@@ -1,0 +1,32 @@
+version: "3"
+
+tasks:
+  build:
+    desc: Build taskrail CLI
+    cmds:
+      - go build ./cmd/taskrail
+
+  test:
+    desc: Run all tests
+    cmds:
+      - go test ./...
+
+  run:help:
+    desc: Run taskrail help
+    cmds:
+      - go run ./cmd/taskrail --help
+
+  validate:
+    desc: Validate Taskrail planning structure
+    cmds:
+      - go run ./cmd/taskrail validate
+
+  next:
+    desc: Select next eligible task
+    cmds:
+      - go run ./cmd/taskrail next --json
+
+  check:skills:
+    desc: Verify mirrored skills are in sync
+    cmds:
+      - ./scripts/check-skill-mirrors.sh
