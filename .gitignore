@@ -37,6 +37,11 @@ go.work.sum
 *_manual_test.go
 /cmd/manual-test-*/
 
+# Planning artifacts (generated evidence; keep out of version control)
+/planning/artifacts/manual-test/
+/planning/artifacts/verify/
+/planning/artifacts/runs/
+
 # Temporary editor files
 *.swp
 *.swo
