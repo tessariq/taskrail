@@ -30,3 +30,14 @@ go.work.sum
 # Editor/IDE
 # .idea/
 # .vscode/
+
+# Taskrail local binaries and temporary manual test code
+/taskrail
+/.task/
+*_manual_test.go
+/cmd/manual-test-*/
+
+# Temporary editor files
+*.swp
+*.swo
+.DS_Store
