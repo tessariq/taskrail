@@ -1,71 +1,203 @@
 # Taskrail
 
-Taskrail is a deterministic execution harness for AI agents that turns goals into structured tasks, keeps work aligned to an authoritative state file, and advances execution through validation, verification, and follow-up.
+[![CI](https://github.com/tessariq/taskrail/actions/workflows/ci.yml/badge.svg)](https://github.com/tessariq/taskrail/actions/workflows/ci.yml)
+[![Go Version](https://img.shields.io/github/go-mod/go-version/tessariq/taskrail)](https://github.com/tessariq/taskrail/blob/main/go.mod)
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](https://github.com/tessariq/taskrail/blob/main/LICENSE)
 
-## Status
+## Goals become tracked work. State stays authoritative.
 
-This repository is bootstrapping Taskrail while also dogfooding the workflow style Taskrail is meant to standardize.
+Taskrail is a deterministic execution harness for humans and AI agents. It turns goals into structured tasks, keeps every transition aligned to one authoritative state file, and advances work through validation, verification, and explicit follow-up.
 
-- Current target release: `v0.1.0`
-- Active spec: `specs/v0.1.0.md`
-- Planning state: `planning/STATE.md`
+The project is built around durable primitives: Git for history and review, and plain Markdown with YAML frontmatter for specs, tasks, and state. No database. No hidden automation. No opaque dashboards. Your repo stays inspectable, and the same `taskrail` commands work whether a person or an agent is at the keyboard.
+
+## Why Taskrail
+
+- **Deterministic:** next-task selection follows status, dependencies, priority, and stable tie-breaking — same repo, same answer, every time.
+- **State-first:** one authoritative `planning/STATE.md` is the continuity and control surface for all work.
+- **Verification as a first-class concept:** completing implementation and verifying it are distinct steps, and verification leaves durable artifacts.
+- **Retrofit-friendly:** `taskrail init` drops the contract into an existing repository with no rewrite.
+- **Agent-ready:** every command has a `--json` path where it matters, so coding agents drive the same workflow humans do.
+
+## What It Is
+
+- A CLI for tracking repo-native work as Markdown task files with explicit, machine-checkable schema.
+- A deterministic workflow built around `validate -> next -> start -> complete -> verify`.
+- An authoritative state model centered on a single `planning/STATE.md`.
+- A verification model that records pass/fail outcomes and writes inspectable artifacts.
+
+## What It Is Not
+
+- Not a built-in LLM provider integration — `v0.1.0` is provider-agnostic and manual-first.
+- Not a sandbox, container, or worktree orchestrator.
+- Not a background daemon, distributed worker pool, or multi-lane scheduler.
+- Not a spec-to-task generator or semantic drift detector (yet).
 
 ## What Taskrail Owns
 
 - repo-native specs under `specs/`
 - deterministic tracked work under `planning/`
 - one authoritative `planning/STATE.md`
-- task validation and dependency checks
+- task validation, dependency checks, and spec references
 - deterministic next-task selection
 - explicit task transitions
 - verification artifacts and follow-up tasks
 
-## What Taskrail Does Not Own
+## Install
 
-- container sandboxing
-- worktree lifecycle orchestration
-- network policy enforcement
-- distributed multi-agent runtime
-- hosted control planes
-- built-in LLM provider integrations in `v0.1.0`
+Build from source:
+
+```sh
+git clone https://github.com/tessariq/taskrail.git
+cd taskrail
+go install ./cmd/taskrail
+taskrail version
+taskrail --help
+```
+
+If you prefer a local binary in the repository directory:
+
+```sh
+go build ./cmd/taskrail
+./taskrail version
+./taskrail --help
+```
+
+Building from source needs Go `1.26`.
+
+## Commands
+
+| Command | Purpose |
+| --- | --- |
+| `taskrail init` | Initialize Taskrail structure (`specs/`, `planning/`, starter `STATE.md`) in the current repository. |
+| `taskrail validate` | Validate folder layout, required files, task shape, dependency and spec references, and `STATE.md` consistency. |
+| `taskrail next` | Deterministically select the next eligible task. Supports `--json`. |
+| `taskrail start <task-id>` | Mark a task as active and update `planning/STATE.md`. |
+| `taskrail complete <task-id>` | Mark a task completed from an implementation perspective. Supports `--note`. |
+| `taskrail block <task-id>` | Mark a task blocked and record a `--reason`. |
+| `taskrail verify <task-id>` | Record a verification outcome and write artifacts under `planning/artifacts/verify/`. Supports `--result`, `--summary`, `--create-followup`, and `--json`. |
+| `taskrail version` | Print the CLI version (also `--version`). |
+
+## Quickstart
+
+Initialize Taskrail inside an existing repository:
+
+```sh
+taskrail init
+```
+
+Confirm the repository is in a sane state:
+
+```sh
+taskrail validate
+```
+
+Tasks live under `planning/tasks/` as Markdown with YAML frontmatter:
+
+```md
+---
+id: T-001
+title: Bootstrap repository structure
+status: pending
+priority: high
+spec_ref: specs/v0.1.0.md#summary
+dependencies: []
+---
+
+# T-001 Bootstrap repository structure
+
+## Description
+
+Create the initial Taskrail structure, specs, and planning area.
+
+## Acceptance
+
+- `planning/STATE.md` exists.
+- `taskrail validate` passes.
+```
+
+Let Taskrail pick the next eligible task, start it, and advance it:
+
+```sh
+taskrail next --json
+taskrail start T-001
+taskrail complete T-001 --note "implementation landed"
+taskrail verify T-001 --result pass --summary "validate passes; acceptance met"
+```
+
+When verification reveals more work, spawn a follow-up task in the same step:
+
+```sh
+taskrail verify T-001 \
+  --result fail \
+  --summary "missing dependency check" \
+  --create-followup \
+  --followup-title "Add dependency validation" \
+  --followup-priority high
+```
+
+Typical flow:
+
+1. Write a goal as a Markdown task inside `planning/tasks/`.
+2. `validate` the repository.
+3. `next` to select deterministically, then `start`.
+4. `complete` the implementation.
+5. `verify` to record the outcome and leave artifacts — opening follow-up tasks as needed.
+
+## What a Verification Leaves Behind
+
+Every verification writes repo-local evidence under `planning/artifacts/verify/<task-id>/<timestamp>/`:
+
+```text
+planning/
+  STATE.md                         # single authoritative state surface
+  tasks/
+    T-001.md                       # task with frontmatter schema
+  artifacts/
+    verify/
+      T-001/
+        20260619T113646Z/
+          plan.md                  # verification plan
+          report.json              # machine-readable outcome
+          report.md                # human-readable outcome
+```
+
+These artifacts are plain files. No proprietary formats. No database required.
+
+## State Contract
+
+`planning/STATE.md` is the authoritative execution state. It carries the active spec, current task, status summary, blockers, the next action, and the last verification result, plus pointers to relevant artifacts. Do not hand-edit machine-managed state fields — let the `taskrail` transitions update them.
 
 ## Repository Layout
 
 ```text
 .
-├── AGENTS.md
+├── AGENTS.md          # guidance for coding agents
 ├── CHANGELOG.md
 ├── README.md
-├── cmd/
-├── docs/
-├── internal/
-├── planning/
+├── cmd/taskrail/      # CLI entry point
+├── internal/          # core packages
+├── planning/          # authoritative tracked work and STATE.md
 ├── scripts/
-├── skills/
-└── specs/
+├── skills/            # workflow skills (dogfooded until the product replaces them)
+└── specs/             # versioned, normative product specs
 ```
 
-## Local Commands
+## Status
 
-- Build: `go build ./cmd/taskrail`
-- Release build (injects version): `go build -ldflags "-X main.version=v0.1.0" ./cmd/taskrail` (or `VERSION=v0.1.0 task release`)
-- Test: `go test ./...`
-- Validate Taskrail structure: `go run ./cmd/taskrail validate`
-- Select next task: `go run ./cmd/taskrail next`
-- Show version: `go run ./cmd/taskrail version` (or `--version`)
-- Show CLI help: `go run ./cmd/taskrail --help`
-- Skill mirror check: `./scripts/check-skill-mirrors.sh`
+Taskrail is an in-progress open-source project centered on its first shippable release, `v0.1.0`.
+
+- `v0.1.0` proves the repository contract, deterministic task progression, the authoritative `STATE.md`, and verification as a first-class concept.
+- `v0.1.0` is manual-first and LLM-provider-agnostic; `loop`, retrofit content generation, and built-in LLM calls are explicitly out of scope.
+- Later versions are tracked under `specs/v0.2.0.md` and `specs/v0.3.0.md`.
+
+This repository also dogfoods the Taskrail workflow style — using `planning/`, `docs/workflow/`, and mirrored skills — until the product itself fully replaces that scaffolding.
 
 ## Read Next
 
-1. `specs/v0.1.0.md`
-2. `specs/v0.2.0.md`
-3. `specs/v0.3.0.md`
-4. `planning/STATE.md`
-5. `AGENTS.md`
+- [`specs/v0.1.0.md`](specs/v0.1.0.md)
+- [`specs/README.md`](specs/README.md)
+- [`planning/STATE.md`](planning/STATE.md)
+- [`AGENTS.md`](AGENTS.md)
+- [`CHANGELOG.md`](CHANGELOG.md)
 
-## Notes
-
-- The versioned specs in `specs/` are normative.
-- `planning/STATE.md` is the authoritative execution state for this repository.
-- Temporary workflow scaffolding in `skills/`, `.agents/skills/`, `.claude/skills/`, and `docs/workflow/` exists to dogfood the Taskrail style before the product replaces it.
+The versioned specs in `specs/` remain the normative source of truth for release scope and behavior.
