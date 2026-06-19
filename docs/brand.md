@@ -37,18 +37,19 @@ Root element carries `fill="none"`. All visible geometry shares one color
 (strokes plus the node fill).
 
 - **Rails (2 horizontal lines):**
-  - Top: `(6,24)→(58,24)`
-  - Bottom: `(6,40)→(58,40)`
-  - `stroke-width 4`, `stroke-linecap="round"`
-- **Ties (3 vertical lines):** at `x=14`, `x=26`, `x=38`, each `y=20 → y=44`
-  - `stroke-width 4`, `stroke-linecap="round"`
-- **Node (active task):** `circle cx=50 cy=32 r=6`, filled (no stroke)
+  - Top: `(6,22)→(58,22)`
+  - Bottom: `(6,42)→(58,42)`
+  - `stroke-width 2.5`, `stroke-linecap="round"`
+- **Ties (3 vertical lines):** at `x=14`, `x=26`, `x=38`, each `y=18 → y=46`
+  - `stroke-width 3`, `stroke-linecap="round"`
+- **Node (active task):** `circle cx=50 cy=32 r=5.5`, filled (no stroke)
 
-The ties sit between the rails and stop short of them at top and bottom (y=20 and
-y=44 against rails at y=24 and y=40), so the round caps read as deliberate
-crossties rather than touching the rails. The node sits centered between the
-rails (`cy=32`, the midpoint of 24 and 40) and leads the ties to the right,
-signalling forward motion.
+The rails are lighter than the ties (stroke 2.5 vs 3): the rails are the guide
+line, the ties are the structured tasks that carry the weight. The ties overrun
+the rails at top and bottom (y=18 and y=46 against rails at y=22 and y=42), so
+the round caps read as deliberate crossties rather than touching the rails. The
+node sits centered between the rails (`cy=32`, the midpoint of 22 and 42) and
+leads the ties to the right, signalling forward motion.
 
 #### Scaling
 
@@ -67,7 +68,15 @@ convention for consistent recognition.
 ### Lockup Variants
 
 - **Horizontal:** Rail icon (left) + `taskrail` wordmark, side by side on a
-  canonical `745×160` viewBox. For: README header, docs.
+  canonical `702×160` viewBox. For: README header, docs.
+
+In the lockup the icon is scaled so the **two rails land on the wordmark's type
+lines**: the bottom rail sits on the **baseline** (the lowercase letters rest on
+it) and the top rail meets the **t-crossbar / x-height**. The track therefore
+reads as continuing straight into `taskrail`. This is the defining alignment of
+the lockup — preserve it when regenerating: pick the icon scale and vertical
+offset so rail centers fall on those two type lines rather than choosing an
+arbitrary icon size.
 
 The horizontal lockup is the only lockup form. There is no stacked or secondary
 mark — the brand stays as singular and direct as the product's one authoritative

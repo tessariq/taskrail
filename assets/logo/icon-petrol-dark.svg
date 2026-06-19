@@ -1,8 +1,8 @@
 <svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Taskrail">
-    <line x1="6" y1="24" x2="58" y2="24" stroke="#0891b2" stroke-width="4" stroke-linecap="round"/>
-    <line x1="6" y1="40" x2="58" y2="40" stroke="#0891b2" stroke-width="4" stroke-linecap="round"/>
-    <line x1="14" y1="20" x2="14" y2="44" stroke="#0891b2" stroke-width="4" stroke-linecap="round"/>
-    <line x1="26" y1="20" x2="26" y2="44" stroke="#0891b2" stroke-width="4" stroke-linecap="round"/>
-    <line x1="38" y1="20" x2="38" y2="44" stroke="#0891b2" stroke-width="4" stroke-linecap="round"/>
-    <circle cx="50" cy="32" r="6" fill="#0891b2"/>
+  <line x1="6" y1="22" x2="58" y2="22" stroke="#0891b2" stroke-width="2.5" stroke-linecap="round"/>
+  <line x1="6" y1="42" x2="58" y2="42" stroke="#0891b2" stroke-width="2.5" stroke-linecap="round"/>
+  <line x1="14" y1="18" x2="14" y2="46" stroke="#0891b2" stroke-width="3" stroke-linecap="round"/>
+  <line x1="26" y1="18" x2="26" y2="46" stroke="#0891b2" stroke-width="3" stroke-linecap="round"/>
+  <line x1="38" y1="18" x2="38" y2="46" stroke="#0891b2" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="50" cy="32" r="5.5" fill="#0891b2"/>
 </svg>
