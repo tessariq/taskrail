@@ -1,18 +1,18 @@
 ---
 schema_version: 1
-updated_at: "2026-06-19T13:12:01Z"
+updated_at: "2026-06-19T13:18:48Z"
 active_spec_version: v0.1.0
 active_spec_path: specs/v0.1.0.md
 current_task: ""
 current_task_title: ""
 status_summary: idle
 blockers: []
-next_action: 'Start task T-015: Add release automation via GoReleaser'
-last_verification_result: pass for T-014 (planning/artifacts/verify/T-014/20260619T125406Z/report.json)
+next_action: Select the next eligible task
+last_verification_result: pass for T-015 (planning/artifacts/verify/T-015/20260619T131843Z/report.json)
 relevant_artifacts:
-    - planning/artifacts/verify/T-014/20260619T125406Z/plan.md
-    - planning/artifacts/verify/T-014/20260619T125406Z/report.json
-    - planning/artifacts/verify/T-014/20260619T125406Z/report.md
+    - planning/artifacts/verify/T-015/20260619T131843Z/plan.md
+    - planning/artifacts/verify/T-015/20260619T131843Z/report.json
+    - planning/artifacts/verify/T-015/20260619T131843Z/report.md
 continuation_notes:
     - This repository is temporarily dogfooding bootstrap workflow tooling until Taskrail v0.1.0 exists.
 ---
@@ -37,17 +37,17 @@ continuation_notes:
 
 ## Last Verification
 
-- pass for T-014 (planning/artifacts/verify/T-014/20260619T125406Z/report.json)
+- pass for T-015 (planning/artifacts/verify/T-015/20260619T131843Z/report.json)
 
 ## Next Action
 
-- Start task T-015: Add release automation via GoReleaser
+- Select the next eligible task
 
 ## Relevant Artifacts
 
-- `planning/artifacts/verify/T-014/20260619T125406Z/plan.md`
-- `planning/artifacts/verify/T-014/20260619T125406Z/report.json`
-- `planning/artifacts/verify/T-014/20260619T125406Z/report.md`
+- `planning/artifacts/verify/T-015/20260619T131843Z/plan.md`
+- `planning/artifacts/verify/T-015/20260619T131843Z/report.json`
+- `planning/artifacts/verify/T-015/20260619T131843Z/report.md`
 
 ## Notes
 
@@ -55,8 +55,8 @@ continuation_notes:
 
 ## Task Counts
 
-- todo: 1
+- todo: 0
 - in_progress: 0
-- completed: 14
+- completed: 15
 - blocked: 0
 - cancelled: 0

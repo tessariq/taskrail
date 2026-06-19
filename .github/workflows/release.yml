@@ -1,0 +1,53 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # --- Tag push: real, published release ---
+
+      - name: Guard CHANGELOG has a section for this tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: ./scripts/check-changelog-version.sh "${GITHUB_REF_NAME}"
+
+      - name: Extract release notes from CHANGELOG
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: ./scripts/changelog-release-notes.sh "${GITHUB_REF_NAME}" > release-notes.md
+
+      - name: Run GoReleaser (publish)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          version: "~> v2"
+          args: release --clean --release-notes=release-notes.md
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # --- Manual dispatch: snapshot only, no GitHub Release ---
+
+      - name: Run GoReleaser (snapshot, no publish)
+        if: github.event_name == 'workflow_dispatch'
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          version: "~> v2"
+          args: release --snapshot --clean

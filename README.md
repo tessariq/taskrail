@@ -79,6 +79,23 @@ VERSION=v0.1.0 task release
 
 Building from source needs Go `1.26`.
 
+### Releases
+
+Tagged releases are automated with [GoReleaser](https://goreleaser.com). Pushing a
+`v*` tag triggers `.github/workflows/release.yml`, which builds `linux`/`darwin`
+binaries for `amd64`/`arm64`, injects the tag into the version, and publishes
+archives plus checksums to a GitHub Release. Release notes are taken from the
+matching `## v<version>` section of `CHANGELOG.md`; a pre-publish guard fails the
+release if that section is missing, so update the changelog before tagging.
+
+Run `workflow_dispatch` on the Release workflow to build a `--snapshot` (no
+publish), or validate locally:
+
+```sh
+goreleaser check
+goreleaser release --snapshot --clean
+```
+
 ## Commands
 
 | Command | Purpose |
