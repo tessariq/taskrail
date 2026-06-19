@@ -77,6 +77,12 @@ Guidance for coding agents working in the Taskrail repository.
 - Keep the markdown contract easy for humans and agents to inspect.
 - Avoid hidden state and avoid over-abstracting simple file operations.
 
+## Commit Conventions
+
+- Use Conventional Commits: `<type>: <description>` (types: `feat`, `fix`, `refactor`, `docs`, `test`, `chore`, `perf`, `ci`).
+- Reference the task ID as a parenthetical suffix on the subject, never as a prefix: `feat: add version reporting to taskrail CLI (T-012)`, not `feat: T-012 add version reporting`.
+- Keep the subject imperative and scoped to one logical outcome; use the body to explain the why when it is not obvious.
+
 ## Testing Expectations
 
 - Follow TDD for code changes whenever practical.
