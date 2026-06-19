@@ -1,13 +1,13 @@
 ---
 schema_version: 1
-updated_at: "2026-06-19T12:54:18Z"
+updated_at: "2026-06-19T13:12:01Z"
 active_spec_version: v0.1.0
 active_spec_path: specs/v0.1.0.md
 current_task: ""
 current_task_title: ""
 status_summary: idle
 blockers: []
-next_action: No eligible task is ready
+next_action: 'Start task T-015: Add release automation via GoReleaser'
 last_verification_result: pass for T-014 (planning/artifacts/verify/T-014/20260619T125406Z/report.json)
 relevant_artifacts:
     - planning/artifacts/verify/T-014/20260619T125406Z/plan.md
@@ -41,7 +41,7 @@ continuation_notes:
 
 ## Next Action
 
-- No eligible task is ready
+- Start task T-015: Add release automation via GoReleaser
 
 ## Relevant Artifacts
 
@@ -55,7 +55,7 @@ continuation_notes:
 
 ## Task Counts
 
-- todo: 0
+- todo: 1
 - in_progress: 0
 - completed: 14
 - blocked: 0
