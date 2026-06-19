@@ -66,6 +66,17 @@ go build ./cmd/taskrail
 ./taskrail --help
 ```
 
+Plain `go build`/`go install` produce a development build that reports version
+`0.0.0-dev`. To produce a release build that reports a real version, inject it at
+build time:
+
+```sh
+go build -ldflags "-X main.version=v0.1.0" -o taskrail ./cmd/taskrail
+# or, via Taskfile:
+VERSION=v0.1.0 task release
+./taskrail version   # -> v0.1.0
+```
+
 Building from source needs Go `1.26`.
 
 ## Commands
