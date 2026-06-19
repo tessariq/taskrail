@@ -6,6 +6,13 @@ tasks:
     cmds:
       - go build ./cmd/taskrail
 
+  release:
+    desc: Build taskrail CLI with an injected release version (VERSION=v0.1.0 task release)
+    vars:
+      VERSION: '{{.VERSION | default "0.0.0-dev"}}'
+    cmds:
+      - go build -ldflags "-X main.version={{.VERSION}}" -o taskrail ./cmd/taskrail
+
   test:
     desc: Run all tests
     cmds:

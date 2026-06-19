@@ -48,9 +48,11 @@ This repository is bootstrapping Taskrail while also dogfooding the workflow sty
 ## Local Commands
 
 - Build: `go build ./cmd/taskrail`
+- Release build (injects version): `go build -ldflags "-X main.version=v0.1.0" ./cmd/taskrail` (or `VERSION=v0.1.0 task release`)
 - Test: `go test ./...`
 - Validate Taskrail structure: `go run ./cmd/taskrail validate`
 - Select next task: `go run ./cmd/taskrail next`
+- Show version: `go run ./cmd/taskrail version` (or `--version`)
 - Show CLI help: `go run ./cmd/taskrail --help`
 - Skill mirror check: `./scripts/check-skill-mirrors.sh`
 

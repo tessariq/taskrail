@@ -1,13 +1,13 @@
 ---
 schema_version: 1
-updated_at: "2026-06-19T11:21:58Z"
+updated_at: "2026-06-19T11:26:27Z"
 active_spec_version: v0.1.0
 active_spec_path: specs/v0.1.0.md
 current_task: ""
 current_task_title: ""
 status_summary: idle
 blockers: []
-next_action: 'Start task T-012: Add taskrail version reporting'
+next_action: Select the next eligible task
 last_verification_result: pass for T-011 (planning/artifacts/verify/T-011/20260331T204220Z/report.json)
 relevant_artifacts:
     - planning/artifacts/verify/T-011/20260331T204220Z/plan.md
@@ -41,7 +41,7 @@ continuation_notes:
 
 ## Next Action
 
-- Start task T-012: Add taskrail version reporting
+- Select the next eligible task
 
 ## Relevant Artifacts
 
@@ -55,8 +55,8 @@ continuation_notes:
 
 ## Task Counts
 
-- todo: 3
+- todo: 2
 - in_progress: 0
-- completed: 11
+- completed: 12
 - blocked: 0
 - cancelled: 0
