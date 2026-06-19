@@ -1,6 +1,6 @@
 ---
 schema_version: 1
-updated_at: "2026-06-19T11:26:27Z"
+updated_at: "2026-06-19T11:36:46Z"
 active_spec_version: v0.1.0
 active_spec_path: specs/v0.1.0.md
 current_task: ""
@@ -8,11 +8,11 @@ current_task_title: ""
 status_summary: idle
 blockers: []
 next_action: Select the next eligible task
-last_verification_result: pass for T-011 (planning/artifacts/verify/T-011/20260331T204220Z/report.json)
+last_verification_result: pass for T-013 (planning/artifacts/verify/T-013/20260619T113646Z/report.json)
 relevant_artifacts:
-    - planning/artifacts/verify/T-011/20260331T204220Z/plan.md
-    - planning/artifacts/verify/T-011/20260331T204220Z/report.json
-    - planning/artifacts/verify/T-011/20260331T204220Z/report.md
+    - planning/artifacts/verify/T-013/20260619T113646Z/plan.md
+    - planning/artifacts/verify/T-013/20260619T113646Z/report.json
+    - planning/artifacts/verify/T-013/20260619T113646Z/report.md
 continuation_notes:
     - This repository is temporarily dogfooding bootstrap workflow tooling until Taskrail v0.1.0 exists.
 ---
@@ -37,7 +37,7 @@ continuation_notes:
 
 ## Last Verification
 
-- pass for T-011 (planning/artifacts/verify/T-011/20260331T204220Z/report.json)
+- pass for T-013 (planning/artifacts/verify/T-013/20260619T113646Z/report.json)
 
 ## Next Action
 
@@ -45,9 +45,9 @@ continuation_notes:
 
 ## Relevant Artifacts
 
-- `planning/artifacts/verify/T-011/20260331T204220Z/plan.md`
-- `planning/artifacts/verify/T-011/20260331T204220Z/report.json`
-- `planning/artifacts/verify/T-011/20260331T204220Z/report.md`
+- `planning/artifacts/verify/T-013/20260619T113646Z/plan.md`
+- `planning/artifacts/verify/T-013/20260619T113646Z/report.json`
+- `planning/artifacts/verify/T-013/20260619T113646Z/report.md`
 
 ## Notes
 
@@ -55,8 +55,8 @@ continuation_notes:
 
 ## Task Counts
 
-- todo: 2
+- todo: 1
 - in_progress: 0
-- completed: 12
+- completed: 13
 - blocked: 0
 - cancelled: 0
