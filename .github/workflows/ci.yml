@@ -44,8 +44,45 @@ jobs:
       - name: Verify mirrored workflow skills
         run: ./scripts/check-skill-mirrors.sh
 
+  unit-tests:
+    needs: checks
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-latest, ubuntu-24.04-arm, macos-latest]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
       - name: Unit tests
         run: go test ./...
 
-      - name: Smoke test help
-        run: go run ./cmd/taskrail --help
+  smoke-tests:
+    needs: checks
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-latest, ubuntu-24.04-arm, macos-latest]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build binary
+        run: CGO_ENABLED=0 go build -o taskrail ./cmd/taskrail
+
+      - name: Smoke test --help
+        run: ./taskrail --help
