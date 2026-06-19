@@ -1,10 +1,14 @@
-# Taskrail
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/logo/lockup-horizontal-mono-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="assets/logo/lockup-horizontal-mono-light.svg">
+  <img alt="Taskrail" src="assets/logo/lockup-horizontal-mono-dark.svg" height="56">
+</picture>
 
 [![CI](https://github.com/tessariq/taskrail/actions/workflows/ci.yml/badge.svg)](https://github.com/tessariq/taskrail/actions/workflows/ci.yml)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/tessariq/taskrail)](https://github.com/tessariq/taskrail/blob/main/go.mod)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](https://github.com/tessariq/taskrail/blob/main/LICENSE)
 
-## Goals become tracked work. State stays authoritative.
+# Goals become tracked work. State stays authoritative.
 
 Taskrail is a deterministic execution harness for humans and AI agents. It turns goals into structured tasks, keeps every transition aligned to one authoritative state file, and advances work through validation, verification, and explicit follow-up.
 
