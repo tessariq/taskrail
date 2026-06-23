@@ -32,23 +32,23 @@ jobs:
 
       - name: Extract release notes from CHANGELOG
         if: startsWith(github.ref, 'refs/tags/v')
-        run: ./scripts/changelog-release-notes.sh "${GITHUB_REF_NAME}" > release-notes.md
+        run: ./scripts/changelog-release-notes.sh "${GITHUB_REF_NAME}" > "${RUNNER_TEMP}/release-notes.md"
 
       - name: Guard release notes are non-empty
         if: startsWith(github.ref, 'refs/tags/v')
         run: |
-          if [ ! -s release-notes.md ]; then
-            echo "guard: release-notes.md is empty; refusing to publish a release with a blank body" >&2
+          if [ ! -s "${RUNNER_TEMP}/release-notes.md" ]; then
+            echo "guard: release notes file is empty; refusing to publish a release with a blank body" >&2
             exit 1
           fi
-          echo "guard: release notes present ($(wc -c < release-notes.md) bytes)"
+          echo "guard: release notes present ($(wc -c < "${RUNNER_TEMP}/release-notes.md") bytes)"
 
       - name: Run GoReleaser (publish)
         if: startsWith(github.ref, 'refs/tags/v')
         uses: goreleaser/goreleaser-action@v7
         with:
           version: "~> v2"
-          args: release --clean --release-notes=release-notes.md
+          args: release --clean --release-notes=${{ runner.temp }}/release-notes.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

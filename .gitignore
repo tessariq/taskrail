@@ -36,8 +36,6 @@ go.work.sum
 /.task/
 # GoReleaser build output
 /dist/
-# Release notes extracted from CHANGELOG by the release workflow
-/release-notes.md
 *_manual_test.go
 /cmd/manual-test-*/
 
