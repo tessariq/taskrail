@@ -4,6 +4,10 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- Homebrew install support via the `tessariq/homebrew-tap` tap: `brew install tessariq/tap/taskrail` (macOS and Linux). The v0.1.0 formula is published retroactively.
+
 ## v0.1.0 - 2026-06-19
 
 First shippable release. Taskrail is a manual-first, LLM-provider-agnostic CLI for

@@ -48,6 +48,15 @@ The project is built around durable primitives: Git for history and review, and 
 
 ## Install
 
+Homebrew (macOS and Linux):
+
+```sh
+brew install tessariq/tap/taskrail
+taskrail --version
+```
+
+This pulls the release binary from the [tessariq/homebrew-tap](https://github.com/tessariq/homebrew-tap) tap.
+
 Build from source:
 
 ```sh

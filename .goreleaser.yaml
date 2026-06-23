@@ -1,9 +1,10 @@
 # GoReleaser configuration for Taskrail.
 #
 # Taskrail is a pure-Go, no-cgo, no-native-deps CLI, so this config is the
-# trimmed cousin of richer release pipelines: no native build job, no Homebrew
-# tap. It builds ./cmd/taskrail for linux/darwin on amd64/arm64 and injects the
-# release version into main.version via -ldflags.
+# trimmed cousin of richer release pipelines: no native build job, no automated
+# Homebrew publishing. It builds ./cmd/taskrail for linux/darwin on amd64/arm64
+# and injects the release version into main.version via -ldflags. The Homebrew
+# tap (tessariq/homebrew-tap) is maintained by hand -- see the note by `release`.
 #
 # Validate locally with:
 #   goreleaser check
@@ -61,3 +62,10 @@ changelog:
 release:
   draft: false
   prerelease: auto
+
+# Homebrew distribution is NOT automated here. The formula lives in
+# tessariq/homebrew-tap and is maintained by hand per release (update the
+# version, the four release-asset URLs, and their sha256 sums from
+# checksums.txt). GoReleaser's `brews` integration is deprecated, and its
+# replacement (`homebrew_casks`) is macOS-only -- it would drop Linuxbrew
+# support, which Taskrail's linux builds rely on. Revisit if that changes.
