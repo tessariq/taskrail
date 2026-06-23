@@ -34,6 +34,15 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         run: ./scripts/changelog-release-notes.sh "${GITHUB_REF_NAME}" > release-notes.md
 
+      - name: Guard release notes are non-empty
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          if [ ! -s release-notes.md ]; then
+            echo "guard: release-notes.md is empty; refusing to publish a release with a blank body" >&2
+            exit 1
+          fi
+          echo "guard: release notes present ($(wc -c < release-notes.md) bytes)"
+
       - name: Run GoReleaser (publish)
         if: startsWith(github.ref, 'refs/tags/v')
         uses: goreleaser/goreleaser-action@v6
