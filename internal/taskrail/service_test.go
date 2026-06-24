@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -39,6 +40,93 @@ func TestInitCreatesStructureAndIsIdempotent(t *testing.T) {
 	}
 	if !validation.Valid {
 		t.Fatalf("expected valid repo, got %v", validation.Violations)
+	}
+}
+
+func TestValidateCleanCheckoutOfCommittedRepo(t *testing.T) {
+	t.Parallel()
+
+	git, err := exec.LookPath("git")
+	if err != nil {
+		t.Skip("git not available")
+	}
+	runGit := func(dir string, args ...string) {
+		t.Helper()
+		cmd := exec.Command(git, args...)
+		cmd.Dir = dir
+		cmd.Env = append(os.Environ(),
+			"GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@example.com",
+			"GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@example.com",
+			"GIT_CONFIG_GLOBAL="+os.DevNull, "GIT_CONFIG_SYSTEM="+os.DevNull,
+		)
+		if out, gitErr := cmd.CombinedOutput(); gitErr != nil {
+			t.Fatalf("git %s: %v\n%s", strings.Join(args, " "), gitErr, out)
+		}
+	}
+
+	// init + scaffold + a tracked task, then commit only the planning content;
+	// artifacts are gitignored output and stay out of the commit. A real repo
+	// always carries at least one task file, so tasks/ travels — only the empty
+	// gitignored artifact dirs are dropped, isolating exactly the T-024 fix.
+	repo := t.TempDir()
+	runGit(repo, "init", "-q")
+	svc := newTestService(t, repo, time.Date(2026, 6, 24, 12, 0, 0, 0, time.UTC))
+	if err := svc.Init(); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	writeTask(t, repo, "T-001", "Seed task", "todo", "high", "specs/v0.1.0.md#summary", nil)
+	writeFile(t, filepath.Join(repo, ".gitignore"), "/planning/artifacts/\n")
+	runGit(repo, "add", "-A")
+	runGit(repo, "commit", "-q", "-m", "init taskrail")
+
+	// A clone carries only committed content. Git cannot track the empty
+	// gitignored artifact dirs, so they do not travel — exactly the fresh
+	// clone / CI clean-checkout case the acceptance criterion describes.
+	clone := t.TempDir()
+	runGit(repo, "clone", "-q", repo, clone)
+	if _, err := os.Stat(filepath.Join(clone, "planning", "artifacts")); !os.IsNotExist(err) {
+		t.Fatalf("expected artifacts tree absent in clone, stat err=%v", err)
+	}
+	// Non-vacuous: the committed planning content (tasks/) must be present, so a
+	// pass proves the artifacts requirement was lifted, not that nothing travels.
+	if _, err := os.Stat(filepath.Join(clone, "planning", "tasks", "T-001.md")); err != nil {
+		t.Fatalf("expected committed task present in clone: %v", err)
+	}
+
+	result, err := newTestService(t, clone, time.Date(2026, 6, 24, 12, 0, 0, 0, time.UTC)).Validate()
+	if err != nil {
+		t.Fatalf("validate: %v", err)
+	}
+	if !result.Valid || len(result.Violations) != 0 {
+		t.Fatalf("expected valid clean checkout, got valid=%v violations=%v", result.Valid, result.Violations)
+	}
+}
+
+func TestVerifyCreatesArtifactDirsWhenAbsent(t *testing.T) {
+	t.Parallel()
+
+	repo := seedFixtureRepo(t)
+	writeTask(t, repo, "T-002", "Verified item", "completed", "high", "specs/v0.1.0.md#summary", nil)
+
+	// Simulate a clean checkout where the gitignored artifacts tree is absent;
+	// verify must still create planning/artifacts/verify/<id>/<ts>/ on demand.
+	if err := os.RemoveAll(filepath.Join(repo, "planning", "artifacts")); err != nil {
+		t.Fatalf("remove artifacts tree: %v", err)
+	}
+
+	svc := newTestService(t, repo, time.Date(2026, 6, 24, 12, 0, 0, 0, time.UTC))
+	result, err := svc.Verify(VerifyInput{
+		TaskID:  "T-002",
+		Result:  "pass",
+		Summary: "Creates dirs on demand",
+	})
+	if err != nil {
+		t.Fatalf("verify: %v", err)
+	}
+	for _, rel := range []string{result.PlanPath, result.ReportPath, result.ReportMarkdown} {
+		if _, err := os.Stat(filepath.Join(repo, rel)); err != nil {
+			t.Fatalf("expected artifact %s on demand: %v", rel, err)
+		}
 	}
 }
 

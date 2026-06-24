@@ -59,7 +59,9 @@ func (s *Service) Init() error {
 
 func (s *Service) Validate() (ValidationResult, error) {
 	violations := make([]string, 0)
-	for _, requiredDir := range []string{s.paths.SpecsDir, s.paths.PlanningDir, s.paths.TasksDir, s.paths.ArtifactsDir, s.paths.VerifyDir} {
+	// Artifacts (ArtifactsDir/VerifyDir) are gitignored output and empty on a
+	// clean checkout, so they are not required; verify creates them on demand.
+	for _, requiredDir := range []string{s.paths.SpecsDir, s.paths.PlanningDir, s.paths.TasksDir} {
 		if !dirExists(requiredDir) {
 			violations = append(violations, fmt.Sprintf("missing required directory %s", relPath(s.paths.RepoRoot, requiredDir)))
 		}

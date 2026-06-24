@@ -13,6 +13,10 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 - `taskrail verify` now records a portable result in committed `STATE.md`: `last_verification_result` is a path-free summary (result, task id, timestamp) and `relevant_artifacts` no longer lists gitignored `planning/artifacts/...` paths. Local evidence is still written under `planning/artifacts/verify/` for the producer, so a teammate cloning the repo no longer sees `STATE.md` pointing at files that exist only on the producer's machine.
 
+### Fixed
+
+- `taskrail validate` no longer requires the gitignored `planning/artifacts` and `planning/artifacts/verify` directories to exist. Git cannot track these empty output directories, so a freshly init-ed and committed repository previously failed `validate` on a clean checkout (fresh clone or CI). A missing artifacts tree is now treated as "no artifacts yet"; `taskrail verify` still creates the directories on demand.
+
 ## v0.1.0 - 2026-06-19
 
 First shippable release. Taskrail is a manual-first, LLM-provider-agnostic CLI for
