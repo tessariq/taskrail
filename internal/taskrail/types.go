@@ -18,6 +18,15 @@ type Paths struct {
 	StateFile    string
 }
 
+// LayoutConfig is the machine-owned `.taskrail/config.yml` marker. It signals
+// that a repository is Taskrail-managed, pins the layout version for upgrades,
+// and records where the human-facing directories live.
+type LayoutConfig struct {
+	LayoutVersion int    `yaml:"layout_version" json:"layout_version"`
+	SpecsDir      string `yaml:"specs_dir" json:"specs_dir"`
+	PlanningDir   string `yaml:"planning_dir" json:"planning_dir"`
+}
+
 type StateFrontmatter struct {
 	SchemaVersion          int      `yaml:"schema_version" json:"schema_version"`
 	UpdatedAt              string   `yaml:"updated_at" json:"updated_at"`

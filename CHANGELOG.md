@@ -6,6 +6,7 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ### Added
 
+- Path discovery now reads an optional `.taskrail/config.yml` layout marker (`layout_version` plus `specs_dir`/`planning_dir` locations). When the marker is absent, discovery falls back to the v0.1.0 layout unchanged, so existing repositories need no migration.
 - Homebrew install support via the `tessariq/homebrew-tap` tap: `brew install tessariq/tap/taskrail` (macOS and Linux). The v0.1.0 formula is published retroactively.
 
 ## v0.1.0 - 2026-06-19
