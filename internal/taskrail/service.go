@@ -499,16 +499,33 @@ func (s *Service) validateTasks(state *State, tasks []*Task) []string {
 	return violations
 }
 
-func (s *Service) validateSpecRef(specRef string) error {
+// parseSpecRef splits a `path#anchor` spec reference into its structural parts
+// without touching the filesystem. It is the shared shape check for both a real
+// task's spec_ref (validateSpecRef adds the file/heading existence check) and an
+// import draft's spec_ref (validated structurally only, before the spec exists).
+func parseSpecRef(specRef string) (string, string, error) {
 	parts := strings.SplitN(specRef, "#", 2)
 	if len(parts) != 2 {
-		return errors.New("spec_ref must include a path and heading anchor")
+		return "", "", errors.New("spec_ref must include a path and heading anchor")
 	}
-
+	if strings.TrimSpace(parts[0]) == "" {
+		return "", "", errors.New("spec_ref path must not be empty")
+	}
 	pathPart := filepath.Clean(parts[0])
+	if pathPart == ".." || strings.HasPrefix(pathPart, ".."+string(filepath.Separator)) {
+		return "", "", errors.New("spec_ref path must stay within the repository")
+	}
 	anchor := strings.TrimSpace(parts[1])
 	if anchor == "" {
-		return errors.New("spec_ref anchor must not be empty")
+		return "", "", errors.New("spec_ref anchor must not be empty")
+	}
+	return pathPart, anchor, nil
+}
+
+func (s *Service) validateSpecRef(specRef string) error {
+	pathPart, anchor, err := parseSpecRef(specRef)
+	if err != nil {
+		return err
 	}
 
 	fullPath := filepath.Join(s.paths.RepoRoot, pathPart)
