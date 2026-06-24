@@ -4,8 +4,8 @@
 
 ## Current Default Scope
 
-- active spec: `specs/v0.1.0.md`
-- active version focus: `v0.1.0`
+- active spec: `specs/v0.2.0.md`
+- active version focus: `v0.2.0`
 
 ## Rules
 
