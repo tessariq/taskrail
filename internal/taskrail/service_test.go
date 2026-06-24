@@ -2,8 +2,10 @@ package taskrail
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -183,6 +185,54 @@ func TestVerifyWritesArtifactsAndCreatesFollowup(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(repo, "planning", "tasks", result.FollowupTaskID+".md")); err != nil {
 		t.Fatalf("expected follow-up task file: %v", err)
+	}
+}
+
+func TestVerifyWritesPortableCommittedState(t *testing.T) {
+	t.Parallel()
+
+	const gitignoredPrefix = "planning/artifacts/"
+	now := time.Date(2026, 3, 31, 12, 0, 0, 0, time.UTC)
+	wantTimestamp := timestamp(now)
+
+	// Both result branches share the frontmatter writer, so the portability
+	// contract must hold for each — including "fail", which also sets NextAction.
+	for _, result := range []string{"pass", "fail"} {
+		t.Run(result, func(t *testing.T) {
+			t.Parallel()
+
+			repo := seedFixtureRepo(t)
+			writeTask(t, repo, "T-002", "Verified item", "completed", "high", "specs/v0.1.0.md#summary", nil)
+
+			svc := newTestService(t, repo, now)
+			if _, err := svc.Verify(VerifyInput{
+				TaskID:  "T-002",
+				Result:  result,
+				Summary: "Summary for " + result,
+			}); err != nil {
+				t.Fatalf("verify: %v", err)
+			}
+
+			state, err := svc.loadState()
+			if err != nil {
+				t.Fatalf("load state: %v", err)
+			}
+
+			// Exact shape: result, task id, and timestamp, with no path.
+			want := fmt.Sprintf("%s for %s at %s", result, "T-002", wantTimestamp)
+			if got := state.Frontmatter.LastVerificationResult; got != want {
+				t.Fatalf("last_verification_result = %q, want %q", got, want)
+			}
+			if strings.Contains(state.Frontmatter.LastVerificationResult, gitignoredPrefix) {
+				t.Fatalf("last_verification_result must not embed gitignored path: %q", state.Frontmatter.LastVerificationResult)
+			}
+
+			// relevant_artifacts must be empty (no gitignored paths), asserted
+			// non-vacuously so a populated slice would fail.
+			if n := len(state.Frontmatter.RelevantArtifacts); n != 0 {
+				t.Fatalf("relevant_artifacts must be empty, got %d: %v", n, state.Frontmatter.RelevantArtifacts)
+			}
+		})
 	}
 }
 

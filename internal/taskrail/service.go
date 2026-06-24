@@ -272,8 +272,11 @@ func (s *Service) Verify(input VerifyInput) (VerifyResult, error) {
 	task.Frontmatter.UpdatedAt = nowText
 
 	state.Frontmatter.UpdatedAt = nowText
-	state.Frontmatter.LastVerificationResult = fmt.Sprintf("%s for %s (%s)", input.Result, task.Frontmatter.ID, relReport)
-	state.Frontmatter.RelevantArtifacts = []string{relPlan, relReport, relReportMarkdown}
+	// Keep committed state portable: record a path-free summary and list no
+	// gitignored artifact paths. Local evidence still lives under
+	// planning/artifacts/verify/ for the producer (see VerifyResult).
+	state.Frontmatter.LastVerificationResult = fmt.Sprintf("%s for %s at %s", input.Result, task.Frontmatter.ID, nowText)
+	state.Frontmatter.RelevantArtifacts = nil
 	if input.Result == "fail" && followupTaskID != "" {
 		state.Frontmatter.NextAction = fmt.Sprintf("Review follow-up task %s", followupTaskID)
 	} else if input.Result == "fail" {

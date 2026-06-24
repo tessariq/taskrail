@@ -1,6 +1,6 @@
 ---
 schema_version: 1
-updated_at: "2026-06-24T15:20:10Z"
+updated_at: "2026-06-24T15:30:53Z"
 active_spec_version: v0.2.0
 active_spec_path: specs/v0.2.0.md
 current_task: ""
@@ -8,11 +8,8 @@ current_task_title: ""
 status_summary: idle
 blockers: []
 next_action: Select the next eligible task
-last_verification_result: pass for T-018 (planning/artifacts/verify/T-018/20260624T152002Z/report.json)
-relevant_artifacts:
-    - planning/artifacts/verify/T-018/20260624T152002Z/plan.md
-    - planning/artifacts/verify/T-018/20260624T152002Z/report.json
-    - planning/artifacts/verify/T-018/20260624T152002Z/report.md
+last_verification_result: pass for T-021 at 2026-06-24T15:30:46Z
+relevant_artifacts: []
 continuation_notes:
     - This repository is temporarily dogfooding bootstrap workflow tooling until Taskrail v0.1.0 exists.
 ---
@@ -37,7 +34,7 @@ continuation_notes:
 
 ## Last Verification
 
-- pass for T-018 (planning/artifacts/verify/T-018/20260624T152002Z/report.json)
+- pass for T-021 at 2026-06-24T15:30:46Z
 
 ## Next Action
 
@@ -45,9 +42,7 @@ continuation_notes:
 
 ## Relevant Artifacts
 
-- `planning/artifacts/verify/T-018/20260624T152002Z/plan.md`
-- `planning/artifacts/verify/T-018/20260624T152002Z/report.json`
-- `planning/artifacts/verify/T-018/20260624T152002Z/report.md`
+- None
 
 ## Notes
 
@@ -55,8 +50,8 @@ continuation_notes:
 
 ## Task Counts
 
-- todo: 17
+- todo: 16
 - in_progress: 0
-- completed: 18
+- completed: 19
 - blocked: 0
 - cancelled: 0
