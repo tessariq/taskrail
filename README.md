@@ -217,11 +217,29 @@ These artifacts are plain files. No proprietary formats. No database required.
 ├── README.md
 ├── cmd/taskrail/      # CLI entry point
 ├── internal/          # core packages
+├── lefthook.yml       # opt-in local git hooks (mirror CI)
 ├── planning/          # authoritative tracked work and STATE.md
 ├── scripts/
 ├── skills/            # workflow skills (dogfooded until the product replaces them)
 └── specs/             # versioned, normative product specs
 ```
+
+## Development
+
+Optional git hooks mirror the CI checks locally. They use
+[lefthook](https://github.com/evilmartians/lefthook) and are opt-in:
+
+```sh
+go install github.com/evilmartians/lefthook@v1.13.6   # or: brew install lefthook
+task hooks:install
+```
+
+- `pre-commit`: `gofmt`, `go vet ./...`, `taskrail validate`, skill-mirror check.
+- `commit-msg`: Conventional Commit subject; rejects automated-attribution trailers.
+- `pre-push`: `go test ./...`.
+
+Hooks are a convenience; CI (`.github/workflows/ci.yml`) remains the authoritative
+gate. Do not bypass them with `--no-verify`.
 
 ## Status
 

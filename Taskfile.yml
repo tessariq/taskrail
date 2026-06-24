@@ -37,3 +37,15 @@ tasks:
     desc: Verify mirrored skills are in sync
     cmds:
       - ./scripts/check-skill-mirrors.sh
+
+  hooks:install:
+    desc: Install opt-in git hooks via lefthook (pre-commit, commit-msg, pre-push)
+    cmds:
+      - |
+        if ! command -v lefthook >/dev/null 2>&1; then
+          echo "lefthook not found. Install it, then re-run 'task hooks:install':" >&2
+          echo "  go install github.com/evilmartians/lefthook@v1.13.6" >&2
+          echo "  # or: brew install lefthook" >&2
+          exit 1
+        fi
+        lefthook install
