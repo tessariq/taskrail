@@ -6,6 +6,7 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ### Added
 
+- `taskrail task new` scaffolds a task file with the next free id and a template body (Description, Acceptance, Verification Notes, Implementation Notes). Requires `--title` and `--spec-ref`; supports `--priority`, repeatable `--dep`, and `--json`. It mirrors `validate`'s checks at creation time (spec anchor must resolve, dependencies must exist, priority must be valid) so an invalid task never lands, and increments the committed `STATE.md` todo count via the existing state-count logic.
 - Path discovery now reads an optional `.taskrail/config.yml` layout marker (`layout_version` plus `specs_dir`/`planning_dir` locations). When the marker is absent, discovery falls back to the v0.1.0 layout unchanged, so existing repositories need no migration.
 - Homebrew install support via the `tessariq/homebrew-tap` tap: `brew install tessariq/tap/taskrail` (macOS and Linux). The v0.1.0 formula is published retroactively.
 

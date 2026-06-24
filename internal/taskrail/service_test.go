@@ -324,6 +324,115 @@ func TestVerifyWritesPortableCommittedState(t *testing.T) {
 	}
 }
 
+func TestCreateTaskScaffoldsValidTaskAndUpdatesCounts(t *testing.T) {
+	t.Parallel()
+
+	repo := seedFixtureRepo(t)
+	writeTask(t, repo, "T-002", "Existing item", "todo", "high", "specs/v0.1.0.md#summary", nil)
+
+	svc := newTestService(t, repo, time.Date(2026, 6, 24, 12, 0, 0, 0, time.UTC))
+	result, err := svc.CreateTask(CreateTaskInput{
+		Title:        "Scaffolded item",
+		SpecRef:      "specs/v0.1.0.md#summary",
+		Priority:     "high",
+		Dependencies: []string{"T-002"},
+	})
+	if err != nil {
+		t.Fatalf("create task: %v", err)
+	}
+
+	// Deterministic id allocation: max existing (T-002) + 1, zero-padded.
+	if result.TaskID != "T-003" {
+		t.Fatalf("expected T-003, got %s", result.TaskID)
+	}
+	if _, err := os.Stat(filepath.Join(repo, result.Path)); err != nil {
+		t.Fatalf("expected task file at %s: %v", result.Path, err)
+	}
+
+	// The scaffolded file must be valid and carry the requested frontmatter.
+	_, tasks, err := svc.loadStateAndTasks()
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	created, ok := taskByID(tasks, "T-003")
+	if !ok {
+		t.Fatalf("expected T-003 in tasks")
+	}
+	if created.Frontmatter.Status != "todo" || created.Frontmatter.Priority != "high" {
+		t.Fatalf("unexpected frontmatter: %+v", created.Frontmatter)
+	}
+	if created.Frontmatter.SpecRef != "specs/v0.1.0.md#summary" {
+		t.Fatalf("unexpected spec_ref: %q", created.Frontmatter.SpecRef)
+	}
+	if len(created.Frontmatter.Dependencies) != 1 || created.Frontmatter.Dependencies[0] != "T-002" {
+		t.Fatalf("unexpected dependencies: %v", created.Frontmatter.Dependencies)
+	}
+	for _, section := range []string{"## Description", "## Acceptance", "## Verification Notes", "## Implementation Notes"} {
+		if !strings.Contains(created.Body, section) {
+			t.Fatalf("expected body section %q, got %q", section, created.Body)
+		}
+	}
+
+	// State counts reuse existing logic: two todo tasks now tracked.
+	state, err := svc.loadState()
+	if err != nil {
+		t.Fatalf("load state: %v", err)
+	}
+	if !strings.Contains(state.Body, "- todo: 2") {
+		t.Fatalf("expected todo count 2 in state body, got %q", state.Body)
+	}
+
+	validation, err := svc.Validate()
+	if err != nil {
+		t.Fatalf("validate: %v", err)
+	}
+	if !validation.Valid {
+		t.Fatalf("expected valid repo after scaffold, got %v", validation.Violations)
+	}
+}
+
+func TestCreateTaskRejectsInvalidInput(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name  string
+		input CreateTaskInput
+	}{
+		{"empty title", CreateTaskInput{Title: "  ", SpecRef: "specs/v0.1.0.md#summary"}},
+		{"empty spec ref", CreateTaskInput{Title: "x", SpecRef: ""}},
+		{"unknown spec anchor", CreateTaskInput{Title: "x", SpecRef: "specs/v0.1.0.md#nope"}},
+		{"bad priority", CreateTaskInput{Title: "x", SpecRef: "specs/v0.1.0.md#summary", Priority: "urgent"}},
+		{"missing dependency", CreateTaskInput{Title: "x", SpecRef: "specs/v0.1.0.md#summary", Dependencies: []string{"T-999"}}},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			repo := seedFixtureRepo(t)
+			// Seed one real task so the dir is non-empty: a regression that writes
+			// before validating would add a *second* file (T-002), so the absence
+			// checks below are load-bearing rather than passing on an empty dir.
+			writeTask(t, repo, "T-001", "Existing item", "todo", "high", "specs/v0.1.0.md#summary", nil)
+
+			svc := newTestService(t, repo, time.Date(2026, 6, 24, 12, 0, 0, 0, time.UTC))
+			if _, err := svc.CreateTask(tc.input); err == nil {
+				t.Fatalf("expected error for %s", tc.name)
+			}
+			// The forthcoming id (T-002) must not have been written on rejection.
+			if _, err := os.Stat(filepath.Join(repo, "planning", "tasks", "T-002.md")); !os.IsNotExist(err) {
+				t.Fatalf("expected no T-002.md written on rejection, stat err=%v", err)
+			}
+			entries, err := os.ReadDir(filepath.Join(repo, "planning", "tasks"))
+			if err != nil {
+				t.Fatalf("read tasks dir: %v", err)
+			}
+			if len(entries) != 1 {
+				t.Fatalf("expected only the seeded task to remain, found %d", len(entries))
+			}
+		})
+	}
+}
+
 func newTestService(t *testing.T, repo string, now time.Time) *Service {
 	t.Helper()
 	paths, err := DiscoverPaths(repo)

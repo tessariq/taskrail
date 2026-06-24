@@ -303,6 +303,79 @@ func (s *Service) Verify(input VerifyInput) (VerifyResult, error) {
 	}, nil
 }
 
+// CreateTask scaffolds a well-formed task file with the next free id. It mirrors
+// the validation `validate` would apply (spec anchor, dependency existence,
+// priority) at creation time so an invalid task never lands on disk.
+func (s *Service) CreateTask(input CreateTaskInput) (CreateTaskResult, error) {
+	title := strings.TrimSpace(input.Title)
+	if title == "" {
+		return CreateTaskResult{}, errors.New("task title must not be empty")
+	}
+	specRef := strings.TrimSpace(input.SpecRef)
+	if specRef == "" {
+		return CreateTaskResult{}, errors.New("task spec_ref must not be empty")
+	}
+	if err := s.validateSpecRef(specRef); err != nil {
+		return CreateTaskResult{}, fmt.Errorf("invalid spec_ref: %w", err)
+	}
+	priority := strings.TrimSpace(input.Priority)
+	if priority == "" {
+		priority = "medium"
+	}
+	if _, ok := validPriorites[priority]; !ok {
+		return CreateTaskResult{}, fmt.Errorf("invalid priority %q", priority)
+	}
+
+	state, tasks, err := s.loadStateAndTasks()
+	if err != nil {
+		return CreateTaskResult{}, err
+	}
+
+	deps := append([]string(nil), input.Dependencies...)
+	for _, dep := range deps {
+		if _, ok := taskByID(tasks, dep); !ok {
+			return CreateTaskResult{}, fmt.Errorf("dependency %s does not exist", dep)
+		}
+	}
+
+	nextID := nextTaskID(tasks)
+	now := timestamp(s.now())
+	newTask := &Task{
+		Frontmatter: TaskFrontmatter{
+			ID:           nextID,
+			Title:        title,
+			Status:       "todo",
+			Priority:     priority,
+			SpecRef:      specRef,
+			Dependencies: deps,
+			UpdatedAt:    now,
+		},
+		Body:     renderNewTaskBody(nextID, title),
+		Filename: filepath.Join(s.paths.TasksDir, nextID+".md"),
+	}
+
+	// Write the durable task file first, then re-render STATE.md counts from the
+	// full set (existing task files are left untouched). Ordering the task write
+	// first means a failed state write leaves a real task with a stale count that
+	// the next state-writing command heals, never a counted-but-absent task.
+	if err := s.saveTask(newTask); err != nil {
+		return CreateTaskResult{}, err
+	}
+	state.Frontmatter.UpdatedAt = now
+	state.Body = renderStateBody(state.Frontmatter, append(tasks, newTask))
+	if err := s.saveState(state); err != nil {
+		return CreateTaskResult{}, err
+	}
+
+	return CreateTaskResult{
+		TaskID:   nextID,
+		Title:    title,
+		Priority: priority,
+		SpecRef:  specRef,
+		Path:     relPath(s.paths.RepoRoot, newTask.Filename),
+	}, nil
+}
+
 func (s *Service) finishTask(taskID, status, note string) (TransitionResult, error) {
 	state, tasks, err := s.loadStateAndTasks()
 	if err != nil {

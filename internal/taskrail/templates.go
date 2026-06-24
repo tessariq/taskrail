@@ -48,6 +48,27 @@ func starterSpecV010() string {
 	`) + "\n"
 }
 
+// renderNewTaskBody produces the placeholder body for a scaffolded task: the
+// four sections agents and humans fill in before starting work.
+func renderNewTaskBody(id, title string) string {
+	return fmt.Sprintf(`# %s %s
+
+## Description
+
+TODO: describe the work and link the spec section.
+
+## Acceptance
+
+- TODO: define acceptance criteria.
+
+## Verification Notes
+
+- TODO: record verification evidence paths.
+
+## Implementation Notes
+`, id, title)
+}
+
 func renderStateBody(state StateFrontmatter, tasks []*Task) string {
 	var builder strings.Builder
 	builder.WriteString("# STATE\n\n")

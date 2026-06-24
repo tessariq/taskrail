@@ -20,6 +20,7 @@ func newRootCmd() *cobra.Command {
 		newCompleteCmd(),
 		newBlockCmd(),
 		newVerifyCmd(),
+		newTaskCmd(),
 		newVersionCmd(),
 	)
 

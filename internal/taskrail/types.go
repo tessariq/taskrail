@@ -76,6 +76,21 @@ type NextResult struct {
 	Candidates []string `json:"candidates"`
 }
 
+type CreateTaskInput struct {
+	Title        string
+	SpecRef      string
+	Priority     string
+	Dependencies []string
+}
+
+type CreateTaskResult struct {
+	TaskID   string `json:"task_id"`
+	Title    string `json:"title"`
+	Priority string `json:"priority"`
+	SpecRef  string `json:"spec_ref"`
+	Path     string `json:"path"`
+}
+
 type TransitionResult struct {
 	TaskID    string `json:"task_id"`
 	Status    string `json:"status"`

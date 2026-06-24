@@ -116,6 +116,7 @@ goreleaser release --snapshot --clean
 | `taskrail complete <task-id>` | Mark a task completed from an implementation perspective. Supports `--note`. |
 | `taskrail block <task-id>` | Mark a task blocked and record a `--reason`. |
 | `taskrail verify <task-id>` | Record a verification outcome and write artifacts under `planning/artifacts/verify/`. Supports `--result`, `--summary`, `--create-followup`, and `--json`. |
+| `taskrail task new` | Scaffold a new task file with the next free id and a template body. Requires `--title` and `--spec-ref`; supports `--priority`, repeatable `--dep`, and `--json`. Refuses to write an invalid task (unknown spec anchor, nonexistent dependency). |
 | `taskrail version` | Print the CLI version (also `--version`). |
 
 ## Quickstart

@@ -211,6 +211,39 @@ func TestVerifyInvalidResult(t *testing.T) {
 	}
 }
 
+func TestTaskNewScaffoldsAndValidates(t *testing.T) {
+	root := setupRepo(t)
+
+	out, err := runRoot(t, "task", "new", "--title", "Scaffolded via CLI", "--spec-ref", "specs/v0.1.0.md#summary", "--priority", "high", "--json")
+	if err != nil {
+		t.Fatalf("task new: %v (output %q)", err, out)
+	}
+	if !strings.Contains(out, `"task_id": "T-001"`) {
+		t.Fatalf("expected T-001 scaffolded, got %q", out)
+	}
+	if _, err := os.Stat(filepath.Join(root, "planning", "tasks", "T-001.md")); err != nil {
+		t.Fatalf("expected scaffolded task file: %v", err)
+	}
+
+	if out, err := runRoot(t, "validate"); err != nil {
+		t.Fatalf("validate after scaffold: %v (output %q)", err, out)
+	}
+}
+
+func TestTaskNewRejectsBadSpecRef(t *testing.T) {
+	root := setupRepo(t)
+	// Seed a task so the dir is non-empty: a regression writing before validating
+	// would add T-101, making the absence check below load-bearing.
+	writeTask(t, root, "T-100", "todo", "")
+
+	if _, err := runRoot(t, "task", "new", "--title", "x", "--spec-ref", "specs/v0.1.0.md#nope"); err == nil {
+		t.Fatal("expected error for unknown spec anchor")
+	}
+	if _, err := os.Stat(filepath.Join(root, "planning", "tasks", "T-101.md")); !os.IsNotExist(err) {
+		t.Fatalf("expected no T-101.md written on rejection, stat err=%v", err)
+	}
+}
+
 func TestCommandsFailOutsideRepo(t *testing.T) {
 	// A bare temp dir with no .git ancestor: service discovery must fail.
 	t.Chdir(t.TempDir())
