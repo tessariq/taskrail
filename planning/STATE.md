@@ -1,13 +1,13 @@
 ---
 schema_version: 1
-updated_at: "2026-06-23T11:12:01Z"
+updated_at: "2026-06-24T09:57:35Z"
 active_spec_version: v0.1.0
 active_spec_path: specs/v0.1.0.md
 current_task: ""
 current_task_title: ""
 status_summary: idle
 blockers: []
-next_action: Select the next eligible task
+next_action: 'Start task T-018: Add .taskrail/config.yml layout marker and config-aware path discovery'
 last_verification_result: pass for T-017 (planning/artifacts/verify/T-017/20260623T111155Z/report.json)
 relevant_artifacts:
     - planning/artifacts/verify/T-017/20260623T111155Z/plan.md
@@ -41,7 +41,7 @@ continuation_notes:
 
 ## Next Action
 
-- Select the next eligible task
+- Start task T-018: Add .taskrail/config.yml layout marker and config-aware path discovery
 
 ## Relevant Artifacts
 
@@ -55,7 +55,7 @@ continuation_notes:
 
 ## Task Counts
 
-- todo: 0
+- todo: 3
 - in_progress: 0
 - completed: 17
 - blocked: 0
