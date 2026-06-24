@@ -1,13 +1,13 @@
 ---
 schema_version: 1
-updated_at: "2026-06-24T16:11:36Z"
+updated_at: "2026-06-24T16:21:29Z"
 active_spec_version: v0.2.0
 active_spec_path: specs/v0.2.0.md
 current_task: ""
 current_task_title: ""
 status_summary: idle
 blockers: []
-next_action: Select the next eligible task
+next_action: 'Start task T-027: Add taskrail task new scaffold command'
 last_verification_result: pass for T-024 at 2026-06-24T16:11:26Z
 relevant_artifacts: []
 continuation_notes:
@@ -38,7 +38,7 @@ continuation_notes:
 
 ## Next Action
 
-- Select the next eligible task
+- Start task T-027: Add taskrail task new scaffold command
 
 ## Relevant Artifacts
 
@@ -50,7 +50,7 @@ continuation_notes:
 
 ## Task Counts
 
-- todo: 15
+- todo: 16
 - in_progress: 0
 - completed: 20
 - blocked: 0
