@@ -301,6 +301,39 @@ func TestTaskNewRejectsBadSpecRef(t *testing.T) {
 	}
 }
 
+func TestTaskNewFollowUpInheritsAndValidates(t *testing.T) {
+	root := setupRepo(t)
+
+	if _, err := runRoot(t, "task", "new", "--title", "Parent", "--spec-ref", "specs/v0.1.0.md#summary"); err != nil {
+		t.Fatalf("scaffold parent: %v", err)
+	}
+	// Follow-up without --spec-ref inherits the parent's and wires the dependency.
+	out, err := runRoot(t, "task", "new", "--title", "Child", "--follow-up", "T-001", "--json")
+	if err != nil {
+		t.Fatalf("task new follow-up: %v (output %q)", err, out)
+	}
+	if !strings.Contains(out, `"task_id": "T-002"`) {
+		t.Fatalf("expected T-002 follow-up, got %q", out)
+	}
+	if !strings.Contains(out, `"spec_ref": "specs/v0.1.0.md#summary"`) {
+		t.Fatalf("expected inherited spec_ref in output, got %q", out)
+	}
+	if _, err := os.Stat(filepath.Join(root, "planning", "tasks", "T-002.md")); err != nil {
+		t.Fatalf("expected follow-up task file: %v", err)
+	}
+	if out, err := runRoot(t, "validate"); err != nil {
+		t.Fatalf("validate after follow-up: %v (output %q)", err, out)
+	}
+}
+
+func TestTaskNewRequiresSpecRefOrFollowUp(t *testing.T) {
+	setupRepo(t)
+	// Neither --spec-ref nor --follow-up: the RunE guard must reject before any write.
+	if _, err := runRoot(t, "task", "new", "--title", "x"); err == nil {
+		t.Fatal("expected error when neither --spec-ref nor --follow-up provided")
+	}
+}
+
 func TestImportPreviewAndApply(t *testing.T) {
 	root := setupRepo(t)
 	notes := strings.Join([]string{

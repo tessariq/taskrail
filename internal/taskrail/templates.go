@@ -49,13 +49,19 @@ func starterSpecV010() string {
 }
 
 // renderNewTaskBody produces the placeholder body for a scaffolded task: the
-// four sections agents and humans fill in before starting work.
-func renderNewTaskBody(id, title string) string {
+// four sections agents and humans fill in before starting work. A non-empty
+// provenance line is appended to the Description so a follow-up records in its
+// durable file that it derives from a parent, not only in the dependency list.
+func renderNewTaskBody(id, title, provenance string) string {
+	description := "TODO: describe the work and link the spec section."
+	if provenance != "" {
+		description += "\n\n" + provenance
+	}
 	return fmt.Sprintf(`# %s %s
 
 ## Description
 
-TODO: describe the work and link the spec section.
+%s
 
 ## Acceptance
 
@@ -66,7 +72,7 @@ TODO: describe the work and link the spec section.
 - TODO: record verification evidence paths.
 
 ## Implementation Notes
-`, id, title)
+`, id, title, description)
 }
 
 func renderStateBody(state StateFrontmatter, tasks []*Task) string {

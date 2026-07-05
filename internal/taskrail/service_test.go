@@ -466,6 +466,98 @@ func TestCreateTaskRejectsInvalidInput(t *testing.T) {
 	}
 }
 
+func TestCreateFollowUpInheritsSpecRefAndWiresDependency(t *testing.T) {
+	t.Parallel()
+
+	repo := seedFixtureRepo(t)
+	writeTask(t, repo, "T-002", "Parent item", "todo", "high", "specs/v0.1.0.md#summary", nil)
+
+	svc := newTestService(t, repo, time.Date(2026, 6, 24, 12, 0, 0, 0, time.UTC))
+	// No spec_ref supplied: it must be inherited from the parent.
+	result, err := svc.CreateTask(CreateTaskInput{
+		Title:      "Follow-up item",
+		FollowUpOf: "T-002",
+	})
+	if err != nil {
+		t.Fatalf("create follow-up: %v", err)
+	}
+
+	_, tasks, err := svc.loadStateAndTasks()
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	created, ok := taskByID(tasks, result.TaskID)
+	if !ok {
+		t.Fatalf("expected %s in tasks", result.TaskID)
+	}
+	if created.Frontmatter.SpecRef != "specs/v0.1.0.md#summary" {
+		t.Fatalf("expected inherited spec_ref, got %q", created.Frontmatter.SpecRef)
+	}
+	if len(created.Frontmatter.Dependencies) != 1 || created.Frontmatter.Dependencies[0] != "T-002" {
+		t.Fatalf("expected parent as sole dependency, got %v", created.Frontmatter.Dependencies)
+	}
+	if !strings.Contains(created.Body, "T-002") {
+		t.Fatalf("expected provenance mentioning parent in body, got %q", created.Body)
+	}
+
+	validation, err := svc.Validate()
+	if err != nil {
+		t.Fatalf("validate: %v", err)
+	}
+	if !validation.Valid {
+		t.Fatalf("expected valid repo after follow-up, got %v", validation.Violations)
+	}
+}
+
+func TestCreateFollowUpOverridesSpecRefAndMergesDependency(t *testing.T) {
+	t.Parallel()
+
+	repo := seedFixtureRepo(t)
+	writeFile(t, filepath.Join(repo, "specs", "v0.2.0.md"), "# Taskrail v0.2.0\n\n## Ergonomics\n\nFixture.\n")
+	writeTask(t, repo, "T-002", "Parent item", "todo", "high", "specs/v0.1.0.md#summary", nil)
+
+	svc := newTestService(t, repo, time.Date(2026, 6, 24, 12, 0, 0, 0, time.UTC))
+	// Explicit spec_ref overrides inheritance; parent already listed must not duplicate.
+	result, err := svc.CreateTask(CreateTaskInput{
+		Title:        "Follow-up item",
+		SpecRef:      "specs/v0.2.0.md#ergonomics",
+		FollowUpOf:   "T-002",
+		Dependencies: []string{"T-002"},
+	})
+	if err != nil {
+		t.Fatalf("create follow-up: %v", err)
+	}
+	_, tasks, err := svc.loadStateAndTasks()
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	created, ok := taskByID(tasks, result.TaskID)
+	if !ok {
+		t.Fatalf("expected %s in tasks after create, not found", result.TaskID)
+	}
+	if created.Frontmatter.SpecRef != "specs/v0.2.0.md#ergonomics" {
+		t.Fatalf("expected overridden spec_ref, got %q", created.Frontmatter.SpecRef)
+	}
+	if len(created.Frontmatter.Dependencies) != 1 || created.Frontmatter.Dependencies[0] != "T-002" {
+		t.Fatalf("expected parent listed once, got %v", created.Frontmatter.Dependencies)
+	}
+}
+
+func TestCreateFollowUpRejectsMissingParent(t *testing.T) {
+	t.Parallel()
+
+	repo := seedFixtureRepo(t)
+	writeTask(t, repo, "T-001", "Existing item", "todo", "high", "specs/v0.1.0.md#summary", nil)
+
+	svc := newTestService(t, repo, time.Date(2026, 6, 24, 12, 0, 0, 0, time.UTC))
+	if _, err := svc.CreateTask(CreateTaskInput{Title: "x", FollowUpOf: "T-999"}); err == nil {
+		t.Fatal("expected error for missing follow-up parent")
+	}
+	if _, err := os.Stat(filepath.Join(repo, "planning", "tasks", "T-002.md")); !os.IsNotExist(err) {
+		t.Fatalf("expected no T-002.md on rejection, stat err=%v", err)
+	}
+}
+
 func newTestService(t *testing.T, repo string, now time.Time) *Service {
 	t.Helper()
 	paths, err := DiscoverPaths(repo)

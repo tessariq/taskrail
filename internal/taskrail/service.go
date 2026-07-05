@@ -547,7 +547,30 @@ func (s *Service) CreateTask(input CreateTaskInput) (CreateTaskResult, error) {
 	if title == "" {
 		return CreateTaskResult{}, errors.New("task title must not be empty")
 	}
+
+	// Load first: a follow-up needs the parent task to inherit spec_ref and wire
+	// the dependency before the shared validation below runs.
+	state, tasks, err := s.loadStateAndTasks()
+	if err != nil {
+		return CreateTaskResult{}, err
+	}
+
 	specRef := strings.TrimSpace(input.SpecRef)
+	deps := append([]string(nil), input.Dependencies...)
+	followUpOf := strings.TrimSpace(input.FollowUpOf)
+	if followUpOf != "" {
+		parent, ok := taskByID(tasks, followUpOf)
+		if !ok {
+			return CreateTaskResult{}, fmt.Errorf("follow-up parent %s does not exist", followUpOf)
+		}
+		if specRef == "" {
+			specRef = parent.Frontmatter.SpecRef
+		}
+		if !slices.Contains(deps, followUpOf) {
+			deps = append(deps, followUpOf)
+		}
+	}
+
 	if specRef == "" {
 		return CreateTaskResult{}, errors.New("task spec_ref must not be empty")
 	}
@@ -562,12 +585,6 @@ func (s *Service) CreateTask(input CreateTaskInput) (CreateTaskResult, error) {
 		return CreateTaskResult{}, fmt.Errorf("invalid priority %q", priority)
 	}
 
-	state, tasks, err := s.loadStateAndTasks()
-	if err != nil {
-		return CreateTaskResult{}, err
-	}
-
-	deps := append([]string(nil), input.Dependencies...)
 	for _, dep := range deps {
 		if _, ok := taskByID(tasks, dep); !ok {
 			return CreateTaskResult{}, fmt.Errorf("dependency %s does not exist", dep)
@@ -576,6 +593,11 @@ func (s *Service) CreateTask(input CreateTaskInput) (CreateTaskResult, error) {
 
 	nextID := nextTaskID(tasks)
 	now := timestamp(s.now())
+	var provenance string
+	if followUpOf != "" {
+		provenance = fmt.Sprintf("Follow-up derived from %s's verification or discovery.", followUpOf)
+	}
+	body := renderNewTaskBody(nextID, title, provenance)
 	newTask := &Task{
 		Frontmatter: TaskFrontmatter{
 			ID:           nextID,
@@ -586,7 +608,7 @@ func (s *Service) CreateTask(input CreateTaskInput) (CreateTaskResult, error) {
 			Dependencies: deps,
 			UpdatedAt:    now,
 		},
-		Body:     renderNewTaskBody(nextID, title),
+		Body:     body,
 		Filename: filepath.Join(s.paths.TasksDir, nextID+".md"),
 	}
 

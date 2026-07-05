@@ -118,6 +118,10 @@ type CreateTaskInput struct {
 	SpecRef      string
 	Priority     string
 	Dependencies []string
+	// FollowUpOf names a parent task id. When set, the new task inherits the
+	// parent's spec_ref (unless SpecRef overrides it), lists the parent in its
+	// dependencies, and records the follow-up provenance in its body.
+	FollowUpOf string
 }
 
 type CreateTaskResult struct {
