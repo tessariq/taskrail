@@ -21,6 +21,7 @@ func newRootCmd() *cobra.Command {
 		newBlockCmd(),
 		newVerifyCmd(),
 		newTaskCmd(),
+		newImportCmd(),
 		newVersionCmd(),
 	)
 

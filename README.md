@@ -117,6 +117,7 @@ goreleaser release --snapshot --clean
 | `taskrail block <task-id>` | Mark a task blocked and record a `--reason`. |
 | `taskrail verify <task-id>` | Record a verification outcome and write artifacts under `planning/artifacts/verify/`. Supports `--result`, `--summary`, `--create-followup`, and `--json`. |
 | `taskrail task new` | Scaffold a new task file with the next free id and a template body. Requires `--title` and `--spec-ref`; supports `--priority`, repeatable `--dep`, and `--json`. Refuses to write an invalid task (unknown spec anchor, nonexistent dependency). |
+| `taskrail import <source> --to tasks\|spec\|planning` | Deterministically parse a markdown source (no LLM) into T-032 draft form: headings become spec sections, subheadings and list items become task drafts. Previews by default; `--apply` writes reviewable draft files under `planning/imports/` (with an override via `--out`). Never modifies the source. Supports `--json`. |
 | `taskrail version` | Print the CLI version (also `--version`). |
 
 ## Quickstart
@@ -175,6 +176,13 @@ taskrail verify T-001 \
   --create-followup \
   --followup-title "Add dependency validation" \
   --followup-priority high
+```
+
+Bootstrap drafts from rough notes without any LLM — preview first, then apply:
+
+```sh
+taskrail import notes.md --to tasks         # preview the structural task drafts
+taskrail import notes.md --to planning --apply  # write spec + task drafts + a STATE seed under planning/imports/
 ```
 
 Typical flow:

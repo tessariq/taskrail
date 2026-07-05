@@ -244,6 +244,58 @@ func TestTaskNewRejectsBadSpecRef(t *testing.T) {
 	}
 }
 
+func TestImportPreviewAndApply(t *testing.T) {
+	root := setupRepo(t)
+	notes := strings.Join([]string{
+		"# Feature Notes",
+		"",
+		"## Add search endpoint",
+		"",
+		"Return ranked results.",
+		"",
+		"- index the corpus",
+		"- expose the query API",
+		"",
+	}, "\n")
+	if err := os.WriteFile(filepath.Join(root, "notes.md"), []byte(notes), 0o644); err != nil {
+		t.Fatalf("write notes: %v", err)
+	}
+
+	// Preview prints the draft and writes nothing.
+	out, err := runRoot(t, "import", "notes.md", "--to", "tasks", "--json")
+	if err != nil {
+		t.Fatalf("import preview: %v (output %q)", err, out)
+	}
+	if !strings.Contains(out, `"applied": false`) || !strings.Contains(out, "Add search endpoint") {
+		t.Fatalf("unexpected preview output: %q", out)
+	}
+	if _, err := os.Stat(filepath.Join(root, "planning", "imports")); !os.IsNotExist(err) {
+		t.Fatalf("preview must not write imports dir, stat err=%v", err)
+	}
+
+	// Apply writes a reviewable draft file under planning/imports.
+	applyOut, err := runRoot(t, "import", "notes.md", "--to", "tasks", "--apply")
+	if err != nil {
+		t.Fatalf("import apply: %v (output %q)", err, applyOut)
+	}
+	if !strings.Contains(applyOut, "planning/imports/") {
+		t.Fatalf("expected written path in output, got %q", applyOut)
+	}
+	if _, err := os.Stat(filepath.Join(root, "planning", "imports", "notes.tasks.import.json")); err != nil {
+		t.Fatalf("expected written draft file: %v", err)
+	}
+}
+
+func TestImportRequiresTarget(t *testing.T) {
+	root := setupRepo(t)
+	if err := os.WriteFile(filepath.Join(root, "notes.md"), []byte("# T\n\n- a\n"), 0o644); err != nil {
+		t.Fatalf("write notes: %v", err)
+	}
+	if _, err := runRoot(t, "import", "notes.md"); err == nil {
+		t.Fatal("expected error when --to is omitted")
+	}
+}
+
 func TestCommandsFailOutsideRepo(t *testing.T) {
 	// A bare temp dir with no .git ancestor: service discovery must fail.
 	t.Chdir(t.TempDir())

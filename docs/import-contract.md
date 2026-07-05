@@ -1,8 +1,17 @@
 # Taskrail Import Contract (Draft Schema)
 
-Status: contract and schema only. `taskrail import` command behavior is
-implemented later by T-033 (command surface) and T-034 (agent-driven
-emit/apply). This document is the agreement those tasks build against.
+Status: contract and schema. The deterministic structural command surface is
+implemented by T-033 (`taskrail import <src> --to tasks|spec|planning`, preview
+by default with `--apply`); the agent-driven `--emit-prompt`/`--apply <draft.json>`
+path is implemented later by T-034. This document is the agreement both build
+against.
+
+T-033's structural import is the crude, no-LLM baseline: it mechanically parses
+markdown structure into an `ImportDraft` (headings → spec sections; subheadings
+and list items → task drafts) and, on `--apply`, writes the draft as a reviewable
+file under `planning/imports/`. That draft is the `--apply <draft.json>` ingest
+target the agent path (T-034) refines with real spec references before ingesting
+through `CreateTask`.
 
 Spec reference: [`specs/v0.2.0.md#taskrail-import`](../specs/v0.2.0.md).
 
