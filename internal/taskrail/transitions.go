@@ -1,0 +1,404 @@
+package taskrail
+
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"slices"
+	"strings"
+)
+
+func (s *Service) Next() (NextResult, error) {
+	state, tasks, err := s.loadStateAndTasks()
+	if err != nil {
+		return NextResult{}, err
+	}
+
+	if state.Frontmatter.CurrentTask != "" {
+		if task, ok := taskByID(tasks, state.Frontmatter.CurrentTask); ok && task.Frontmatter.Status == "in_progress" {
+			state.Frontmatter.UpdatedAt = timestamp(s.now())
+			state.Frontmatter.NextAction = fmt.Sprintf("Continue task %s", task.Frontmatter.ID)
+			state.Body = renderStateBody(state.Frontmatter, tasks)
+			if err := s.saveState(state); err != nil {
+				return NextResult{}, err
+			}
+			return NextResult{
+				TaskID:     task.Frontmatter.ID,
+				Title:      task.Frontmatter.Title,
+				Priority:   task.Frontmatter.Priority,
+				Reason:     "active task already in progress",
+				Candidates: []string{task.Frontmatter.ID},
+			}, nil
+		}
+	}
+
+	candidates := eligibleTasks(tasks)
+	ids := make([]string, 0, len(candidates))
+	for _, task := range candidates {
+		ids = append(ids, task.Frontmatter.ID)
+	}
+
+	state.Frontmatter.UpdatedAt = timestamp(s.now())
+	if len(candidates) == 0 {
+		state.Frontmatter.NextAction = "No eligible task is ready"
+		state.Body = renderStateBody(state.Frontmatter, tasks)
+		if err := s.saveState(state); err != nil {
+			return NextResult{}, err
+		}
+		return NextResult{Reason: "no eligible task", Candidates: ids}, nil
+	}
+
+	selected := candidates[0]
+	state.Frontmatter.NextAction = fmt.Sprintf("Start task %s: %s", selected.Frontmatter.ID, selected.Frontmatter.Title)
+	state.Body = renderStateBody(state.Frontmatter, tasks)
+	if err := s.saveState(state); err != nil {
+		return NextResult{}, err
+	}
+
+	return NextResult{
+		TaskID:     selected.Frontmatter.ID,
+		Title:      selected.Frontmatter.Title,
+		Priority:   selected.Frontmatter.Priority,
+		Reason:     "next eligible todo by priority and stable task id",
+		Candidates: ids,
+	}, nil
+}
+
+func (s *Service) Start(taskID string) (TransitionResult, error) {
+	state, tasks, err := s.loadStateAndTasks()
+	if err != nil {
+		return TransitionResult{}, err
+	}
+	if state.Frontmatter.CurrentTask != "" {
+		return TransitionResult{}, fmt.Errorf("task %s is already active", state.Frontmatter.CurrentTask)
+	}
+
+	task, ok := taskByID(tasks, taskID)
+	if !ok {
+		return TransitionResult{}, fmt.Errorf("task %s not found", taskID)
+	}
+	if task.Frontmatter.Status != "todo" {
+		return TransitionResult{}, fmt.Errorf("task %s is not todo", taskID)
+	}
+	if !dependenciesResolved(task, tasks) {
+		return TransitionResult{}, fmt.Errorf("task %s has unresolved dependencies", taskID)
+	}
+
+	now := timestamp(s.now())
+	task.Frontmatter.Status = "in_progress"
+	task.Frontmatter.UpdatedAt = now
+
+	state.Frontmatter.UpdatedAt = now
+	state.Frontmatter.CurrentTask = task.Frontmatter.ID
+	state.Frontmatter.CurrentTaskTitle = task.Frontmatter.Title
+	state.Frontmatter.StatusSummary = "in_progress"
+	state.Frontmatter.Blockers = []string{}
+	state.Frontmatter.NextAction = fmt.Sprintf("Implement %s and run targeted tests", task.Frontmatter.ID)
+	state.Body = renderStateBody(state.Frontmatter, tasks)
+
+	if err := s.saveAll(state, tasks); err != nil {
+		return TransitionResult{}, err
+	}
+
+	return TransitionResult{TaskID: taskID, Status: task.Frontmatter.Status, UpdatedAt: now}, nil
+}
+
+func (s *Service) Complete(taskID, note string) (TransitionResult, error) {
+	return s.finishTask(taskID, "completed", strings.TrimSpace(note))
+}
+
+func (s *Service) Block(taskID, reason string) (TransitionResult, error) {
+	if strings.TrimSpace(reason) == "" {
+		return TransitionResult{}, errors.New("block reason must not be empty")
+	}
+	return s.finishTask(taskID, "blocked", strings.TrimSpace(reason))
+}
+
+func (s *Service) Verify(input VerifyInput) (VerifyResult, error) {
+	if input.Result != "pass" && input.Result != "fail" {
+		return VerifyResult{}, fmt.Errorf("invalid verify result %q", input.Result)
+	}
+	if strings.TrimSpace(input.Summary) == "" {
+		return VerifyResult{}, errors.New("verify summary must not be empty")
+	}
+
+	state, tasks, err := s.loadStateAndTasks()
+	if err != nil {
+		return VerifyResult{}, err
+	}
+	task, ok := taskByID(tasks, input.TaskID)
+	if !ok {
+		return VerifyResult{}, fmt.Errorf("task %s not found", input.TaskID)
+	}
+
+	now := s.now().UTC()
+	ts := now.Format("20060102T150405Z")
+	artifactDir := filepath.Join(s.paths.VerifyDir, task.Frontmatter.ID, ts)
+	if err := ensureDir(artifactDir); err != nil {
+		return VerifyResult{}, err
+	}
+
+	planPath := filepath.Join(artifactDir, "plan.md")
+	reportPath := filepath.Join(artifactDir, "report.json")
+	reportMarkdownPath := filepath.Join(artifactDir, "report.md")
+
+	followupTaskID := ""
+	if input.CreateFollowup {
+		newTask, err := s.createFollowupTask(tasks, task, input)
+		if err != nil {
+			return VerifyResult{}, err
+		}
+		tasks = append(tasks, newTask)
+		followupTaskID = newTask.Frontmatter.ID
+	}
+
+	plan := renderVerificationPlan(task, input, followupTaskID)
+	if err := os.WriteFile(planPath, []byte(plan), 0o644); err != nil {
+		return VerifyResult{}, fmt.Errorf("write verification plan: %w", err)
+	}
+
+	relPlan := relPath(s.paths.RepoRoot, planPath)
+	relReport := relPath(s.paths.RepoRoot, reportPath)
+	relReportMarkdown := relPath(s.paths.RepoRoot, reportMarkdownPath)
+
+	report := VerificationArtifact{
+		SchemaVersion:  stateSchemaVersion,
+		TaskID:         task.Frontmatter.ID,
+		TaskTitle:      task.Frontmatter.Title,
+		Result:         input.Result,
+		Summary:        strings.TrimSpace(input.Summary),
+		Details:        strings.TrimSpace(input.Details),
+		GeneratedAt:    timestamp(now),
+		SpecRef:        task.Frontmatter.SpecRef,
+		Artifacts:      []string{relPlan, relReportMarkdown},
+		FollowupTaskID: followupTaskID,
+	}
+
+	reportBytes, err := json.MarshalIndent(report, "", "  ")
+	if err != nil {
+		return VerifyResult{}, fmt.Errorf("marshal verification report: %w", err)
+	}
+	if err := os.WriteFile(reportPath, reportBytes, 0o644); err != nil {
+		return VerifyResult{}, fmt.Errorf("write verification report: %w", err)
+	}
+
+	reportMarkdown := renderVerificationReportMarkdown(report)
+	if err := os.WriteFile(reportMarkdownPath, []byte(reportMarkdown), 0o644); err != nil {
+		return VerifyResult{}, fmt.Errorf("write verification markdown report: %w", err)
+	}
+
+	nowText := timestamp(now)
+	// Task files are committed, so the note must stay portable: record the
+	// result and timestamp without a path into gitignored artifacts (mirrors
+	// the path-free state summary below).
+	appendTaskNote(task, fmt.Sprintf("- %s: verification %s", nowText, input.Result))
+	task.Frontmatter.UpdatedAt = nowText
+
+	state.Frontmatter.UpdatedAt = nowText
+	// Keep committed state portable: record a path-free summary and list no
+	// gitignored artifact paths. Local evidence still lives under
+	// planning/artifacts/verify/ for the producer (see VerifyResult).
+	state.Frontmatter.LastVerificationResult = fmt.Sprintf("%s for %s at %s", input.Result, task.Frontmatter.ID, nowText)
+	state.Frontmatter.RelevantArtifacts = nil
+	if input.Result == "fail" && followupTaskID != "" {
+		state.Frontmatter.NextAction = fmt.Sprintf("Review follow-up task %s", followupTaskID)
+	} else if input.Result == "fail" {
+		state.Frontmatter.NextAction = fmt.Sprintf("Resolve verification findings for %s", task.Frontmatter.ID)
+	} else {
+		state.Frontmatter.NextAction = "Select the next eligible task"
+	}
+	state.Body = renderStateBody(state.Frontmatter, tasks)
+
+	if err := s.saveAll(state, tasks); err != nil {
+		return VerifyResult{}, err
+	}
+
+	return VerifyResult{
+		TaskID:         task.Frontmatter.ID,
+		Result:         input.Result,
+		ArtifactDir:    relPath(s.paths.RepoRoot, artifactDir),
+		PlanPath:       relPlan,
+		ReportPath:     relReport,
+		ReportMarkdown: relReportMarkdown,
+		FollowupTaskID: followupTaskID,
+	}, nil
+}
+
+// CreateTask scaffolds a well-formed task file with the next free id. It mirrors
+// the validation `validate` would apply (spec anchor, dependency existence,
+// priority) at creation time so an invalid task never lands on disk.
+func (s *Service) CreateTask(input CreateTaskInput) (CreateTaskResult, error) {
+	title := strings.TrimSpace(input.Title)
+	if title == "" {
+		return CreateTaskResult{}, errors.New("task title must not be empty")
+	}
+
+	// Load first: a follow-up needs the parent task to inherit spec_ref and wire
+	// the dependency before the shared validation below runs.
+	state, tasks, err := s.loadStateAndTasks()
+	if err != nil {
+		return CreateTaskResult{}, err
+	}
+
+	specRef := strings.TrimSpace(input.SpecRef)
+	deps := append([]string(nil), input.Dependencies...)
+	followUpOf := strings.TrimSpace(input.FollowUpOf)
+	if followUpOf != "" {
+		parent, ok := taskByID(tasks, followUpOf)
+		if !ok {
+			return CreateTaskResult{}, fmt.Errorf("follow-up parent %s does not exist", followUpOf)
+		}
+		if specRef == "" {
+			specRef = parent.Frontmatter.SpecRef
+		}
+		if !slices.Contains(deps, followUpOf) {
+			deps = append(deps, followUpOf)
+		}
+	}
+
+	if specRef == "" {
+		return CreateTaskResult{}, errors.New("task spec_ref must not be empty")
+	}
+	if err := s.validateSpecRef(specRef); err != nil {
+		return CreateTaskResult{}, fmt.Errorf("invalid spec_ref: %w", err)
+	}
+	priority := strings.TrimSpace(input.Priority)
+	if priority == "" {
+		priority = "medium"
+	}
+	if _, ok := validPriorites[priority]; !ok {
+		return CreateTaskResult{}, fmt.Errorf("invalid priority %q", priority)
+	}
+
+	for _, dep := range deps {
+		if _, ok := taskByID(tasks, dep); !ok {
+			return CreateTaskResult{}, fmt.Errorf("dependency %s does not exist", dep)
+		}
+	}
+
+	nextID := nextTaskID(tasks)
+	now := timestamp(s.now())
+	var provenance string
+	if followUpOf != "" {
+		provenance = fmt.Sprintf("Follow-up derived from %s's verification or discovery.", followUpOf)
+	}
+	body := renderNewTaskBody(nextID, title, provenance)
+	newTask := &Task{
+		Frontmatter: TaskFrontmatter{
+			ID:           nextID,
+			Title:        title,
+			Status:       "todo",
+			Priority:     priority,
+			SpecRef:      specRef,
+			Dependencies: deps,
+			UpdatedAt:    now,
+		},
+		Body:     body,
+		Filename: filepath.Join(s.paths.TasksDir, nextID+".md"),
+	}
+
+	// Write the durable task file first, then re-render STATE.md counts from the
+	// full set (existing task files are left untouched). Ordering the task write
+	// first means a failed state write leaves a real task with a stale count that
+	// the next state-writing command heals, never a counted-but-absent task.
+	if err := s.saveTask(newTask); err != nil {
+		return CreateTaskResult{}, err
+	}
+	state.Frontmatter.UpdatedAt = now
+	state.Body = renderStateBody(state.Frontmatter, append(tasks, newTask))
+	if err := s.saveState(state); err != nil {
+		return CreateTaskResult{}, err
+	}
+
+	return CreateTaskResult{
+		TaskID:   nextID,
+		Title:    title,
+		Priority: priority,
+		SpecRef:  specRef,
+		Path:     relPath(s.paths.RepoRoot, newTask.Filename),
+	}, nil
+}
+
+func (s *Service) finishTask(taskID, status, note string) (TransitionResult, error) {
+	state, tasks, err := s.loadStateAndTasks()
+	if err != nil {
+		return TransitionResult{}, err
+	}
+	task, ok := taskByID(tasks, taskID)
+	if !ok {
+		return TransitionResult{}, fmt.Errorf("task %s not found", taskID)
+	}
+	if task.Frontmatter.Status != "in_progress" && !(status == "blocked" && task.Frontmatter.Status == "todo") {
+		return TransitionResult{}, fmt.Errorf("task %s is not in a transitionable state", taskID)
+	}
+
+	now := timestamp(s.now())
+	task.Frontmatter.Status = status
+	task.Frontmatter.UpdatedAt = now
+	if note != "" {
+		appendTaskNote(task, fmt.Sprintf("- %s: %s", now, note))
+	}
+
+	if state.Frontmatter.CurrentTask == taskID {
+		state.Frontmatter.CurrentTask = ""
+		state.Frontmatter.CurrentTaskTitle = ""
+	}
+	state.Frontmatter.UpdatedAt = now
+	state.Frontmatter.StatusSummary = "idle"
+	if status == "blocked" {
+		state.Frontmatter.Blockers = []string{fmt.Sprintf("%s: %s", taskID, note)}
+		state.Frontmatter.StatusSummary = "blocked"
+		state.Frontmatter.NextAction = fmt.Sprintf("Resolve blocker on %s", taskID)
+	} else {
+		state.Frontmatter.Blockers = []string{}
+		state.Frontmatter.NextAction = "Select the next eligible task"
+	}
+	state.Body = renderStateBody(state.Frontmatter, tasks)
+
+	if err := s.saveAll(state, tasks); err != nil {
+		return TransitionResult{}, err
+	}
+
+	return TransitionResult{TaskID: taskID, Status: status, UpdatedAt: now}, nil
+}
+
+func (s *Service) createFollowupTask(tasks []*Task, source *Task, input VerifyInput) (*Task, error) {
+	priority := strings.TrimSpace(input.FollowupPriority)
+	if priority == "" {
+		priority = "medium"
+	}
+	if _, ok := validPriorites[priority]; !ok {
+		return nil, fmt.Errorf("invalid follow-up priority %q", priority)
+	}
+
+	nextID := nextTaskID(tasks)
+	title := strings.TrimSpace(input.FollowupTitle)
+	if title == "" {
+		title = fmt.Sprintf("Follow-up for %s: %s", source.Frontmatter.ID, input.Summary)
+	}
+	description := strings.TrimSpace(input.FollowupDescription)
+	if description == "" {
+		description = strings.TrimSpace(input.Details)
+	}
+	if description == "" {
+		description = "Investigate and resolve the verification finding recorded for this task."
+	}
+
+	body := renderFollowupTaskBody(nextID, title, description)
+	task := &Task{
+		Frontmatter: TaskFrontmatter{
+			ID:           nextID,
+			Title:        title,
+			Status:       "todo",
+			Priority:     priority,
+			SpecRef:      source.Frontmatter.SpecRef,
+			Dependencies: []string{source.Frontmatter.ID},
+			UpdatedAt:    timestamp(s.now()),
+		},
+		Body:     body,
+		Filename: filepath.Join(s.paths.TasksDir, nextID+".md"),
+	}
+	return task, nil
+}

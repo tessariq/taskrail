@@ -75,6 +75,66 @@ func renderNewTaskBody(id, title, provenance string) string {
 `, id, title, description)
 }
 
+// renderFollowupTaskBody produces the body for a verify-created follow-up task.
+// Unlike renderNewTaskBody its Description is evidence-populated from the
+// verification finding and it deliberately omits an Implementation Notes section,
+// so the two task-body scaffolds stay distinct while living side by side
+// (T-028/T-038).
+func renderFollowupTaskBody(id, title, description string) string {
+	return fmt.Sprintf(`# %s %s
+
+## Description
+
+%s
+
+## Acceptance
+
+- The follow-up issue described by verification is resolved.
+- Verification evidence is updated.
+
+## Verification Notes
+
+- Re-run task-scoped verification after implementing the fix.
+`, id, title, description)
+}
+
+func renderVerificationPlan(task *Task, input VerifyInput, followupTaskID string) string {
+	var builder strings.Builder
+	builder.WriteString("# Verification Plan\n\n")
+	builder.WriteString(fmt.Sprintf("- Task: `%s`\n", task.Frontmatter.ID))
+	builder.WriteString(fmt.Sprintf("- Title: %s\n", task.Frontmatter.Title))
+	builder.WriteString(fmt.Sprintf("- Requested result: %s\n", input.Result))
+	builder.WriteString(fmt.Sprintf("- Summary: %s\n", input.Summary))
+	if input.Details != "" {
+		builder.WriteString(fmt.Sprintf("- Details: %s\n", input.Details))
+	}
+	if followupTaskID != "" {
+		builder.WriteString(fmt.Sprintf("- Follow-up task to create: `%s`\n", followupTaskID))
+	}
+	return builder.String()
+}
+
+func renderVerificationReportMarkdown(report VerificationArtifact) string {
+	var builder strings.Builder
+	builder.WriteString("# Verification Report\n\n")
+	builder.WriteString(fmt.Sprintf("- Task: `%s`\n", report.TaskID))
+	builder.WriteString(fmt.Sprintf("- Title: %s\n", report.TaskTitle))
+	builder.WriteString(fmt.Sprintf("- Result: %s\n", report.Result))
+	builder.WriteString(fmt.Sprintf("- Summary: %s\n", report.Summary))
+	if report.Details != "" {
+		builder.WriteString(fmt.Sprintf("- Details: %s\n", report.Details))
+	}
+	builder.WriteString(fmt.Sprintf("- Generated at: %s\n", report.GeneratedAt))
+	builder.WriteString(fmt.Sprintf("- Spec ref: `%s`\n", report.SpecRef))
+	for _, artifact := range report.Artifacts {
+		builder.WriteString(fmt.Sprintf("- Artifact: `%s`\n", artifact))
+	}
+	if report.FollowupTaskID != "" {
+		builder.WriteString(fmt.Sprintf("- Follow-up task: `%s`\n", report.FollowupTaskID))
+	}
+	return builder.String()
+}
+
 func renderStateBody(state StateFrontmatter, tasks []*Task) string {
 	var builder strings.Builder
 	builder.WriteString("# STATE\n\n")
