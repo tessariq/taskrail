@@ -1,0 +1,95 @@
+# Skills Productization Decisions
+
+Contract for how Taskrail's tracked-work skills become a supported product
+surface. Records the three decisions the v0.2.0 spec
+(`specs/v0.2.0.md#agent-workflow-skills`) requires be made explicitly, with
+rationale and non-goals. No runtime behavior lives here; this document gates the
+implementation tasks T-029, T-030, and T-034.
+
+## Decision 1: Portability
+
+Shipped skills must be repo-agnostic. They invoke the installed `taskrail`
+binary, never `go run ./cmd/taskrail`, which only resolves inside the Taskrail
+source tree.
+
+Rationale: adopting repositories have no Go module for Taskrail and no
+`./cmd/taskrail` package. A skill that shells out to `go run` cannot run in any
+repository other than this one.
+
+This repository's own dogfooding skills under `skills/` may keep `go run` until
+the installed binary becomes the dogfooding entry point. Dogfooding portability
+and shipped portability are separated deliberately.
+
+## Decision 2: Distribution Mechanism
+
+Exactly one initial path: **embedded skill files via `embed.FS`, written only on
+explicit opt-in.** Skills are embedded in the binary and materialized only when
+the user runs `taskrail init --with-skills`.
+
+The default `taskrail init` must not write `.agents/` or `.claude/` skill
+directories, or any other agent-tool directory. Provisioning agent-tool
+directories is opt-in and never silent.
+
+Rationale: embedding keeps the shipped skill text versioned with the binary that
+implements the commands the skills call, so the two cannot drift. Gating on an
+explicit `--with-skills` flag keeps `taskrail init` minimal and avoids writing
+provider-specific directories into repositories that do not want them.
+
+Rejected alternative:
+
+- Documentation-only (adopters copy skill text manually): loses version
+  coupling between skills and the binary; higher adoption friction.
+
+Note: writing skills on default `taskrail init` was never an option — it is
+ruled out by the constraint above, not a considered alternative.
+
+## Decision 3: Relationship To Task-Creation Ergonomics
+
+Shipped skills call the real `taskrail task new` command (see T-027 / T-028)
+instead of hand-authoring task markdown.
+
+Rationale: today's dogfooding skills compensate for the absence of a
+task-creation command by writing task files by hand. That duplicates the task
+schema inside skill text and drifts from the CLI's own validation. A real
+command lets a skill create a well-formed task with one non-interactive call, so
+skill text carries workflow, not schema.
+
+The task-creation ergonomics work and the skills work are designed together: as
+`taskrail task new` absorbs schema responsibility, shipped skills shrink to
+workflow orchestration.
+
+## Non-Goals
+
+Taskrail distributes skills as static, provider-agnostic text. It does **not**:
+
+- execute skills,
+- schedule skills, or
+- orchestrate skills.
+
+Running a skill remains the agent's responsibility, consistent with the LLM and
+runtime exclusions in the spec. There is no skill-execution, skill-scheduling,
+or skill-orchestration runtime in Taskrail.
+
+## Shippable Versus Dogfooding-Only Skills
+
+Input list for T-029, which owns the final selection and the portability
+rewrite. Current canonical skills (`skills/`, mirrored to `.agents/skills/` and
+`.claude/skills/`):
+
+| Skill | Disposition | Reason |
+|-------|-------------|--------|
+| `autonomous-backlog` | Shippable | Generic tracked-work cycle (validate, select, start, implement, verify, follow-up); no repo-local assumptions once `go run` is replaced by the installed binary. |
+| `autonomous-task` | Shippable | Executes one selected task through CLI transitions; portable after the binary rewrite. |
+| `autonomous-verify` | Shippable | Drives `taskrail verify` against acceptance criteria and points at product-level verification artifacts. |
+| `autonomous-recovery` | Dogfooding-only (for now) | Falls back to manual edits of authoritative state, which product rules forbid. Becomes shippable once a conservative repair surface (`taskrail repair` / `validate --fix`, see spec "State Repair") removes the need to bypass the CLI. |
+| `autonomous-manual-test` | Dogfooding-only (for now) | Writes under `planning/artifacts/manual-test/`, an internal dogfooding convention the spec ("Artifact And Init Consistency") declines to promote to a product invariant without a deliberate decision. |
+
+T-029 may revise this list, but must justify any change against the three
+decisions above.
+
+## Cross-References
+
+- Spec: `specs/v0.2.0.md#agent-workflow-skills`
+- Skill catalog and packaging: `docs/workflow/skills-overview.md`
+- Downstream implementation tasks: T-029 (shippable skill selection and
+  portability rewrite), T-030 (`init --with-skills` distribution), T-034.

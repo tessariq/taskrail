@@ -23,6 +23,7 @@ Guidance for coding agents working in the Taskrail repository.
 - Local git hooks: `lefthook.yml` (opt-in pre-commit/commit-msg/pre-push; mirrors CI, but `.github/workflows/ci.yml` is authoritative)
 - Canonical skills: `skills/`
 - Mirrored runtime skills: `.agents/skills/` and `.claude/skills/`
+- Skills productization contract: `docs/workflow/skills-productization.md`
 
 ## Toolchain And Environment
 
