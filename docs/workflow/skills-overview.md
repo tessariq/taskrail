@@ -12,10 +12,26 @@ Skill catalog for deterministic tracked-work execution in Taskrail.
 
 ## Packaging
 
-- Canonical skill guidance lives in `skills/`.
+- Canonical dogfooding skill guidance lives in `skills/`.
 - Mirrored runtime copies live in `.agents/skills/` and `.claude/skills/`.
 - Productization decisions live in `docs/workflow/skills-productization.md`.
 - `./scripts/check-skill-mirrors.sh` verifies the mirrored copies stay in sync.
+
+## Shippable Skill Set
+
+The repo-agnostic set installed by `taskrail init --with-skills` (T-030) lives
+separately under `internal/taskrail/skills/`. It invokes the installed
+`taskrail` binary (never `go run`) and creates tasks with `taskrail task new`.
+
+Per `docs/workflow/skills-productization.md`, the split is:
+
+- Shippable: `autonomous-backlog`, `autonomous-task`, `autonomous-verify`.
+- Dogfooding-only: `autonomous-recovery` (hand-edits authoritative state),
+  `autonomous-manual-test` (writes the internal `planning/artifacts/manual-test/`
+  convention).
+
+The dogfooding skills under `skills/` may keep `go run ./cmd/taskrail ...` until
+the installed binary becomes the dogfooding entry point.
 
 ## Required Behavior
 
