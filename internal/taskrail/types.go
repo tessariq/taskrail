@@ -36,7 +36,20 @@ const (
 	InitCurrent          InitOutcome = "current"           // marker already at the current version
 	InitMigrationPreview InitOutcome = "migration_preview" // older version, dry-run diff only
 	InitMigrated         InitOutcome = "migrated"          // older version, migration applied
+	InitRetrofitPreview  InitOutcome = "retrofit_preview"  // non-standard layout, dry-run proposal only
+	InitRetrofitApplied  InitOutcome = "retrofit_applied"  // non-standard layout adopted after confirmation
 )
+
+// RetrofitMapping proposes how one detected candidate directory in a
+// non-standard repository relates to a Taskrail layout role. It is a detection
+// proposal the human confirms before the standard layout is scaffolded; applying
+// a retrofit never moves or rewrites the source directory's content (content
+// migration is a later flow), it only creates the missing Taskrail structure.
+type RetrofitMapping struct {
+	Source string `json:"source"` // detected candidate directory (repo-relative)
+	Target string `json:"target"` // Taskrail directory it maps onto (repo-relative)
+	Role   string `json:"role"`   // Taskrail role the target fills ("specs" | "planning")
+}
 
 // InitResult reports what version-aware init observed and did. Changes is the
 // human-readable diff (populated for migration outcomes); Validation is set only
@@ -47,6 +60,7 @@ type InitResult struct {
 	ToVersion   int               `json:"to_version"`
 	Applied     bool              `json:"applied"`
 	Changes     []string          `json:"changes,omitempty"`
+	Mapping     []RetrofitMapping `json:"mapping,omitempty"`
 	Validation  *ValidationResult `json:"validation,omitempty"`
 }
 

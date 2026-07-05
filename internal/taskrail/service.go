@@ -39,13 +39,14 @@ func (s *Service) Init(apply bool) (InitResult, error) {
 	if hasMarker {
 		return s.initWithMarker(cfg, apply)
 	}
-	return s.initWithoutMarker()
+	return s.initWithoutMarker(apply)
 }
 
-// initWithoutMarker handles the two unmarked cases: a pre-existing v0.1.0 layout
-// is adopted (marker written, nothing else touched), while an empty repository
-// gets a fresh layout plus marker.
-func (s *Service) initWithoutMarker() (InitResult, error) {
+// initWithoutMarker handles the unmarked cases: a pre-existing v0.1.0 layout is
+// adopted (marker written, nothing else touched); a non-standard layout with
+// candidate directories triggers a guided retrofit that proposes a mapping and
+// defaults to a dry run; and an empty repository gets a fresh layout plus marker.
+func (s *Service) initWithoutMarker(apply bool) (InitResult, error) {
 	if s.layoutExists() {
 		if err := writeMarker(s.paths.RepoRoot, defaultLayoutConfig()); err != nil {
 			return InitResult{}, err
@@ -55,8 +56,12 @@ func (s *Service) initWithoutMarker() (InitResult, error) {
 			FromVersion: currentLayoutVersion,
 			ToVersion:   currentLayoutVersion,
 			Applied:     true,
-			Changes:     []string{fmt.Sprintf("write %s (layout_version %d)", markerRelPath(), currentLayoutVersion)},
+			Changes:     []string{markerWriteChange()},
 		}, nil
+	}
+
+	if mapping := s.detectRetrofit(); len(mapping) > 0 {
+		return s.retrofit(mapping, apply)
 	}
 
 	if err := s.ensureLayout(); err != nil {
@@ -114,9 +119,6 @@ func (s *Service) migrate(cfg LayoutConfig, apply bool) (InitResult, error) {
 		}, nil
 	}
 
-	if err := s.ensureLayout(); err != nil {
-		return InitResult{}, err
-	}
 	migrated := cfg
 	migrated.LayoutVersion = currentLayoutVersion
 	if migrated.SpecsDir == "" {
@@ -125,10 +127,7 @@ func (s *Service) migrate(cfg LayoutConfig, apply bool) (InitResult, error) {
 	if migrated.PlanningDir == "" {
 		migrated.PlanningDir = defaultPlanningDir
 	}
-	if err := writeMarker(s.paths.RepoRoot, migrated); err != nil {
-		return InitResult{}, err
-	}
-	validation, err := s.Validate()
+	validation, err := s.applyLayout(migrated)
 	if err != nil {
 		return InitResult{}, err
 	}
@@ -140,6 +139,93 @@ func (s *Service) migrate(cfg LayoutConfig, apply bool) (InitResult, error) {
 		Changes:     changes,
 		Validation:  &validation,
 	}, nil
+}
+
+// retrofitCandidates lists the source directory names a non-standard repository
+// might already use, in priority order, and the Taskrail directory (target) and
+// role each would fill. Detection is deliberately conservative: it only
+// recognizes this small, well-known set rather than guessing from arbitrary
+// directory names.
+var retrofitCandidates = []struct {
+	dir    string
+	role   string
+	target string
+}{
+	{defaultSpecsDir, "specs", defaultSpecsDir},
+	{defaultPlanningDir, "planning", defaultPlanningDir},
+	{"notes", "planning", defaultPlanningDir},
+}
+
+// detectRetrofit scans an unmarked, non-standard repository for candidate
+// directories that suggest an existing layout to adopt, returning the proposed
+// mapping onto the Taskrail layout. It returns nil for an empty repository (which
+// should be fresh-initialized) and never proposes the same role twice, so a
+// human confirms one clear mapping rather than a redundant one.
+func (s *Service) detectRetrofit() []RetrofitMapping {
+	var mapping []RetrofitMapping
+	claimed := map[string]bool{}
+	for _, c := range retrofitCandidates {
+		if claimed[c.role] {
+			continue
+		}
+		if !dirExists(filepath.Join(s.paths.RepoRoot, c.dir)) {
+			continue
+		}
+		mapping = append(mapping, RetrofitMapping{Source: c.dir, Target: c.target, Role: c.role})
+		claimed[c.role] = true
+	}
+	return mapping
+}
+
+// retrofit adopts a detected non-standard layout into the current Taskrail
+// layout. It defaults to a dry run that only reports the proposed mapping and the
+// changes applying it would make; apply creates the missing layout with
+// writeFileIfMissing semantics (never clobbering existing content), writes the
+// marker, and re-runs validation.
+func (s *Service) retrofit(mapping []RetrofitMapping, apply bool) (InitResult, error) {
+	changes := append(s.pendingLayoutChanges(), markerWriteChange())
+
+	if !apply {
+		return InitResult{
+			Outcome:     InitRetrofitPreview,
+			FromVersion: currentLayoutVersion,
+			ToVersion:   currentLayoutVersion,
+			Changes:     changes,
+			Mapping:     mapping,
+		}, nil
+	}
+
+	validation, err := s.applyLayout(defaultLayoutConfig())
+	if err != nil {
+		return InitResult{}, err
+	}
+	return InitResult{
+		Outcome:     InitRetrofitApplied,
+		FromVersion: currentLayoutVersion,
+		ToVersion:   currentLayoutVersion,
+		Applied:     true,
+		Changes:     changes,
+		Mapping:     mapping,
+		Validation:  &validation,
+	}, nil
+}
+
+// applyLayout is the shared apply tail for migrate and retrofit: create the
+// current layout idempotently, persist the given marker, and re-run validation.
+// Both callers only ever add missing content, so human-authored files survive.
+func (s *Service) applyLayout(marker LayoutConfig) (ValidationResult, error) {
+	if err := s.ensureLayout(); err != nil {
+		return ValidationResult{}, err
+	}
+	if err := writeMarker(s.paths.RepoRoot, marker); err != nil {
+		return ValidationResult{}, err
+	}
+	return s.Validate()
+}
+
+// markerWriteChange describes writing the current marker, used in dry-run diffs.
+func markerWriteChange() string {
+	return fmt.Sprintf("write %s (layout_version %d)", markerRelPath(), currentLayoutVersion)
 }
 
 // layoutExists reports whether the repository already carries a v0.1.0 layout,

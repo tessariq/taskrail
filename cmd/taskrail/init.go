@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/tessariq/taskrail/internal/taskrail"
@@ -14,8 +15,11 @@ func newInitCmd() *cobra.Command {
 		Use:   "init",
 		Short: "Initialize or upgrade Taskrail structure in the current repository",
 		Long: "Initialize Taskrail in an empty repository, adopt an existing unmarked " +
-			"layout, or migrate an older layout to the current version. Migration " +
-			"defaults to a dry run; pass --apply to write the changes.",
+			"layout, migrate an older layout to the current version, or retrofit a " +
+			"non-standard repository (one with a specs/, planning/, or notes/ " +
+			"directory) by proposing a mapping. Migration and retrofit default to a " +
+			"dry run; pass --apply to write the changes. Retrofit scaffolds the " +
+			"Taskrail layout without moving existing content.",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			svc, err := serviceFromCmd(cmd)
 			if err != nil {
@@ -47,9 +51,25 @@ func initSummary(result taskrail.InitResult) string {
 	case taskrail.InitMigrated:
 		return fmt.Sprintf("migrated layout %d -> %d\n%svalidation: %s",
 			result.FromVersion, result.ToVersion, changeLines(result.Changes), validationLabel(result.Validation))
+	case taskrail.InitRetrofitPreview:
+		return fmt.Sprintf("non-standard layout detected; proposed mapping (dry run)\n%s%sexisting content is not moved; re-run with --apply to retrofit",
+			mappingLines(result.Mapping), changeLines(result.Changes))
+	case taskrail.InitRetrofitApplied:
+		return fmt.Sprintf("retrofit applied (existing content was not moved)\n%s%svalidation: %s",
+			mappingLines(result.Mapping), changeLines(result.Changes), validationLabel(result.Validation))
 	default:
 		return "initialized taskrail structure"
 	}
+}
+
+// mappingLines renders the proposed retrofit mapping so the human can confirm
+// how each detected directory maps onto the Taskrail layout before applying.
+func mappingLines(mapping []taskrail.RetrofitMapping) string {
+	var out strings.Builder
+	for _, m := range mapping {
+		fmt.Fprintf(&out, "  %s/ -> %s/ (%s)\n", m.Source, m.Target, m.Role)
+	}
+	return out.String()
 }
 
 func changeLines(changes []string) string {

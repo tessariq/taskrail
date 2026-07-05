@@ -3,6 +3,7 @@ package taskrail
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strings"
 	"testing"
@@ -199,6 +200,96 @@ func TestInitRejectsNewerLayoutVersion(t *testing.T) {
 	svc := newTestService(t, repo, time.Date(2026, 3, 31, 12, 0, 0, 0, time.UTC))
 	if _, err := svc.Init(false); err == nil {
 		t.Fatal("expected error for newer-than-supported layout_version")
+	}
+}
+
+// seedNonStandardRepo builds an unmarked repository that has candidate
+// directories (a populated specs/ and a notes/ folder) but no Taskrail STATE.md
+// or tasks/ layout, so init must propose a retrofit rather than fresh-create.
+func seedNonStandardRepo(t *testing.T) string {
+	t.Helper()
+	repo := initGitRepo(t)
+	writeFile(t, filepath.Join(repo, "specs", "overview.md"), "# Hand-written specs\n")
+	if err := os.MkdirAll(filepath.Join(repo, "notes"), 0o755); err != nil {
+		t.Fatalf("mkdir notes: %v", err)
+	}
+	writeFile(t, filepath.Join(repo, "notes", "ideas.md"), "loose planning notes\n")
+	return repo
+}
+
+func TestInitDetectsNonStandardLayoutAndProposesMapping(t *testing.T) {
+	t.Parallel()
+
+	repo := seedNonStandardRepo(t)
+	before := snapshotTree(t, repo)
+
+	svc := newTestService(t, repo, time.Date(2026, 3, 31, 12, 0, 0, 0, time.UTC))
+	result, err := svc.Init(false)
+	if err != nil {
+		t.Fatalf("init dry run: %v", err)
+	}
+	if result.Outcome != InitRetrofitPreview {
+		t.Fatalf("outcome = %q, want %q", result.Outcome, InitRetrofitPreview)
+	}
+	if result.Applied {
+		t.Fatal("retrofit dry run must not apply changes")
+	}
+	// The seed repo has specs/ and notes/ but no planning/, so detection must
+	// propose exactly the specs->specs and notes->planning mappings, in that
+	// order, and must not emit a redundant second planning role.
+	want := []RetrofitMapping{
+		{Source: "specs", Target: "specs", Role: "specs"},
+		{Source: "notes", Target: "planning", Role: "planning"},
+	}
+	if !reflect.DeepEqual(result.Mapping, want) {
+		t.Fatalf("mapping = %+v, want %+v", result.Mapping, want)
+	}
+	if len(result.Changes) == 0 {
+		t.Fatal("retrofit preview must report planned changes")
+	}
+
+	after := snapshotTree(t, repo)
+	if added := addedPaths(before, after); len(added) != 0 {
+		t.Fatalf("dry run added files: %v", added)
+	}
+	if _, present, err := readMarker(repo); err != nil || present {
+		t.Fatalf("dry run must not write marker: present=%v err=%v", present, err)
+	}
+}
+
+func TestInitRetrofitApplyIsNonDestructive(t *testing.T) {
+	t.Parallel()
+
+	repo := seedNonStandardRepo(t)
+	humanSpec := filepath.Join(repo, "specs", "overview.md")
+	humanContent := "# Hand-written specs\n"
+
+	svc := newTestService(t, repo, time.Date(2026, 3, 31, 12, 0, 0, 0, time.UTC))
+	result, err := svc.Init(true)
+	if err != nil {
+		t.Fatalf("init apply: %v", err)
+	}
+	if result.Outcome != InitRetrofitApplied || !result.Applied {
+		t.Fatalf("outcome = %q applied=%v, want %q applied", result.Outcome, result.Applied, InitRetrofitApplied)
+	}
+	if result.Validation == nil || !result.Validation.Valid {
+		t.Fatalf("expected valid post-retrofit validation, got %+v", result.Validation)
+	}
+
+	got, err := os.ReadFile(humanSpec)
+	if err != nil {
+		t.Fatalf("read human spec: %v", err)
+	}
+	if string(got) != humanContent {
+		t.Fatal("retrofit rewrote human-authored spec content")
+	}
+
+	cfg, present, err := readMarker(repo)
+	if err != nil || !present {
+		t.Fatalf("read marker: present=%v err=%v", present, err)
+	}
+	if cfg.LayoutVersion != currentLayoutVersion {
+		t.Fatalf("layout_version = %d, want %d", cfg.LayoutVersion, currentLayoutVersion)
 	}
 }
 
