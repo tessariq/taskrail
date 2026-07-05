@@ -63,12 +63,21 @@ func TestInitCreatesStructure(t *testing.T) {
 	for _, rel := range []string{
 		"planning/STATE.md",
 		"planning/tasks",
-		"planning/artifacts/verify",
 		"specs/README.md",
 		"specs/v0.1.0.md",
 	} {
 		if _, err := os.Stat(filepath.Join(root, rel)); err != nil {
 			t.Errorf("expected %s to exist: %v", rel, err)
+		}
+	}
+	// init does not pre-create gitignored artifact output dirs (T-024/T-025).
+	for _, rel := range []string{
+		"planning/artifacts/verify",
+		"planning/artifacts/runs",
+		"planning/artifacts/manual-test",
+	} {
+		if _, err := os.Stat(filepath.Join(root, rel)); !os.IsNotExist(err) {
+			t.Errorf("expected init not to create %s, stat err=%v", rel, err)
 		}
 	}
 }

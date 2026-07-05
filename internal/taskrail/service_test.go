@@ -28,10 +28,22 @@ func TestInitCreatesStructureAndIsIdempotent(t *testing.T) {
 		filepath.Join(repo, "specs", "README.md"),
 		filepath.Join(repo, "planning", "STATE.md"),
 		filepath.Join(repo, "planning", "tasks"),
-		filepath.Join(repo, "planning", "artifacts", "verify"),
 	} {
 		if _, err := os.Stat(path); err != nil {
 			t.Fatalf("expected %s to exist: %v", path, err)
+		}
+	}
+	// init must not pre-create gitignored artifact output directories; a clean
+	// checkout drops them anyway and verify creates verify/<id>/<ts>/ on demand
+	// (T-024/T-025). manual-test artifacts stay an internal dogfooding
+	// convention, never provisioned by init.
+	for _, path := range []string{
+		filepath.Join(repo, "planning", "artifacts", "verify"),
+		filepath.Join(repo, "planning", "artifacts", "runs"),
+		filepath.Join(repo, "planning", "artifacts", "manual-test"),
+	} {
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Fatalf("expected init not to create %s, stat err=%v", path, err)
 		}
 	}
 	validation, err := svc.Validate()

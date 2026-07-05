@@ -213,6 +213,8 @@ planning/
 
 These artifacts are plain files. No proprietary formats. No database required.
 
+The `planning/artifacts/` tree is gitignored, reproducible local output. `verify` creates `planning/artifacts/verify/<task-id>/<timestamp>/` on demand; manual-test evidence under `planning/artifacts/manual-test/` is an internal dogfooding convention. `taskrail init` does not pre-create these directories — a clean checkout drops them, and neither committed state nor `validate` depends on the tree surviving a Git round-trip.
+
 ## State Contract
 
 `planning/STATE.md` is the authoritative execution state. It carries the active spec, current task, status summary, blockers, the next action, and the last verification result, plus pointers to relevant artifacts. Do not hand-edit machine-managed state fields — let the `taskrail` transitions update them.

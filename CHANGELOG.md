@@ -16,6 +16,7 @@ All notable user-visible changes to Taskrail will be documented in this file.
 ### Changed
 
 - `taskrail verify` now records a portable result in committed `STATE.md`: `last_verification_result` is a path-free summary (result, task id, timestamp) and `relevant_artifacts` no longer lists gitignored `planning/artifacts/...` paths. Local evidence is still written under `planning/artifacts/verify/` for the producer, so a teammate cloning the repo no longer sees `STATE.md` pointing at files that exist only on the producer's machine.
+- `taskrail init` no longer pre-creates the gitignored artifact output directories (`planning/artifacts/verify/` and `planning/artifacts/runs/`). These are reproducible local output that a clean checkout drops anyway; `verify` still creates `planning/artifacts/verify/<task-id>/<timestamp>/` on demand. Manual-test evidence under `planning/artifacts/manual-test/` stays an internal dogfooding convention and is likewise never provisioned by `init`, so init, `validate`, and `verify` now share one coherent artifact contract.
 
 ### Fixed
 

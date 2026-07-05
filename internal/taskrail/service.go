@@ -238,7 +238,11 @@ func (s *Service) layoutExists() bool {
 // and content via writeFileIfMissing, with the state file written only when
 // absent. Re-running it never overwrites existing files.
 func (s *Service) ensureLayout() error {
-	for _, dir := range []string{s.paths.SpecsDir, s.paths.TasksDir, s.paths.VerifyDir, filepath.Join(s.paths.ArtifactsDir, "runs")} {
+	// Only tracked, committed directories are provisioned. Gitignored artifact
+	// output (verify/, runs/, manual-test/) is created on demand by verify and
+	// manual testing; a clean checkout drops it, so pre-creating it here would
+	// leave init and validate inconsistent (T-024/T-025).
+	for _, dir := range []string{s.paths.SpecsDir, s.paths.TasksDir} {
 		if err := ensureDir(dir); err != nil {
 			return err
 		}
@@ -263,7 +267,7 @@ func (s *Service) ensureLayout() error {
 // create, so a migration dry run can report exactly what applying it would add.
 func (s *Service) pendingLayoutChanges() []string {
 	var changes []string
-	for _, dir := range []string{s.paths.SpecsDir, s.paths.TasksDir, s.paths.VerifyDir, filepath.Join(s.paths.ArtifactsDir, "runs")} {
+	for _, dir := range []string{s.paths.SpecsDir, s.paths.TasksDir} {
 		if !dirExists(dir) {
 			changes = append(changes, "create dir "+relPath(s.paths.RepoRoot, dir))
 		}
