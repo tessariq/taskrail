@@ -109,7 +109,7 @@ goreleaser release --snapshot --clean
 
 | Command | Purpose |
 | --- | --- |
-| `taskrail init` | Initialize Taskrail structure (`specs/`, `planning/`, starter `STATE.md`) in the current repository. |
+| `taskrail init` | Version-aware, non-destructive initialize/upgrade. Empty repo: write the layout plus a `.taskrail/config.yml` marker. Existing unmarked v0.1.0 layout: adopt it by writing only the marker. Older `layout_version`: migrate (dry run by default, `--apply` to write, then re-validate). Supports `--json`. |
 | `taskrail validate` | Validate folder layout, required files, task shape, dependency and spec references, and `STATE.md` consistency. |
 | `taskrail next` | Deterministically select the next eligible task. Supports `--json`. |
 | `taskrail start <task-id>` | Mark a task as active and update `planning/STATE.md`. |

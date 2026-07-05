@@ -17,10 +17,10 @@ func TestInitCreatesStructureAndIsIdempotent(t *testing.T) {
 	repo := initGitRepo(t)
 	svc := newTestService(t, repo, time.Date(2026, 3, 31, 12, 0, 0, 0, time.UTC))
 
-	if err := svc.Init(); err != nil {
+	if _, err := svc.Init(false); err != nil {
 		t.Fatalf("init: %v", err)
 	}
-	if err := svc.Init(); err != nil {
+	if _, err := svc.Init(false); err != nil {
 		t.Fatalf("init second run: %v", err)
 	}
 
@@ -71,7 +71,7 @@ func TestValidateCleanCheckoutOfCommittedRepo(t *testing.T) {
 	repo := t.TempDir()
 	runGit(repo, "init", "-q")
 	svc := newTestService(t, repo, time.Date(2026, 6, 24, 12, 0, 0, 0, time.UTC))
-	if err := svc.Init(); err != nil {
+	if _, err := svc.Init(false); err != nil {
 		t.Fatalf("init: %v", err)
 	}
 	writeTask(t, repo, "T-001", "Seed task", "todo", "high", "specs/v0.1.0.md#summary", nil)

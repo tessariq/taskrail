@@ -27,6 +27,29 @@ type LayoutConfig struct {
 	PlanningDir   string `yaml:"planning_dir" json:"planning_dir"`
 }
 
+// InitOutcome classifies what version-aware init did to a repository.
+type InitOutcome string
+
+const (
+	InitCreated          InitOutcome = "created"           // fresh layout written in an empty repo
+	InitAdopted          InitOutcome = "adopted"           // legacy layout marked, nothing else changed
+	InitCurrent          InitOutcome = "current"           // marker already at the current version
+	InitMigrationPreview InitOutcome = "migration_preview" // older version, dry-run diff only
+	InitMigrated         InitOutcome = "migrated"          // older version, migration applied
+)
+
+// InitResult reports what version-aware init observed and did. Changes is the
+// human-readable diff (populated for migration outcomes); Validation is set only
+// after an applied migration re-runs validation.
+type InitResult struct {
+	Outcome     InitOutcome       `json:"outcome"`
+	FromVersion int               `json:"from_version"`
+	ToVersion   int               `json:"to_version"`
+	Applied     bool              `json:"applied"`
+	Changes     []string          `json:"changes,omitempty"`
+	Validation  *ValidationResult `json:"validation,omitempty"`
+}
+
 type StateFrontmatter struct {
 	SchemaVersion          int      `yaml:"schema_version" json:"schema_version"`
 	UpdatedAt              string   `yaml:"updated_at" json:"updated_at"`

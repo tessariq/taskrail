@@ -75,6 +75,44 @@ func loadLayoutConfig(root string) (LayoutConfig, error) {
 	return cfg, nil
 }
 
+func markerPath(root string) string {
+	return filepath.Join(root, taskrailConfigDir, taskrailConfigFile)
+}
+
+// readMarker reads the `.taskrail/config.yml` marker and reports whether it
+// exists. Unlike loadLayoutConfig it does not synthesize a default when the
+// marker is absent, so callers can distinguish an unmarked repository (needing
+// fresh init or legacy adoption) from a marked one.
+func readMarker(root string) (LayoutConfig, bool, error) {
+	data, err := os.ReadFile(markerPath(root))
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return LayoutConfig{}, false, nil
+		}
+		return LayoutConfig{}, false, fmt.Errorf("read layout marker: %w", err)
+	}
+	cfg := defaultLayoutConfig()
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
+		return LayoutConfig{}, false, fmt.Errorf("parse layout marker %s: %w", markerPath(root), err)
+	}
+	return cfg, true, nil
+}
+
+// writeMarker persists the layout marker, creating `.taskrail/` if needed.
+func writeMarker(root string, cfg LayoutConfig) error {
+	if err := os.MkdirAll(filepath.Join(root, taskrailConfigDir), 0o755); err != nil {
+		return fmt.Errorf("create %s: %w", taskrailConfigDir, err)
+	}
+	data, err := yaml.Marshal(cfg)
+	if err != nil {
+		return fmt.Errorf("marshal layout marker: %w", err)
+	}
+	if err := os.WriteFile(markerPath(root), data, 0o644); err != nil {
+		return fmt.Errorf("write layout marker: %w", err)
+	}
+	return nil
+}
+
 // ensureWithinRoot rejects marker locations that resolve outside the repository
 // root (e.g. `../../etc`), so an untrusted config cannot redirect discovery to
 // arbitrary filesystem paths.

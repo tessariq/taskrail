@@ -25,20 +25,138 @@ func NewService(start string) (*Service, error) {
 	return &Service{paths: paths, now: time.Now}, nil
 }
 
-func (s *Service) Init() error {
-	if err := ensureDir(s.paths.SpecsDir); err != nil {
-		return err
+// Init makes a repository Taskrail-managed in a version-aware, non-destructive
+// way: it writes the `.taskrail/config.yml` marker and, when the marker records
+// an older layout_version, migrates to the current layout. Migration defaults to
+// a dry run reporting the diff; callers must pass apply=true to write it. Content
+// created for the layout uses writeFileIfMissing/saveState-if-missing semantics,
+// so human-authored content under specs/ and planning/ is never rewritten.
+func (s *Service) Init(apply bool) (InitResult, error) {
+	cfg, hasMarker, err := readMarker(s.paths.RepoRoot)
+	if err != nil {
+		return InitResult{}, err
 	}
-	if err := ensureDir(s.paths.TasksDir); err != nil {
-		return err
+	if hasMarker {
+		return s.initWithMarker(cfg, apply)
 	}
-	if err := ensureDir(s.paths.VerifyDir); err != nil {
-		return err
-	}
-	if err := ensureDir(filepath.Join(s.paths.ArtifactsDir, "runs")); err != nil {
-		return err
+	return s.initWithoutMarker()
+}
+
+// initWithoutMarker handles the two unmarked cases: a pre-existing v0.1.0 layout
+// is adopted (marker written, nothing else touched), while an empty repository
+// gets a fresh layout plus marker.
+func (s *Service) initWithoutMarker() (InitResult, error) {
+	if s.layoutExists() {
+		if err := writeMarker(s.paths.RepoRoot, defaultLayoutConfig()); err != nil {
+			return InitResult{}, err
+		}
+		return InitResult{
+			Outcome:     InitAdopted,
+			FromVersion: currentLayoutVersion,
+			ToVersion:   currentLayoutVersion,
+			Applied:     true,
+			Changes:     []string{fmt.Sprintf("write %s (layout_version %d)", markerRelPath(), currentLayoutVersion)},
+		}, nil
 	}
 
+	if err := s.ensureLayout(); err != nil {
+		return InitResult{}, err
+	}
+	if err := writeMarker(s.paths.RepoRoot, defaultLayoutConfig()); err != nil {
+		return InitResult{}, err
+	}
+	return InitResult{
+		Outcome:     InitCreated,
+		FromVersion: currentLayoutVersion,
+		ToVersion:   currentLayoutVersion,
+		Applied:     true,
+	}, nil
+}
+
+// initWithMarker dispatches on the recorded layout version: current is an
+// idempotent no-op, older triggers migration, and newer is refused so an older
+// CLI never mangles a layout it does not understand.
+func (s *Service) initWithMarker(cfg LayoutConfig, apply bool) (InitResult, error) {
+	switch {
+	case cfg.LayoutVersion == currentLayoutVersion:
+		if err := s.ensureLayout(); err != nil {
+			return InitResult{}, err
+		}
+		return InitResult{
+			Outcome:     InitCurrent,
+			FromVersion: cfg.LayoutVersion,
+			ToVersion:   currentLayoutVersion,
+			Applied:     true,
+		}, nil
+	case cfg.LayoutVersion > currentLayoutVersion:
+		return InitResult{}, fmt.Errorf(
+			"repository layout_version %d is newer than supported %d; upgrade taskrail",
+			cfg.LayoutVersion, currentLayoutVersion)
+	default:
+		return s.migrate(cfg, apply)
+	}
+}
+
+// migrate upgrades an older-version repository to the current layout. It defaults
+// to a dry run that only reports the diff; apply writes the missing layout,
+// bumps the marker, and re-runs validation. It only ever creates missing content
+// and rewrites the machine marker, so human-authored files are left intact.
+func (s *Service) migrate(cfg LayoutConfig, apply bool) (InitResult, error) {
+	changes := append(s.pendingLayoutChanges(),
+		fmt.Sprintf("update %s layout_version %d -> %d", markerRelPath(), cfg.LayoutVersion, currentLayoutVersion))
+
+	if !apply {
+		return InitResult{
+			Outcome:     InitMigrationPreview,
+			FromVersion: cfg.LayoutVersion,
+			ToVersion:   currentLayoutVersion,
+			Changes:     changes,
+		}, nil
+	}
+
+	if err := s.ensureLayout(); err != nil {
+		return InitResult{}, err
+	}
+	migrated := cfg
+	migrated.LayoutVersion = currentLayoutVersion
+	if migrated.SpecsDir == "" {
+		migrated.SpecsDir = defaultSpecsDir
+	}
+	if migrated.PlanningDir == "" {
+		migrated.PlanningDir = defaultPlanningDir
+	}
+	if err := writeMarker(s.paths.RepoRoot, migrated); err != nil {
+		return InitResult{}, err
+	}
+	validation, err := s.Validate()
+	if err != nil {
+		return InitResult{}, err
+	}
+	return InitResult{
+		Outcome:     InitMigrated,
+		FromVersion: cfg.LayoutVersion,
+		ToVersion:   currentLayoutVersion,
+		Applied:     true,
+		Changes:     changes,
+		Validation:  &validation,
+	}, nil
+}
+
+// layoutExists reports whether the repository already carries a v0.1.0 layout,
+// used to tell legacy adoption apart from a fresh empty-repo init.
+func (s *Service) layoutExists() bool {
+	return fileExists(s.paths.StateFile) || dirExists(s.paths.TasksDir)
+}
+
+// ensureLayout creates the current layout idempotently: directories via ensureDir
+// and content via writeFileIfMissing, with the state file written only when
+// absent. Re-running it never overwrites existing files.
+func (s *Service) ensureLayout() error {
+	for _, dir := range []string{s.paths.SpecsDir, s.paths.TasksDir, s.paths.VerifyDir, filepath.Join(s.paths.ArtifactsDir, "runs")} {
+		if err := ensureDir(dir); err != nil {
+			return err
+		}
+	}
 	if err := writeFileIfMissing(filepath.Join(s.paths.SpecsDir, "README.md"), []byte(starterSpecsReadme())); err != nil {
 		return err
 	}
@@ -46,15 +164,38 @@ func (s *Service) Init() error {
 		return err
 	}
 	if _, err := os.Stat(s.paths.StateFile); errors.Is(err, os.ErrNotExist) {
-		state := starterState(s.now())
-		if err := s.saveState(state); err != nil {
+		if err := s.saveState(starterState(s.now())); err != nil {
 			return err
 		}
 	} else if err != nil {
 		return fmt.Errorf("stat state file: %w", err)
 	}
-
 	return nil
+}
+
+// pendingLayoutChanges lists the layout directories and files ensureLayout would
+// create, so a migration dry run can report exactly what applying it would add.
+func (s *Service) pendingLayoutChanges() []string {
+	var changes []string
+	for _, dir := range []string{s.paths.SpecsDir, s.paths.TasksDir, s.paths.VerifyDir, filepath.Join(s.paths.ArtifactsDir, "runs")} {
+		if !dirExists(dir) {
+			changes = append(changes, "create dir "+relPath(s.paths.RepoRoot, dir))
+		}
+	}
+	for _, file := range []string{
+		filepath.Join(s.paths.SpecsDir, "README.md"),
+		filepath.Join(s.paths.SpecsDir, "v0.1.0.md"),
+		s.paths.StateFile,
+	} {
+		if !fileExists(file) {
+			changes = append(changes, "create "+relPath(s.paths.RepoRoot, file))
+		}
+	}
+	return changes
+}
+
+func markerRelPath() string {
+	return filepath.Join(taskrailConfigDir, taskrailConfigFile)
 }
 
 func (s *Service) Validate() (ValidationResult, error) {
