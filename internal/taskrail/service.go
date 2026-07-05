@@ -5,7 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -666,7 +668,201 @@ func (s *Service) validateState(state *State) []string {
 	if strings.TrimSpace(state.Frontmatter.StatusSummary) == "" {
 		violations = append(violations, "state status_summary must not be empty")
 	}
+	violations = append(violations, stateArtifactRefs(state.Frontmatter)...)
 	return violations
+}
+
+// gitignoredArtifactPrefix is the repo-relative prefix of the gitignored
+// planning/artifacts/ tree. A clean checkout drops that tree, so a committed
+// reference to a concrete file under it always dangles. We pattern-match the
+// prefix rather than shelling out to git (T-026).
+const gitignoredArtifactPrefix = "planning/artifacts/"
+
+// danglingArtifactPaths returns concrete file paths under the gitignored
+// artifacts tree referenced in s. It targets producer-only pointers like
+// planning/artifacts/verify/T-011/<ts>/report.json (the rot scrubbed in
+// T-021/T-022/T-023), not the contract prose the scrub deliberately kept:
+// bare directory prefixes (planning/artifacts/verify/) and placeholder paths
+// (planning/artifacts/manual-test/T-019/<timestamp>/) are legitimate and pass.
+// It scans for the prefix as a plain substring anywhere in s; committed
+// planning prose does not embed the prefix inside unrelated tokens (e.g. URLs),
+// so keeping the scan simple is preferred over anchoring to word boundaries.
+func danglingArtifactPaths(s string) []string {
+	paths := make([]string, 0)
+	for rest := s; ; {
+		idx := strings.Index(rest, gitignoredArtifactPrefix)
+		if idx < 0 {
+			break
+		}
+		end := idx
+		for end < len(rest) && isArtifactPathByte(rest[end]) {
+			end++
+		}
+		token := rest[idx:end]
+		rest = rest[end:]
+		if isConcreteArtifactFile(token) {
+			paths = append(paths, token)
+		}
+	}
+	return paths
+}
+
+func isArtifactPathByte(b byte) bool {
+	switch {
+	case b >= 'a' && b <= 'z', b >= 'A' && b <= 'Z', b >= '0' && b <= '9':
+		return true
+	case b == '/' || b == '.' || b == '-' || b == '_' || b == '<' || b == '>':
+		return true
+	default:
+		return false
+	}
+}
+
+// isConcreteArtifactFile reports whether token names a specific file (not a
+// directory or placeholder) inside the artifacts tree. Placeholder markers and
+// bare directory references are treated as contract prose and ignored.
+func isConcreteArtifactFile(token string) bool {
+	if strings.ContainsAny(token, "<>") || strings.Contains(token, "...") {
+		return false
+	}
+	base := path.Base(token)
+	dot := strings.LastIndex(base, ".")
+	if dot <= 0 || dot == len(base)-1 {
+		return false
+	}
+	ext := base[dot+1:]
+	// Artifact files use short extensions (report.json, report.md, .txt, .log).
+	// Cap the extension length so a directory segment that merely contains a dot
+	// (e.g. a versioned dir) is not mistaken for a file. Longer extensions are
+	// out of scope: no producer writes them, and prose stays unflagged.
+	if len(ext) > 6 {
+		return false
+	}
+	for i := 0; i < len(ext); i++ {
+		b := ext[i]
+		if !(b >= 'a' && b <= 'z' || b >= 'A' && b <= 'Z' || b >= '0' && b <= '9') {
+			return false
+		}
+	}
+	return true
+}
+
+// stateArtifactRefs flags committed STATE.md frontmatter fields that point at a
+// concrete gitignored artifact file, naming the offending field.
+func stateArtifactRefs(fm StateFrontmatter) []string {
+	violations := make([]string, 0)
+	scan := func(field, value string) {
+		for _, p := range danglingArtifactPaths(value) {
+			violations = append(violations, fmt.Sprintf("state %s references gitignored artifact path %s", field, p))
+		}
+	}
+	scan("last_verification_result", fm.LastVerificationResult)
+	scan("next_action", fm.NextAction)
+	scan("current_task_title", fm.CurrentTaskTitle)
+	for _, v := range fm.RelevantArtifacts {
+		scan("relevant_artifacts", v)
+	}
+	for _, v := range fm.ContinuationNotes {
+		scan("continuation_notes", v)
+	}
+	for _, v := range fm.Blockers {
+		scan("blockers", v)
+	}
+	return violations
+}
+
+// taskArtifactRefs flags a committed task file (frontmatter title and body
+// lines) that points at a concrete gitignored artifact file.
+func taskArtifactRefs(task *Task) []string {
+	violations := make([]string, 0)
+	id := task.Frontmatter.ID
+	for _, p := range danglingArtifactPaths(task.Frontmatter.Title) {
+		violations = append(violations, fmt.Sprintf("task %s title references gitignored artifact path %s", id, p))
+	}
+	// An artifact path never spans a newline (\n is not a path byte), so a
+	// single whole-body scan yields the same tokens as a per-line scan.
+	for _, p := range danglingArtifactPaths(task.Body) {
+		violations = append(violations, fmt.Sprintf("task %s body references gitignored artifact path %s", id, p))
+	}
+	return violations
+}
+
+// detectDependencyCycles reports directed cycles among existing task
+// dependencies. Missing deps and self-deps are reported by validateTasks, so
+// only edges between distinct existing tasks are followed here. Each distinct
+// cycle is reported once regardless of traversal entry point.
+func detectDependencyCycles(tasks []*Task) []string {
+	exists := make(map[string]struct{}, len(tasks))
+	for _, task := range tasks {
+		exists[task.Frontmatter.ID] = struct{}{}
+	}
+	adj := make(map[string][]string, len(tasks))
+	for _, task := range tasks {
+		id := task.Frontmatter.ID
+		for _, dep := range task.Frontmatter.Dependencies {
+			if dep == id {
+				continue // self-dependency handled by validateTasks
+			}
+			if _, ok := exists[dep]; ok {
+				adj[id] = append(adj[id], dep)
+			}
+		}
+	}
+
+	const (
+		white = 0
+		gray  = 1
+		black = 2
+	)
+	color := make(map[string]int, len(tasks))
+	reported := make(map[string]struct{})
+	violations := make([]string, 0)
+	stack := make([]string, 0, len(tasks))
+
+	// Recursion depth is bounded by the longest dependency chain; planning
+	// backlogs are small, so an explicit work stack is not warranted.
+	var visit func(id string)
+	visit = func(id string) {
+		color[id] = gray
+		stack = append(stack, id)
+		for _, dep := range adj[id] {
+			switch color[dep] {
+			case gray:
+				cycle := append(append([]string{}, stack[slices.Index(stack, dep):]...), dep)
+				sig := cycleSignature(cycle)
+				if _, seen := reported[sig]; !seen {
+					reported[sig] = struct{}{}
+					violations = append(violations, "dependency cycle detected: "+strings.Join(cycle, " -> "))
+				}
+			case white:
+				visit(dep)
+			}
+		}
+		stack = stack[:len(stack)-1]
+		color[id] = black
+	}
+
+	for _, task := range tasks {
+		if color[task.Frontmatter.ID] == white {
+			visit(task.Frontmatter.ID)
+		}
+	}
+	return violations
+}
+
+// cycleSignature normalizes a directed cycle (given as [a, b, ..., a]) to a
+// rotation starting at its smallest node so the same cycle discovered from
+// different entry points yields one signature.
+func cycleSignature(cycle []string) string {
+	nodes := cycle[:len(cycle)-1] // drop the repeated closing node
+	minIdx := 0
+	for i, n := range nodes {
+		if n < nodes[minIdx] {
+			minIdx = i
+		}
+	}
+	rotated := append(append([]string{}, nodes[minIdx:]...), nodes[:minIdx]...)
+	return strings.Join(rotated, ">")
 }
 
 func (s *Service) validateTasks(state *State, tasks []*Task) []string {
@@ -705,6 +901,7 @@ func (s *Service) validateTasks(state *State, tasks []*Task) []string {
 		} else if err := s.validateSpecRef(task.Frontmatter.SpecRef); err != nil {
 			violations = append(violations, fmt.Sprintf("task %s invalid spec_ref: %v", task.Frontmatter.ID, err))
 		}
+		violations = append(violations, taskArtifactRefs(task)...)
 	}
 
 	for _, task := range tasks {
@@ -714,6 +911,8 @@ func (s *Service) validateTasks(state *State, tasks []*Task) []string {
 			}
 		}
 	}
+
+	violations = append(violations, detectDependencyCycles(tasks)...)
 
 	if len(inProgress) > 1 {
 		ids := make([]string, 0, len(inProgress))
