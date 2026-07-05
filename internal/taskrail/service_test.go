@@ -320,6 +320,27 @@ func TestVerifyWritesPortableCommittedState(t *testing.T) {
 			if n := len(state.Frontmatter.RelevantArtifacts); n != 0 {
 				t.Fatalf("relevant_artifacts must be empty, got %d: %v", n, state.Frontmatter.RelevantArtifacts)
 			}
+
+			// The verify-time task note is a second committed sink and must be
+			// portable too: it records the result and timestamp but no path into
+			// gitignored artifacts (else cloned repos point at missing files).
+			_, tasks, err := svc.loadStateAndTasks()
+			if err != nil {
+				t.Fatalf("load tasks: %v", err)
+			}
+			task, ok := taskByID(tasks, "T-002")
+			if !ok {
+				t.Fatalf("expected T-002 in tasks")
+			}
+			if strings.Contains(task.Body, gitignoredPrefix) {
+				t.Fatalf("task note must not embed gitignored path:\n%s", task.Body)
+			}
+			if !strings.Contains(task.Body, wantTimestamp) {
+				t.Fatalf("task note must record verification timestamp %q:\n%s", wantTimestamp, task.Body)
+			}
+			if !strings.Contains(task.Body, "verification "+result) {
+				t.Fatalf("task note must record verification result %q:\n%s", result, task.Body)
+			}
 		})
 	}
 }
