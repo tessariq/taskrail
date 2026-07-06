@@ -165,6 +165,56 @@ func TestInitRetrofitDryRunThenApply(t *testing.T) {
 	}
 }
 
+// TestRetrofitCommandDryRunThenApply exercises the guided retrofit command end to
+// end: a non-standard repo with human notes gets a dry-run proposal that imports
+// the notes into a planning bootstrap and writes nothing, then an --apply that
+// scaffolds the layout, re-runs validation, and preserves the notes.
+func TestRetrofitCommandDryRunThenApply(t *testing.T) {
+	root := t.TempDir()
+	if err := os.Mkdir(filepath.Join(root, ".git"), 0o755); err != nil {
+		t.Fatalf("create .git marker: %v", err)
+	}
+	notePath := filepath.Join(root, "notes", "ideas.md")
+	if err := os.MkdirAll(filepath.Dir(notePath), 0o755); err != nil {
+		t.Fatalf("mkdir notes: %v", err)
+	}
+	noteBody := "# Roadmap\n\n## Ship it\n\n- Add login\n- Add logout\n"
+	if err := os.WriteFile(notePath, []byte(noteBody), 0o644); err != nil {
+		t.Fatalf("write note: %v", err)
+	}
+	t.Chdir(root)
+
+	out, err := runRoot(t, "retrofit", "notes/ideas.md")
+	if err != nil {
+		t.Fatalf("retrofit dry run: %v (output %q)", err, out)
+	}
+	if !strings.Contains(out, "guided retrofit (dry run)") ||
+		!strings.Contains(out, "notes/ -> planning/ (planning)") ||
+		!strings.Contains(out, "planning bootstrap") ||
+		!strings.Contains(out, "re-run with --apply") {
+		t.Fatalf("unexpected retrofit dry-run output: %q", out)
+	}
+	if _, err := os.Stat(filepath.Join(root, "planning", "STATE.md")); !os.IsNotExist(err) {
+		t.Fatalf("dry run scaffolded layout: STATE.md stat err=%v", err)
+	}
+
+	out, err = runRoot(t, "retrofit", "notes/ideas.md", "--apply")
+	if err != nil {
+		t.Fatalf("retrofit --apply: %v (output %q)", err, out)
+	}
+	if !strings.Contains(out, "retrofit applied (existing content was not moved)") ||
+		!strings.Contains(out, "validation: valid") {
+		t.Fatalf("unexpected retrofit apply output: %q", out)
+	}
+	if _, err := os.Stat(filepath.Join(root, "planning", "STATE.md")); err != nil {
+		t.Fatalf("apply did not scaffold STATE.md: %v", err)
+	}
+	got, err := os.ReadFile(notePath)
+	if err != nil || string(got) != noteBody {
+		t.Fatalf("retrofit moved or rewrote notes content: got %q err=%v", string(got), err)
+	}
+}
+
 func TestValidateValidRepo(t *testing.T) {
 	setupRepo(t)
 
