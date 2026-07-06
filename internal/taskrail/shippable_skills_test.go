@@ -18,6 +18,16 @@ var shippableSkills = []string{
 	"autonomous-backlog",
 	"autonomous-task",
 	"autonomous-verify",
+	"taskrail-import",
+}
+
+// taskAuthoringSkills create tracked tasks via `taskrail task new`. taskrail-import
+// is excluded: it authors tasks through `taskrail import --apply`, covered by
+// TestImportSkillInvokesImportCommand.
+var taskAuthoringSkills = []string{
+	"autonomous-backlog",
+	"autonomous-task",
+	"autonomous-verify",
 }
 
 // dogfoodingOnlySkills must never leak into the shippable set: recovery still
@@ -62,9 +72,20 @@ func TestShippableSkillsNeverUseGoRun(t *testing.T) {
 // Shippable skills create tasks through the real command, not hand-authored
 // markdown (Decision 3 in the productization contract).
 func TestShippableSkillsUseTaskNew(t *testing.T) {
-	for _, name := range shippableSkills {
+	for _, name := range taskAuthoringSkills {
 		if !strings.Contains(readShippableSkill(t, name), "taskrail task new") {
 			t.Errorf("shippable skill %s must reference 'taskrail task new' for task creation", name)
+		}
+	}
+}
+
+// The import skill drives the agent-in-the-loop import path (T-034): it invokes
+// the installed binary's emit-prompt and apply steps, never a built-in LLM call.
+func TestImportSkillInvokesImportCommand(t *testing.T) {
+	body := readShippableSkill(t, "taskrail-import")
+	for _, want := range []string{"taskrail import", "--emit-prompt", "--apply"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("taskrail-import skill must reference %q", want)
 		}
 	}
 }

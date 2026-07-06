@@ -1,7 +1,6 @@
 package taskrail
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -25,55 +24,38 @@ var atxHeadingPattern = regexp.MustCompile(`^(#{1,6})\s+(.+?)\s*#*$`)
 // they fold into the item's body rather than becoming their own units.
 var topBulletPattern = regexp.MustCompile(`^(?:[-*+]|\d+\.)\s+(.+?)\s*$`)
 
-// ImportInput drives a single structural import. Preview is the default; Apply
-// opts into writing the draft (and, for planning, a STATE seed). OutPath, when
-// set, overrides the default reviewable location and must stay within the repo.
+// ImportInput drives a single structural import preview. The preview is the only
+// mode: it parses the source into a draft and returns it for review. Persisting a
+// draft is the caller's job (redirect stdout), and writing real files is the
+// separate agent-driven apply path (ApplyImportDraft, T-034).
 type ImportInput struct {
 	SourcePath string
 	Target     string
-	Apply      bool
-	OutPath    string
 }
 
-// ImportResult reports the parsed draft and, when applied, where it landed.
-// StateSeed is populated only for the planning bootstrap; it is a non-authoritative
-// seed for review, never a substitute for the CLI-managed planning/STATE.md.
+// ImportResult reports the parsed draft. StateSeed is populated only for the
+// planning bootstrap; it is a non-authoritative seed for review, never a
+// substitute for the CLI-managed planning/STATE.md.
 type ImportResult struct {
 	Source    string      `json:"source"`
 	Target    string      `json:"target"`
 	Draft     ImportDraft `json:"draft"`
 	StateSeed string      `json:"state_seed,omitempty"`
-	Applied   bool        `json:"applied"`
-	DraftPath string      `json:"draft_path,omitempty"`
-	SeedPath  string      `json:"seed_path,omitempty"`
 }
 
-// Import performs one deterministic structural import. It never calls an LLM and
-// never modifies the source file; the semantic lift stays the agent's job (T-034).
+// Import performs one deterministic structural import preview. It never calls an
+// LLM and never modifies the source file; the semantic lift stays the agent's
+// job (T-034). It writes nothing: the returned draft is the reviewable artifact.
 func (s *Service) Import(input ImportInput) (ImportResult, error) {
 	target := strings.TrimSpace(input.Target)
 	if _, ok := validImportTargets[target]; !ok {
 		return ImportResult{}, fmt.Errorf("import target must be one of tasks, spec, planning; got %q", target)
 	}
-	source := strings.TrimSpace(input.SourcePath)
-	if source == "" {
-		return ImportResult{}, errors.New("import source path must not be empty")
-	}
-
-	absSource := source
-	if !filepath.IsAbs(absSource) {
-		absSource = filepath.Join(s.paths.RepoRoot, absSource)
-	}
-	data, err := os.ReadFile(absSource)
+	markdown, sourceLabel, err := s.readImportSource(input.SourcePath)
 	if err != nil {
-		return ImportResult{}, fmt.Errorf("read import source: %w", err)
-	}
-	sourceLabel := relPath(s.paths.RepoRoot, absSource)
-	if strings.HasPrefix(sourceLabel, "..") {
-		sourceLabel = filepath.Base(absSource)
+		return ImportResult{}, err
 	}
 
-	markdown := string(data)
 	draft := ImportDraft{SchemaVersion: importDraftSchemaVersion, Target: target, Source: sourceLabel}
 	var stateSeed string
 	switch target {
@@ -91,59 +73,35 @@ func (s *Service) Import(input ImportInput) (ImportResult, error) {
 		return ImportResult{}, fmt.Errorf("structural import produced no valid draft: %s", strings.Join(violations, "; "))
 	}
 
-	result := ImportResult{Source: sourceLabel, Target: target, Draft: draft, StateSeed: stateSeed}
-	if !input.Apply {
-		return result, nil
-	}
-
-	draftPath, seedPath, err := s.writeImportDraft(input, draft, stateSeed, absSource, target)
-	if err != nil {
-		return ImportResult{}, err
-	}
-	result.Applied = true
-	result.DraftPath = draftPath
-	result.SeedPath = seedPath
-	return result, nil
+	return ImportResult{Source: sourceLabel, Target: target, Draft: draft, StateSeed: stateSeed}, nil
 }
 
-// writeImportDraft persists the draft (and optional STATE seed) for review. It is
-// the only write path and is constrained to the repository so an import can never
-// escape the repo root.
-func (s *Service) writeImportDraft(input ImportInput, draft ImportDraft, stateSeed, absSource, target string) (string, string, error) {
-	draftFile := strings.TrimSpace(input.OutPath)
-	if draftFile == "" {
-		stem := slugHeading(strings.TrimSuffix(filepath.Base(absSource), filepath.Ext(absSource)))
-		if stem == "" {
-			stem = "import"
-		}
-		draftFile = filepath.Join(s.paths.PlanningDir, "imports", fmt.Sprintf("%s.%s.import.json", stem, target))
-	} else if !filepath.IsAbs(draftFile) {
-		draftFile = filepath.Join(s.paths.RepoRoot, draftFile)
+// readImportSource reads a source file (repo-relative or absolute) and returns
+// its content plus a portable repo-relative label. The source is never modified.
+func (s *Service) readImportSource(sourcePath string) (string, string, error) {
+	source := strings.TrimSpace(sourcePath)
+	if source == "" {
+		return "", "", errors.New("import source path must not be empty")
 	}
-	if rel := relPath(s.paths.RepoRoot, draftFile); rel == ".." || strings.HasPrefix(rel, "../") {
-		return "", "", fmt.Errorf("import out path %q escapes the repository root", input.OutPath)
-	}
-
-	if err := ensureDir(filepath.Dir(draftFile)); err != nil {
-		return "", "", err
-	}
-	payload, err := json.MarshalIndent(draft, "", "  ")
+	absSource := s.resolveRepoPath(source)
+	data, err := os.ReadFile(absSource)
 	if err != nil {
-		return "", "", fmt.Errorf("marshal import draft: %w", err)
+		return "", "", fmt.Errorf("read import source: %w", err)
 	}
-	if err := os.WriteFile(draftFile, append(payload, '\n'), 0o644); err != nil {
-		return "", "", fmt.Errorf("write import draft: %w", err)
+	label := relPath(s.paths.RepoRoot, absSource)
+	if strings.HasPrefix(label, "..") {
+		label = filepath.Base(absSource)
 	}
+	return string(data), label, nil
+}
 
-	seedPath := ""
-	if stateSeed != "" {
-		seedFile := strings.TrimSuffix(draftFile, filepath.Ext(draftFile)) + ".STATE.seed.md"
-		if err := os.WriteFile(seedFile, []byte(stateSeed), 0o644); err != nil {
-			return "", "", fmt.Errorf("write import state seed: %w", err)
-		}
-		seedPath = relPath(s.paths.RepoRoot, seedFile)
+// resolveRepoPath turns a repo-relative path into one rooted at the repository,
+// leaving an already-absolute path untouched.
+func (s *Service) resolveRepoPath(path string) string {
+	if filepath.IsAbs(path) {
+		return path
 	}
-	return relPath(s.paths.RepoRoot, draftFile), seedPath, nil
+	return filepath.Join(s.paths.RepoRoot, path)
 }
 
 // parseSpecSections turns every heading into a flat spec section whose body is the

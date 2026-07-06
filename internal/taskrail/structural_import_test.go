@@ -143,12 +143,8 @@ func TestImportPreviewDoesNotWriteAndLeavesSourceIntact(t *testing.T) {
 		t.Fatalf("read source: %v", err)
 	}
 
-	result, err := svc.Import(ImportInput{SourcePath: "notes.md", Target: "planning"})
-	if err != nil {
+	if _, err := svc.Import(ImportInput{SourcePath: "notes.md", Target: "planning"}); err != nil {
 		t.Fatalf("import: %v", err)
-	}
-	if result.Applied || result.DraftPath != "" || result.SeedPath != "" {
-		t.Fatalf("preview must not write: applied=%v draft=%q seed=%q", result.Applied, result.DraftPath, result.SeedPath)
 	}
 	if _, err := os.Stat(filepath.Join(svc.paths.PlanningDir, "imports")); !os.IsNotExist(err) {
 		t.Fatalf("preview must not create the imports dir, stat err=%v", err)
@@ -159,74 +155,6 @@ func TestImportPreviewDoesNotWriteAndLeavesSourceIntact(t *testing.T) {
 	}
 	if string(before) != string(after) {
 		t.Fatal("preview must not modify the source file")
-	}
-}
-
-func TestImportApplyWritesReviewableDraft(t *testing.T) {
-	t.Parallel()
-	svc := importFixture(t)
-
-	result, err := svc.Import(ImportInput{SourcePath: "notes.md", Target: "planning", Apply: true})
-	if err != nil {
-		t.Fatalf("import apply: %v", err)
-	}
-	if !result.Applied {
-		t.Fatal("expected applied=true")
-	}
-	draftAbs := filepath.Join(svc.paths.RepoRoot, result.DraftPath)
-	data, err := os.ReadFile(draftAbs)
-	if err != nil {
-		t.Fatalf("read written draft: %v", err)
-	}
-	// The persisted file is a valid ImportDraft: it round-trips through the
-	// contract parser so it is exactly the T-034 --apply ingest target.
-	parsed, err := ParseImportDraft(data)
-	if err != nil {
-		t.Fatalf("written draft must parse as an ImportDraft: %v", err)
-	}
-	if !reflect.DeepEqual(parsed, result.Draft) {
-		t.Fatalf("written draft mismatch\n got=%+v\nwant=%+v", parsed, result.Draft)
-	}
-	if result.SeedPath == "" {
-		t.Fatal("planning apply must also write a STATE seed")
-	}
-	if _, err := os.Stat(filepath.Join(svc.paths.RepoRoot, result.SeedPath)); err != nil {
-		t.Fatalf("expected STATE seed on disk: %v", err)
-	}
-}
-
-func TestImportApplyRespectsExplicitOutPath(t *testing.T) {
-	t.Parallel()
-	svc := importFixture(t)
-
-	result, err := svc.Import(ImportInput{
-		SourcePath: "notes.md",
-		Target:     "tasks",
-		Apply:      true,
-		OutPath:    "planning/imports/custom.json",
-	})
-	if err != nil {
-		t.Fatalf("import apply: %v", err)
-	}
-	if result.DraftPath != "planning/imports/custom.json" {
-		t.Fatalf("expected explicit out path, got %q", result.DraftPath)
-	}
-	if _, err := os.Stat(filepath.Join(svc.paths.RepoRoot, result.DraftPath)); err != nil {
-		t.Fatalf("expected draft at explicit path: %v", err)
-	}
-}
-
-func TestImportRejectsOutPathEscapingRepo(t *testing.T) {
-	t.Parallel()
-	svc := importFixture(t)
-
-	if _, err := svc.Import(ImportInput{
-		SourcePath: "notes.md",
-		Target:     "tasks",
-		Apply:      true,
-		OutPath:    "../escape.json",
-	}); err == nil {
-		t.Fatal("expected error for out path escaping the repository root")
 	}
 }
 

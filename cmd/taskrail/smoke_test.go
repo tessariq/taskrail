@@ -391,23 +391,43 @@ func TestImportPreviewAndApply(t *testing.T) {
 	if err != nil {
 		t.Fatalf("import preview: %v (output %q)", err, out)
 	}
-	if !strings.Contains(out, `"applied": false`) || !strings.Contains(out, "Add search endpoint") {
+	if !strings.Contains(out, "Add search endpoint") {
 		t.Fatalf("unexpected preview output: %q", out)
 	}
 	if _, err := os.Stat(filepath.Join(root, "planning", "imports")); !os.IsNotExist(err) {
 		t.Fatalf("preview must not write imports dir, stat err=%v", err)
 	}
 
-	// Apply writes a reviewable draft file under planning/imports.
-	applyOut, err := runRoot(t, "import", "notes.md", "--to", "tasks", "--apply")
+	// Emit-prompt hands the semantic lift to an agent; still no LLM call, no writes.
+	promptOut, err := runRoot(t, "import", "notes.md", "--to", "tasks", "--emit-prompt")
+	if err != nil {
+		t.Fatalf("import emit-prompt: %v (output %q)", err, promptOut)
+	}
+	if !strings.Contains(promptOut, "Taskrail import prompt") || !strings.Contains(promptOut, "Add search endpoint") {
+		t.Fatalf("unexpected emit-prompt output: %q", promptOut)
+	}
+
+	// Apply ingests an agent-produced draft and scaffolds real task files.
+	draft := `{
+  "schema_version": 1,
+  "target": "tasks",
+  "source": "notes.md",
+  "tasks": [
+    {"key": "search", "title": "Add search endpoint", "spec_ref": "specs/v0.1.0.md#summary", "priority": "high"}
+  ]
+}`
+	if err := os.WriteFile(filepath.Join(root, "draft.json"), []byte(draft), 0o644); err != nil {
+		t.Fatalf("write draft: %v", err)
+	}
+	applyOut, err := runRoot(t, "import", "--apply", "draft.json")
 	if err != nil {
 		t.Fatalf("import apply: %v (output %q)", err, applyOut)
 	}
-	if !strings.Contains(applyOut, "planning/imports/") {
-		t.Fatalf("expected written path in output, got %q", applyOut)
+	if !strings.Contains(applyOut, "created T-") {
+		t.Fatalf("expected created task in output, got %q", applyOut)
 	}
-	if _, err := os.Stat(filepath.Join(root, "planning", "imports", "notes.tasks.import.json")); err != nil {
-		t.Fatalf("expected written draft file: %v", err)
+	if _, err := os.Stat(filepath.Join(root, "planning", "tasks", "T-001.md")); err != nil {
+		t.Fatalf("expected scaffolded task file: %v", err)
 	}
 }
 

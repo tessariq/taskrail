@@ -117,7 +117,8 @@ goreleaser release --snapshot --clean
 | `taskrail block <task-id>` | Mark a task blocked and record a `--reason`. |
 | `taskrail verify <task-id>` | Record a verification outcome and write artifacts under `planning/artifacts/verify/`. Supports `--result`, `--summary`, `--create-followup`, and `--json`. |
 | `taskrail task new` | Scaffold a new task file with the next free id and a template body. Requires `--title` and `--spec-ref`; supports `--priority`, repeatable `--dep`, `--follow-up <parent-id>`, and `--json`. Refuses to write an invalid task (unknown spec anchor, nonexistent dependency). With `--follow-up`, the new task inherits the parent's `spec_ref` (overridable), depends on the parent, and records the provenance in its body; `--spec-ref` is then optional. |
-| `taskrail import <source> --to tasks\|spec\|planning` | Deterministically parse a markdown source (no LLM) into T-032 draft form: headings become spec sections, subheadings and list items become task drafts. Previews by default; `--apply` writes reviewable draft files under `planning/imports/` (with an override via `--out`). Never modifies the source. Supports `--json`. |
+| `taskrail import <source> --to tasks\|spec\|planning` | Preview a T-032 draft from a markdown source (no LLM): headings become spec sections, subheadings and list items become task drafts. Add `--emit-prompt` to print a ready-to-paste agent prompt instead. Never modifies the source. Supports `--json`. |
+| `taskrail import --apply <draft.json>` | Validate an agent-produced draft against the T-032 schema and write real files: spec sections become a new spec file (never overwriting one), tasks are scaffolded like `taskrail task new` with in-draft dependencies resolved. The `--llm` adapter is deferred to v0.3. Supports `--json`. |
 | `taskrail version` | Print the CLI version (also `--version`). |
 
 ## Quickstart
@@ -181,8 +182,9 @@ taskrail verify T-001 \
 Bootstrap drafts from rough notes without any LLM — preview first, then apply:
 
 ```sh
-taskrail import notes.md --to tasks         # preview the structural task drafts
-taskrail import notes.md --to planning --apply  # write spec + task drafts + a STATE seed under planning/imports/
+taskrail import notes.md --to tasks                # preview the structural task drafts
+taskrail import notes.md --to tasks --emit-prompt  # print an agent prompt to produce a richer draft
+taskrail import --apply draft.json                 # validate an agent draft and write real spec/task files
 ```
 
 Typical flow:

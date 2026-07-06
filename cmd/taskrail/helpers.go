@@ -21,6 +21,11 @@ func printResult(cmd *cobra.Command, asJSON bool, value any, fallback string) er
 		_, err := fmt.Fprintln(cmd.OutOrStdout(), fallback)
 		return err
 	}
+	return printJSON(cmd, value)
+}
+
+// printJSON writes a value as indented JSON followed by a newline.
+func printJSON(cmd *cobra.Command, value any) error {
 	data, err := json.MarshalIndent(value, "", "  ")
 	if err != nil {
 		return fmt.Errorf("marshal json: %w", err)

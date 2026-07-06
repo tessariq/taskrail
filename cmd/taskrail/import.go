@@ -1,8 +1,9 @@
 package main
 
 import (
-	"encoding/json"
+	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/tessariq/taskrail/internal/taskrail"
@@ -10,31 +11,58 @@ import (
 
 func newImportCmd() *cobra.Command {
 	var (
-		to    string
-		apply bool
-		out   string
-		opt   jsonOption
+		to         string
+		emitPrompt bool
+		apply      string
+		opt        jsonOption
 	)
 
 	cmd := &cobra.Command{
-		Use:   "import <source>",
-		Short: "Structurally import markdown into task, spec, or planning drafts (no LLM)",
-		Long: "Deterministically parse a markdown source into T-032 draft form: headings " +
-			"become spec sections and subheadings plus list items become task drafts. " +
-			"Previews by default; pass --apply to write reviewable draft files. The " +
-			"source file is never modified.",
-		Args: cobra.ExactArgs(1),
+		Use:   "import [source]",
+		Short: "Import markdown into task/spec/planning drafts, agent-assisted or structural (no LLM)",
+		Long: "Turn a markdown source into Taskrail structure without any built-in LLM call.\n\n" +
+			"Three modes:\n" +
+			"  import <src> --to <target>                structural preview: prints a T-032 draft\n" +
+			"  import <src> --to <target> --emit-prompt  prints a ready-to-paste agent prompt\n" +
+			"  import --apply <draft.json>               writes real spec/task files from a draft\n\n" +
+			"The agent does the semantic lift and returns a draft; the binary stays " +
+			"provider-agnostic. The thin --llm adapter (the binary calling a model directly) " +
+			"is deferred to v0.3 and is intentionally not implemented here. The source file " +
+			"is never modified.",
+		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			svc, err := serviceFromCmd(cmd)
 			if err != nil {
 				return err
 			}
-			result, err := svc.Import(taskrail.ImportInput{
-				SourcePath: args[0],
-				Target:     to,
-				Apply:      apply,
-				OutPath:    out,
-			})
+
+			if applyPath := strings.TrimSpace(apply); applyPath != "" {
+				if len(args) > 0 || to != "" || emitPrompt {
+					return errors.New("--apply ingests a draft file; do not combine it with a source, --to, or --emit-prompt")
+				}
+				result, err := svc.ApplyImportDraft(taskrail.ApplyDraftInput{DraftPath: applyPath})
+				if err != nil {
+					return err
+				}
+				return printApplyResult(cmd, opt.json, result)
+			}
+
+			if len(args) == 0 {
+				return errors.New("import requires a source file, or --apply <draft.json>")
+			}
+			if to == "" {
+				return errors.New("import requires --to (tasks, spec, or planning)")
+			}
+
+			if emitPrompt {
+				result, err := svc.EmitImportPrompt(taskrail.EmitPromptInput{SourcePath: args[0], Target: to})
+				if err != nil {
+					return err
+				}
+				return printPromptResult(cmd, opt.json, result)
+			}
+
+			result, err := svc.Import(taskrail.ImportInput{SourcePath: args[0], Target: to})
 			if err != nil {
 				return err
 			}
@@ -42,43 +70,52 @@ func newImportCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&to, "to", "", "import target: tasks, spec, or planning")
-	cmd.Flags().BoolVar(&apply, "apply", false, "write reviewable draft files instead of previewing")
-	cmd.Flags().StringVar(&out, "out", "", "override the draft output path (used with --apply)")
+	cmd.Flags().StringVar(&to, "to", "", "import target: tasks, spec, or planning (preview and --emit-prompt)")
+	cmd.Flags().BoolVar(&emitPrompt, "emit-prompt", false, "print an agent prompt instead of a structural draft")
+	cmd.Flags().StringVar(&apply, "apply", "", "write real spec/task files from an agent-produced draft JSON file")
 	cmd.Flags().BoolVar(&opt.json, "json", false, "print machine-readable output")
-	_ = cmd.MarkFlagRequired("to")
 	return cmd
 }
 
-// printImportResult renders the import outcome. In JSON mode it emits the full
-// result envelope; in preview it prints the draft (the reviewable artifact); on
-// apply it reports the written paths.
+// printImportResult renders a structural preview. In JSON mode it emits the full
+// result envelope; otherwise it prints the draft, which is the reviewable artifact
+// a caller redirects to a file and later feeds to --apply.
 func printImportResult(cmd *cobra.Command, asJSON bool, result taskrail.ImportResult) error {
-	if asJSON {
-		data, err := json.MarshalIndent(result, "", "  ")
-		if err != nil {
-			return fmt.Errorf("marshal json: %w", err)
-		}
-		_, err = fmt.Fprintln(cmd.OutOrStdout(), string(data))
-		return err
+	// Both modes emit JSON: the full envelope, or just the draft (the reviewable
+	// artifact a caller redirects to a file and later feeds to --apply).
+	payload := any(result)
+	if !asJSON {
+		payload = result.Draft
 	}
+	return printJSON(cmd, payload)
+}
 
-	if result.Applied {
-		if _, err := fmt.Fprintf(cmd.OutOrStdout(), "wrote %s\n", result.DraftPath); err != nil {
+// printPromptResult renders the emit-prompt output: the raw prompt in text mode,
+// the full envelope (source, target, prompt) in JSON mode.
+func printPromptResult(cmd *cobra.Command, asJSON bool, result taskrail.EmitPromptResult) error {
+	if asJSON {
+		return printJSON(cmd, result)
+	}
+	_, err := fmt.Fprint(cmd.OutOrStdout(), result.Prompt)
+	return err
+}
+
+// printApplyResult reports what --apply wrote: the full envelope in JSON mode, or
+// one line per written artifact otherwise.
+func printApplyResult(cmd *cobra.Command, asJSON bool, result taskrail.ApplyDraftResult) error {
+	if asJSON {
+		return printJSON(cmd, result)
+	}
+	out := cmd.OutOrStdout()
+	if result.SpecPath != "" {
+		if _, err := fmt.Fprintf(out, "wrote spec %s\n", result.SpecPath); err != nil {
 			return err
 		}
-		if result.SeedPath != "" {
-			if _, err := fmt.Fprintf(cmd.OutOrStdout(), "wrote %s\n", result.SeedPath); err != nil {
-				return err
-			}
+	}
+	for _, task := range result.Tasks {
+		if _, err := fmt.Fprintf(out, "created %s %s\n", task.TaskID, task.Path); err != nil {
+			return err
 		}
-		return nil
 	}
-
-	data, err := json.MarshalIndent(result.Draft, "", "  ")
-	if err != nil {
-		return fmt.Errorf("marshal draft: %w", err)
-	}
-	_, err = fmt.Fprintln(cmd.OutOrStdout(), string(data))
-	return err
+	return nil
 }
