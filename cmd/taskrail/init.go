@@ -11,6 +11,7 @@ import (
 func newInitCmd() *cobra.Command {
 	var opt jsonOption
 	var apply bool
+	var withSkills bool
 	cmd := &cobra.Command{
 		Use:   "init",
 		Short: "Initialize or upgrade Taskrail structure in the current repository",
@@ -19,7 +20,9 @@ func newInitCmd() *cobra.Command {
 			"non-standard repository (one with a specs/, planning/, or notes/ " +
 			"directory) by proposing a mapping. Migration and retrofit default to a " +
 			"dry run; pass --apply to write the changes. Retrofit scaffolds the " +
-			"Taskrail layout without moving existing content.",
+			"Taskrail layout without moving existing content. Pass --with-skills to " +
+			"install the embedded repo-agnostic tracked-work skills; installing " +
+			"agent-tool directories is opt-in and never happens on a default init.",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			svc, err := serviceFromCmd(cmd)
 			if err != nil {
@@ -29,12 +32,33 @@ func newInitCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return printResult(cmd, opt.json, result, initSummary(result))
+			summary := initSummary(result)
+			if withSkills {
+				written, wErr := svc.WriteShippableSkills()
+				if wErr != nil {
+					// Report what was installed before the failure so the user
+					// knows the partial state, then propagate the error.
+					fmt.Fprintln(cmd.ErrOrStderr(), skillsSummary(written))
+					return wErr
+				}
+				summary += "\n" + skillsSummary(written)
+			}
+			return printResult(cmd, opt.json, result, summary)
 		},
 	}
 	cmd.Flags().BoolVar(&opt.json, "json", false, "print machine-readable output")
 	cmd.Flags().BoolVar(&apply, "apply", false, "apply a pending layout migration instead of a dry run")
+	cmd.Flags().BoolVar(&withSkills, "with-skills", false, "install the embedded repo-agnostic tracked-work skills (opt-in; installed paths are listed in text output only, not --json)")
 	return cmd
+}
+
+// skillsSummary reports what --with-skills installed. A re-run is
+// non-destructive, so an empty list means every skill was already present.
+func skillsSummary(written []string) string {
+	if len(written) == 0 {
+		return "skills: already installed (no files written)"
+	}
+	return fmt.Sprintf("skills: installed %d file(s)\n%s", len(written), changeLines(written))
 }
 
 // initSummary renders the human-readable outcome, listing the diff and the

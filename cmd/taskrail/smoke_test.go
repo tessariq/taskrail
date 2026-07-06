@@ -82,6 +82,41 @@ func TestInitCreatesStructure(t *testing.T) {
 	}
 }
 
+// TestInitWithSkillsInstallsOptIn verifies the opt-in flag installs the embedded
+// skills into the agent-tool directories, while a default init leaves them out.
+func TestInitWithSkillsInstallsOptIn(t *testing.T) {
+	root := setupRepo(t)
+
+	// Default init (run by setupRepo) must not have written skill directories.
+	for _, dir := range []string{".agents/skills", ".claude/skills"} {
+		if _, err := os.Stat(filepath.Join(root, dir)); !os.IsNotExist(err) {
+			t.Errorf("default init created %s, stat err=%v", dir, err)
+		}
+	}
+
+	out, err := runRoot(t, "init", "--with-skills")
+	if err != nil {
+		t.Fatalf("init --with-skills: %v (output %q)", err, out)
+	}
+	if !strings.Contains(out, "skills: installed") {
+		t.Fatalf("unexpected --with-skills output: %q", out)
+	}
+	for _, dir := range []string{".agents/skills", ".claude/skills"} {
+		if _, err := os.Stat(filepath.Join(root, dir, "autonomous-backlog", "SKILL.md")); err != nil {
+			t.Errorf("expected installed skill under %s: %v", dir, err)
+		}
+	}
+
+	// Re-running is non-destructive and reports nothing newly written.
+	out, err = runRoot(t, "init", "--with-skills")
+	if err != nil {
+		t.Fatalf("re-run init --with-skills: %v (output %q)", err, out)
+	}
+	if !strings.Contains(out, "already installed") {
+		t.Fatalf("expected idempotent re-run notice, got: %q", out)
+	}
+}
+
 // TestInitRetrofitDryRunThenApply exercises the guided retrofit path end to end
 // through the CLI: a repo with a non-standard notes/ directory gets a dry-run
 // proposal that writes nothing, then an --apply that scaffolds the layout while
