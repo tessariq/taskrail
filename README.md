@@ -5,46 +5,65 @@
 </picture>
 
 [![CI](https://github.com/tessariq/taskrail/actions/workflows/ci.yml/badge.svg)](https://github.com/tessariq/taskrail/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/tessariq/taskrail)](https://github.com/tessariq/taskrail/releases)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/tessariq/taskrail)](https://github.com/tessariq/taskrail/blob/main/go.mod)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](https://github.com/tessariq/taskrail/blob/main/LICENSE)
 
-# Goals become tracked work. State stays authoritative.
+# Taskrail
 
-Taskrail is a deterministic execution harness for humans and AI agents. It turns goals into structured tasks, keeps every transition aligned to one authoritative state file, and advances work through validation, verification, and explicit follow-up.
+**Turn goals into tracked work, kept aligned to one authoritative state file.**
 
-The project is built around durable primitives: Git for history and review, and plain Markdown with YAML frontmatter for specs, tasks, and state. No database. No hidden automation. No opaque dashboards. Your repo stays inspectable, and the same `taskrail` commands work whether a person or an agent is at the keyboard.
+Taskrail is a deterministic execution harness for humans and AI agents. It turns goals into structured tasks, keeps every transition aligned to a single authoritative state file, and advances work through validation, verification, and explicit follow-up.
+
+It is built on durable primitives — Git for history and review, plain Markdown with YAML frontmatter for specs, tasks, and state. No database. No hidden automation. No opaque dashboards. Your repo stays inspectable, and the same `taskrail` commands work whether a person or an agent is at the keyboard.
+
+```sh
+taskrail init                                        # adopt Taskrail in an existing repo
+taskrail next --json                                 # pick the next eligible task, deterministically
+taskrail start T-001
+taskrail complete T-001 --note "implemented"
+taskrail verify T-001 --result pass --summary "acceptance met"
+```
+
+## Contents
+
+- [Why Taskrail](#why-taskrail)
+- [What It Is](#what-it-is)
+- [What It Is Not](#what-it-is-not)
+- [Install](#install)
+- [Commands](#commands)
+- [Quickstart](#quickstart)
+- [What a Verification Leaves Behind](#what-a-verification-leaves-behind)
+- [State Contract](#state-contract)
+- [Repository Layout](#repository-layout)
+- [Development](#development)
+- [Status](#status)
+- [License](#license)
+- [Read Next](#read-next)
 
 ## Why Taskrail
 
 - **Deterministic:** next-task selection follows status, dependencies, priority, and stable tie-breaking — same repo, same answer, every time.
 - **State-first:** one authoritative `planning/STATE.md` is the continuity and control surface for all work.
 - **Verification as a first-class concept:** completing implementation and verifying it are distinct steps, and verification leaves durable artifacts.
-- **Retrofit-friendly:** `taskrail init` drops the contract into an existing repository with no rewrite.
+- **Retrofit-friendly:** `taskrail init` (or `retrofit`) drops the contract into an existing repository with no rewrite.
 - **Agent-ready:** every command has a `--json` path where it matters, so coding agents drive the same workflow humans do.
 
 ## What It Is
 
-- A CLI for tracking repo-native work as Markdown task files with explicit, machine-checkable schema.
-- A deterministic workflow built around `validate -> next -> start -> complete -> verify`.
-- An authoritative state model centered on a single `planning/STATE.md`.
-- A verification model that records pass/fail outcomes and writes inspectable artifacts.
+- A CLI for tracking repo-native work as Markdown task files with an explicit, machine-checkable schema.
+- A deterministic workflow: `validate → next → start → complete → verify`.
+- One authoritative `planning/STATE.md` — the continuity and control surface for all work.
+- Repo-native specs under `specs/` and deterministic tracked work under `planning/`.
+- Task validation (dependency checks, spec references), deterministic next-task selection, and explicit transitions.
+- A verification model that records pass/fail outcomes, writes inspectable artifacts, and opens follow-up tasks as needed.
 
 ## What It Is Not
 
-- Not a built-in LLM provider integration — `v0.1.0` is provider-agnostic and manual-first.
+- Not a built-in LLM provider integration — Taskrail is provider-agnostic and manual-first. (`import` structures notes; it never calls a model.)
 - Not a sandbox, container, or worktree orchestrator.
 - Not a background daemon, distributed worker pool, or multi-lane scheduler.
-- Not a spec-to-task generator or semantic drift detector (yet).
-
-## What Taskrail Owns
-
-- repo-native specs under `specs/`
-- deterministic tracked work under `planning/`
-- one authoritative `planning/STATE.md`
-- task validation, dependency checks, and spec references
-- deterministic next-task selection
-- explicit task transitions
-- verification artifacts and follow-up tasks
+- Not a *semantic* spec-to-task generator or drift detector — `import` produces structural drafts only; LLM-assisted generation is deferred.
 
 ## Install
 
@@ -57,22 +76,13 @@ taskrail --version
 
 This pulls the release binary from the [tessariq/homebrew-tap](https://github.com/tessariq/homebrew-tap) tap.
 
-Build from source:
+Build from source (needs Go `1.26`):
 
 ```sh
 git clone https://github.com/tessariq/taskrail.git
 cd taskrail
 go install ./cmd/taskrail
 taskrail version
-taskrail --help
-```
-
-If you prefer a local binary in the repository directory:
-
-```sh
-go build ./cmd/taskrail
-./taskrail version
-./taskrail --help
 ```
 
 Plain `go build`/`go install` produce a development build that reports version
@@ -80,60 +90,42 @@ Plain `go build`/`go install` produce a development build that reports version
 build time:
 
 ```sh
-go build -ldflags "-X main.version=v0.1.0" -o taskrail ./cmd/taskrail
+go build -ldflags "-X main.version=v0.2.0" -o taskrail ./cmd/taskrail
 # or, via Taskfile:
-VERSION=v0.1.0 task release
-./taskrail version   # -> v0.1.0
+VERSION=v0.2.0 task release
+./taskrail version   # -> v0.2.0
 ```
 
-Building from source needs Go `1.26`.
-
-### Releases
-
-Tagged releases are automated with [GoReleaser](https://goreleaser.com). Pushing a
-`v*` tag triggers `.github/workflows/release.yml`, which builds `linux`/`darwin`
-binaries for `amd64`/`arm64`, injects the tag into the version, and publishes
-archives plus checksums to a GitHub Release. Release notes are taken from the
-matching `## v<version>` section of `CHANGELOG.md`; a pre-publish guard fails the
-release if that section is missing, so update the changelog before tagging.
-
-Run `workflow_dispatch` on the Release workflow to build a `--snapshot` (no
-publish), or validate locally:
-
-```sh
-goreleaser check
-goreleaser release --snapshot --clean
-```
+Tagged releases are automated with [GoReleaser](https://goreleaser.com): pushing a
+`v*` tag builds `linux`/`darwin` binaries for `amd64`/`arm64` and publishes archives
+plus checksums to a GitHub Release, with notes taken from the matching `## v<version>`
+section of `CHANGELOG.md`.
 
 ## Commands
 
+Run `taskrail <command> --help` for full flag details.
+
 | Command | Purpose |
 | --- | --- |
-| `taskrail init` | Version-aware, non-destructive initialize/upgrade. Empty repo: write the layout plus a `.taskrail/config.yml` marker. Existing unmarked v0.1.0 layout: adopt it by writing only the marker. Non-standard repo (has `specs/`, `planning/`, or `notes/` but no Taskrail layout): detect it and propose a retrofit mapping (dry run by default, `--apply` to scaffold; existing content is never overwritten or moved). Older `layout_version`: migrate (dry run by default, `--apply` to write, then re-validate). Opt in with `--with-skills` to install the embedded repo-agnostic tracked-work skills into `.agents/skills/` and `.claude/skills/` (non-destructive; default init writes no skill directories). Supports `--json`. |
-| `taskrail retrofit [notes]` | Guided bootstrap for an existing non-standard repository: detect a layout mapping, import the optional human-notes markdown into a reviewable planning bootstrap draft (a proposal to adopt via the CLI, not tracked work retrofit creates), and scaffold `specs/`, `planning/tasks/`, and an initial `STATE.md`. Dry run by default; `--apply` writes the scaffold and marker and re-runs validation. `--emit-prompt` prints the same agent prompt as `import <notes> --to planning --emit-prompt` (read-only, no scaffold, allowed on any repo); save the agent's draft and run `taskrail import --apply <draft.json>` to land real spec/task files. Existing files are never overwritten and the notes file is only read. Without `--emit-prompt`, refuses an already-managed repo (use `taskrail init`). Supports `--json`. |
-| `taskrail validate` | Validate folder layout, required files, task shape, dependency and spec references, and `STATE.md` consistency. |
-| `taskrail repair` | Conservatively reconcile mechanical `STATE.md` drift with the task files: a `current_task` pointer that disagrees with the in_progress task, or stale rendered task counts. Dry run by default (prints the proposed corrections and body diff, writes nothing); `--apply` writes `STATE.md` and re-runs validation. Only ever rewrites `STATE.md` — never advances a status or fabricates work — so non-mechanical violations (missing `spec_ref`, dependency cycle, multiple in_progress tasks) are left untouched and reported by validation. Supports `--json`. |
-| `taskrail next` | Deterministically select the next eligible task. Supports `--json`. |
-| `taskrail start <task-id>` | Mark a task as active and update `planning/STATE.md`. |
-| `taskrail complete <task-id>` | Mark a task completed from an implementation perspective. Supports `--note`. |
+| `taskrail init` | Version-aware, non-destructive init/upgrade for empty, existing, or non-standard repos. `--with-skills` installs the agent skills; `--apply` writes migrations/retrofits; `--json`. |
+| `taskrail retrofit [notes]` | Guided bootstrap for a non-standard repo: detect layout, import notes into a reviewable draft, scaffold `specs/` + `planning/`. Dry run by default; `--apply`, `--emit-prompt`, `--json`. |
+| `taskrail validate` | Validate layout, task shape, dependency/spec references, and `STATE.md` consistency. Read-only. |
+| `taskrail repair` | Reconcile mechanical `STATE.md` drift (stale `current_task` pointer or task counts). Dry run by default; `--apply` rewrites `STATE.md` only; `--json`. |
+| `taskrail next` | Deterministically select the next eligible task. `--json`. |
+| `taskrail start <task-id>` | Mark a task active and update `STATE.md`. |
+| `taskrail complete <task-id>` | Mark a task implementation-complete. `--note`. |
 | `taskrail block <task-id>` | Mark a task blocked and record a `--reason`. |
-| `taskrail verify <task-id>` | Record a verification outcome and write artifacts under `planning/artifacts/verify/`. Supports `--result`, `--summary`, `--create-followup`, and `--json`. |
-| `taskrail task new` | Scaffold a new task file with the next free id and a template body. Requires `--title` and `--spec-ref`; supports `--priority`, repeatable `--dep`, `--follow-up <parent-id>`, and `--json`. Refuses to write an invalid task (unknown spec anchor, nonexistent dependency). With `--follow-up`, the new task inherits the parent's `spec_ref` (overridable), depends on the parent, and records the provenance in its body; `--spec-ref` is then optional. |
-| `taskrail import <source> --to tasks\|spec\|planning` | Preview a T-032 draft from a markdown source (no LLM): headings become spec sections, subheadings and list items become task drafts. Add `--emit-prompt` to print a ready-to-paste agent prompt instead. Never modifies the source. Supports `--json`. |
-| `taskrail import --apply <draft.json>` | Validate an agent-produced draft against the T-032 schema and write real files: spec sections become a new spec file (never overwriting one), tasks are scaffolded like `taskrail task new` with in-draft dependencies resolved. The `--llm` adapter is deferred to v0.3. Supports `--json`. |
+| `taskrail verify <task-id>` | Record a pass/fail outcome and write artifacts under `planning/artifacts/verify/`. `--result`, `--summary`, `--create-followup`, `--json`. |
+| `taskrail task new` | Scaffold a task file with the next free id. Requires `--title` and `--spec-ref`; `--priority`, repeatable `--dep`, `--follow-up <parent-id>`, `--json`. |
+| `taskrail import <source>` | Build spec/task drafts from a markdown source without an LLM. `--to tasks\|spec\|planning`, `--emit-prompt`, `--apply <draft.json>`, `--json`. |
 | `taskrail version` | Print the CLI version (also `--version`). |
 
 ## Quickstart
 
-Initialize Taskrail inside an existing repository:
+Initialize Taskrail inside an existing repository, then confirm it is sane:
 
 ```sh
 taskrail init
-```
-
-Confirm the repository is in a sane state:
-
-```sh
 taskrail validate
 ```
 
@@ -185,8 +177,8 @@ Bootstrap drafts from rough notes without any LLM — preview first, then apply:
 
 ```sh
 taskrail import notes.md --to tasks                # preview the structural task drafts
-taskrail import notes.md --to tasks --emit-prompt  # print an agent prompt to produce a richer draft
-taskrail import --apply draft.json                 # validate an agent draft and write real spec/task files
+taskrail import notes.md --to tasks --emit-prompt  # print an agent prompt for a richer draft
+taskrail import --apply draft.json                 # validate an agent draft and write real files
 ```
 
 Typical flow:
@@ -215,9 +207,10 @@ planning/
           report.md                # human-readable outcome
 ```
 
-These artifacts are plain files. No proprietary formats. No database required.
-
-The `planning/artifacts/` tree is gitignored, reproducible local output. `verify` creates `planning/artifacts/verify/<task-id>/<timestamp>/` on demand; manual-test evidence under `planning/artifacts/manual-test/` is an internal dogfooding convention. `taskrail init` does not pre-create these directories — a clean checkout drops them, and neither committed state nor `validate` depends on the tree surviving a Git round-trip.
+These are plain files — no proprietary formats, no database required. The
+`planning/artifacts/` tree is gitignored, reproducible local output: `verify`
+creates it on demand, `taskrail init` never pre-creates it, and neither committed
+state nor `validate` depends on it surviving a Git round-trip.
 
 ## State Contract
 
@@ -251,18 +244,16 @@ mise install     # provision the pinned toolchain on a fresh clone
 mise run setup   # provision + wire the opt-in git hooks (lefthook install)
 ```
 
-The `mise.toml` pins are the single source of truth: the `go` pin matches
-`go.mod` and the `lefthook` pin matches the `task hooks:install` guidance below.
-CI provisions the same toolchain from `mise.toml` via
-[`jdx/mise-action`](https://github.com/jdx/mise-action), so local and CI builds
-share one set of pinned versions. The build/test job runs as an OS matrix over
-Linux, Windows, and macOS, so cross-platform regressions (path separators, line
-endings, file modes) are caught before merge; expect a green run on all three
-runners.
+The `mise.toml` pins are the single source of truth: the `go` pin matches `go.mod`
+and the `lefthook` pin matches the hooks guidance below. CI provisions the same
+toolchain via [`jdx/mise-action`](https://github.com/jdx/mise-action), so local and
+CI builds share one set of pinned versions. The build/test job runs as an OS matrix
+over Linux, Windows, and macOS, catching cross-platform regressions (path
+separators, line endings, file modes) before merge.
 
-Optional git hooks mirror the CI checks locally. They use
-[lefthook](https://github.com/evilmartians/lefthook) and are opt-in. `mise run
-setup` wires them for you; to install by hand:
+Optional git hooks mirror the CI checks locally via
+[lefthook](https://github.com/evilmartians/lefthook). `mise run setup` wires them;
+to install by hand:
 
 ```sh
 go install github.com/evilmartians/lefthook@v1.13.6   # or: brew install lefthook
@@ -278,20 +269,24 @@ gate. Do not bypass them with `--no-verify`.
 
 ## Status
 
-Taskrail is an in-progress open-source project centered on its first shippable release, `v0.1.0`.
+Taskrail is an in-progress open-source project. The current release is `v0.2.0`.
 
-- `v0.1.0` proves the repository contract, deterministic task progression, the authoritative `STATE.md`, and verification as a first-class concept.
-- `v0.1.0` is manual-first and LLM-provider-agnostic; `loop`, retrofit content generation, and built-in LLM calls are explicitly out of scope.
-- Later versions are tracked under `specs/v0.2.0.md` and `specs/v0.3.0.md`.
+- `v0.1.0` established the repository contract: deterministic task progression, the authoritative `STATE.md`, and verification as a first-class concept.
+- `v0.2.0` makes adoption in existing repositories easy — guided `retrofit`, LLM-free `import` of rough notes into spec/task drafts, opt-in shippable agent skills, a version-aware non-destructive `init`, and conservative `STATE.md` repair — while keeping the core CLI provider- and tooling-independent.
+- Later work is tracked under [`specs/v0.3.0.md`](specs/v0.3.0.md).
 
 This repository also dogfoods the Taskrail workflow style — using `planning/`, `docs/workflow/`, and mirrored skills — until the product itself fully replaces that scaffolding.
 
+## License
+
+Apache-2.0. See [LICENSE](LICENSE).
+
 ## Read Next
 
-- [`specs/v0.1.0.md`](specs/v0.1.0.md)
-- [`specs/README.md`](specs/README.md)
-- [`planning/STATE.md`](planning/STATE.md)
-- [`AGENTS.md`](AGENTS.md)
+- [`specs/v0.2.0.md`](specs/v0.2.0.md) — current release scope
+- [`specs/README.md`](specs/README.md) — spec reading order and versioning
+- [`planning/STATE.md`](planning/STATE.md) — live execution state
+- [`AGENTS.md`](AGENTS.md) — guidance for coding agents
 - [`CHANGELOG.md`](CHANGELOG.md)
 
 The versioned specs in `specs/` remain the normative source of truth for release scope and behavior.
