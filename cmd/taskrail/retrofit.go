@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -11,6 +12,7 @@ import (
 func newRetrofitCmd() *cobra.Command {
 	var opt jsonOption
 	var apply bool
+	var emitPrompt bool
 	cmd := &cobra.Command{
 		Use:   "retrofit [notes]",
 		Short: "Bootstrap Taskrail structure from an existing repository and human notes",
@@ -22,14 +24,40 @@ func newRetrofitCmd() *cobra.Command {
 			"write the scaffold and marker and re-run validation. Existing files are " +
 			"never overwritten and the notes file is only read. The imported " +
 			"bootstrap is a proposal to review, not tracked work the retrofit " +
-			"creates; adopt it through the CLI. Refuses an already-managed repository " +
-			"(use `taskrail init` there instead).",
+			"creates; adopt it through the CLI.\n\n" +
+			"Pass --emit-prompt with a notes source to print the same agent prompt as " +
+			"`import <notes> --to planning --emit-prompt` (reads only, scaffolds " +
+			"nothing; safe on any repo, managed or not). Save the agent's draft and " +
+			"run `taskrail import --apply <draft.json>` to land real spec/task files, " +
+			"so retrofit is the single guided entry point for detect -> scaffold -> " +
+			"import -> adopt. Without --emit-prompt, refuses an already-managed " +
+			"repository (use `taskrail init` there instead).",
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			// Validate flag combinations before any service I/O (path discovery,
+			// config load), so a misuse fails fast without touching the filesystem.
+			if emitPrompt {
+				if apply {
+					return errors.New("--emit-prompt prints a read-only prompt; do not combine it with --apply")
+				}
+				if len(args) == 0 {
+					return errors.New("retrofit --emit-prompt requires a notes source")
+				}
+			}
+
 			svc, err := serviceFromCmd(cmd)
 			if err != nil {
 				return err
 			}
+
+			if emitPrompt {
+				result, err := svc.EmitImportPrompt(taskrail.EmitPromptInput{SourcePath: args[0], Target: "planning"})
+				if err != nil {
+					return err
+				}
+				return printPromptResult(cmd, opt.json, result)
+			}
+
 			input := taskrail.RetrofitInput{Apply: apply}
 			if len(args) > 0 {
 				input.NotesPath = args[0]
@@ -43,6 +71,7 @@ func newRetrofitCmd() *cobra.Command {
 	}
 	cmd.Flags().BoolVar(&opt.json, "json", false, "print machine-readable output")
 	cmd.Flags().BoolVar(&apply, "apply", false, "apply the scaffold instead of a dry run")
+	cmd.Flags().BoolVar(&emitPrompt, "emit-prompt", false, "print the planning-target import agent prompt instead of scaffolding")
 	return cmd
 }
 

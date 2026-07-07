@@ -28,6 +28,33 @@ func setupRepo(t *testing.T) string {
 	return root
 }
 
+// setupUnmarkedRepo creates a bare temp repo carrying only a .git marker and
+// changes into it, so retrofit tests start from a non-standard, unmanaged tree.
+func setupUnmarkedRepo(t *testing.T) string {
+	t.Helper()
+	root := t.TempDir()
+	if err := os.Mkdir(filepath.Join(root, ".git"), 0o755); err != nil {
+		t.Fatalf("create .git marker: %v", err)
+	}
+	t.Chdir(root)
+	return root
+}
+
+// setupUnmarkedRepoWithNote seeds a bare unmarked repo with body at
+// notes/ideas.md, the human-notes source the guided retrofit imports.
+func setupUnmarkedRepoWithNote(t *testing.T, body string) string {
+	t.Helper()
+	root := setupUnmarkedRepo(t)
+	notePath := filepath.Join(root, "notes", "ideas.md")
+	if err := os.MkdirAll(filepath.Dir(notePath), 0o755); err != nil {
+		t.Fatalf("mkdir notes: %v", err)
+	}
+	if err := os.WriteFile(notePath, []byte(body), 0o644); err != nil {
+		t.Fatalf("write note: %v", err)
+	}
+	return root
+}
+
 // writeTask drops a minimal valid task file into planning/tasks. The spec_ref
 // anchor matches a heading in the starter spec written by init.
 func writeTask(t *testing.T, root, id, status string, deps string) {
@@ -212,6 +239,136 @@ func TestRetrofitCommandDryRunThenApply(t *testing.T) {
 	got, err := os.ReadFile(notePath)
 	if err != nil || string(got) != noteBody {
 		t.Fatalf("retrofit moved or rewrote notes content: got %q err=%v", string(got), err)
+	}
+}
+
+// TestRetrofitEmitPromptMatchesImport proves `retrofit <notes> --emit-prompt`
+// prints the exact prompt of the planning-target `import --emit-prompt` and
+// scaffolds nothing, so retrofit is the single guided entry point without
+// forking a second prompt path.
+func TestRetrofitEmitPromptMatchesImport(t *testing.T) {
+	root := setupUnmarkedRepoWithNote(t, "# Roadmap\n\n## Ship it\n\n- Add login\n- Add logout\n")
+
+	retro, err := runRoot(t, "retrofit", "notes/ideas.md", "--emit-prompt")
+	if err != nil {
+		t.Fatalf("retrofit emit-prompt: %v (output %q)", err, retro)
+	}
+	imp, err := runRoot(t, "import", "notes/ideas.md", "--to", "planning", "--emit-prompt")
+	if err != nil {
+		t.Fatalf("import emit-prompt: %v (output %q)", err, imp)
+	}
+	if retro != imp {
+		t.Fatalf("retrofit emit-prompt output diverged from import:\nretrofit=%q\nimport=%q", retro, imp)
+	}
+	if !strings.Contains(retro, "Taskrail import prompt") {
+		t.Fatalf("emit-prompt output missing prompt header: %q", retro)
+	}
+
+	// The JSON envelope must match too, guarding the machine-readable path.
+	retroJSON, err := runRoot(t, "retrofit", "notes/ideas.md", "--emit-prompt", "--json")
+	if err != nil {
+		t.Fatalf("retrofit emit-prompt --json: %v (output %q)", err, retroJSON)
+	}
+	impJSON, err := runRoot(t, "import", "notes/ideas.md", "--to", "planning", "--emit-prompt", "--json")
+	if err != nil {
+		t.Fatalf("import emit-prompt --json: %v (output %q)", err, impJSON)
+	}
+	if retroJSON != impJSON {
+		t.Fatalf("retrofit emit-prompt --json diverged from import:\nretrofit=%q\nimport=%q", retroJSON, impJSON)
+	}
+
+	// Emit-prompt never scaffolds.
+	if _, err := os.Stat(filepath.Join(root, "planning", "STATE.md")); !os.IsNotExist(err) {
+		t.Fatalf("emit-prompt scaffolded layout: STATE.md stat err=%v", err)
+	}
+}
+
+// TestRetrofitEmitPromptAllowedOnManagedRepo confirms the read-only prompt path
+// works on any repo, unlike the scaffolding retrofit path which refuses an
+// already-managed repository. This locks the intentional marker-check bypass
+// that keeps `retrofit --emit-prompt` equivalent to `import --emit-prompt`.
+func TestRetrofitEmitPromptAllowedOnManagedRepo(t *testing.T) {
+	root := setupRepo(t) // init writes the marker, so the repo is managed
+	if err := os.WriteFile(filepath.Join(root, "notes.md"), []byte("# Roadmap\n\n## Ship it\n\n- Add login\n"), 0o644); err != nil {
+		t.Fatalf("write notes: %v", err)
+	}
+
+	// Plain retrofit refuses a managed repo.
+	if _, err := runRoot(t, "retrofit", "notes.md"); err == nil {
+		t.Fatal("plain retrofit must refuse an already-managed repository")
+	}
+
+	// --emit-prompt is read-only and works regardless.
+	out, err := runRoot(t, "retrofit", "notes.md", "--emit-prompt")
+	if err != nil {
+		t.Fatalf("retrofit --emit-prompt on managed repo: %v (output %q)", err, out)
+	}
+	if !strings.Contains(out, "Taskrail import prompt") {
+		t.Fatalf("unexpected emit-prompt output: %q", out)
+	}
+}
+
+// TestRetrofitEmitPromptRequiresNotes rejects an emit-prompt run with no notes
+// source; there is nothing to build a prompt from.
+func TestRetrofitEmitPromptRequiresNotes(t *testing.T) {
+	setupUnmarkedRepo(t)
+	if _, err := runRoot(t, "retrofit", "--emit-prompt"); err == nil {
+		t.Fatal("expected error when --emit-prompt has no notes source")
+	}
+}
+
+// TestRetrofitEmitPromptRejectsApply keeps the read-only prompt path and the
+// scaffold path from being requested at once.
+func TestRetrofitEmitPromptRejectsApply(t *testing.T) {
+	// The conflict guard fires before any notes I/O, so a bare repo suffices.
+	setupUnmarkedRepo(t)
+	if _, err := runRoot(t, "retrofit", "notes/ideas.md", "--emit-prompt", "--apply"); err == nil {
+		t.Fatal("expected error when --emit-prompt is combined with --apply")
+	}
+}
+
+// TestRetrofitEmitPromptThenApply exercises the documented adoption path end to
+// end: retrofit scaffolds the layout, emit-prompt hands the semantic lift to an
+// agent, and the agent-refined draft flows through `import --apply` so real
+// spec/task files land with a valid spec_ref (reusing CreateTask validation).
+func TestRetrofitEmitPromptThenApply(t *testing.T) {
+	root := setupUnmarkedRepoWithNote(t, "# Roadmap\n\n## Ship it\n\n- Add login\n")
+
+	// Emit the prompt (no scaffold yet), then scaffold the tracked layout.
+	if out, err := runRoot(t, "retrofit", "notes/ideas.md", "--emit-prompt"); err != nil {
+		t.Fatalf("retrofit emit-prompt: %v (output %q)", err, out)
+	}
+	if out, err := runRoot(t, "retrofit", "notes/ideas.md", "--apply"); err != nil {
+		t.Fatalf("retrofit apply: %v (output %q)", err, out)
+	}
+
+	// An agent-refined draft: a spec section supplies the heading its task's
+	// spec_ref points at, so apply reuses CreateTask validation with no invented
+	// anchor.
+	draft := `{
+  "schema_version": 1,
+  "target": "planning",
+  "source": "notes/ideas.md",
+  "spec_sections": [{"heading": "Roadmap", "body": "Ship the importer."}],
+  "tasks": [
+    {"key": "importer", "title": "Wire structural import into retrofit", "spec_ref": "specs/ideas.md#roadmap", "priority": "medium"}
+  ]
+}`
+	if err := os.WriteFile(filepath.Join(root, "draft.json"), []byte(draft), 0o644); err != nil {
+		t.Fatalf("write draft: %v", err)
+	}
+	applyOut, err := runRoot(t, "import", "--apply", "draft.json")
+	if err != nil {
+		t.Fatalf("import apply: %v (output %q)", err, applyOut)
+	}
+	if !strings.Contains(applyOut, "created T-") || !strings.Contains(applyOut, "wrote spec specs/ideas.md") {
+		t.Fatalf("unexpected apply output: %q", applyOut)
+	}
+	if _, err := os.Stat(filepath.Join(root, "specs", "ideas.md")); err != nil {
+		t.Fatalf("apply did not write spec: %v", err)
+	}
+	if out, err := runRoot(t, "validate"); err != nil {
+		t.Fatalf("post-apply validate failed: %v (output %q)", err, out)
 	}
 }
 
