@@ -135,7 +135,19 @@ Guidance for coding agents working in the Taskrail repository.
 - Run `./scripts/check-skill-mirrors.sh` when changing canonical skills or mirrored skill directories.
 - After any `taskrail start`/`next`/`verify`/`complete`/`block`, run `git status` and stage the regenerated `planning/STATE.md` and rewritten task files with the related change; never leave committed `STATE.md` out of sync with task/spec state.
 - Update `README.md` when CLI commands or workflow expectations change.
-- Update `CHANGELOG.md` for user-visible behavior changes under an Unreleased section; skip internal-only refactors, CI plumbing, and dependency-bump noise.
+- Update `CHANGELOG.md` for user-visible behavior changes under an Unreleased
+  section; skip internal-only refactors, CI plumbing, and dependency-bump noise.
+  Keep entries terse: **one to two lines**, lead with the command or user-facing
+  verb, state the observable effect and the flags a user types. Leave out internal
+  mechanics (function names, struct/schema ids, `embed.FS`, "shared validator")
+  and design rationale — those belong in the commit body or spec. Fold one
+  user-facing feature into one entry even when it spans several tasks. Copy-edit
+  against the existing entries so register and length stay consistent; the terse
+  v0.1.0 entries are the reference.
+  - Good: `` `taskrail repair` — reconcile mechanical `STATE.md` drift; dry run by
+    default, `--apply` writes `STATE.md` only and re-validates. Supports `--json`. ``
+  - Bad: a 5-sentence paragraph restating the task description and how it works
+    internally.
 - Delete all ephemeral manual test code after the report is written; never commit `*_manual_test.go` files or `cmd/manual-test-*/` directories.
 
 ## Notes On Repository Behavior
