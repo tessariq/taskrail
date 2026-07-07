@@ -37,11 +37,13 @@ type ApplyDraftResult struct {
 }
 
 // ApplyImportDraft validates a draft and writes real spec/task files. Structural
-// validation rejects malformed drafts before anything is written; runtime repo
-// checks that CreateTask performs (spec heading existence, external dependency
-// existence) can still fail after a spec section was written or an earlier task
-// created. On such a failure the returned result reports what already landed and
-// the error names it, so partial state is never silent.
+// validation rejects malformed drafts, then a live pre-flight (T-041) runs every
+// task's repo checks — spec heading existence and external dependency existence —
+// resolving spec_ref anchors against both existing spec files and the draft's own
+// pending spec sections. Because that pre-flight writes nothing, a draft that
+// would fail any live check leaves the repository unchanged: no orphan spec, no
+// partial tasks. describeWrittenArtifacts still guards the residual I/O-failure
+// path so a mid-write disk error is never silent.
 func (s *Service) ApplyImportDraft(input ApplyDraftInput) (ApplyDraftResult, error) {
 	draft, err := s.readImportDraft(input.DraftPath)
 	if err != nil {
@@ -49,6 +51,9 @@ func (s *Service) ApplyImportDraft(input ApplyDraftInput) (ApplyDraftResult, err
 	}
 	if violations := ValidateImportDraft(draft); len(violations) > 0 {
 		return ApplyDraftResult{}, fmt.Errorf("import draft is invalid: %s", strings.Join(violations, "; "))
+	}
+	if err := s.preflightImportDraft(draft); err != nil {
+		return ApplyDraftResult{}, err
 	}
 
 	result := ApplyDraftResult{Target: draft.Target}
@@ -69,6 +74,84 @@ func (s *Service) ApplyImportDraft(input ApplyDraftInput) (ApplyDraftResult, err
 		return result, err
 	}
 	return result, nil
+}
+
+// pendingSpec captures the spec an apply is about to write: its repo-relative
+// path and the heading anchors it will expose. Pre-flight consults it so a task
+// may legitimately reference a heading in the not-yet-written imported spec.
+type pendingSpec struct {
+	path    string
+	anchors map[string]struct{}
+}
+
+// importedSpecPath is the absolute path `import --apply` writes a draft's spec
+// to. Pre-flight and writeImportedSpec both derive it here so they can never
+// disagree on where the imported spec lands.
+func (s *Service) importedSpecPath(draft ImportDraft) string {
+	return filepath.Join(s.paths.SpecsDir, specStemFromSource(draft.Source)+".md")
+}
+
+// buildPendingSpec derives the pending imported spec from a draft, or nil when
+// the draft writes no spec. Anchors are collected from the exact markdown
+// writeImportedSpec will render, so pre-flight and apply agree on what exists.
+func (s *Service) buildPendingSpec(draft ImportDraft) *pendingSpec {
+	if len(draft.SpecSections) == 0 {
+		return nil
+	}
+	return &pendingSpec{
+		path:    relPath(s.paths.RepoRoot, s.importedSpecPath(draft)),
+		anchors: collectHeadingAnchors(renderImportedSpec(draft)),
+	}
+}
+
+// preflightImportDraft runs every live-repo check apply would otherwise hit only
+// after writing: the shared validateTaskCreatable per task (spec heading resolved
+// against the pending imported spec, priority, dependency existence) plus the
+// dependency-cycle check task ordering performs. In-draft key dependencies are
+// accepted here because a sibling task will create them. Nothing is written, so
+// any failure leaves the repository unchanged — no orphan spec, no partial tasks.
+func (s *Service) preflightImportDraft(draft ImportDraft) error {
+	_, tasks, err := s.loadStateAndTasks()
+	if err != nil {
+		return err
+	}
+	pending := s.buildPendingSpec(draft)
+	keys, _ := draftTaskKeys(draft.Tasks)
+	opts := taskValidationOpts{pending: pending, draftKeys: keys}
+	for i, task := range draft.Tasks {
+		if _, err := s.validateTaskCreatable(tasks, task.SpecRef, task.Priority, task.Dependencies, opts); err != nil {
+			return fmt.Errorf("%s: %w", taskDraftLabel(task, i), err)
+		}
+	}
+	// Ordering detects a dependency cycle among draft keys; run it before any
+	// write so a cyclic draft with spec sections cannot leave an orphan spec.
+	if _, err := orderTaskDraftsByDeps(draft.Tasks); err != nil {
+		return err
+	}
+	return nil
+}
+
+// validateSpecRefWithPending is the live spec_ref check CreateTask performs,
+// extended to resolve a reference to the pending imported spec against that
+// spec's about-to-be-written headings instead of the on-disk file (which may not
+// exist yet, or may be a stale orphan the apply will overwrite).
+func (s *Service) validateSpecRefWithPending(specRef string, pending *pendingSpec) error {
+	if strings.TrimSpace(specRef) == "" {
+		return errors.New("task spec_ref must not be empty")
+	}
+	pathPart, anchor, err := parseSpecRef(specRef)
+	if err != nil {
+		return err
+	}
+	// pending.path is slash-normalized (relPath applies filepath.ToSlash); pathPart
+	// is OS-native from parseSpecRef, so normalize it before comparing on Windows.
+	if pending != nil && filepath.ToSlash(pathPart) == pending.path {
+		if _, ok := pending.anchors[anchor]; !ok {
+			return fmt.Errorf("heading #%s not found in %s (pending import)", anchor, pathPart)
+		}
+		return nil
+	}
+	return s.validateSpecRef(specRef)
 }
 
 // describeWrittenArtifacts summarizes what an apply landed on disk, for surfacing
@@ -201,12 +284,18 @@ func orderTaskDraftsByDeps(tasks []TaskDraft) ([]int, error) {
 	return order, nil
 }
 
+// importedSpecMarker tags every spec file `import --apply` writes. Its presence
+// distinguishes an orphan left by a prior import (safe to overwrite on retry)
+// from an authored spec (never clobbered).
+const importedSpecMarker = "Imported by `taskrail import --apply`. Review before adopting."
+
 // writeImportedSpec assembles the draft's spec sections into a new spec file. It
-// refuses to overwrite an existing file so an import never clobbers authored
-// specs, mirroring the non-destructive Init contract.
+// never clobbers an authored spec, mirroring the non-destructive Init contract,
+// but overwrites an orphan a prior import left at the same path so a corrected
+// re-apply can succeed (T-041).
 func (s *Service) writeImportedSpec(draft ImportDraft) (string, error) {
-	specPath := filepath.Join(s.paths.SpecsDir, specStemFromSource(draft.Source)+".md")
-	if fileExists(specPath) {
+	specPath := s.importedSpecPath(draft)
+	if fileExists(specPath) && !isImportedSpec(specPath) {
 		return "", fmt.Errorf("spec file %s already exists; refusing to overwrite", relPath(s.paths.RepoRoot, specPath))
 	}
 	if err := ensureDir(filepath.Dir(specPath)); err != nil {
@@ -216,6 +305,17 @@ func (s *Service) writeImportedSpec(draft ImportDraft) (string, error) {
 		return "", fmt.Errorf("write imported spec: %w", err)
 	}
 	return relPath(s.paths.RepoRoot, specPath), nil
+}
+
+// isImportedSpec reports whether the file at path was written by a prior
+// `import --apply` (carries importedSpecMarker). An unreadable file is treated as
+// not-imported so writeImportedSpec falls back to its refuse-to-overwrite guard.
+func isImportedSpec(path string) bool {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return false
+	}
+	return strings.Contains(string(data), importedSpecMarker)
 }
 
 // specStemFromSource derives a safe spec filename stem from the draft source,
@@ -248,7 +348,7 @@ func renderImportedSpec(draft ImportDraft) string {
 	}
 	var b strings.Builder
 	fmt.Fprintf(&b, "# %s\n\n", title)
-	b.WriteString("Imported by `taskrail import --apply`. Review before adopting.\n\n")
+	b.WriteString(importedSpecMarker + "\n\n")
 	for _, section := range draft.SpecSections {
 		fmt.Fprintf(&b, "## %s\n\n", strings.TrimSpace(section.Heading))
 		if body := strings.TrimSpace(section.Body); body != "" {

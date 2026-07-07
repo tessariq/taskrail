@@ -226,6 +226,45 @@ func (s *Service) Verify(input VerifyInput) (VerifyResult, error) {
 	}, nil
 }
 
+// taskValidationOpts carries the import-specific relaxations validateTaskCreatable
+// honors: resolving a spec_ref against a not-yet-written imported spec, and
+// accepting a dependency that names an in-draft key a sibling task will create.
+// The zero value is the strict, on-disk mode CreateTask uses.
+type taskValidationOpts struct {
+	pending   *pendingSpec
+	draftKeys map[string]struct{}
+}
+
+// validateTaskCreatable runs the spec-and-dependency live-repo checks CreateTask
+// enforces before it writes — non-empty spec_ref with a resolvable heading, a
+// valid priority, and existing dependencies — and returns the normalized
+// priority. Writing nothing, it is the shared pre-write validator import
+// pre-flight (T-041) reuses to reject a whole draft before any file lands, so
+// any check added *here* is enforced on both paths. Checks CreateTask keeps to
+// itself (title emptiness) are not covered — the import path relies on
+// ValidateImportDraft for those.
+func (s *Service) validateTaskCreatable(tasks []*Task, specRef, priority string, deps []string, opts taskValidationOpts) (string, error) {
+	if err := s.validateSpecRefWithPending(specRef, opts.pending); err != nil {
+		return "", fmt.Errorf("invalid spec_ref: %w", err)
+	}
+	priority = strings.TrimSpace(priority)
+	if priority == "" {
+		priority = "medium"
+	}
+	if _, ok := validPriorites[priority]; !ok {
+		return "", fmt.Errorf("invalid priority %q", priority)
+	}
+	for _, dep := range deps {
+		if _, ok := opts.draftKeys[dep]; ok {
+			continue // an in-draft key: a sibling draft task will create it
+		}
+		if _, ok := taskByID(tasks, dep); !ok {
+			return "", fmt.Errorf("dependency %s does not exist", dep)
+		}
+	}
+	return priority, nil
+}
+
 // CreateTask scaffolds a well-formed task file with the next free id. It mirrors
 // the validation `validate` would apply (spec anchor, dependency existence,
 // priority) at creation time so an invalid task never lands on disk.
@@ -258,24 +297,9 @@ func (s *Service) CreateTask(input CreateTaskInput) (CreateTaskResult, error) {
 		}
 	}
 
-	if specRef == "" {
-		return CreateTaskResult{}, errors.New("task spec_ref must not be empty")
-	}
-	if err := s.validateSpecRef(specRef); err != nil {
-		return CreateTaskResult{}, fmt.Errorf("invalid spec_ref: %w", err)
-	}
-	priority := strings.TrimSpace(input.Priority)
-	if priority == "" {
-		priority = "medium"
-	}
-	if _, ok := validPriorites[priority]; !ok {
-		return CreateTaskResult{}, fmt.Errorf("invalid priority %q", priority)
-	}
-
-	for _, dep := range deps {
-		if _, ok := taskByID(tasks, dep); !ok {
-			return CreateTaskResult{}, fmt.Errorf("dependency %s does not exist", dep)
-		}
+	priority, err := s.validateTaskCreatable(tasks, specRef, input.Priority, deps, taskValidationOpts{})
+	if err != nil {
+		return CreateTaskResult{}, err
 	}
 
 	nextID := nextTaskID(tasks)

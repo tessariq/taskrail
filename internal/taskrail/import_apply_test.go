@@ -134,10 +134,11 @@ func TestApplyImportDraftDoesNotClobberExistingSpec(t *testing.T) {
 	}
 }
 
-// A runtime CreateTask failure can happen only after a spec section was already
-// written. The error must name what already landed on disk so the user is not
-// left with silent partial state.
-func TestApplyImportDraftReportsPartialWriteOnTaskFailure(t *testing.T) {
+// A draft whose task fails a live-repo check must leave the repository
+// unchanged: two-phase validation (T-041) pre-flights every task's live checks
+// before any spec or task is written, so a failure writes nothing — no orphan
+// spec, no partial tasks.
+func TestApplyImportDraftLeavesRepoUnchangedOnLiveCheckFailure(t *testing.T) {
 	t.Parallel()
 	svc := applyFixture(t)
 
@@ -146,21 +147,95 @@ func TestApplyImportDraftReportsPartialWriteOnTaskFailure(t *testing.T) {
 		Target:        "planning",
 		Source:        "feature.md",
 		SpecSections:  []SpecSectionDraft{{Heading: "Overview", Body: "x"}},
-		// spec_ref anchor does not exist: CreateTask fails after the spec write.
+		// spec_ref anchor does not exist on the referenced on-disk spec: the
+		// live check fails, and pre-flight must reject before any write.
 		Tasks: []TaskDraft{{Key: "t", Title: "T", SpecRef: "specs/v0.1.0.md#does-not-exist"}},
 	}
 	rel := writeDraftFile(t, svc.paths.RepoRoot, "planning/imports/partial.json", draft)
 
-	_, err := svc.ApplyImportDraft(ApplyDraftInput{DraftPath: rel})
+	result, err := svc.ApplyImportDraft(ApplyDraftInput{DraftPath: rel})
 	if err == nil {
-		t.Fatal("expected error when a task fails to create")
+		t.Fatal("expected error when a task fails a live-repo check")
 	}
-	// The spec was written before the failure; the error must surface it.
-	if !strings.Contains(err.Error(), "specs/feature.md") {
-		t.Fatalf("error must name the already-written spec, got: %v", err)
+	if result.SpecPath != "" || len(result.Tasks) != 0 {
+		t.Fatalf("failed apply must report no written artifacts, got %+v", result)
 	}
-	if _, statErr := os.Stat(filepath.Join(svc.paths.RepoRoot, "specs", "feature.md")); statErr != nil {
-		t.Fatalf("spec should exist on disk after partial apply: %v", statErr)
+	if _, statErr := os.Stat(filepath.Join(svc.paths.RepoRoot, "specs", "feature.md")); !os.IsNotExist(statErr) {
+		t.Fatalf("no orphan spec must be written on a failed apply, stat err: %v", statErr)
+	}
+	_, tasks, err := svc.loadStateAndTasks()
+	if err != nil {
+		t.Fatalf("load tasks: %v", err)
+	}
+	if len(tasks) != 0 {
+		t.Fatalf("no tasks must be created on a failed apply, got %d", len(tasks))
+	}
+}
+
+// The legitimate planning case: a task's spec_ref points at a heading in the
+// spec the same apply is about to write. Pre-flight must resolve that anchor
+// against the draft's pending spec sections (not only the on-disk file, which
+// does not exist yet) so the apply still succeeds.
+func TestApplyImportDraftResolvesSpecRefAgainstPendingImportedSpec(t *testing.T) {
+	t.Parallel()
+	svc := applyFixture(t)
+
+	draft := ImportDraft{
+		SchemaVersion: importDraftSchemaVersion,
+		Target:        "planning",
+		Source:        "feature.md",
+		SpecSections:  []SpecSectionDraft{{Heading: "Overview", Body: "x"}},
+		// Anchor resolves only against the pending imported spec (specs/feature.md).
+		Tasks: []TaskDraft{{Key: "t", Title: "T", SpecRef: "specs/feature.md#overview"}},
+	}
+	rel := writeDraftFile(t, svc.paths.RepoRoot, "planning/imports/pending.json", draft)
+
+	result, err := svc.ApplyImportDraft(ApplyDraftInput{DraftPath: rel})
+	if err != nil {
+		t.Fatalf("apply must succeed for a task referencing the pending spec heading: %v", err)
+	}
+	if result.SpecPath == "" || len(result.Tasks) != 1 {
+		t.Fatalf("expected a written spec and one task, got %+v", result)
+	}
+	if _, statErr := os.Stat(filepath.Join(svc.paths.RepoRoot, result.Tasks[0].Path)); statErr != nil {
+		t.Fatalf("task file must exist: %v", statErr)
+	}
+}
+
+// Retry after a prior partial apply: an orphan spec written by a previous import
+// (carrying the import marker) must be overwritten so a corrected re-apply
+// succeeds. Authored specs (no marker) stay protected — see
+// TestApplyImportDraftDoesNotClobberExistingSpec.
+func TestApplyImportDraftOverwritesOrphanImportedSpec(t *testing.T) {
+	t.Parallel()
+	svc := applyFixture(t)
+
+	// Simulate an orphan left by an earlier import: a spec at the target path
+	// carrying the import marker.
+	orphan := filepath.Join(svc.paths.RepoRoot, "specs", "feature.md")
+	if err := os.WriteFile(orphan, []byte("# feature.md\n\n"+importedSpecMarker+"\n\n## Stale\n\nold.\n"), 0o644); err != nil {
+		t.Fatalf("seed orphan spec: %v", err)
+	}
+
+	draft := ImportDraft{
+		SchemaVersion: importDraftSchemaVersion,
+		Target:        "spec",
+		Source:        "feature.md",
+		SpecSections:  []SpecSectionDraft{{Heading: "Overview", Body: "fresh."}},
+	}
+	rel := writeDraftFile(t, svc.paths.RepoRoot, "planning/imports/retry.json", draft)
+
+	result, err := svc.ApplyImportDraft(ApplyDraftInput{DraftPath: rel})
+	if err != nil {
+		t.Fatalf("apply must overwrite an orphan imported spec on retry: %v", err)
+	}
+	data, err := os.ReadFile(filepath.Join(svc.paths.RepoRoot, result.SpecPath))
+	if err != nil {
+		t.Fatalf("read rewritten spec: %v", err)
+	}
+	spec := string(data)
+	if !strings.Contains(spec, "## Overview") || strings.Contains(spec, "## Stale") {
+		t.Fatalf("orphan spec must be replaced with the fresh sections, got:\n%s", spec)
 	}
 }
 
@@ -251,6 +326,33 @@ func TestApplyImportDraftRejectsDependencyCycle(t *testing.T) {
 
 	if _, err := svc.ApplyImportDraft(ApplyDraftInput{DraftPath: rel}); err == nil {
 		t.Fatal("expected error for a dependency cycle among draft keys")
+	}
+}
+
+// A dependency cycle is detected during task ordering, which the old apply ran
+// only after writing the spec — leaving an orphan. Pre-flight must catch the
+// cycle before any write so a cyclic draft with spec sections changes nothing.
+func TestApplyImportDraftLeavesRepoUnchangedOnDependencyCycle(t *testing.T) {
+	t.Parallel()
+	svc := applyFixture(t)
+
+	draft := ImportDraft{
+		SchemaVersion: importDraftSchemaVersion,
+		Target:        "planning",
+		Source:        "feature.md",
+		SpecSections:  []SpecSectionDraft{{Heading: "Overview", Body: "x"}},
+		Tasks: []TaskDraft{
+			{Key: "a", Title: "A", SpecRef: "specs/feature.md#overview", Dependencies: []string{"b"}},
+			{Key: "b", Title: "B", SpecRef: "specs/feature.md#overview", Dependencies: []string{"a"}},
+		},
+	}
+	rel := writeDraftFile(t, svc.paths.RepoRoot, "planning/imports/cycle-spec.json", draft)
+
+	if _, err := svc.ApplyImportDraft(ApplyDraftInput{DraftPath: rel}); err == nil {
+		t.Fatal("expected error for a dependency cycle")
+	}
+	if _, statErr := os.Stat(filepath.Join(svc.paths.RepoRoot, "specs", "feature.md")); !os.IsNotExist(statErr) {
+		t.Fatalf("no orphan spec must be written when the draft has a cycle, stat err: %v", statErr)
 	}
 }
 
