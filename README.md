@@ -267,6 +267,9 @@ task hooks:install
 Hooks are a convenience; CI (`.github/workflows/ci.yml`) remains the authoritative
 gate. Do not bypass them with `--no-verify`.
 
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the PR checklist, the AI-assisted
+contribution policy, and tracked-work rules.
+
 ## Status
 
 Taskrail is an in-progress open-source project. The current release is `v0.2.0`.
