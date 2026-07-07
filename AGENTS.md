@@ -29,12 +29,14 @@ Guidance for coding agents working in the Taskrail repository.
 
 - Go version: `1.26` (`go.mod`).
 - `task` is optional convenience. Direct Go commands remain canonical.
-- `mise` (`mise.toml`) is optional convenience too: `mise install` provisions the
-  pinned toolchain (Go, `task`, `lefthook`) on a fresh clone, and `mise run setup`
-  additionally wires the opt-in git hooks (`lefthook install`). Direct `go`
-  commands and `Taskfile.yml` targets keep working without mise. The `mise.toml`
-  pins are the single source of truth: `go` matches `go.mod` and `lefthook`
-  matches the `task hooks:install` guidance (guarded by `internal/toolchain`).
+- `mise` (`mise.toml`) provisions the pinned toolchain (Go, `task`, `lefthook`):
+  `mise install` sets it up on a fresh clone and `mise run setup` additionally
+  wires the opt-in git hooks (`lefthook install`). Locally it is optional
+  convenience — direct `go` commands and `Taskfile.yml` targets work without it —
+  but CI provisions the same toolchain via `jdx/mise-action`, so `mise.toml` is
+  the single source of toolchain versions locally and on CI. The pins are guarded
+  by `internal/toolchain`: `go` matches `go.mod`, `lefthook` matches the
+  `task hooks:install` guidance, and CI is asserted to provision via mise-action.
 - Prefer repository-local, inspectable file operations over hidden automation.
 
 ## Build, Format, And Test Commands

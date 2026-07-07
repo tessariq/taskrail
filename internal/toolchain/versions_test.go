@@ -1,11 +1,12 @@
-// Package toolchain holds guard tests that keep the pinned developer toolchain
-// (mise.toml) consistent with the versions referenced elsewhere in the repo.
+// Package toolchain holds guard tests that keep mise.toml the single source of
+// truth for the developer toolchain, locally and on CI
+// (see specs/v0.2.0.md#mise-toolchain-management).
 //
-// The versions in mise.toml are meant to be the single source of truth for the
-// developer environment (see specs/v0.2.0.md#mise-toolchain-management): the Go
-// pin must match go.mod, and the lefthook pin must match the version the
-// `task hooks:install` guidance installs (Taskfile.yml and README.md). These
-// tests fail loudly when those drift apart.
+// Two concerns are guarded: version consistency — the Go pin must match go.mod
+// and the lefthook pin must match the `task hooks:install` guidance
+// (Taskfile.yml and README.md) — and CI provisioning — CI must install the
+// toolchain via jdx/mise-action rather than a separately pinned mechanism. These
+// tests fail loudly when either invariant drifts.
 package toolchain_test
 
 import (
