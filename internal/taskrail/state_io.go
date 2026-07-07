@@ -81,7 +81,10 @@ func (s *Service) saveState(state *State) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(s.paths.StateFile, data, 0o644)
+	if err := os.WriteFile(s.paths.StateFile, data, 0o644); err != nil {
+		return fmt.Errorf("write state file: %w", err)
+	}
+	return nil
 }
 
 func (s *Service) saveTask(task *Task) error {
@@ -89,7 +92,10 @@ func (s *Service) saveTask(task *Task) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(task.Filename, data, 0o644)
+	if err := os.WriteFile(task.Filename, data, 0o644); err != nil {
+		return fmt.Errorf("write task file: %w", err)
+	}
+	return nil
 }
 
 func ensureDir(path string) error {
