@@ -6,29 +6,46 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ### Added
 
-- `taskrail repair` conservatively reconciles mechanical `STATE.md` drift with the task files — a `current_task` pointer that disagrees with the in_progress task, or stale rendered task counts. It defaults to a dry run that prints the proposed frontmatter corrections and body diff and writes nothing; `--apply` writes `STATE.md` and re-runs validation. It only ever rewrites `STATE.md` (never a task file), so it structurally cannot advance a status or fabricate work; inconsistencies that need human judgement (a missing `spec_ref`, a dependency cycle, more than one in_progress task) are left untouched and surfaced through validation. Supports `--json`. Shipped alongside a `taskrail-repair` agent skill (installed by `taskrail init --with-skills`) that drives the dry-run → review → apply → re-validate loop; the dogfooding `autonomous-recovery` skill now routes recovery through `taskrail repair` instead of hand-editing authoritative state.
-- `taskrail init --with-skills` installs the embedded, repo-agnostic tracked-work skills (`autonomous-backlog`, `autonomous-task`, `autonomous-verify`) into `.agents/skills/` and `.claude/skills/`. The skills are embedded in the binary via `embed.FS`, so their text stays versioned with the commands they call. Installing is opt-in only: a default `taskrail init` writes no agent-tool or skill directories. Re-running is non-destructive (`writeFileIfMissing` semantics; user-edited skills are never overwritten) and reports whether anything was newly written; dogfooding-only skills (`autonomous-recovery`, `autonomous-manual-test`) are never shipped. Installed paths are listed in text output only, not `--json`.
-
-- `taskrail validate` now strengthens spec-and-task linkage checks. It flags committed references to a concrete file under the gitignored `planning/artifacts/` tree (in `STATE.md` frontmatter fields and task files), naming the offending field so the rot is visible, while leaving legitimate contract prose — bare directory prefixes and `<placeholder>` paths — unflagged. It also detects dependency cycles among tasks (reporting each cycle once) alongside the existing duplicate-task-id and missing-dependency checks.
-- `taskrail task new` scaffolds a task file with the next free id and a template body (Description, Acceptance, Verification Notes, Implementation Notes). Requires `--title` and `--spec-ref`; supports `--priority`, repeatable `--dep`, and `--json`. It mirrors `validate`'s checks at creation time (spec anchor must resolve, dependencies must exist, priority must be valid) so an invalid task never lands, and increments the committed `STATE.md` todo count via the existing state-count logic.
-- `taskrail task new --follow-up <parent-id>` scaffolds a follow-up task ergonomically: it inherits the parent's `spec_ref` (overridable with an explicit `--spec-ref`), adds the parent to `dependencies`, and records the follow-up provenance in the body. With `--follow-up`, `--spec-ref` becomes optional; without either flag the command errors before writing. Reuses the same id allocation, validation, and `--json` support.
-- `taskrail import` supports three no-LLM modes over a markdown source, never modifying it. `import <source> --to tasks|spec|planning` deterministically previews a T-032 draft (headings become spec sections; subheadings plus list items become task drafts; the `planning` target also prints a non-authoritative STATE seed). `import <source> --to <target> --emit-prompt` prints a deterministic, ready-to-paste prompt that embeds the source, the draft schema, and Taskrail conventions so a coding agent produces the draft — the binary stays provider-agnostic and makes no model call. `import --apply <draft.json>` validates an agent-produced draft against the T-032 schema and writes real files: spec sections become a new spec file (never overwriting an existing one) and each task is scaffolded through the same path as `taskrail task new`, with in-draft key dependencies resolved to allocated task ids in dependency order. The thin `--llm` adapter (the binary calling a model directly) is intentionally deferred to v0.3. Supports `--json`. Shipped alongside a `taskrail-import` agent skill installed by `taskrail init --with-skills`.
-- Path discovery now reads an optional `.taskrail/config.yml` layout marker (`layout_version` plus `specs_dir`/`planning_dir` locations). When the marker is absent, discovery falls back to the v0.1.0 layout unchanged, so existing repositories need no migration.
-- `taskrail init` is now version-aware and non-destructive. An empty repository gets the full layout plus a `.taskrail/config.yml` marker at the current `layout_version`; an existing unmarked v0.1.0 layout is adopted by writing only the marker (no other files change); and a marker recording an older `layout_version` triggers a migration that defaults to a dry run printing the diff, applies only with `--apply`, and re-runs validation. Migration never deletes or rewrites human-authored content under `specs/` or `planning/`. Supports `--json`.
-- `taskrail init` now guides a retrofit for a non-standard repository. When an unmarked repo has a candidate directory (`specs/`, `planning/`, or `notes/`) but no standard Taskrail layout, `init` detects it and proposes a mapping onto the Taskrail layout instead of silently scaffolding. It defaults to a dry run; `--apply` scaffolds the standard layout with `writeFileIfMissing` semantics (existing content is never overwritten or moved), writes the marker, and re-runs validation. Both the dry-run and applied output note that existing content is not moved.
-- `taskrail retrofit [notes]` ties the retrofit pieces into the spec's Guided Retrofit Bootstrap Flow. It composes layout detection (the same candidate mapping `init` proposes), a structural import of the optional human-notes markdown into a reviewable planning bootstrap draft (task and spec-section drafts plus a non-authoritative STATE seed), and the shared dry-run/apply scaffold. The bootstrap is surfaced for review — a proposal to adopt through the CLI, not tracked work the command creates — so no unreviewed tasks are written. Dry run by default shows the mapping, the bootstrap summary, and the diff while writing nothing; `--apply` scaffolds `specs/`, `planning/tasks/`, and an initial `STATE.md` (never overwriting existing files), writes the `.taskrail/config.yml` marker, and re-runs validation. `retrofit <notes> --emit-prompt` prints the same agent prompt as `import <notes> --to planning --emit-prompt` (read-only, scaffolds nothing, allowed on any repo) so an agent-refined draft can flow through `import --apply` to land real spec/task files — making retrofit the single guided entry point for detect → scaffold → import → adopt. The notes file is only read. Without `--emit-prompt`, refuses an already-managed repository (directing to `taskrail init`). Supports `--json`, which includes the full bootstrap draft.
-- A `taskrail-retrofit` agent skill, installed by `taskrail init --with-skills` alongside the other shippable skills. It drives the guided retrofit bootstrap end to end — detect and dry-run, confirm, `--apply` the scaffold, then adopt reviewed notes as real tracked work via `retrofit <notes> --emit-prompt` into `taskrail import --apply`, closing with `taskrail validate`. It invokes the installed `taskrail` binary (never `go run`) and has no dogfooding counterpart under `skills/`, since Taskrail's own repository is already managed.
-- Homebrew install support via the `tessariq/homebrew-tap` tap: `brew install tessariq/tap/taskrail` (macOS and Linux). The v0.1.0 formula is published retroactively.
+- `taskrail repair` — reconcile mechanical `STATE.md` drift (stale `current_task`
+  pointer or task counts) against the task files. Dry run by default; `--apply`
+  rewrites `STATE.md` only (never a task file) and re-validates. Judgement calls
+  (missing `spec_ref`, dependency cycles, multiple in_progress) are left to
+  `validate`. Supports `--json`.
+- `taskrail task new` — scaffold a task file with the next free id. Requires
+  `--title` and `--spec-ref`; supports `--priority`, repeatable `--dep`, `--json`.
+  Runs `validate`'s checks at creation so an invalid task never lands.
+- `taskrail task new --follow-up <parent-id>` — scaffold a follow-up: inherits the
+  parent's `spec_ref` and adds it as a dependency.
+- `taskrail import` — build spec/task drafts from a markdown source without an LLM.
+  `--to tasks|spec|planning` previews a draft; `--emit-prompt` prints a paste-ready
+  agent prompt; `--apply <draft.json>` validates and writes real files. Supports
+  `--json`. (`--llm` deferred to v0.3.)
+- `taskrail retrofit [notes]` — guided bootstrap for a non-standard repo: detect
+  layout, scaffold, and adopt reviewed notes as tracked work. Dry run by default;
+  `--apply` scaffolds without overwriting. Supports `--json`.
+- `taskrail init --with-skills` — install the shippable tracked-work agent skills
+  (`autonomous-backlog`, `autonomous-task`, `autonomous-verify`, `taskrail-repair`,
+  `taskrail-import`, `taskrail-retrofit`). Opt-in; re-running never overwrites edits.
+- `taskrail init` is now version-aware and non-destructive: writes a
+  `.taskrail/config.yml` layout marker, adopts an existing v0.1.0 layout, and
+  migrates older layouts (dry run, `--apply` to write). Never rewrites human content.
+- `taskrail validate` now detects dependency cycles and committed references to
+  gitignored `planning/artifacts/` paths.
+- Homebrew install: `brew install tessariq/tap/taskrail` (macOS and Linux).
 
 ### Changed
 
-- `taskrail import --apply` is now atomic. It pre-flights every task's live-repo checks — spec-heading existence (resolved against both existing spec files and the draft's own pending `spec_sections`), priority, dependency existence, and dependency cycles — before writing anything, so a draft that would fail part-way now leaves the repository unchanged instead of stranding an orphan spec plus partial tasks. Those checks are a single shared validator that `import --apply` and `taskrail task new` both run. To make a corrected re-apply ergonomic, `--apply` now overwrites a spec a prior import left at the target path (identified by its import marker) while still refusing to clobber an authored spec.
-- `taskrail verify` now records a portable result in committed `STATE.md`: `last_verification_result` is a path-free summary (result, task id, timestamp) and `relevant_artifacts` no longer lists gitignored `planning/artifacts/...` paths. Local evidence is still written under `planning/artifacts/verify/` for the producer, so a teammate cloning the repo no longer sees `STATE.md` pointing at files that exist only on the producer's machine.
-- `taskrail init` no longer pre-creates the gitignored artifact output directories (`planning/artifacts/verify/` and `planning/artifacts/runs/`). These are reproducible local output that a clean checkout drops anyway; `verify` still creates `planning/artifacts/verify/<task-id>/<timestamp>/` on demand. Manual-test evidence under `planning/artifacts/manual-test/` stays an internal dogfooding convention and is likewise never provisioned by `init`, so init, `validate`, and `verify` now share one coherent artifact contract.
+- `taskrail import --apply` is now atomic — pre-flights all checks before writing,
+  so a failing draft leaves the repo unchanged.
+- `taskrail verify` records a portable, path-free result in committed `STATE.md`;
+  gitignored artifact paths no longer leak into `relevant_artifacts`.
+- `taskrail init` no longer pre-creates gitignored artifact directories; `verify`
+  creates them on demand.
 
 ### Fixed
 
-- `taskrail validate` no longer requires the gitignored `planning/artifacts` and `planning/artifacts/verify` directories to exist. Git cannot track these empty output directories, so a freshly init-ed and committed repository previously failed `validate` on a clean checkout (fresh clone or CI). A missing artifacts tree is now treated as "no artifacts yet"; `taskrail verify` still creates the directories on demand.
+- `taskrail validate` no longer fails on a fresh clone when the gitignored
+  `planning/artifacts` tree is absent.
 
 ## v0.1.0 - 2026-06-19
 
