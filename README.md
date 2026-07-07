@@ -254,7 +254,10 @@ The `mise.toml` pins are the single source of truth: the `go` pin matches
 `go.mod` and the `lefthook` pin matches the `task hooks:install` guidance below.
 CI provisions the same toolchain from `mise.toml` via
 [`jdx/mise-action`](https://github.com/jdx/mise-action), so local and CI builds
-share one set of pinned versions.
+share one set of pinned versions. The build/test job runs as an OS matrix over
+Linux, Windows, and macOS, so cross-platform regressions (path separators, line
+endings, file modes) are caught before merge; expect a green run on all three
+runners.
 
 Optional git hooks mirror the CI checks locally. They use
 [lefthook](https://github.com/evilmartians/lefthook) and are opt-in. `mise run

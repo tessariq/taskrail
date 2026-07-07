@@ -24,30 +24,18 @@ jobs:
         uses: jdx/mise-action@v4
 
       - name: Verify formatting
-        run: |
-          fmt_out="$(gofmt -l .)"
-          if [ -n "$fmt_out" ]; then
-            echo "The following files need gofmt:" >&2
-            echo "$fmt_out" >&2
-            exit 1
-          fi
-
-      - name: Vet
-        run: go vet ./...
-
-      - name: Validate Taskrail state
-        run: task validate
+        run: task fmt:check
 
       - name: Verify mirrored workflow skills
         run: task check:skills
 
-  unit-tests:
+  build-test:
     needs: checks
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
       matrix:
-        runner: [ubuntu-latest, ubuntu-24.04-arm, macos-latest]
+        runner: [ubuntu-latest, ubuntu-24.04-arm, windows-latest, macos-latest]
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -55,25 +43,17 @@ jobs:
       - name: Provision toolchain (mise)
         uses: jdx/mise-action@v4
 
-      - name: Unit tests
+      - name: Build
+        run: task build
+
+      - name: Vet
+        run: task vet
+
+      - name: Test
         run: task test
 
-  smoke-tests:
-    needs: checks
-    runs-on: ${{ matrix.runner }}
-    strategy:
-      fail-fast: false
-      matrix:
-        runner: [ubuntu-latest, ubuntu-24.04-arm, macos-latest]
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
+      - name: Smoke --help
+        run: task run:help
 
-      - name: Provision toolchain (mise)
-        uses: jdx/mise-action@v4
-
-      - name: Build binary
-        run: CGO_ENABLED=0 go build -o taskrail ./cmd/taskrail
-
-      - name: Smoke test --help
-        run: ./taskrail --help
+      - name: Smoke validate
+        run: task validate

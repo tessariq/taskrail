@@ -18,11 +18,11 @@ pre-commit:
           exit 1
         fi
     vet:
-      run: go vet ./...
+      run: task vet
     validate:
-      run: go run ./cmd/taskrail validate
+      run: task validate
     skill-mirrors:
-      run: ./scripts/check-skill-mirrors.sh
+      run: task check:skills
 
 commit-msg:
   commands:
@@ -32,4 +32,4 @@ commit-msg:
 pre-push:
   commands:
     tests:
-      run: go test ./...
+      run: task test

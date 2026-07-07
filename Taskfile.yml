@@ -3,6 +3,8 @@ version: "3"
 tasks:
   build:
     desc: Build taskrail CLI
+    env:
+      CGO_ENABLED: "0"
     cmds:
       - go build ./cmd/taskrail
 
@@ -17,6 +19,22 @@ tasks:
     desc: Run all tests
     cmds:
       - go test ./...
+
+  vet:
+    desc: Run go vet across all packages
+    cmds:
+      - go vet ./...
+
+  fmt:check:
+    desc: Fail if any Go file needs gofmt
+    cmds:
+      - |
+        out="$(gofmt -l .)"
+        if [ -n "$out" ]; then
+          echo "gofmt needed on:" >&2
+          echo "$out" >&2
+          exit 1
+        fi
 
   run:help:
     desc: Run taskrail help
