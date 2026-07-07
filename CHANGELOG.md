@@ -4,6 +4,14 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ## Unreleased
 
+## v0.2.0 - 2026-07-07
+
+Second release. Taskrail builds on the stable v0.1.0 repo contract to make adoption
+in existing repositories easy: guided retrofit, LLM-free import of rough notes into
+spec/task drafts, opt-in shippable agent skills, a version-aware non-destructive
+`init`, and conservative mechanical `STATE.md` repair — all while keeping the core
+CLI provider- and tooling-independent.
+
 ### Added
 
 - `taskrail repair` — reconcile mechanical `STATE.md` drift (stale `current_task`
