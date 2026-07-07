@@ -657,3 +657,46 @@ func TestCommandsFailOutsideRepo(t *testing.T) {
 		}
 	}
 }
+
+// TestRepairCommandDryRunThenApply drives the repair surface end to end: an
+// in_progress task with an empty current_task pointer is a mechanical drift the
+// dry run reports without writing, then --apply reconciles STATE.md and validates.
+func TestRepairCommandDryRunThenApply(t *testing.T) {
+	root := setupRepo(t)
+	writeTask(t, root, "T-001", "in_progress", "")
+
+	// The seeded drift makes validation fail first.
+	if _, err := runRoot(t, "validate"); err == nil {
+		t.Fatal("expected validate to fail on the seeded drift")
+	}
+
+	statePath := filepath.Join(root, "planning", "STATE.md")
+	before, err := os.ReadFile(statePath)
+	if err != nil {
+		t.Fatalf("read state: %v", err)
+	}
+
+	out, err := runRoot(t, "repair")
+	if err != nil {
+		t.Fatalf("repair dry run: %v (output %q)", err, out)
+	}
+	if !strings.Contains(out, "repair dry run") ||
+		!strings.Contains(out, "current_task") ||
+		!strings.Contains(out, "re-run with --apply") {
+		t.Fatalf("unexpected repair dry-run output: %q", out)
+	}
+	if after, _ := os.ReadFile(statePath); string(after) != string(before) {
+		t.Fatal("dry run wrote to STATE.md")
+	}
+
+	out, err = runRoot(t, "repair", "--apply")
+	if err != nil {
+		t.Fatalf("repair apply: %v (output %q)", err, out)
+	}
+	if !strings.Contains(out, "repair applied") || !strings.Contains(out, "validation: valid") {
+		t.Fatalf("unexpected repair apply output: %q", out)
+	}
+	if _, err := runRoot(t, "validate"); err != nil {
+		t.Fatalf("validate after repair: %v", err)
+	}
+}

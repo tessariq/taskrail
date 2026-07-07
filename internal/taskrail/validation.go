@@ -256,13 +256,17 @@ func cycleSignature(cycle []string) string {
 func (s *Service) validateTasks(state *State, tasks []*Task) []string {
 	violations := make([]string, 0)
 	seen := make(map[string]struct{}, len(tasks))
-	inProgress := make([]*Task, 0)
+	// canonical drops duplicate-id files (each id's first occurrence wins), so the
+	// current_task/in_progress reconciliation below counts a duplicated id once,
+	// matching the shared inProgressTasks contract repair also relies on.
+	canonical := make([]*Task, 0, len(tasks))
 	for _, task := range tasks {
 		if _, ok := seen[task.Frontmatter.ID]; ok {
 			violations = append(violations, fmt.Sprintf("duplicate task id %s", task.Frontmatter.ID))
 			continue
 		}
 		seen[task.Frontmatter.ID] = struct{}{}
+		canonical = append(canonical, task)
 
 		if task.Frontmatter.ID == "" {
 			violations = append(violations, fmt.Sprintf("task file %s missing id", relPath(s.paths.RepoRoot, task.Filename)))
@@ -275,9 +279,6 @@ func (s *Service) validateTasks(state *State, tasks []*Task) []string {
 		}
 		if _, ok := validPriorites[task.Frontmatter.Priority]; !ok {
 			violations = append(violations, fmt.Sprintf("task %s has invalid priority %q", task.Frontmatter.ID, task.Frontmatter.Priority))
-		}
-		if task.Frontmatter.Status == "in_progress" {
-			inProgress = append(inProgress, task)
 		}
 		for _, dep := range task.Frontmatter.Dependencies {
 			if dep == task.Frontmatter.ID {
@@ -302,6 +303,7 @@ func (s *Service) validateTasks(state *State, tasks []*Task) []string {
 
 	violations = append(violations, detectDependencyCycles(tasks)...)
 
+	inProgress := inProgressTasks(canonical)
 	if len(inProgress) > 1 {
 		ids := make([]string, 0, len(inProgress))
 		for _, task := range inProgress {

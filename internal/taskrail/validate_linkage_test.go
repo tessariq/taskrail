@@ -245,3 +245,33 @@ updated_at: "2026-03-31T00:00:00Z"
 		t.Fatalf("expected duplicate task id violation, got %v", res.Violations)
 	}
 }
+
+// A duplicated id whose two files are both in_progress must count as one task for
+// the current_task/in_progress reconciliation: the duplicate is reported as a
+// duplicate id, not spuriously re-reported as "multiple in_progress" (which would
+// also wrongly suppress repair of the single logical task).
+func TestValidateCountsDuplicateInProgressIDOnce(t *testing.T) {
+	t.Parallel()
+	repo := seedFixtureRepo(t)
+	writeTask(t, repo, "T-001", "One", "in_progress", "medium", "specs/v0.1.0.md#summary", nil)
+	writeFile(t, filepath.Join(repo, "planning", "tasks", "T-001-dup.md"), `---
+id: T-001
+title: Dup
+status: in_progress
+priority: medium
+spec_ref: specs/v0.1.0.md#summary
+dependencies: []
+updated_at: "2026-03-31T00:00:00Z"
+---
+
+# T-001 Dup
+`)
+
+	res := validateRepo(t, repo)
+	if !hasViolation(res.Violations, "duplicate task id") {
+		t.Fatalf("expected duplicate task id violation, got %v", res.Violations)
+	}
+	if hasViolation(res.Violations, "multiple in_progress") {
+		t.Fatalf("duplicate id must not be counted as multiple in_progress, got %v", res.Violations)
+	}
+}

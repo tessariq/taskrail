@@ -37,6 +37,20 @@ func eligibleTasks(tasks []*Task) []*Task {
 	return eligible
 }
 
+// inProgressTasks returns the tasks currently marked in_progress, preserving
+// input order. Both validation (which reports a current_task disagreement) and
+// repair (which reconciles it) derive the current_task invariant from this set,
+// so the rule lives in one place.
+func inProgressTasks(tasks []*Task) []*Task {
+	active := make([]*Task, 0, 1)
+	for _, task := range tasks {
+		if task.Frontmatter.Status == "in_progress" {
+			active = append(active, task)
+		}
+	}
+	return active
+}
+
 func dependenciesResolved(task *Task, tasks []*Task) bool {
 	for _, dep := range task.Frontmatter.Dependencies {
 		found, ok := taskByID(tasks, dep)

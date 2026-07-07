@@ -16,6 +16,7 @@ func newRootCmd() *cobra.Command {
 		newInitCmd(),
 		newRetrofitCmd(),
 		newValidateCmd(),
+		newRepairCmd(),
 		newNextCmd(),
 		newStartCmd(),
 		newCompleteCmd(),

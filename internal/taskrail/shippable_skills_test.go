@@ -20,6 +20,7 @@ var shippableSkills = []string{
 	"autonomous-verify",
 	"taskrail-import",
 	"taskrail-retrofit",
+	"taskrail-repair",
 }
 
 // taskAuthoringSkills create tracked tasks via `taskrail task new`. taskrail-import
@@ -112,6 +113,36 @@ func TestRetrofitSkillDrivesGuidedFlow(t *testing.T) {
 		"taskrail import --apply",
 		"taskrail validate",
 	)
+}
+
+// The repair skill drives the conservative dry-run -> apply -> re-validate loop
+// through the installed binary, so autonomous-recovery no longer needs to bypass
+// the CLI (skills-productization.md, T-050).
+func TestRepairSkillDrivesConservativeLoop(t *testing.T) {
+	assertSkillReferences(t, "taskrail-repair",
+		"taskrail repair",
+		"taskrail repair --apply",
+		"taskrail validate",
+	)
+}
+
+// The retargeted recovery skill must route through repair and must no longer
+// permit hand-editing authoritative state (its old bootstrap-edit fallback).
+func TestRecoverySkillRoutesThroughRepair(t *testing.T) {
+	for _, dir := range []string{"../../skills", "../../.agents/skills", "../../.claude/skills"} {
+		path := filepath.Join(dir, "autonomous-recovery", "SKILL.md")
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read %s: %v", path, err)
+		}
+		body := string(data)
+		if !strings.Contains(body, "taskrail repair") {
+			t.Errorf("%s must route recovery through 'taskrail repair'", path)
+		}
+		if strings.Contains(body, "bootstrap-era manual edits") {
+			t.Errorf("%s must drop the bootstrap-era manual-edit fallback", path)
+		}
+	}
 }
 
 // Dogfooding-only skills stay out of the shippable directory entirely.
