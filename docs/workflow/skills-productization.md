@@ -87,9 +87,24 @@ rewrite. Current canonical skills (`skills/`, mirrored to `.agents/skills/` and
 T-029 may revise this list, but must justify any change against the three
 decisions above.
 
+## Product-Only Onboarding Skills
+
+Some shippable skills have no dogfooding counterpart under `skills/`: they onboard
+a repository that is not yet Taskrail-managed, which Taskrail's own already-managed
+repository never needs. They live only in the shippable set
+(`internal/taskrail/skills/`) and honor the same three decisions — repo-agnostic,
+installed-via-`--with-skills`, and task-creation through a real command rather
+than hand-authored markdown.
+
+| Skill | Origin | Task creation | Reason |
+|-------|--------|---------------|--------|
+| `taskrail-import` | T-034 | `taskrail import --apply` | Turns markdown notes/drafts into spec and task files via the agent-in-the-loop import path; the binary stays LLM-free. |
+| `taskrail-retrofit` | T-043 | `taskrail import --apply` | Drives the guided retrofit bootstrap (detect -> dry-run -> confirm -> apply -> adopt -> validate) for an existing repo, adopting reviewed notes as tracked work through the import pipeline (T-042). |
+
 ## Cross-References
 
 - Spec: `specs/v0.2.0.md#agent-workflow-skills`
 - Skill catalog and packaging: `docs/workflow/skills-overview.md`
 - Downstream implementation tasks: T-029 (shippable skill selection and
-  portability rewrite), T-030 (`init --with-skills` distribution), T-034.
+  portability rewrite), T-030 (`init --with-skills` distribution), T-034
+  (`taskrail-import` skill), T-043 (`taskrail-retrofit` skill).

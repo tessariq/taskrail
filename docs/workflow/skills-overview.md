@@ -21,11 +21,17 @@ Skill catalog for deterministic tracked-work execution in Taskrail.
 
 The repo-agnostic set installed by `taskrail init --with-skills` (T-030) lives
 separately under `internal/taskrail/skills/`. It invokes the installed
-`taskrail` binary (never `go run`) and creates tasks with `taskrail task new`.
+`taskrail` binary (never `go run`) and creates tasks with `taskrail task new`
+(the tracked-work skills) or `taskrail import --apply` (the onboarding skills).
 
 Per `docs/workflow/skills-productization.md`, the split is:
 
-- Shippable: `autonomous-backlog`, `autonomous-task`, `autonomous-verify`.
+- Shippable: `autonomous-backlog`, `autonomous-task`, `autonomous-verify`,
+  plus the product-only onboarding skills `taskrail-import` (notes/draft ->
+  spec/task import) and `taskrail-retrofit` (guided retrofit of an existing
+  repository into a Taskrail layout). The onboarding skills have no dogfooding
+  counterpart under `skills/`; they exist only in the shippable set because
+  Taskrail's own repository is already managed.
 - Dogfooding-only: `autonomous-recovery` (hand-edits authoritative state),
   `autonomous-manual-test` (writes the internal `planning/artifacts/manual-test/`
   convention).

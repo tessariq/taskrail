@@ -19,11 +19,13 @@ var shippableSkills = []string{
 	"autonomous-task",
 	"autonomous-verify",
 	"taskrail-import",
+	"taskrail-retrofit",
 }
 
 // taskAuthoringSkills create tracked tasks via `taskrail task new`. taskrail-import
-// is excluded: it authors tasks through `taskrail import --apply`, covered by
-// TestImportSkillInvokesImportCommand.
+// and taskrail-retrofit are excluded: they author tasks through
+// `taskrail import --apply`, covered by TestImportSkillInvokesImportCommand and
+// TestRetrofitSkillDrivesGuidedFlow.
 var taskAuthoringSkills = []string{
 	"autonomous-backlog",
 	"autonomous-task",
@@ -49,6 +51,18 @@ func readShippableSkill(t *testing.T, name string) string {
 		t.Fatalf("read shippable skill %s: %v", name, err)
 	}
 	return string(data)
+}
+
+// assertSkillReferences fails if the skill body omits any of the wanted
+// substrings, keeping per-skill command-flow assertions to one call site.
+func assertSkillReferences(t *testing.T, name string, wants ...string) {
+	t.Helper()
+	body := readShippableSkill(t, name)
+	for _, want := range wants {
+		if !strings.Contains(body, want) {
+			t.Errorf("%s skill must reference %q", name, want)
+		}
+	}
 }
 
 func TestShippableSkillsExist(t *testing.T) {
@@ -82,12 +96,22 @@ func TestShippableSkillsUseTaskNew(t *testing.T) {
 // The import skill drives the agent-in-the-loop import path (T-034): it invokes
 // the installed binary's emit-prompt and apply steps, never a built-in LLM call.
 func TestImportSkillInvokesImportCommand(t *testing.T) {
-	body := readShippableSkill(t, "taskrail-import")
-	for _, want := range []string{"taskrail import", "--emit-prompt", "--apply"} {
-		if !strings.Contains(body, want) {
-			t.Errorf("taskrail-import skill must reference %q", want)
-		}
-	}
+	assertSkillReferences(t, "taskrail-import", "taskrail import", "--emit-prompt", "--apply")
+}
+
+// The retrofit skill drives the guided bootstrap end to end (T-043): dry-run
+// detection, an explicit --apply, then the emit-prompt -> import --apply adopt
+// path that persists reviewed tasks (T-042), closing with a validate.
+func TestRetrofitSkillDrivesGuidedFlow(t *testing.T) {
+	// Anchor on the full workflow commands, not bare flags: a bare "--apply"
+	// would also match the Rules prose, so the assertion must not pass if the
+	// apply/emit-prompt workflow steps were dropped.
+	assertSkillReferences(t, "taskrail-retrofit",
+		"taskrail retrofit <notes.md> --apply",
+		"taskrail retrofit <notes.md> --emit-prompt",
+		"taskrail import --apply",
+		"taskrail validate",
+	)
 }
 
 // Dogfooding-only skills stay out of the shippable directory entirely.
