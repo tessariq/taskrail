@@ -90,7 +90,7 @@ func (s *Service) saveState(state *State) error {
 func (s *Service) saveTask(task *Task) error {
 	data, err := marshalFrontmatter(task.Frontmatter, task.Body)
 	if err != nil {
-		return err
+		return fmt.Errorf("marshal task file %s: %w", filepath.Base(task.Filename), err)
 	}
 	if err := os.WriteFile(task.Filename, data, 0o644); err != nil {
 		return fmt.Errorf("write task file %s: %w", filepath.Base(task.Filename), err)
