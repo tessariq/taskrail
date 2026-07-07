@@ -232,6 +232,7 @@ The `planning/artifacts/` tree is gitignored, reproducible local output. `verify
 ├── cmd/taskrail/      # CLI entry point
 ├── internal/          # core packages
 ├── lefthook.yml       # opt-in local git hooks (mirror CI)
+├── mise.toml          # optional pinned developer toolchain (mise)
 ├── planning/          # authoritative tracked work and STATE.md
 ├── scripts/
 ├── skills/            # workflow skills (dogfooded until the product replaces them)
@@ -240,8 +241,21 @@ The `planning/artifacts/` tree is gitignored, reproducible local output. `verify
 
 ## Development
 
+[mise](https://mise.jdx.dev) can pin and provision the developer toolchain (Go,
+`task`, `lefthook`) from the committed `mise.toml`. It is optional convenience —
+direct `go` commands and the `Taskfile.yml` targets work without it:
+
+```sh
+mise install     # provision the pinned toolchain on a fresh clone
+mise run setup   # provision + wire the opt-in git hooks (lefthook install)
+```
+
+The `mise.toml` pins are the single source of truth: the `go` pin matches
+`go.mod` and the `lefthook` pin matches the `task hooks:install` guidance below.
+
 Optional git hooks mirror the CI checks locally. They use
-[lefthook](https://github.com/evilmartians/lefthook) and are opt-in:
+[lefthook](https://github.com/evilmartians/lefthook) and are opt-in. `mise run
+setup` wires them for you; to install by hand:
 
 ```sh
 go install github.com/evilmartians/lefthook@v1.13.6   # or: brew install lefthook

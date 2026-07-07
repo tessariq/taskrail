@@ -1,0 +1,23 @@
+# Optional, pinned developer toolchain for Taskrail.
+#
+# mise (https://mise.jdx.dev) is convenience only: direct `go` commands and the
+# existing Taskfile.yml targets remain canonical and work without mise. These
+# pins are the single source of truth for the developer environment — the `go`
+# pin matches go.mod and the `lefthook` pin matches the `task hooks:install`
+# guidance in Taskfile.yml and README.md.
+#
+# Usage:
+#   mise install     # provision the pinned toolchain on a fresh clone
+#   mise run setup    # provision + wire the opt-in git hooks (lefthook install)
+
+[tools]
+go = "1.26"
+task = "3.52.0"
+lefthook = "1.13.6"
+
+[tasks.setup]
+description = "Provision the pinned toolchain and install the opt-in git hooks"
+run = [
+  "mise install",
+  "lefthook install",
+]
