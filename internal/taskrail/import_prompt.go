@@ -29,15 +29,15 @@ type EmitPromptResult struct {
 // EmitImportPrompt renders the import prompt for a source. It only reads the
 // source and formats text; it makes no model call and writes nothing.
 func (s *Service) EmitImportPrompt(input EmitPromptInput) (EmitPromptResult, error) {
-	target := strings.TrimSpace(input.Target)
-	if _, ok := validImportTargets[target]; !ok {
-		return EmitPromptResult{}, fmt.Errorf("import target must be one of tasks, spec, planning; got %q", target)
+	target, err := parseTarget(input.Target)
+	if err != nil {
+		return EmitPromptResult{}, err
 	}
 	markdown, label, err := s.readImportSource(input.SourcePath)
 	if err != nil {
 		return EmitPromptResult{}, err
 	}
-	return EmitPromptResult{Source: label, Target: target, Prompt: renderImportPrompt(label, target, markdown)}, nil
+	return EmitPromptResult{Source: label, Target: string(target), Prompt: renderImportPrompt(label, string(target), markdown)}, nil
 }
 
 // renderImportPrompt builds the deterministic prompt: instructions, the T-032

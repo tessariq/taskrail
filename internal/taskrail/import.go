@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 )
 
@@ -14,10 +15,47 @@ import (
 // loudly rather than ingesting under the wrong assumptions.
 const importDraftSchemaVersion = 1
 
-// validImportTargets mirrors the `taskrail import --to` surface. The binary
-// performs no LLM calls; an agent produces the draft and these targets describe
-// only where an applied draft lands.
-var validImportTargets = map[string]struct{}{"tasks": {}, "spec": {}, "planning": {}}
+// Target is a validated `taskrail import --to` destination. The binary performs
+// no LLM calls; an agent produces the draft and these targets describe only where
+// an applied draft lands. parseTarget is the single gate that admits a target, so
+// callers route on the constants instead of re-checking a raw string.
+type Target string
+
+const (
+	TargetTasks    Target = "tasks"
+	TargetSpec     Target = "spec"
+	TargetPlanning Target = "planning"
+)
+
+// importTargets is the canonical, ordered set of valid import targets. Membership
+// checks and the error-message enumeration both derive from it, so a new target is
+// added in exactly one place and no message can drift out of sync with the set.
+var importTargets = []Target{TargetTasks, TargetSpec, TargetPlanning}
+
+func (t Target) valid() bool {
+	return slices.Contains(importTargets, t)
+}
+
+// importTargetList renders the valid targets for error messages so the message
+// and the accepted set stay in lockstep.
+func importTargetList() string {
+	names := make([]string, len(importTargets))
+	for i, t := range importTargets {
+		names[i] = string(t)
+	}
+	return strings.Join(names, ", ")
+}
+
+// parseTarget trims and validates a raw import target, returning the canonical
+// Target. It is the one place that decides which targets exist; Import and
+// EmitImportPrompt delegate here rather than re-checking membership themselves.
+func parseTarget(raw string) (Target, error) {
+	t := Target(strings.TrimSpace(raw))
+	if !t.valid() {
+		return "", fmt.Errorf("import target must be one of %s; got %q", importTargetList(), string(t))
+	}
+	return t, nil
+}
 
 // taskIDPattern matches an already-tracked task id (for example `T-027`). A draft
 // dependency may reference such an id; its existence is a deferred apply-time
@@ -78,8 +116,8 @@ func ValidateImportDraft(draft ImportDraft) []string {
 	if draft.SchemaVersion != importDraftSchemaVersion {
 		violations = append(violations, fmt.Sprintf("import draft schema_version must be %d", importDraftSchemaVersion))
 	}
-	if _, ok := validImportTargets[draft.Target]; !ok {
-		violations = append(violations, fmt.Sprintf("import draft target must be one of tasks, spec, planning; got %q", draft.Target))
+	if !Target(draft.Target).valid() {
+		violations = append(violations, fmt.Sprintf("import draft target must be one of %s; got %q", importTargetList(), draft.Target))
 	}
 	if len(draft.Tasks) == 0 && len(draft.SpecSections) == 0 {
 		violations = append(violations, "import draft must contain at least one task or spec section")

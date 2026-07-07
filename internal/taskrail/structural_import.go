@@ -47,33 +47,35 @@ type ImportResult struct {
 // LLM and never modifies the source file; the semantic lift stays the agent's
 // job (T-034). It writes nothing: the returned draft is the reviewable artifact.
 func (s *Service) Import(input ImportInput) (ImportResult, error) {
-	target := strings.TrimSpace(input.Target)
-	if _, ok := validImportTargets[target]; !ok {
-		return ImportResult{}, fmt.Errorf("import target must be one of tasks, spec, planning; got %q", target)
+	target, err := parseTarget(input.Target)
+	if err != nil {
+		return ImportResult{}, err
 	}
 	markdown, sourceLabel, err := s.readImportSource(input.SourcePath)
 	if err != nil {
 		return ImportResult{}, err
 	}
 
-	draft := ImportDraft{SchemaVersion: importDraftSchemaVersion, Target: target, Source: sourceLabel}
+	draft := ImportDraft{SchemaVersion: importDraftSchemaVersion, Target: string(target), Source: sourceLabel}
 	var stateSeed string
 	switch target {
-	case "tasks":
+	case TargetTasks:
 		draft.Tasks = parseTaskDrafts(markdown)
-	case "spec":
+	case TargetSpec:
 		draft.SpecSections = parseSpecSections(markdown)
-	case "planning":
+	case TargetPlanning:
 		draft.SpecSections = parseSpecSections(markdown)
 		draft.Tasks = parseTaskDrafts(markdown)
 		stateSeed = renderImportStateSeed(sourceLabel, len(draft.Tasks), len(draft.SpecSections))
+	default:
+		return ImportResult{}, fmt.Errorf("unhandled import target %q", string(target))
 	}
 
 	if violations := ValidateImportDraft(draft); len(violations) > 0 {
 		return ImportResult{}, fmt.Errorf("structural import produced no valid draft: %s", strings.Join(violations, "; "))
 	}
 
-	return ImportResult{Source: sourceLabel, Target: target, Draft: draft, StateSeed: stateSeed}, nil
+	return ImportResult{Source: sourceLabel, Target: string(target), Draft: draft, StateSeed: stateSeed}, nil
 }
 
 // readImportSource reads a source file (repo-relative or absolute) and returns

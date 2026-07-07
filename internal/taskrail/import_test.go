@@ -69,6 +69,48 @@ func TestParseImportDraftRejectsTrailingContent(t *testing.T) {
 	}
 }
 
+func TestParseTargetAcceptsCanonicalTargetsAndTrims(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		input string
+		want  Target
+	}{
+		{"tasks", TargetTasks},
+		{"spec", TargetSpec},
+		{"planning", TargetPlanning},
+		{"  tasks  ", TargetTasks},
+		{"\tplanning ", TargetPlanning},
+	}
+	for _, tt := range cases {
+		t.Run(tt.input, func(t *testing.T) {
+			t.Parallel()
+			got, err := parseTarget(tt.input)
+			if err != nil {
+				t.Fatalf("parseTarget(%q) returned error: %v", tt.input, err)
+			}
+			if got != tt.want {
+				t.Fatalf("parseTarget(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestParseTargetRejectsUnknown(t *testing.T) {
+	t.Parallel()
+	for _, input := range []string{"everything", "", "  ", "Tasks"} {
+		t.Run(input, func(t *testing.T) {
+			t.Parallel()
+			_, err := parseTarget(input)
+			if err == nil {
+				t.Fatalf("parseTarget(%q): expected error for unknown target, got nil", input)
+			}
+			if !strings.Contains(err.Error(), "import target must be one of tasks, spec, planning") {
+				t.Fatalf("unexpected error message: %v", err)
+			}
+		})
+	}
+}
+
 func TestValidateImportDraftAcceptsSample(t *testing.T) {
 	t.Parallel()
 	if violations := ValidateImportDraft(sampleImportDraft()); len(violations) != 0 {
