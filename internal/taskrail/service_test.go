@@ -120,8 +120,9 @@ func TestVerifyCreatesArtifactDirsWhenAbsent(t *testing.T) {
 	repo := seedFixtureRepo(t)
 	writeTask(t, repo, "T-002", "Verified item", "completed", "high", "specs/v0.1.0.md#summary", nil)
 
-	// Simulate a clean checkout where the gitignored artifacts tree is absent;
-	// verify must still create planning/artifacts/verify/<id>/<ts>/ on demand.
+	// seedFixtureRepo already omits the artifacts tree; this defensive removal
+	// keeps the test self-contained so verify's on-demand creation of
+	// planning/artifacts/verify/<id>/<ts>/ is exercised regardless of fixture state.
 	if err := os.RemoveAll(filepath.Join(repo, "planning", "artifacts")); err != nil {
 		t.Fatalf("remove artifacts tree: %v", err)
 	}
@@ -139,6 +140,17 @@ func TestVerifyCreatesArtifactDirsWhenAbsent(t *testing.T) {
 		if _, err := os.Stat(filepath.Join(repo, rel)); err != nil {
 			t.Fatalf("expected artifact %s on demand: %v", rel, err)
 		}
+	}
+}
+
+// seedFixtureRepo must model a clean checkout: the gitignored artifacts tree is
+// absent so fixtures cannot mask a regression in verify's on-demand creation.
+func TestSeedFixtureRepoHasNoArtifactsTree(t *testing.T) {
+	t.Parallel()
+
+	repo := seedFixtureRepo(t)
+	if _, err := os.Stat(filepath.Join(repo, "planning", "artifacts")); !os.IsNotExist(err) {
+		t.Fatalf("expected artifacts tree absent in fixture, stat err=%v", err)
 	}
 }
 
@@ -593,9 +605,8 @@ continuation_notes:
 	if err := os.MkdirAll(filepath.Join(repo, "planning", "tasks"), 0o755); err != nil {
 		t.Fatalf("mkdir tasks: %v", err)
 	}
-	if err := os.MkdirAll(filepath.Join(repo, "planning", "artifacts", "verify"), 0o755); err != nil {
-		t.Fatalf("mkdir verify: %v", err)
-	}
+	// No artifacts tree: it is gitignored output that verify creates on demand,
+	// so a fixture must not pre-create it (T-036).
 	return repo
 }
 

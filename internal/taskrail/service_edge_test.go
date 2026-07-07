@@ -145,9 +145,6 @@ continuation_notes: []
 	if err := ensureDir(filepath.Join(repo, "planning", "tasks")); err != nil {
 		t.Fatalf("mkdir tasks: %v", err)
 	}
-	if err := ensureDir(filepath.Join(repo, "planning", "artifacts", "verify")); err != nil {
-		t.Fatalf("mkdir verify: %v", err)
-	}
 
 	svc := newTestService(t, repo, time.Now().UTC())
 	result, err := svc.Validate()
