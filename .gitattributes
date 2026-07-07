@@ -1,0 +1,6 @@
+# Normalize all text files to LF in the repository and on checkout, so Windows
+# clones do not introduce CRLF. Taskrail parses Markdown task/state files with
+# LF-only delimiters, and shell scripts/Go sources must stay LF cross-platform.
+# The parser also tolerates CRLF defensively (internal/taskrail/frontmatter.go),
+# but normalized checkout keeps tracked files deterministic everywhere.
+* text=auto eol=lf

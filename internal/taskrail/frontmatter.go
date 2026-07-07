@@ -10,7 +10,11 @@ import (
 
 func parseFrontmatter[T any](data []byte) (T, string, error) {
 	var zero T
-	text := string(data)
+	// Normalize CRLF (Windows) and lone CR (classic Mac / legacy tools) to LF so
+	// files parse identically regardless of authoring platform; the delimiter and
+	// body logic below is LF-only.
+	text := strings.ReplaceAll(string(data), "\r\n", "\n")
+	text = strings.ReplaceAll(text, "\r", "\n")
 	if !strings.HasPrefix(text, "---\n") {
 		return zero, "", fmt.Errorf("missing frontmatter start")
 	}
