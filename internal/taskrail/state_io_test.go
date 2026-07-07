@@ -49,6 +49,10 @@ func TestSaveTaskWrapsWriteError(t *testing.T) {
 	if !strings.Contains(err.Error(), "write task file") {
 		t.Fatalf("error missing operation context: %q", err.Error())
 	}
+	wantPrefix := "write task file " + filepath.Base(dir) + ":"
+	if !strings.HasPrefix(err.Error(), wantPrefix) {
+		t.Fatalf("error missing failing task filename context %q: %q", wantPrefix, err.Error())
+	}
 	if errors.Unwrap(err) == nil {
 		t.Fatalf("expected wrapped underlying error, got flat: %q", err.Error())
 	}

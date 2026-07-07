@@ -93,7 +93,7 @@ func (s *Service) saveTask(task *Task) error {
 		return err
 	}
 	if err := os.WriteFile(task.Filename, data, 0o644); err != nil {
-		return fmt.Errorf("write task file: %w", err)
+		return fmt.Errorf("write task file %s: %w", filepath.Base(task.Filename), err)
 	}
 	return nil
 }
