@@ -1,13 +1,13 @@
 ---
 schema_version: 1
-updated_at: "2026-07-07T16:58:42Z"
+updated_at: "2026-07-08T14:10:43Z"
 active_spec_version: v0.2.0
 active_spec_path: specs/v0.2.0.md
 current_task: ""
 current_task_title: ""
 status_summary: idle
 blockers: []
-next_action: Select the next eligible task
+next_action: 'Start task T-051: Configurable skill entry point (${TASKRAIL:-taskrail}) with mise env override'
 last_verification_result: pass for T-050 at 2026-07-07T16:58:29Z
 relevant_artifacts: []
 continuation_notes:
@@ -38,7 +38,7 @@ continuation_notes:
 
 ## Next Action
 
-- Select the next eligible task
+- Start task T-051: Configurable skill entry point (${TASKRAIL:-taskrail}) with mise env override
 
 ## Relevant Artifacts
 
@@ -50,7 +50,7 @@ continuation_notes:
 
 ## Task Counts
 
-- todo: 0
+- todo: 10
 - in_progress: 0
 - completed: 50
 - blocked: 0
