@@ -99,7 +99,8 @@ VERSION=v0.2.0 task release
 Tagged releases are automated with [GoReleaser](https://goreleaser.com): pushing a
 `v*` tag builds `linux`/`darwin` binaries for `amd64`/`arm64` and publishes archives
 plus checksums to a GitHub Release, with notes taken from the matching `## v<version>`
-section of `CHANGELOG.md`.
+section of `CHANGELOG.md`. The Homebrew tap is bumped by hand afterward — see
+[`docs/workflow/releasing.md`](docs/workflow/releasing.md) for the full checklist.
 
 ## Commands
 

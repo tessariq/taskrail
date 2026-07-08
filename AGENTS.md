@@ -18,6 +18,7 @@ Guidance for coding agents working in the Taskrail repository.
 - Active planning state: `planning/STATE.md`
 - Tracked tasks: `planning/tasks/`
 - Workflow contract: `docs/workflow/`
+- Release checklist: `docs/workflow/releasing.md`
 - Build and convenience commands: `Taskfile.yml`
 - CI checks: `.github/workflows/ci.yml`
 - Local git hooks: `lefthook.yml` (opt-in pre-commit/commit-msg/pre-push; mirrors CI, but `.github/workflows/ci.yml` is authoritative)
