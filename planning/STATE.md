@@ -1,6 +1,6 @@
 ---
 schema_version: 1
-updated_at: "2026-07-08T15:00:00Z"
+updated_at: "2026-07-09T08:43:22Z"
 active_spec_version: v0.3.0
 active_spec_path: specs/v0.3.0.md
 current_task: ""
@@ -48,11 +48,11 @@ continuation_notes:
 ## Notes
 
 - This repository is temporarily dogfooding bootstrap workflow tooling until Taskrail v0.1.0 exists.
-- One-time sanctioned bootstrap edit on 2026-07-08: active spec advanced from v0.2.0 to v0.3.0 by hand because `taskrail spec activate` (T-060) does not exist yet. This pierces the CLI-only-writer invariant exactly once; once T-060 lands, all further active-spec changes go through the command.
+- One-time sanctioned bootstrap edit on 2026-07-08: active spec advanced from v0.2.0 to v0.3.0 by hand because taskrail spec activate (T-060) does not exist yet. This pierces the CLI-only-writer invariant exactly once; once T-060 lands, all further active-spec changes go through the command.
 
 ## Task Counts
 
-- todo: 18
+- todo: 21
 - in_progress: 0
 - completed: 50
 - blocked: 0
