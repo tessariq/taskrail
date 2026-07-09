@@ -33,6 +33,7 @@ go.work.sum
 
 # Taskrail local binaries and temporary manual test code
 /taskrail
+/bin/
 /.task/
 # GoReleaser build output
 /dist/

@@ -15,8 +15,42 @@ tasks:
     cmds:
       - go build -ldflags "-X main.version={{.VERSION}}" -o taskrail ./cmd/taskrail
 
+  taskrail:install:
+    desc: Build the working-tree taskrail CLI onto the mise-provided PATH (./bin)
+    # CGO_ENABLED=0 + -trimpath make the build byte-reproducible so taskrail:check
+    # can compare it against a fresh build; the .exe suffix on Windows lets a bare
+    # `taskrail` resolve via PATHEXT. Both build sites must keep these identical —
+    # guarded by TestTaskrailBuildsShareReproducibleFlags.
+    env:
+      CGO_ENABLED: "0"
+    cmds:
+      - go build -trimpath -o bin/taskrail{{if eq OS "windows"}}.exe{{end}} ./cmd/taskrail
+
+  taskrail:check:
+    desc: Fail if the taskrail on PATH is stale versus the working tree (POSIX/CI shell; uses mktemp+cmp)
+    env:
+      CGO_ENABLED: "0"
+    cmds:
+      - |
+        resolved="$(command -v taskrail || true)"
+        if [ -z "$resolved" ]; then
+          echo "taskrail is not on PATH; run 'mise run setup' or 'task taskrail:install'" >&2
+          exit 1
+        fi
+        tmp="$(mktemp)"
+        trap 'rm -f "$tmp"' EXIT
+        if ! go build -trimpath -o "$tmp" ./cmd/taskrail; then
+          echo "taskrail build failed; fix the working tree before checking freshness" >&2
+          exit 1
+        fi
+        if ! cmp -s "$tmp" "$resolved"; then
+          echo "on-PATH taskrail ($resolved) is stale versus the working tree; run 'task taskrail:install'" >&2
+          exit 1
+        fi
+
   test:
     desc: Run all tests
+    deps: [taskrail:install]
     cmds:
       - go test ./...
 

@@ -1,14 +1,14 @@
 ---
 schema_version: 1
-updated_at: "2026-07-09T13:36:07Z"
+updated_at: "2026-07-09T15:07:18Z"
 active_spec_version: v0.3.0
 active_spec_path: specs/v0.3.0.md
 current_task: ""
 current_task_title: ""
 status_summary: idle
 blockers: []
-next_action: 'Start task T-074: Harden CI and build scripts to route commands via Taskfile and Mise'
-last_verification_result: pass for T-050 at 2026-07-07T16:58:29Z
+next_action: Select the next eligible task
+last_verification_result: pass for T-074 at 2026-07-09T14:58:15Z
 relevant_artifacts: []
 continuation_notes:
     - This repository is temporarily dogfooding bootstrap workflow tooling until Taskrail v0.1.0 exists.
@@ -35,11 +35,11 @@ continuation_notes:
 
 ## Last Verification
 
-- pass for T-050 at 2026-07-07T16:58:29Z
+- pass for T-074 at 2026-07-09T14:58:15Z
 
 ## Next Action
 
-- Start task T-074: Harden CI and build scripts to route commands via Taskfile and Mise
+- Select the next eligible task
 
 ## Relevant Artifacts
 
@@ -54,6 +54,6 @@ continuation_notes:
 
 - todo: 30
 - in_progress: 0
-- completed: 50
+- completed: 51
 - blocked: 0
 - cancelled: 0

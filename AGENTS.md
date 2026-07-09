@@ -32,7 +32,11 @@ Guidance for coding agents working in the Taskrail repository.
 - `task` is optional convenience. Direct Go commands remain canonical.
 - `mise` (`mise.toml`) provisions the pinned toolchain (Go, `task`, `lefthook`):
   `mise install` sets it up on a fresh clone and `mise run setup` additionally
-  wires the opt-in git hooks (`lefthook install`). Locally it is optional
+  builds the working-tree `taskrail` onto the mise PATH (`./bin`, via
+  `task taskrail:install`) and wires the opt-in git hooks (`lefthook install`).
+  A bare `taskrail` then resolves to the current build with no `TASKRAIL`
+  override; `task taskrail:check` fails loud if that on-PATH binary is stale.
+  Locally it is optional
   convenience — direct `go` commands and `Taskfile.yml` targets work without it —
   but CI provisions the same toolchain via `jdx/mise-action`, so `mise.toml` is
   the single source of toolchain versions locally and on CI. The pins are guarded

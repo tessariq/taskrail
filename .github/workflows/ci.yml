@@ -29,6 +29,15 @@ jobs:
       - name: Verify mirrored workflow skills
         run: task check:skills
 
+      - name: Build taskrail onto the mise PATH
+        run: task taskrail:install
+
+      - name: Guard taskrail freshness on PATH
+        run: task taskrail:check
+
+      - name: Smoke bare taskrail resolves to the working-tree build
+        run: taskrail validate
+
   build-test:
     needs: checks
     runs-on: ${{ matrix.runner }}

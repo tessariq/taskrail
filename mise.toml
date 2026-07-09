@@ -15,9 +15,19 @@ go = "1.26"
 task = "3.52.0"
 lefthook = "1.13.6"
 
+# Expose the working-tree taskrail build on the mise-provided PATH, alongside
+# go/task/lefthook. A bare `taskrail` (the ${TASKRAIL:-taskrail} fallback the
+# adopted skills use, T-051) then resolves to ./bin/taskrail with no env
+# override and no runner-specific config. `mise run setup` / `task
+# taskrail:install` populate it; a missing mise PATH fails loudly rather than
+# silently resolving a stale binary elsewhere.
+[env]
+_.path = ["{{config_root}}/bin"]
+
 [tasks.setup]
-description = "Provision the pinned toolchain and install the opt-in git hooks"
+description = "Provision the pinned toolchain, build taskrail onto PATH, and install the opt-in git hooks"
 run = [
   "mise install",
+  "task taskrail:install",
   "lefthook install",
 ]

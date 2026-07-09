@@ -242,8 +242,13 @@ direct `go` commands and the `Taskfile.yml` targets work without it:
 
 ```sh
 mise install     # provision the pinned toolchain on a fresh clone
-mise run setup   # provision + wire the opt-in git hooks (lefthook install)
+mise run setup   # provision, build taskrail onto PATH, wire the opt-in git hooks
 ```
+
+`mise run setup` (and `task taskrail:install`) build the working-tree
+`./cmd/taskrail` into `./bin` and mise puts `./bin` on PATH, so a bare `taskrail`
+resolves to the current build with no `TASKRAIL` override. `task taskrail:check`
+fails loudly if the on-PATH binary is stale versus the working tree.
 
 The `mise.toml` pins are the single source of truth: the `go` pin matches `go.mod`
 and the `lefthook` pin matches the hooks guidance below. CI provisions the same
