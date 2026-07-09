@@ -23,6 +23,12 @@ All notable user-visible changes to Taskrail will be documented in this file.
   of a hardcoded `taskrail`. Adopters need nothing (it resolves to the installed
   binary); set `TASKRAIL=/path/to/taskrail` (or `go run ./cmd/taskrail`) to override.
 
+### Fixed
+
+- `taskrail block` now keeps every currently-blocked task's reason in `STATE.md`
+  (one entry per task) instead of overwriting the list with only the most recent;
+  `taskrail status` reports each blocked task's own reason.
+
 ## v0.2.0 - 2026-07-07
 
 Second release. Taskrail builds on the stable v0.1.0 repo contract to make adoption

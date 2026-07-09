@@ -3,11 +3,10 @@ package taskrail
 import "strings"
 
 // UnrecordedBlockerReason is the explicit placeholder status shows for a blocked
-// task whose reason STATE.md does not retain. The blockers list only keeps the
-// most recently blocked task's reason (see finishTask), so an earlier blocked
-// task has no recorded reason; status surfaces that honestly rather than emitting
-// a silent empty string. Follow-up T-083 makes the blockers list retain all of
-// them, after which this placeholder becomes rare.
+// task whose reason STATE.md does not retain. The transitions keep one blockers
+// entry per blocked task, so this is now only reachable for legacy or
+// hand-repaired state where a blocked task has no entry; status surfaces that
+// honestly rather than emitting a silent empty string.
 const UnrecordedBlockerReason = "(reason not recorded in STATE.md)"
 
 // StatusCounts is the task distribution across the four operational buckets the
@@ -148,4 +147,29 @@ func blockerReasons(blockers []string) map[string]string {
 		reasons[strings.TrimSpace(id)] = strings.TrimSpace(reason)
 	}
 	return reasons
+}
+
+// blockerID returns the task id an "<id>: <reason>" blockers entry belongs to.
+func blockerID(entry string) string {
+	id, _, _ := strings.Cut(entry, ":")
+	return strings.TrimSpace(id)
+}
+
+// upsertBlocker records taskID's reason in the blockers list, replacing any
+// existing entry for that task so the list holds exactly one entry per blocked
+// task and never loses another task's reason.
+func upsertBlocker(blockers []string, taskID, reason string) []string {
+	return append(removeBlocker(blockers, taskID), taskID+": "+reason)
+}
+
+// removeBlocker returns blockers without taskID's entry, preserving order.
+func removeBlocker(blockers []string, taskID string) []string {
+	kept := make([]string, 0, len(blockers))
+	for _, entry := range blockers {
+		if blockerID(entry) == taskID {
+			continue
+		}
+		kept = append(kept, entry)
+	}
+	return kept
 }

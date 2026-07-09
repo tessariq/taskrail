@@ -144,12 +144,10 @@ func TestStatusJSONMirrorsHumanView(t *testing.T) {
 	}
 }
 
-// TestStatusMultipleBlockedTasksMarkUnrecordedReason locks in that when more
-// than one task is blocked, status never silently emits an empty reason. STATE.md
-// only retains the most recently blocked task's reason (a known limitation of the
-// blockers list; see follow-up T-083), so an earlier blocked task must render an
-// explicit "not recorded" marker rather than a blank.
-func TestStatusMultipleBlockedTasksMarkUnrecordedReason(t *testing.T) {
+// TestStatusMultipleBlockedTasksShowAllReasons locks in that when more than one
+// task is blocked, status reports each task's own recorded reason (T-083 makes
+// STATE.md retain them all rather than only the most recent).
+func TestStatusMultipleBlockedTasksShowAllReasons(t *testing.T) {
 	root := setupRepo(t)
 	writeCoverageTaskFile(t, root, "T-201", "todo", "specs/v0.1.0.md#summary")
 	writeCoverageTaskFile(t, root, "T-202", "todo", "specs/v0.1.0.md#summary")
@@ -173,11 +171,8 @@ func TestStatusMultipleBlockedTasksMarkUnrecordedReason(t *testing.T) {
 	if len(report.Blocked) != 2 {
 		t.Fatalf("blocked = %+v, want 2 entries", report.Blocked)
 	}
-	if report.Blocked[0].TaskID != "T-201" || report.Blocked[0].Reason == "" {
-		t.Errorf("T-201 blocked entry must carry an explicit non-empty reason, got %+v", report.Blocked[0])
-	}
-	if strings.Contains(report.Blocked[0].Reason, "first blocker") {
-		t.Errorf("T-201 reason is not retained in STATE.md; must not fabricate it, got %q", report.Blocked[0].Reason)
+	if report.Blocked[0].TaskID != "T-201" || report.Blocked[0].Reason != "first blocker" {
+		t.Errorf("T-201 blocked entry = %+v, want reason 'first blocker'", report.Blocked[0])
 	}
 	if report.Blocked[1].TaskID != "T-202" || report.Blocked[1].Reason != "second blocker" {
 		t.Errorf("T-202 blocked entry = %+v, want reason 'second blocker'", report.Blocked[1])
@@ -187,8 +182,13 @@ func TestStatusMultipleBlockedTasksMarkUnrecordedReason(t *testing.T) {
 	if err != nil {
 		t.Fatalf("status: %v", err)
 	}
-	if !strings.Contains(human, "T-201: "+taskrail.UnrecordedBlockerReason) {
-		t.Errorf("human view must mark T-201's reason as not recorded: %q", human)
+	for _, want := range []string{"T-201: first blocker", "T-202: second blocker"} {
+		if !strings.Contains(human, want) {
+			t.Errorf("human view missing %q: %q", want, human)
+		}
+	}
+	if strings.Contains(human, taskrail.UnrecordedBlockerReason) {
+		t.Errorf("no blocked task should be marked unrecorded: %q", human)
 	}
 }
 

@@ -102,7 +102,9 @@ func (s *Service) Start(taskID string) (TransitionResult, error) {
 	state.Frontmatter.CurrentTask = task.Frontmatter.ID
 	state.Frontmatter.CurrentTaskTitle = task.Frontmatter.Title
 	state.Frontmatter.StatusSummary = "in_progress"
-	state.Frontmatter.Blockers = []string{}
+	// Starting a task clears only its own stale blocker entry (if any); other
+	// tasks may still be blocked and must keep their recorded reasons.
+	state.Frontmatter.Blockers = removeBlocker(state.Frontmatter.Blockers, task.Frontmatter.ID)
 	state.Frontmatter.NextAction = fmt.Sprintf("Implement %s and run targeted tests", task.Frontmatter.ID)
 	state.Body = renderStateBody(state.Frontmatter, tasks)
 
@@ -380,11 +382,13 @@ func (s *Service) finishTask(taskID, status, note string) (TransitionResult, err
 	state.Frontmatter.UpdatedAt = now
 	state.Frontmatter.StatusSummary = "idle"
 	if status == "blocked" {
-		state.Frontmatter.Blockers = []string{fmt.Sprintf("%s: %s", taskID, note)}
+		state.Frontmatter.Blockers = upsertBlocker(state.Frontmatter.Blockers, taskID, note)
 		state.Frontmatter.StatusSummary = "blocked"
 		state.Frontmatter.NextAction = fmt.Sprintf("Resolve blocker on %s", taskID)
 	} else {
-		state.Frontmatter.Blockers = []string{}
+		// Completing one task must not erase reasons recorded for other tasks that
+		// are still blocked; drop only this task's own entry.
+		state.Frontmatter.Blockers = removeBlocker(state.Frontmatter.Blockers, taskID)
 		state.Frontmatter.NextAction = "Select the next eligible task"
 	}
 	state.Body = renderStateBody(state.Frontmatter, tasks)
