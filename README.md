@@ -120,6 +120,7 @@ Run `taskrail <command> --help` for full flag details.
 | `taskrail complete <task-id>` | Mark a task implementation-complete. `--note`. |
 | `taskrail block <task-id>` | Mark a task blocked and record a `--reason`. |
 | `taskrail verify <task-id>` | Record a pass/fail outcome and write artifacts under `planning/artifacts/verify/`. `--result`, `--summary`, `--create-followup`, `--json`. |
+| `taskrail spec activate <version>` | Repoint `STATE.md`'s active spec to a versioned target (e.g. `v0.3.0`), re-render `STATE.md`, and re-validate. CLI-only writer of the active spec; rejects a missing or non-conforming version with no write. `--json`. |
 | `taskrail task new` | Scaffold a task file with the next free id. Requires `--title` and `--spec-ref`; `--priority`, repeatable `--dep`, `--follow-up <parent-id>`, `--json`. |
 | `taskrail import <source>` | Build spec/task drafts from a markdown source without an LLM. `--to tasks\|spec\|planning`, `--emit-prompt`, `--apply <draft.json>`, `--json`. |
 | `taskrail version` | Print the CLI version (also `--version`). |

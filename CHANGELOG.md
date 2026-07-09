@@ -6,6 +6,10 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ### Added
 
+- `taskrail spec` — spec command family. `spec activate <version>` repoints the
+  active spec in `STATE.md` to `specs/<version>.md`, re-renders `STATE.md`, and
+  re-validates; it is the CLI-only writer of the active spec and rejects a missing
+  or non-conforming version with no write. Supports `--json`.
 - `taskrail coverage` — advisory read-only linkage analysis for the active spec:
   a decomposition-coverage percentage with per-area gaps, orphan tasks (spec_ref
   pointing at another spec), and a two-directional drift summary. Never writes
