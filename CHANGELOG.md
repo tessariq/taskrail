@@ -4,6 +4,14 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- `taskrail coverage` — advisory read-only linkage analysis for the active spec:
+  a decomposition-coverage percentage with per-area gaps, orphan tasks (spec_ref
+  pointing at another spec), and a two-directional drift summary. Never writes
+  state and never fails `validate`; a spec with no coverable areas reports `N/A`.
+  Supports `--json`.
+
 ### Changed
 
 - Shipped agent skills now invoke the CLI through `${TASKRAIL:-taskrail}` instead

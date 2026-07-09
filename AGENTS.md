@@ -160,6 +160,7 @@ Guidance for coding agents working in the Taskrail repository.
 Intentional, non-obvious decisions — do not "fix" these:
 
 - `validate` is read-only. It never writes `planning/STATE.md` or task files.
+- `coverage` is read-only (side-effect-free like `validate`): it reports advisory spec-coverage/orphan/drift signals and never writes `planning/STATE.md` or task files, so it needs no post-run `git status`/staging follow-up. Its signals never make `validate` fail.
 - `start`, `next`, `verify`, `complete`, and `block` rewrite `planning/STATE.md` (and sometimes task files). Even a `next` selection probe updates `next_action`/`updated_at`, so it dirties the working tree — check `git status` after running it.
 - Rendered `STATE.md` counts are a projection of the task files. `taskrail task new` refreshes them as it creates a task (prefer it over hand-authoring). If you hand-add/remove/edit task files, refresh the projection with `taskrail repair --apply` — there is no separate "refresh" command; `repair` owns re-projecting `STATE.md` and never touches task files or status.
 - `verify` creates `planning/artifacts/verify/<id>/<timestamp>/` on demand; the artifacts tree is gitignored and is never committed (no `.gitkeep` placeholders — the v0.2.0 gitignored-artifacts contract).

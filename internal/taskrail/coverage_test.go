@@ -1,0 +1,308 @@
+package taskrail
+
+import (
+	"path/filepath"
+	"strconv"
+	"testing"
+	"time"
+)
+
+// coverageSpecFixture exercises every branch of the coverable-area convention:
+// a plain area (Alpha), a > Deferred area (Beta), a > Subsumed area (Gamma),
+// and a grouped area covered only through a #### sub-area (Delta).
+const coverageSpecFixture = `# Fixture
+
+## Summary
+
+Meta section, never coverable.
+
+## Potential Features
+
+### Alpha
+
+Prose.
+
+### Beta
+
+> Deferred to v9.9
+
+Deferred feature.
+
+### Gamma
+
+> Subsumed by Alpha
+
+Subsumed feature.
+
+### Delta
+
+#### Delta One
+
+#### Delta Two
+
+## Explicitly Excluded
+
+Meta section, never coverable.
+`
+
+func fixtureTask(id, status, specRef string) *Task {
+	return &Task{Frontmatter: TaskFrontmatter{ID: id, Status: status, Priority: "high", SpecRef: specRef}}
+}
+
+func TestComputeCoverageConvention(t *testing.T) {
+	tests := []struct {
+		name          string
+		tasks         []*Task
+		wantPercent   *float64
+		wantCovered   int
+		wantCoverable int
+		wantUncovered []string
+		wantOrphanIDs []string
+		wantAwayCount int
+	}{
+		{
+			name: "full decomposition through direct link and sub-area roll-up",
+			tasks: []*Task{
+				fixtureTask("T-1", "todo", "specs/v0.3.0.md#alpha"),
+				fixtureTask("T-2", "completed", "specs/v0.3.0.md#delta-two"),
+			},
+			wantPercent:   ptrFloat(100),
+			wantCovered:   2,
+			wantCoverable: 2,
+			wantUncovered: nil,
+		},
+		{
+			name: "partial coverage records the gap",
+			tasks: []*Task{
+				fixtureTask("T-1", "todo", "specs/v0.3.0.md#alpha"),
+			},
+			wantPercent:   ptrFloat(50),
+			wantCovered:   1,
+			wantCoverable: 2,
+			wantUncovered: []string{"delta"},
+		},
+		{
+			name: "subsumed area is excluded from the denominator purely from the marker",
+			tasks: []*Task{
+				fixtureTask("T-1", "todo", "specs/v0.3.0.md#alpha"),
+				fixtureTask("T-2", "todo", "specs/v0.3.0.md#delta-one"),
+			},
+			// Gamma (subsumed) and Beta (deferred) never enter the denominator,
+			// so 2/2 despite four ### headings under Potential Features.
+			wantPercent:   ptrFloat(100),
+			wantCovered:   2,
+			wantCoverable: 2,
+		},
+		{
+			name: "cancelled task does not cover its area",
+			tasks: []*Task{
+				fixtureTask("T-1", "cancelled", "specs/v0.3.0.md#alpha"),
+				fixtureTask("T-2", "todo", "specs/v0.3.0.md#delta-two"),
+			},
+			wantPercent:   ptrFloat(50),
+			wantCovered:   1,
+			wantCoverable: 2,
+			wantUncovered: []string{"alpha"},
+		},
+		{
+			name: "open task pointing at a non-active spec is an orphan and drift",
+			tasks: []*Task{
+				fixtureTask("T-1", "todo", "specs/v0.3.0.md#alpha"),
+				fixtureTask("T-2", "todo", "specs/v0.3.0.md#delta-two"),
+				fixtureTask("T-9", "todo", "specs/v0.2.0.md#retrofit"),
+			},
+			wantPercent:   ptrFloat(100),
+			wantCovered:   2,
+			wantCoverable: 2,
+			wantOrphanIDs: []string{"T-9"},
+			wantAwayCount: 1,
+		},
+		{
+			name: "completed task pointing at a prior spec is delivered history, not drift",
+			tasks: []*Task{
+				fixtureTask("T-1", "todo", "specs/v0.3.0.md#alpha"),
+				fixtureTask("T-2", "todo", "specs/v0.3.0.md#delta-two"),
+				// A finished v0.1.0 task legitimately points at its own spec.
+				fixtureTask("T-hist", "completed", "specs/v0.1.0.md#summary"),
+			},
+			wantPercent:   ptrFloat(100),
+			wantCovered:   2,
+			wantCoverable: 2,
+			wantOrphanIDs: nil,
+			wantAwayCount: 0,
+		},
+		{
+			name: "cancelled task pointing at a non-active spec is not an orphan",
+			tasks: []*Task{
+				fixtureTask("T-1", "todo", "specs/v0.3.0.md#alpha"),
+				fixtureTask("T-2", "todo", "specs/v0.3.0.md#delta-two"),
+				// An abandoned task pointing away is dead, not drifting.
+				fixtureTask("T-x", "cancelled", "specs/v0.2.0.md#retrofit"),
+			},
+			wantPercent:   ptrFloat(100),
+			wantCovered:   2,
+			wantCoverable: 2,
+			wantOrphanIDs: nil,
+			wantAwayCount: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			report := computeCoverage(coverageSpecFixture, "specs/v0.3.0.md", tt.tasks)
+
+			if !equalFloatPtr(report.Percent, tt.wantPercent) {
+				t.Fatalf("percent = %v, want %v", fmtFloatPtr(report.Percent), fmtFloatPtr(tt.wantPercent))
+			}
+			if report.CoveredAreas != tt.wantCovered {
+				t.Errorf("covered = %d, want %d", report.CoveredAreas, tt.wantCovered)
+			}
+			if report.CoverableAreas != tt.wantCoverable {
+				t.Errorf("coverable = %d, want %d", report.CoverableAreas, tt.wantCoverable)
+			}
+			if !equalStrings(report.UncoveredAreas, tt.wantUncovered) {
+				t.Errorf("uncovered = %v, want %v", report.UncoveredAreas, tt.wantUncovered)
+			}
+			gotOrphans := make([]string, 0, len(report.Orphans))
+			for _, o := range report.Orphans {
+				gotOrphans = append(gotOrphans, o.TaskID)
+			}
+			if !equalStrings(gotOrphans, tt.wantOrphanIDs) {
+				t.Errorf("orphan ids = %v, want %v", gotOrphans, tt.wantOrphanIDs)
+			}
+			if report.Drift.AwayTaskCount != tt.wantAwayCount {
+				t.Errorf("drift away count = %d, want %d", report.Drift.AwayTaskCount, tt.wantAwayCount)
+			}
+			if report.Drift.UncoveredAreaCount != len(report.UncoveredAreas) {
+				t.Errorf("drift uncovered count = %d, want %d", report.Drift.UncoveredAreaCount, len(report.UncoveredAreas))
+			}
+			// The subsumed and deferred anchors must never surface as areas.
+			for _, a := range report.Areas {
+				if a.Anchor == "gamma" || a.Anchor == "beta" {
+					t.Errorf("excluded area %q leaked into report", a.Anchor)
+				}
+			}
+		})
+	}
+}
+
+func TestComputeCoverageIgnoresEmptyTitleHeading(t *testing.T) {
+	// A heading marker with no title text must not become a phantom, forever
+	// uncovered area (no spec_ref can resolve to an empty anchor).
+	const spec = "# Fixture\n\n## Potential Features\n\n### Alpha\n\n### \n\nStray marker.\n"
+	report := computeCoverage(spec, "specs/v0.3.0.md", []*Task{
+		fixtureTask("T-1", "todo", "specs/v0.3.0.md#alpha"),
+	})
+	if report.CoverableAreas != 1 {
+		t.Fatalf("coverable = %d, want 1 (empty-title heading ignored)", report.CoverableAreas)
+	}
+	if report.Percent == nil || *report.Percent != 100 {
+		t.Errorf("percent = %v, want 100", report.Percent)
+	}
+}
+
+func TestComputeCoverageUncoveredAreaLinkedTasksNotNil(t *testing.T) {
+	// LinkedTasks must serialize as [] (not null) for an uncovered area, to
+	// stay consistent with the report-level slices.
+	report := computeCoverage(coverageSpecFixture, "specs/v0.3.0.md", nil)
+	for _, area := range report.Areas {
+		if area.LinkedTasks == nil {
+			t.Errorf("area %q has nil LinkedTasks; want non-nil empty slice", area.Anchor)
+		}
+	}
+}
+
+func TestComputeCoverageNoCoverableAreas(t *testing.T) {
+	// A spec without a Potential Features section has an empty denominator.
+	const spec = "# Old Spec\n\n## Summary\n\nNothing coverable here.\n"
+	report := computeCoverage(spec, "specs/v0.1.0.md", []*Task{
+		fixtureTask("T-1", "todo", "specs/v0.1.0.md#summary"),
+	})
+	if report.Percent != nil {
+		t.Fatalf("percent = %v, want nil (N/A)", *report.Percent)
+	}
+	if report.CoverableAreas != 0 {
+		t.Errorf("coverable = %d, want 0", report.CoverableAreas)
+	}
+}
+
+func TestServiceCoverageIsReadOnly(t *testing.T) {
+	repo := seedCoverageRepo(t)
+	svc := newTestService(t, repo, time.Date(2026, 7, 9, 0, 0, 0, 0, time.UTC))
+
+	before := snapshotTree(t, repo)
+	if _, err := svc.Coverage(); err != nil {
+		t.Fatalf("coverage: %v", err)
+	}
+	after := snapshotTree(t, repo)
+
+	for path, content := range before {
+		if after[path] != content {
+			t.Errorf("coverage mutated %s", path)
+		}
+	}
+	if len(before) != len(after) {
+		t.Errorf("coverage changed the file set: before %d, after %d", len(before), len(after))
+	}
+}
+
+func TestValidatePassesWithAdvisoryCoverageGap(t *testing.T) {
+	repo := seedCoverageRepo(t)
+	svc := newTestService(t, repo, time.Date(2026, 7, 9, 0, 0, 0, 0, time.UTC))
+
+	report, err := svc.Coverage()
+	if err != nil {
+		t.Fatalf("coverage: %v", err)
+	}
+	if len(report.UncoveredAreas) == 0 {
+		t.Fatal("fixture must have an uncovered area to prove validate still passes")
+	}
+
+	result, err := svc.Validate()
+	if err != nil {
+		t.Fatalf("validate: %v", err)
+	}
+	if !result.Valid {
+		t.Fatalf("validate must pass despite advisory coverage gap: %v", result.Violations)
+	}
+}
+
+// seedCoverageRepo builds a repo whose active spec has one covered and one
+// uncovered coverable area, so coverage reports a real gap while validate stays
+// clean (every task's spec_ref resolves to a live anchor).
+func seedCoverageRepo(t *testing.T) string {
+	t.Helper()
+	repo := seedFixtureRepo(t)
+	writeFile(t, filepath.Join(repo, "specs", "v0.1.0.md"), coverageSpecFixture)
+	// One valid task covering Alpha; Delta stays an advisory gap.
+	writeTask(t, repo, "T-1", "Cover alpha", "todo", "high", "specs/v0.1.0.md#alpha", nil)
+	return repo
+}
+
+func ptrFloat(f float64) *float64 { return &f }
+
+func equalFloatPtr(a, b *float64) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return *a == *b
+}
+
+func fmtFloatPtr(p *float64) string {
+	if p == nil {
+		return "N/A"
+	}
+	return strconv.FormatFloat(*p, 'f', -1, 64)
+}
+
+func equalStrings(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
