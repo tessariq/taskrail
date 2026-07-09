@@ -1,13 +1,13 @@
 ---
 schema_version: 1
-updated_at: "2026-07-09T08:43:22Z"
+updated_at: "2026-07-09T10:54:42Z"
 active_spec_version: v0.3.0
 active_spec_path: specs/v0.3.0.md
 current_task: ""
 current_task_title: ""
 status_summary: idle
 blockers: []
-next_action: 'Start task T-051: Configurable skill entry point (${TASKRAIL:-taskrail}) with mise env override'
+next_action: 'Start task T-073: CI cross-compile smoke across windows/amd64, darwin, and linux/arm'
 last_verification_result: pass for T-050 at 2026-07-07T16:58:29Z
 relevant_artifacts: []
 continuation_notes:
@@ -39,7 +39,7 @@ continuation_notes:
 
 ## Next Action
 
-- Start task T-051: Configurable skill entry point (${TASKRAIL:-taskrail}) with mise env override
+- Start task T-073: CI cross-compile smoke across windows/amd64, darwin, and linux/arm
 
 ## Relevant Artifacts
 
@@ -52,7 +52,7 @@ continuation_notes:
 
 ## Task Counts
 
-- todo: 21
+- todo: 27
 - in_progress: 0
 - completed: 50
 - blocked: 0
