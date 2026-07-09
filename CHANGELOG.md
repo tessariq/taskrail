@@ -11,6 +11,11 @@ All notable user-visible changes to Taskrail will be documented in this file.
   pointing at another spec), and a two-directional drift summary. Never writes
   state and never fails `validate`; a spec with no coverable areas reports `N/A`.
   Supports `--json`.
+- `taskrail status` — strictly read-only snapshot of current tracked-work state:
+  active spec, task counts (done/active/blocked/todo), the next eligible task
+  marked *not persisted*, blocked tasks with reasons, the last verification
+  result, and a one-line coverage summary (`N/A` when the spec has no coverable
+  areas). Leaves the working tree clean. Supports `--json`.
 
 ### Changed
 

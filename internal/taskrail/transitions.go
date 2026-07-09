@@ -16,21 +16,29 @@ func (s *Service) Next() (NextResult, error) {
 		return NextResult{}, err
 	}
 
+	result := computeNext(state, tasks)
+	state.Frontmatter.UpdatedAt = timestamp(s.now())
+	state.Frontmatter.NextAction = nextAction(result)
+	state.Body = renderStateBody(state.Frontmatter, tasks)
+	if err := s.saveState(state); err != nil {
+		return NextResult{}, err
+	}
+	return result, nil
+}
+
+// computeNext resolves the next-task selection without persisting anything.
+// Next() wraps it to also record next_action/updated_at; status reuses it to
+// report the selection read-only, so the selection logic lives in one place.
+func computeNext(state *State, tasks []*Task) NextResult {
 	if state.Frontmatter.CurrentTask != "" {
 		if task, ok := taskByID(tasks, state.Frontmatter.CurrentTask); ok && task.Frontmatter.Status == "in_progress" {
-			state.Frontmatter.UpdatedAt = timestamp(s.now())
-			state.Frontmatter.NextAction = fmt.Sprintf("Continue task %s", task.Frontmatter.ID)
-			state.Body = renderStateBody(state.Frontmatter, tasks)
-			if err := s.saveState(state); err != nil {
-				return NextResult{}, err
-			}
 			return NextResult{
 				TaskID:     task.Frontmatter.ID,
 				Title:      task.Frontmatter.Title,
 				Priority:   task.Frontmatter.Priority,
 				Reason:     "active task already in progress",
 				Candidates: []string{task.Frontmatter.ID},
-			}, nil
+			}
 		}
 	}
 
@@ -39,31 +47,31 @@ func (s *Service) Next() (NextResult, error) {
 	for _, task := range candidates {
 		ids = append(ids, task.Frontmatter.ID)
 	}
-
-	state.Frontmatter.UpdatedAt = timestamp(s.now())
 	if len(candidates) == 0 {
-		state.Frontmatter.NextAction = "No eligible task is ready"
-		state.Body = renderStateBody(state.Frontmatter, tasks)
-		if err := s.saveState(state); err != nil {
-			return NextResult{}, err
-		}
-		return NextResult{Reason: "no eligible task", Candidates: ids}, nil
+		return NextResult{Reason: "no eligible task", Candidates: ids}
 	}
 
 	selected := candidates[0]
-	state.Frontmatter.NextAction = fmt.Sprintf("Start task %s: %s", selected.Frontmatter.ID, selected.Frontmatter.Title)
-	state.Body = renderStateBody(state.Frontmatter, tasks)
-	if err := s.saveState(state); err != nil {
-		return NextResult{}, err
-	}
-
 	return NextResult{
 		TaskID:     selected.Frontmatter.ID,
 		Title:      selected.Frontmatter.Title,
 		Priority:   selected.Frontmatter.Priority,
 		Reason:     "next eligible todo by priority and stable task id",
 		Candidates: ids,
-	}, nil
+	}
+}
+
+// nextAction renders the STATE.md next_action string that `next` persists for a
+// given selection. It is the write-side counterpart to computeNext.
+func nextAction(result NextResult) string {
+	switch result.Reason {
+	case "active task already in progress":
+		return fmt.Sprintf("Continue task %s", result.TaskID)
+	case "no eligible task":
+		return "No eligible task is ready"
+	default:
+		return fmt.Sprintf("Start task %s: %s", result.TaskID, result.Title)
+	}
 }
 
 func (s *Service) Start(taskID string) (TransitionResult, error) {

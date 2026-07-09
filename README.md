@@ -113,6 +113,7 @@ Run `taskrail <command> --help` for full flag details.
 | `taskrail validate` | Validate layout, task shape, dependency/spec references, and `STATE.md` consistency. Read-only. |
 | `taskrail repair` | Reconcile mechanical `STATE.md` drift (stale `current_task` pointer or task counts). Dry run by default; `--apply` rewrites `STATE.md` only; `--json`. |
 | `taskrail coverage` | Report advisory spec-coverage percentage, orphan tasks, and drift for the active spec. Read-only; never fails `validate`. `--json`. |
+| `taskrail status` | Print the current tracked-work snapshot: active spec, task counts, next eligible task (computed but not persisted), blocked tasks with reasons, last verification, and a one-line coverage summary. Read-only. `--json`. |
 | `taskrail next` | Deterministically select the next eligible task. `--json`. |
 | `taskrail start <task-id>` | Mark a task active and update `STATE.md`. |
 | `taskrail complete <task-id>` | Mark a task implementation-complete. `--note`. |

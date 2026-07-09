@@ -53,6 +53,13 @@ func (s *Service) Coverage() (CoverageReport, error) {
 	if err != nil {
 		return CoverageReport{}, err
 	}
+	return s.coverageFor(state, tasks)
+}
+
+// coverageFor computes coverage from an already-loaded state and task set, so
+// callers that have paid the load cost (status) reuse the same computation
+// without a second read of STATE.md and the task files.
+func (s *Service) coverageFor(state *State, tasks []*Task) (CoverageReport, error) {
 	activePath := state.Frontmatter.ActiveSpecPath
 	data, err := os.ReadFile(filepath.Join(s.paths.RepoRoot, filepath.Clean(activePath)))
 	if err != nil {
@@ -69,7 +76,7 @@ type parsedArea struct {
 	subAnchors []string
 }
 
-// computeCoverage is the shared, IO-free coverage computation. `stats` and
+// computeCoverage is the shared, IO-free coverage computation. `coverage` and
 // `status` reuse it so the spec-coverage metric is computed in exactly one
 // place. specMarkdown is the active spec's content; activeSpecPath is its
 // repo-relative path used to classify orphans.
