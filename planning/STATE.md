@@ -1,6 +1,6 @@
 ---
 schema_version: 1
-updated_at: "2026-07-09T21:59:33Z"
+updated_at: "2026-07-09T22:10:33Z"
 active_spec_version: v0.3.0
 active_spec_path: specs/v0.3.0.md
 current_task: ""
@@ -8,7 +8,7 @@ current_task_title: ""
 status_summary: idle
 blockers: []
 next_action: Select the next eligible task
-last_verification_result: pass for T-057 at 2026-07-09T21:59:26Z
+last_verification_result: pass for T-065 at 2026-07-09T22:10:29Z
 relevant_artifacts: []
 continuation_notes:
     - This repository is temporarily dogfooding bootstrap workflow tooling until Taskrail v0.1.0 exists.
@@ -35,7 +35,7 @@ continuation_notes:
 
 ## Last Verification
 
-- pass for T-057 at 2026-07-09T21:59:26Z
+- pass for T-065 at 2026-07-09T22:10:29Z
 
 ## Next Action
 
@@ -52,8 +52,8 @@ continuation_notes:
 
 ## Task Counts
 
-- todo: 25
+- todo: 24
 - in_progress: 0
-- completed: 57
+- completed: 58
 - blocked: 0
 - cancelled: 0
