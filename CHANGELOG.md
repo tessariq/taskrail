@@ -4,6 +4,12 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ## Unreleased
 
+### Changed
+
+- Shipped agent skills now invoke the CLI through `${TASKRAIL:-taskrail}` instead
+  of a hardcoded `taskrail`. Adopters need nothing (it resolves to the installed
+  binary); set `TASKRAIL=/path/to/taskrail` (or `go run ./cmd/taskrail`) to override.
+
 ## v0.2.0 - 2026-07-07
 
 Second release. Taskrail builds on the stable v0.1.0 repo contract to make adoption

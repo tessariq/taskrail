@@ -3,6 +3,7 @@ package taskrail
 import (
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -84,12 +85,38 @@ func TestShippableSkillsNeverUseGoRun(t *testing.T) {
 	}
 }
 
+// Shippable skills invoke the binary through the configurable entry point
+// (${TASKRAIL:-taskrail}, T-051) and never hardcode a `taskrail <cmd>` prefix,
+// which would defeat the override and, in this repo, silently resolve a stale
+// installed binary. Prose references to the `taskrail` binary (no trailing
+// subcommand) are fine; only backtick-prefixed invocations are forbidden.
+func TestShippableSkillsUseConfigurableEntryPoint(t *testing.T) {
+	const entryPoint = "${TASKRAIL:-taskrail}"
+	// A backtick-prefixed invocation: a code span opening on the binary name
+	// followed by a subcommand. \s (not a literal space) also catches an
+	// invocation that word-wraps immediately after `taskrail`. The trailing
+	// whitespace is what distinguishes it from a bare `taskrail` prose
+	// reference, whose closing backtick abuts the name.
+	hardcoded := regexp.MustCompile("`taskrail\\s")
+	for _, name := range shippableSkills {
+		body := readShippableSkill(t, name)
+		if !strings.Contains(body, entryPoint) {
+			t.Errorf("shippable skill %s must invoke the binary via %q", name, entryPoint)
+		}
+		if loc := hardcoded.FindString(body); loc != "" {
+			t.Errorf("shippable skill %s must not hardcode a `taskrail <cmd>` invocation (%q); use %q", name, loc, entryPoint)
+		}
+	}
+}
+
 // Shippable skills create tasks through the real command, not hand-authored
-// markdown (Decision 3 in the productization contract).
+// markdown (Decision 3 in the productization contract). Matches the resolved
+// subcommand tail, not the binary prefix, since the entry point renders as
+// `${TASKRAIL:-taskrail} task new` (T-051).
 func TestShippableSkillsUseTaskNew(t *testing.T) {
 	for _, name := range taskAuthoringSkills {
-		if !strings.Contains(readShippableSkill(t, name), "taskrail task new") {
-			t.Errorf("shippable skill %s must reference 'taskrail task new' for task creation", name)
+		if !strings.Contains(readShippableSkill(t, name), "} task new") {
+			t.Errorf("shippable skill %s must reference '} task new' for task creation", name)
 		}
 	}
 }
@@ -97,7 +124,7 @@ func TestShippableSkillsUseTaskNew(t *testing.T) {
 // The import skill drives the agent-in-the-loop import path (T-034): it invokes
 // the installed binary's emit-prompt and apply steps, never a built-in LLM call.
 func TestImportSkillInvokesImportCommand(t *testing.T) {
-	assertSkillReferences(t, "taskrail-import", "taskrail import", "--emit-prompt", "--apply")
+	assertSkillReferences(t, "taskrail-import", "} import", "--emit-prompt", "--apply")
 }
 
 // The retrofit skill drives the guided bootstrap end to end (T-043): dry-run
@@ -108,10 +135,10 @@ func TestRetrofitSkillDrivesGuidedFlow(t *testing.T) {
 	// would also match the Rules prose, so the assertion must not pass if the
 	// apply/emit-prompt workflow steps were dropped.
 	assertSkillReferences(t, "taskrail-retrofit",
-		"taskrail retrofit <notes.md> --apply",
-		"taskrail retrofit <notes.md> --emit-prompt",
-		"taskrail import --apply",
-		"taskrail validate",
+		"} retrofit <notes.md> --apply",
+		"} retrofit <notes.md> --emit-prompt",
+		"} import --apply",
+		"} validate",
 	)
 }
 
@@ -120,9 +147,9 @@ func TestRetrofitSkillDrivesGuidedFlow(t *testing.T) {
 // the CLI (skills-productization.md, T-050).
 func TestRepairSkillDrivesConservativeLoop(t *testing.T) {
 	assertSkillReferences(t, "taskrail-repair",
-		"taskrail repair",
-		"taskrail repair --apply",
-		"taskrail validate",
+		"} repair",
+		"} repair --apply",
+		"} validate",
 	)
 }
 
