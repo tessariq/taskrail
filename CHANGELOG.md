@@ -16,6 +16,11 @@ All notable user-visible changes to Taskrail will be documented in this file.
   marked *not persisted*, blocked tasks with reasons, the last verification
   result, and a one-line coverage summary (`N/A` when the spec has no coverable
   areas). Leaves the working tree clean. Supports `--json`.
+- `taskrail stats` — strictly read-only aggregate statistics computed
+  snapshot-only from current task files and `STATE.md`: counts and percentages by
+  status, the blocked ratio and recorded-blocker count, spec coverage with a
+  per-area breakdown, and dependency shape (tasks with unmet dependencies,
+  longest dependency chain). Leaves the working tree clean. Supports `--json`.
 
 ### Changed
 
