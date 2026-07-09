@@ -39,3 +39,15 @@ If state appears inconsistent:
 3. repair the repo through normal Taskrail commands or explicit bootstrap edits
 
 Do not mutate `planning/STATE.md` or task statuses casually once the CLI is in normal use.
+
+### Refreshing rendered `STATE.md` after hand-edits
+
+Rendered `STATE.md` body fields (task counts, `current_task`) are projections of
+the task files, re-rendered only by state-writing commands. Prefer `taskrail
+task new` to author tasks — it refreshes the counts as it creates the file, so
+they never drift. If you add, remove, or edit task files by hand (for example
+bulk backlog authoring), the rendered counts go stale; run `taskrail repair`
+(dry run) then `taskrail repair --apply` to re-project `STATE.md` from the task
+files. Repair only ever rewrites `STATE.md` — never a task file — so it cannot
+advance a status or fabricate work. There is deliberately no separate "refresh"
+command: `repair` already owns re-projecting `STATE.md`.

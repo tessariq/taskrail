@@ -157,6 +157,7 @@ Intentional, non-obvious decisions — do not "fix" these:
 
 - `validate` is read-only. It never writes `planning/STATE.md` or task files.
 - `start`, `next`, `verify`, `complete`, and `block` rewrite `planning/STATE.md` (and sometimes task files). Even a `next` selection probe updates `next_action`/`updated_at`, so it dirties the working tree — check `git status` after running it.
+- Rendered `STATE.md` counts are a projection of the task files. `taskrail task new` refreshes them as it creates a task (prefer it over hand-authoring). If you hand-add/remove/edit task files, refresh the projection with `taskrail repair --apply` — there is no separate "refresh" command; `repair` owns re-projecting `STATE.md` and never touches task files or status.
 - `verify` creates `planning/artifacts/verify/<id>/<timestamp>/` on demand; the artifacts tree is gitignored and is never committed (no `.gitkeep` placeholders — the v0.2.0 gitignored-artifacts contract).
 - Committed `STATE.md` stays portable: `last_verification_result` is a path-free summary and `relevant_artifacts` is empty, so cloned repos never point at producer-only files.
 - Manual-test artifacts under `planning/artifacts/manual-test/` are ephemeral local evidence and are gitignored.
