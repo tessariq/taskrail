@@ -126,6 +126,68 @@ func (s *Service) Block(taskID, reason string) (TransitionResult, error) {
 	return s.finishTask(taskID, "blocked", strings.TrimSpace(reason))
 }
 
+// Unblock is the inverse of Block: it returns a blocked task to todo so it
+// re-enters next selection, drops only that task's blockers entry (other blocked
+// tasks keep their reasons), and, when reason is non-empty, records a timestamped
+// Implementation Notes line — the reason is never re-added to the blockers list.
+// It then re-renders STATE.md and re-runs validation, reporting the result
+// (mirrors ActivateSpec per specs/v0.3.0.md#task-unblocking).
+func (s *Service) Unblock(taskID, reason string) (UnblockResult, error) {
+	state, tasks, err := s.loadStateAndTasks()
+	if err != nil {
+		return UnblockResult{}, err
+	}
+	task, ok := taskByID(tasks, taskID)
+	if !ok {
+		return UnblockResult{}, fmt.Errorf("task %s not found", taskID)
+	}
+	if task.Frontmatter.Status != "blocked" {
+		return UnblockResult{}, fmt.Errorf("task %s is not blocked", taskID)
+	}
+
+	now := timestamp(s.now())
+	task.Frontmatter.Status = "todo"
+	task.Frontmatter.UpdatedAt = now
+	if note := strings.TrimSpace(reason); note != "" {
+		appendTaskNote(task, fmt.Sprintf("- %s: %s", now, note))
+	}
+
+	state.Frontmatter.UpdatedAt = now
+	// Drop only this task's stale blocker entry; other tasks may still be blocked
+	// and must keep their recorded reasons (mirrors finishTask's drop-only path).
+	state.Frontmatter.Blockers = removeBlocker(state.Frontmatter.Blockers, taskID)
+	// Reconcile the summary/next_action pointers without contradicting the
+	// remaining blockers. An active task owns those pointers, so leave them; with
+	// no active task, stay "blocked" (pointing at a still-blocked task, never the
+	// one just unblocked) while any blocker remains, and only fall back to the
+	// neutral idle pointers once the last blocker clears.
+	if state.Frontmatter.CurrentTask == "" {
+		if remaining := state.Frontmatter.Blockers; len(remaining) > 0 {
+			state.Frontmatter.StatusSummary = "blocked"
+			state.Frontmatter.NextAction = fmt.Sprintf("Resolve blocker on %s", blockerID(remaining[len(remaining)-1]))
+		} else {
+			state.Frontmatter.StatusSummary = "idle"
+			state.Frontmatter.NextAction = "Select the next eligible task"
+		}
+	}
+	state.Body = renderStateBody(state.Frontmatter, tasks)
+
+	if err := s.saveAll(state, tasks); err != nil {
+		return UnblockResult{}, err
+	}
+
+	validation, err := s.Validate()
+	if err != nil {
+		return UnblockResult{}, err
+	}
+	return UnblockResult{
+		TaskID:     taskID,
+		Status:     task.Frontmatter.Status,
+		UpdatedAt:  now,
+		Validation: validation,
+	}, nil
+}
+
 func (s *Service) Verify(input VerifyInput) (VerifyResult, error) {
 	if input.Result != "pass" && input.Result != "fail" {
 		return VerifyResult{}, fmt.Errorf("invalid verify result %q", input.Result)

@@ -471,6 +471,31 @@ func TestBlockCommand(t *testing.T) {
 	}
 }
 
+func TestUnblockCommand(t *testing.T) {
+	root := setupRepo(t)
+	writeTask(t, root, "T-100", "todo", "")
+	if out, err := runRoot(t, "start", "T-100"); err != nil {
+		t.Fatalf("start: %v (output %q)", err, out)
+	}
+	if out, err := runRoot(t, "block", "T-100", "--reason", "waiting on upstream"); err != nil {
+		t.Fatalf("block: %v (output %q)", err, out)
+	}
+
+	// --json reports the todo transition; --reason is optional here (unlike block).
+	out, err := runRoot(t, "unblock", "T-100", "--json")
+	if err != nil {
+		t.Fatalf("unblock --json: %v (output %q)", err, out)
+	}
+	if !strings.Contains(out, `"status": "todo"`) {
+		t.Fatalf("expected todo status in json, got %q", out)
+	}
+
+	// Unblocking a non-blocked task must error (mirrors start's guard).
+	if _, err := runRoot(t, "unblock", "T-100"); err == nil {
+		t.Fatal("expected error when unblocking a non-blocked task")
+	}
+}
+
 func TestVerifyCommand(t *testing.T) {
 	root := setupRepo(t)
 	writeTask(t, root, "T-100", "todo", "")

@@ -6,6 +6,10 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ### Added
 
+- `taskrail unblock <task-id>` — return a blocked task to todo so it re-enters
+  `next` selection and drop its `STATE.md` blocker entry (other blocked tasks keep
+  theirs); optional `--reason` appends a note. Rejects a non-blocked task with no
+  write. Supports `--json`.
 - `taskrail spec` — spec command family. `spec activate <version>` repoints the
   active spec in `STATE.md` to `specs/<version>.md`, re-renders `STATE.md`, and
   re-validates; it is the CLI-only writer of the active spec and rejects a missing

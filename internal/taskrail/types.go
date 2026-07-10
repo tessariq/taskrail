@@ -138,6 +138,16 @@ type TransitionResult struct {
 	UpdatedAt string `json:"updated_at"`
 }
 
+// UnblockResult reports the blocked->todo transition Unblock performed plus the
+// validation it re-ran afterward, mirroring SpecActivateResult's shape so the
+// spec's "re-runs validation, reporting the result" contract is machine-readable.
+type UnblockResult struct {
+	TaskID     string           `json:"task_id"`
+	Status     string           `json:"status"`
+	UpdatedAt  string           `json:"updated_at"`
+	Validation ValidationResult `json:"validation"`
+}
+
 type VerifyInput struct {
 	TaskID              string
 	Result              string

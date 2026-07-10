@@ -119,6 +119,7 @@ Run `taskrail <command> --help` for full flag details.
 | `taskrail start <task-id>` | Mark a task active and update `STATE.md`. |
 | `taskrail complete <task-id>` | Mark a task implementation-complete. `--note`. |
 | `taskrail block <task-id>` | Mark a task blocked and record a `--reason`. |
+| `taskrail unblock <task-id>` | Return a blocked task to todo so it re-enters `next` selection; drops its `STATE.md` blocker entry. Optional `--reason` appends a note. `--json`. |
 | `taskrail verify <task-id>` | Record a pass/fail outcome and write artifacts under `planning/artifacts/verify/`. `--result`, `--summary`, `--create-followup`, `--json`. |
 | `taskrail spec activate <version>` | Repoint `STATE.md`'s active spec to a versioned target (e.g. `v0.3.0`), re-render `STATE.md`, and re-validate. CLI-only writer of the active spec; rejects a missing or non-conforming version with no write. `--json`. |
 | `taskrail task new` | Scaffold a task file with the next free id. Requires `--title` and `--spec-ref`; `--priority`, repeatable `--dep`, `--follow-up <parent-id>`, `--json`. |
