@@ -33,6 +33,8 @@ All notable user-visible changes to Taskrail will be documented in this file.
 - Shipped agent skills now invoke the CLI through `${TASKRAIL:-taskrail}` instead
   of a hardcoded `taskrail`. Adopters need nothing (it resolves to the installed
   binary); set `TASKRAIL=/path/to/taskrail` (or `go run ./cmd/taskrail`) to override.
+- `taskrail init --with-skills` now also installs the `autonomous-recovery` and
+  `autonomous-manual-test` agent skills; still opt-in and non-destructive.
 - `taskrail repair` also reconciles a `status_summary` that is stale against a
   single `in_progress` task (sets it to `in_progress`); still `STATE.md`-only,
   dry run by default, and never advances a status. The idle/blocked direction and
@@ -72,9 +74,8 @@ CLI provider- and tooling-independent.
   layout, scaffold, and adopt reviewed notes as tracked work. Dry run by default;
   `--apply` scaffolds without overwriting. Supports `--json`.
 - `taskrail init --with-skills` — install the shippable tracked-work agent skills
-  (`autonomous-backlog`, `autonomous-task`, `autonomous-verify`,
-  `autonomous-recovery`, `taskrail-repair`, `taskrail-import`, `taskrail-retrofit`).
-  Opt-in; re-running never overwrites edits.
+  (`autonomous-backlog`, `autonomous-task`, `autonomous-verify`, `taskrail-repair`,
+  `taskrail-import`, `taskrail-retrofit`). Opt-in; re-running never overwrites edits.
 - `taskrail init` is now version-aware and non-destructive: writes a
   `.taskrail/config.yml` layout marker, adopts an existing v0.1.0 layout, and
   migrates older layouts (dry run, `--apply` to write). Never rewrites human content.

@@ -20,6 +20,7 @@ var shippableSkills = []string{
 	"autonomous-task",
 	"autonomous-verify",
 	"autonomous-recovery",
+	"autonomous-manual-test",
 	"taskrail-import",
 	"taskrail-retrofit",
 	"taskrail-repair",
@@ -35,13 +36,13 @@ var taskAuthoringSkills = []string{
 	"autonomous-verify",
 }
 
-// dogfoodingOnlySkills must never leak into the shippable set: manual-test
-// writes an internal-only artifact convention forbidden for shipped skills.
-// (autonomous-recovery graduated to the shippable set in T-054 once the widened
-// repair surface removed its need to bypass the CLI.)
-var dogfoodingOnlySkills = []string{
-	"autonomous-manual-test",
-}
+// dogfoodingOnlySkills lists skills that must never leak into the shippable set.
+// It is currently empty: autonomous-recovery graduated in T-054 once the widened
+// repair surface removed its need to bypass the CLI, and autonomous-manual-test
+// in T-081 (its manual-test artifacts stay ephemeral and gitignored rather than
+// becoming a product invariant, so shipping the skill needs no new invariant).
+// The guard stays so a future dogfooding-only skill re-arms it without new wiring.
+var dogfoodingOnlySkills = []string{}
 
 func shippableSkillPath(name string) string {
 	return filepath.Join(shippableSkillsDir, name, "SKILL.md")
