@@ -47,6 +47,11 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ### Fixed
 
+- `taskrail task new` now allocates the next id from the highest numeric prefix
+  across bare and slug-suffixed ids, so a repo whose ids are all slug-suffixed
+  (e.g. `T-076-ingestion-commands`) no longer restarts at `T-001` and collides.
+  `taskrail validate` now reports two task files that share a numeric prefix
+  (e.g. `T-001` and `T-001-milestone`) as a collision.
 - `taskrail block` now keeps every currently-blocked task's reason in `STATE.md`
   (one entry per task) instead of overwriting the list with only the most recent;
   `taskrail status` reports each blocked task's own reason.
