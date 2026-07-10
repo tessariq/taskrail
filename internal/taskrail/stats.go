@@ -15,16 +15,19 @@ type StatusStat struct {
 	Percent float64 `json:"percent"`
 }
 
-// StatsCoverage is the decomposition-coverage figure plus the per-area
-// breakdown, reused from the shared Coverage capability. DecompositionPercent is
-// nil (rendered N/A) when the active spec has no coverable areas. The field is
-// named specifically so the later implementation ("can we release") figure can be
-// added without a breaking rename (T-080).
+// StatsCoverage is both coverage figures plus the per-area breakdown, reused
+// from the shared Coverage capability. DecompositionPercent ("is the work
+// planned?") gates via `coverage --min`; ImplementationPercent ("can we
+// release?") is report-only. Both are nil (rendered N/A) when the active spec
+// has no coverable areas and share the CoverableAreas denominator; each area's
+// Implemented flag distinguishes decomposed-not-implemented from implemented.
 type StatsCoverage struct {
-	DecompositionPercent *float64       `json:"decomposition_percent"`
-	CoveredAreas         int            `json:"covered_areas"`
-	CoverableAreas       int            `json:"coverable_areas"`
-	Areas                []CoverageArea `json:"areas"`
+	DecompositionPercent  *float64       `json:"decomposition_percent"`
+	ImplementationPercent *float64       `json:"implementation_percent"`
+	CoveredAreas          int            `json:"covered_areas"`
+	ImplementedAreas      int            `json:"implemented_areas"`
+	CoverableAreas        int            `json:"coverable_areas"`
+	Areas                 []CoverageArea `json:"areas"`
 }
 
 // DependencyShape describes the current dependency graph: how many tasks are
@@ -76,10 +79,12 @@ func buildStats(state *State, tasks []*Task, coverage CoverageReport) StatsRepor
 		BlockedRatio:         ratio(countStatus(tasks, "blocked"), total),
 		RecordedBlockerCount: recordedBlockerCount(tasks, state.Frontmatter.Blockers),
 		Coverage: StatsCoverage{
-			DecompositionPercent: coverage.Percent,
-			CoveredAreas:         coverage.CoveredAreas,
-			CoverableAreas:       coverage.CoverableAreas,
-			Areas:                coverage.Areas,
+			DecompositionPercent:  coverage.Percent,
+			ImplementationPercent: coverage.ImplementationPercent,
+			CoveredAreas:          coverage.CoveredAreas,
+			ImplementedAreas:      coverage.ImplementedAreas,
+			CoverableAreas:        coverage.CoverableAreas,
+			Areas:                 coverage.Areas,
 		},
 		Dependencies: DependencyShape{
 			UnmetDependencyTaskCount: unmetDependencyTaskCount(tasks),

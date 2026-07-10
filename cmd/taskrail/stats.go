@@ -56,22 +56,35 @@ func renderStatsText(r taskrail.StatsReport) string {
 	return b.String()
 }
 
+// areaStateMark labels an area's three-state coverage: uncovered (no linked
+// task), decomposed (linked but open work remains), or implemented (every
+// linked task completed).
+func areaStateMark(a taskrail.CoverageArea) string {
+	switch {
+	case a.Implemented:
+		return "implemented"
+	case a.Covered:
+		return "decomposed"
+	default:
+		return "uncovered"
+	}
+}
+
 // renderStatsCoverage renders the coverage headline plus a per-area breakdown.
 // The percentage is "N/A" when the active spec has no coverable areas.
 func renderStatsCoverage(c taskrail.StatsCoverage) string {
 	var b strings.Builder
 	if c.DecompositionPercent == nil {
 		b.WriteString("coverage: N/A (no coverable areas)\n")
+		b.WriteString("implementation: N/A (no coverable areas)\n")
 	} else {
 		fmt.Fprintf(&b, "coverage: %s (%d/%d areas)\n",
 			formatPercent(*c.DecompositionPercent), c.CoveredAreas, c.CoverableAreas)
+		fmt.Fprintf(&b, "implementation: %s (%d/%d areas)\n",
+			formatPercent(*c.ImplementationPercent), c.ImplementedAreas, c.CoverableAreas)
 	}
 	for _, area := range c.Areas {
-		mark := "uncovered"
-		if area.Covered {
-			mark = "covered"
-		}
-		fmt.Fprintf(&b, "  %-9s %s\n", mark, area.Anchor)
+		fmt.Fprintf(&b, "  %-11s %s\n", areaStateMark(area), area.Anchor)
 	}
 	return b.String()
 }

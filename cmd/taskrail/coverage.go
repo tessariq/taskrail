@@ -38,13 +38,24 @@ func renderCoverageText(r taskrail.CoverageReport) string {
 	var b strings.Builder
 	if r.Percent == nil {
 		fmt.Fprintf(&b, "coverage: N/A (no coverable areas) — %s\n", r.ActiveSpecPath)
+		fmt.Fprintf(&b, "implementation: N/A (no coverable areas) — %s\n", r.ActiveSpecPath)
 	} else {
 		fmt.Fprintf(&b, "coverage: %s (%d/%d areas) — %s\n", formatPercent(*r.Percent), r.CoveredAreas, r.CoverableAreas, r.ActiveSpecPath)
+		fmt.Fprintf(&b, "implementation: %s (%d/%d areas) — %s\n", formatPercent(*r.ImplementationPercent), r.ImplementedAreas, r.CoverableAreas, r.ActiveSpecPath)
 	}
 
 	if len(r.UncoveredAreas) > 0 {
 		b.WriteString("uncovered areas:\n")
 		for _, area := range r.UncoveredAreas {
+			fmt.Fprintf(&b, "  - %s\n", area)
+		}
+	}
+
+	// Areas that are decomposed but not yet implemented — the report-only gap
+	// between the two figures, surfaced as a per-area state in human output.
+	if notImplemented := decomposedNotImplemented(r.Areas); len(notImplemented) > 0 {
+		b.WriteString("decomposed, not implemented:\n")
+		for _, area := range notImplemented {
 			fmt.Fprintf(&b, "  - %s\n", area)
 		}
 	}
@@ -58,6 +69,18 @@ func renderCoverageText(r taskrail.CoverageReport) string {
 
 	fmt.Fprintf(&b, "drift: %d uncovered area(s), %d task(s) pointing away", r.Drift.UncoveredAreaCount, r.Drift.AwayTaskCount)
 	return b.String()
+}
+
+// decomposedNotImplemented returns the anchors of areas that are covered (have a
+// linked task) but not yet implemented (some linked task is still open).
+func decomposedNotImplemented(areas []taskrail.CoverageArea) []string {
+	gap := make([]string, 0)
+	for _, a := range areas {
+		if a.Covered && !a.Implemented {
+			gap = append(gap, a.Anchor)
+		}
+	}
+	return gap
 }
 
 // formatPercent prints a whole percentage without a decimal and otherwise keeps

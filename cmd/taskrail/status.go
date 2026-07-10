@@ -68,10 +68,11 @@ func renderStatusNext(n taskrail.StatusNext) string {
 
 func renderStatusCoverage(c taskrail.StatusCoverage) string {
 	if c.DecompositionPercent == nil {
-		return fmt.Sprintf("coverage: N/A (no coverable areas); %d orphan(s), %d uncovered area(s)\n",
+		return fmt.Sprintf("coverage: N/A (no coverable areas); implementation N/A; %d orphan(s), %d uncovered area(s)\n",
 			c.OrphanTaskCount, c.UncoveredAreaCount)
 	}
-	return fmt.Sprintf("coverage: %s (%d/%d areas); %d orphan(s), %d uncovered area(s)\n",
+	return fmt.Sprintf("coverage: %s (%d/%d areas); implementation %s (%d/%d implemented); %d orphan(s), %d uncovered area(s)\n",
 		formatPercent(*c.DecompositionPercent), c.CoveredAreas, c.CoverableAreas,
+		formatPercent(*c.ImplementationPercent), c.ImplementedAreas, c.CoverableAreas,
 		c.OrphanTaskCount, c.UncoveredAreaCount)
 }

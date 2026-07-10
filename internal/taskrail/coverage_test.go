@@ -186,6 +186,153 @@ func TestComputeCoverageConvention(t *testing.T) {
 	}
 }
 
+func TestComputeCoverageImplementationDimension(t *testing.T) {
+	// Implementation coverage shares the decomposition denominator but only
+	// counts an area once every non-cancelled linked task (roll-up respected) is
+	// completed. It reads three per-area states: uncovered, decomposed (planned
+	// but open work remains), and implemented.
+	tests := []struct {
+		name                 string
+		tasks                []*Task
+		wantDecomp           *float64
+		wantImpl             *float64
+		wantImplementedAreas int
+		wantImplemented      map[string]bool
+	}{
+		{
+			name: "area implemented only when all linked tasks completed (direct + roll-up)",
+			tasks: []*Task{
+				fixtureTask("T-1", "completed", "specs/v0.3.0.md#alpha"),
+				fixtureTask("T-2", "completed", "specs/v0.3.0.md#delta-two"),
+			},
+			wantDecomp:           ptrFloat(100),
+			wantImpl:             ptrFloat(100),
+			wantImplementedAreas: 2,
+			wantImplemented:      map[string]bool{"alpha": true, "delta": true},
+		},
+		{
+			name: "partially-completed area reads decomposed-not-implemented",
+			tasks: []*Task{
+				fixtureTask("T-1", "completed", "specs/v0.3.0.md#alpha"),
+				fixtureTask("T-2", "todo", "specs/v0.3.0.md#alpha"),
+				fixtureTask("T-3", "completed", "specs/v0.3.0.md#delta-one"),
+			},
+			// alpha has an open task → decomposed but not implemented; delta fully done.
+			wantDecomp:           ptrFloat(100),
+			wantImpl:             ptrFloat(50),
+			wantImplementedAreas: 1,
+			wantImplemented:      map[string]bool{"alpha": false, "delta": true},
+		},
+		{
+			name: "cancelled linked task is ignored for the implementation check",
+			tasks: []*Task{
+				fixtureTask("T-1", "completed", "specs/v0.3.0.md#alpha"),
+				fixtureTask("T-2", "cancelled", "specs/v0.3.0.md#alpha"),
+				fixtureTask("T-3", "completed", "specs/v0.3.0.md#delta-two"),
+			},
+			wantDecomp:           ptrFloat(100),
+			wantImpl:             ptrFloat(100),
+			wantImplementedAreas: 2,
+			wantImplemented:      map[string]bool{"alpha": true, "delta": true},
+		},
+		{
+			name: "uncovered area is neither decomposed nor implemented",
+			tasks: []*Task{
+				fixtureTask("T-1", "completed", "specs/v0.3.0.md#alpha"),
+			},
+			// delta has no linked task at all.
+			wantDecomp:           ptrFloat(50),
+			wantImpl:             ptrFloat(50),
+			wantImplementedAreas: 1,
+			wantImplemented:      map[string]bool{"alpha": true, "delta": false},
+		},
+		{
+			name: "decomposed but zero completed reads 0% implementation",
+			tasks: []*Task{
+				fixtureTask("T-1", "todo", "specs/v0.3.0.md#alpha"),
+				fixtureTask("T-2", "in_progress", "specs/v0.3.0.md#delta-two"),
+			},
+			wantDecomp:           ptrFloat(100),
+			wantImpl:             ptrFloat(0),
+			wantImplementedAreas: 0,
+			wantImplemented:      map[string]bool{"alpha": false, "delta": false},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			report := computeCoverage(coverageSpecFixture, "specs/v0.3.0.md", tt.tasks)
+
+			if !equalFloatPtr(report.Percent, tt.wantDecomp) {
+				t.Errorf("decomposition percent = %s, want %s", fmtFloatPtr(report.Percent), fmtFloatPtr(tt.wantDecomp))
+			}
+			if !equalFloatPtr(report.ImplementationPercent, tt.wantImpl) {
+				t.Errorf("implementation percent = %s, want %s", fmtFloatPtr(report.ImplementationPercent), fmtFloatPtr(tt.wantImpl))
+			}
+			if report.ImplementedAreas != tt.wantImplementedAreas {
+				t.Errorf("implemented areas = %d, want %d", report.ImplementedAreas, tt.wantImplementedAreas)
+			}
+			// Both figures share the coverable-area denominator.
+			if report.CoverableAreas != 2 {
+				t.Errorf("coverable areas = %d, want 2 (shared denominator)", report.CoverableAreas)
+			}
+			for _, area := range report.Areas {
+				want, ok := tt.wantImplemented[area.Anchor]
+				if !ok {
+					continue
+				}
+				if area.Implemented != want {
+					t.Errorf("area %q implemented = %v, want %v", area.Anchor, area.Implemented, want)
+				}
+				if area.Implemented && !area.Covered {
+					t.Errorf("area %q implemented but not covered: implementation must imply decomposition", area.Anchor)
+				}
+			}
+		})
+	}
+}
+
+func TestComputeCoverageImplementationNAWhenNoCoverableAreas(t *testing.T) {
+	// The N/A rule applies to both figures alike: an unscoreable spec never
+	// reports a false 0%/100% implementation figure.
+	const spec = "# Old Spec\n\n## Summary\n\nNothing coverable here.\n"
+	report := computeCoverage(spec, "specs/v0.1.0.md", []*Task{
+		fixtureTask("T-1", "completed", "specs/v0.1.0.md#summary"),
+	})
+	if report.Percent != nil {
+		t.Errorf("decomposition percent = %v, want nil (N/A)", *report.Percent)
+	}
+	if report.ImplementationPercent != nil {
+		t.Errorf("implementation percent = %v, want nil (N/A)", *report.ImplementationPercent)
+	}
+	if report.ImplementedAreas != 0 {
+		t.Errorf("implemented areas = %d, want 0", report.ImplementedAreas)
+	}
+}
+
+func TestValidatePassesWithLowImplementationCoverage(t *testing.T) {
+	// Report-only guarantee: a low implementation figure (every area decomposed
+	// but none implemented) must never make validate exit non-zero.
+	repo := seedCoverageRepo(t)
+	svc := newTestService(t, repo, time.Date(2026, 7, 9, 0, 0, 0, 0, time.UTC))
+
+	report, err := svc.Coverage()
+	if err != nil {
+		t.Fatalf("coverage: %v", err)
+	}
+	if report.ImplementationPercent == nil || *report.ImplementationPercent != 0 {
+		t.Fatalf("implementation percent = %s, want 0 (fixture task is todo)", fmtFloatPtr(report.ImplementationPercent))
+	}
+
+	result, err := svc.Validate()
+	if err != nil {
+		t.Fatalf("validate: %v", err)
+	}
+	if !result.Valid {
+		t.Fatalf("validate must pass despite low implementation coverage: %v", result.Violations)
+	}
+}
+
 func TestComputeCoverageIgnoresEmptyTitleHeading(t *testing.T) {
 	// A heading marker with no title text must not become a phantom, forever
 	// uncovered area (no spec_ref can resolve to an empty anchor).

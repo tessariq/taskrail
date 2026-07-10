@@ -37,17 +37,19 @@ type BlockedTask struct {
 }
 
 // StatusCoverage is the one-line coverage summary embedded in status. It carries
-// the decomposition figure plus the orphan/drift counts drawn from the shared
-// Coverage capability. DecompositionPercent is nil (rendered N/A) when the active
-// spec has no coverable areas. The field is named specifically so a later
-// implementation ("can we release") figure can be added without a breaking
-// rename (T-080).
+// both coverage dimensions plus the orphan/drift counts drawn from the shared
+// Coverage capability. DecompositionPercent ("is the work planned?") gates via
+// `coverage --min`; ImplementationPercent ("can we release?") is report-only.
+// Both are nil (rendered N/A) when the active spec has no coverable areas and
+// share the CoverableAreas denominator.
 type StatusCoverage struct {
-	DecompositionPercent *float64 `json:"decomposition_percent"`
-	CoveredAreas         int      `json:"covered_areas"`
-	CoverableAreas       int      `json:"coverable_areas"`
-	OrphanTaskCount      int      `json:"orphan_task_count"`
-	UncoveredAreaCount   int      `json:"uncovered_area_count"`
+	DecompositionPercent  *float64 `json:"decomposition_percent"`
+	ImplementationPercent *float64 `json:"implementation_percent"`
+	CoveredAreas          int      `json:"covered_areas"`
+	ImplementedAreas      int      `json:"implemented_areas"`
+	CoverableAreas        int      `json:"coverable_areas"`
+	OrphanTaskCount       int      `json:"orphan_task_count"`
+	UncoveredAreaCount    int      `json:"uncovered_area_count"`
 }
 
 // StatusReport is the strictly read-only snapshot of current tracked-work state.
@@ -88,11 +90,13 @@ func (s *Service) Status() (StatusReport, error) {
 		Blocked:                blockedTasks(tasks, state.Frontmatter.Blockers),
 		LastVerificationResult: state.Frontmatter.LastVerificationResult,
 		Coverage: StatusCoverage{
-			DecompositionPercent: coverage.Percent,
-			CoveredAreas:         coverage.CoveredAreas,
-			CoverableAreas:       coverage.CoverableAreas,
-			OrphanTaskCount:      coverage.Drift.AwayTaskCount,
-			UncoveredAreaCount:   coverage.Drift.UncoveredAreaCount,
+			DecompositionPercent:  coverage.Percent,
+			ImplementationPercent: coverage.ImplementationPercent,
+			CoveredAreas:          coverage.CoveredAreas,
+			ImplementedAreas:      coverage.ImplementedAreas,
+			CoverableAreas:        coverage.CoverableAreas,
+			OrphanTaskCount:       coverage.Drift.AwayTaskCount,
+			UncoveredAreaCount:    coverage.Drift.UncoveredAreaCount,
 		},
 	}, nil
 }

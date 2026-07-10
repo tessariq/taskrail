@@ -11,10 +11,12 @@ All notable user-visible changes to Taskrail will be documented in this file.
   re-validates; it is the CLI-only writer of the active spec and rejects a missing
   or non-conforming version with no write. Supports `--json`.
 - `taskrail coverage` — advisory read-only linkage analysis for the active spec:
-  a decomposition-coverage percentage with per-area gaps, orphan tasks (spec_ref
-  pointing at another spec), and a two-directional drift summary. Never writes
-  state and never fails `validate`; a spec with no coverable areas reports `N/A`.
-  Supports `--json`.
+  two coverage figures over the same areas — decomposition (any linked task) and
+  report-only implementation (every linked task completed) — with per-area state
+  (uncovered / decomposed / implemented), orphan tasks (spec_ref pointing at
+  another spec), and a two-directional drift summary. `status` and `stats` show
+  both figures. Never writes state and never fails `validate`; a spec with no
+  coverable areas reports `N/A`. Supports `--json`.
 - `taskrail status` — strictly read-only snapshot of current tracked-work state:
   active spec, task counts (done/active/blocked/todo), the next eligible task
   marked *not persisted*, blocked tasks with reasons, the last verification

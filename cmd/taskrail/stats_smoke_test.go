@@ -19,12 +19,15 @@ type statsJSON struct {
 	BlockedRatio         float64 `json:"blocked_ratio"`
 	RecordedBlockerCount int     `json:"recorded_blocker_count"`
 	Coverage             struct {
-		DecompositionPercent *float64 `json:"decomposition_percent"`
-		CoveredAreas         int      `json:"covered_areas"`
-		CoverableAreas       int      `json:"coverable_areas"`
-		Areas                []struct {
-			Anchor  string `json:"anchor"`
-			Covered bool   `json:"covered"`
+		DecompositionPercent  *float64 `json:"decomposition_percent"`
+		ImplementationPercent *float64 `json:"implementation_percent"`
+		CoveredAreas          int      `json:"covered_areas"`
+		ImplementedAreas      int      `json:"implemented_areas"`
+		CoverableAreas        int      `json:"coverable_areas"`
+		Areas                 []struct {
+			Anchor      string `json:"anchor"`
+			Covered     bool   `json:"covered"`
+			Implemented bool   `json:"implemented"`
 		} `json:"areas"`
 	} `json:"coverage"`
 	Dependencies struct {
@@ -146,8 +149,21 @@ func TestStatsJSONMirrorsMetricsOnSeededDAG(t *testing.T) {
 	if report.Coverage.DecompositionPercent == nil || *report.Coverage.DecompositionPercent != 50 {
 		t.Errorf("decomposition percent = %v, want 50", report.Coverage.DecompositionPercent)
 	}
+	// Alpha is linked by a completed (T-1) plus three todo tasks, so it is
+	// decomposed but not implemented → implementation 0/2 = 0%.
+	if report.Coverage.ImplementationPercent == nil || *report.Coverage.ImplementationPercent != 0 {
+		t.Errorf("implementation percent = %v, want 0", report.Coverage.ImplementationPercent)
+	}
+	if report.Coverage.ImplementedAreas != 0 {
+		t.Errorf("implemented areas = %d, want 0", report.Coverage.ImplementedAreas)
+	}
 	if len(report.Coverage.Areas) == 0 {
 		t.Errorf("expected a per-area coverage breakdown, got none")
+	}
+	for _, a := range report.Coverage.Areas {
+		if a.Anchor == "alpha" && (!a.Covered || a.Implemented) {
+			t.Errorf("alpha = covered %v implemented %v, want covered true implemented false", a.Covered, a.Implemented)
+		}
 	}
 }
 

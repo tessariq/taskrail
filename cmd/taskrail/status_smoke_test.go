@@ -49,11 +49,13 @@ type statusJSON struct {
 	} `json:"blocked"`
 	LastVerificationResult string `json:"last_verification_result"`
 	Coverage               struct {
-		DecompositionPercent *float64 `json:"decomposition_percent"`
-		CoveredAreas         int      `json:"covered_areas"`
-		CoverableAreas       int      `json:"coverable_areas"`
-		OrphanTaskCount      int      `json:"orphan_task_count"`
-		UncoveredAreaCount   int      `json:"uncovered_area_count"`
+		DecompositionPercent  *float64 `json:"decomposition_percent"`
+		ImplementationPercent *float64 `json:"implementation_percent"`
+		CoveredAreas          int      `json:"covered_areas"`
+		ImplementedAreas      int      `json:"implemented_areas"`
+		CoverableAreas        int      `json:"coverable_areas"`
+		OrphanTaskCount       int      `json:"orphan_task_count"`
+		UncoveredAreaCount    int      `json:"uncovered_area_count"`
 	} `json:"coverage"`
 }
 
@@ -80,7 +82,7 @@ func TestStatusReportsSnapshotAndStaysReadOnly(t *testing.T) {
 	if err != nil {
 		t.Fatalf("status: %v (output %q)", err, out)
 	}
-	for _, want := range []string{"v0.1.0", "next: T-100", "not persisted", "T-102", "waiting on upstream", "50%"} {
+	for _, want := range []string{"v0.1.0", "next: T-100", "not persisted", "T-102", "waiting on upstream", "50%", "implementation 0% (0/2 implemented)"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("human view missing %q: %q", want, out)
 		}
@@ -135,6 +137,14 @@ func TestStatusJSONMirrorsHumanView(t *testing.T) {
 	}
 	if report.Coverage.DecompositionPercent == nil || *report.Coverage.DecompositionPercent != 50 {
 		t.Errorf("decomposition_percent = %v, want 50", report.Coverage.DecompositionPercent)
+	}
+	// Alpha has a completed and open tasks → decomposed-not-implemented; Beta
+	// uncovered. Implementation is 0/2 over the same denominator.
+	if report.Coverage.ImplementationPercent == nil || *report.Coverage.ImplementationPercent != 0 {
+		t.Errorf("implementation_percent = %v, want 0", report.Coverage.ImplementationPercent)
+	}
+	if report.Coverage.ImplementedAreas != 0 {
+		t.Errorf("implemented_areas = %d, want 0", report.Coverage.ImplementedAreas)
 	}
 	if report.Coverage.CoveredAreas != 1 || report.Coverage.CoverableAreas != 2 {
 		t.Errorf("coverage areas = %d/%d, want 1/2", report.Coverage.CoveredAreas, report.Coverage.CoverableAreas)
@@ -216,5 +226,8 @@ func TestStatusCoverageNAWhenNoCoverableAreas(t *testing.T) {
 	}
 	if report.Coverage.DecompositionPercent != nil {
 		t.Errorf("decomposition_percent = %v, want nil", *report.Coverage.DecompositionPercent)
+	}
+	if report.Coverage.ImplementationPercent != nil {
+		t.Errorf("implementation_percent = %v, want nil (N/A)", *report.Coverage.ImplementationPercent)
 	}
 }
