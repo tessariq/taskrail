@@ -27,14 +27,15 @@ separately under `internal/taskrail/skills/`. It invokes the installed
 Per `docs/workflow/skills-productization.md`, the split is:
 
 - Shippable: `autonomous-backlog`, `autonomous-task`, `autonomous-verify`,
-  plus the product-only onboarding skills `taskrail-import` (notes/draft ->
-  spec/task import) and `taskrail-retrofit` (guided retrofit of an existing
-  repository into a Taskrail layout). The onboarding skills have no dogfooding
-  counterpart under `skills/`; they exist only in the shippable set because
-  Taskrail's own repository is already managed.
-- Dogfooding-only: `autonomous-recovery` (hand-edits authoritative state),
-  `autonomous-manual-test` (writes the internal `planning/artifacts/manual-test/`
-  convention).
+  `autonomous-recovery` (routes every correction through `taskrail repair`, never
+  hand-editing state), and `taskrail-repair`, plus the product-only onboarding
+  skills `taskrail-import` (notes/draft -> spec/task import) and
+  `taskrail-retrofit` (guided retrofit of an existing repository into a Taskrail
+  layout). The onboarding skills have no dogfooding counterpart under `skills/`;
+  they exist only in the shippable set because Taskrail's own repository is
+  already managed.
+- Dogfooding-only: `autonomous-manual-test` (writes the internal
+  `planning/artifacts/manual-test/` convention).
 
 The dogfooding skills under `skills/` may keep `go run ./cmd/taskrail ...` until
 the installed binary becomes the dogfooding entry point.

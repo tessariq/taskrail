@@ -19,6 +19,7 @@ var shippableSkills = []string{
 	"autonomous-backlog",
 	"autonomous-task",
 	"autonomous-verify",
+	"autonomous-recovery",
 	"taskrail-import",
 	"taskrail-retrofit",
 	"taskrail-repair",
@@ -34,11 +35,11 @@ var taskAuthoringSkills = []string{
 	"autonomous-verify",
 }
 
-// dogfoodingOnlySkills must never leak into the shippable set: recovery still
-// hand-edits authoritative state and manual-test writes an internal-only
-// artifact convention, both forbidden for shipped skills.
+// dogfoodingOnlySkills must never leak into the shippable set: manual-test
+// writes an internal-only artifact convention forbidden for shipped skills.
+// (autonomous-recovery graduated to the shippable set in T-054 once the widened
+// repair surface removed its need to bypass the CLI.)
 var dogfoodingOnlySkills = []string{
-	"autonomous-recovery",
 	"autonomous-manual-test",
 }
 

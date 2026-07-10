@@ -81,7 +81,7 @@ rewrite. Current canonical skills (`skills/`, mirrored to `.agents/skills/` and
 | `autonomous-backlog` | Shippable | Generic tracked-work cycle (validate, select, start, implement, verify, follow-up); no repo-local assumptions once `go run` is replaced by the installed binary. |
 | `autonomous-task` | Shippable | Executes one selected task through CLI transitions; portable after the binary rewrite. |
 | `autonomous-verify` | Shippable | Drives `taskrail verify` against acceptance criteria and points at product-level verification artifacts. |
-| `autonomous-recovery` | Dogfooding-only (for now) | Falls back to manual edits of authoritative state, which product rules forbid. Becomes shippable once a conservative repair surface (`taskrail repair` / `validate --fix`, see spec "State Repair") removes the need to bypass the CLI. |
+| `autonomous-recovery` | Shippable | Routes every correction through `taskrail repair` (dry-run -> apply -> re-validate) and never hand-edits authoritative state. Shipped in T-054 once the widened repair surface (T-072) shrank the human-resolved residue to what the skill claims; the earlier "falls back to manual edits" premise is stale. |
 | `autonomous-manual-test` | Dogfooding-only (for now) | Writes under `planning/artifacts/manual-test/`, an internal dogfooding convention the spec ("Artifact And Init Consistency") declines to promote to a product invariant without a deliberate decision. |
 
 T-029 may revise this list, but must justify any change against the three
