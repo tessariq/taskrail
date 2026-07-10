@@ -49,11 +49,11 @@ func TestWriteShippableSkillsInstallsToTargets(t *testing.T) {
 		t.Fatalf("init: %v", err)
 	}
 
-	written, err := svc.WriteShippableSkills()
+	res, err := svc.WriteShippableSkills(false)
 	if err != nil {
 		t.Fatalf("write shippable skills: %v", err)
 	}
-	if len(written) == 0 {
+	if len(res.Written) == 0 {
 		t.Fatal("write shippable skills reported no files written")
 	}
 
@@ -93,7 +93,7 @@ func TestWriteShippableSkillsIdempotent(t *testing.T) {
 	if _, err := svc.Init(false); err != nil {
 		t.Fatalf("init: %v", err)
 	}
-	if _, err := svc.WriteShippableSkills(); err != nil {
+	if _, err := svc.WriteShippableSkills(false); err != nil {
 		t.Fatalf("first write: %v", err)
 	}
 
@@ -103,12 +103,12 @@ func TestWriteShippableSkillsIdempotent(t *testing.T) {
 		t.Fatalf("edit skill: %v", err)
 	}
 
-	written, err := svc.WriteShippableSkills()
+	res, err := svc.WriteShippableSkills(false)
 	if err != nil {
 		t.Fatalf("second write: %v", err)
 	}
-	if len(written) != 0 {
-		t.Errorf("re-run wrote %v; want no files", written)
+	if len(res.Written) != 0 || len(res.Overwritten) != 0 || len(res.BackedUp) != 0 {
+		t.Errorf("re-run changed files: %+v; want no changes", res)
 	}
 
 	data, err := os.ReadFile(edited)
@@ -117,5 +117,149 @@ func TestWriteShippableSkillsIdempotent(t *testing.T) {
 	}
 	if string(data) != userMark {
 		t.Errorf("re-run clobbered user-edited skill; content = %q", string(data))
+	}
+}
+
+// backupsFor returns the timestamped backup files sitting next to a skill file.
+func backupsFor(t *testing.T, skillPath string) []string {
+	t.Helper()
+	entries, err := os.ReadDir(filepath.Dir(skillPath))
+	if err != nil {
+		t.Fatalf("read skill dir: %v", err)
+	}
+	base := filepath.Base(skillPath)
+	var backups []string
+	for _, e := range entries {
+		if strings.HasPrefix(e.Name(), base+".bak.") {
+			backups = append(backups, filepath.Join(filepath.Dir(skillPath), e.Name()))
+		}
+	}
+	return backups
+}
+
+// --force reinstalls the embedded skill over a locally-modified copy, backing up
+// the user's version first and reporting both the overwrite and the backup.
+func TestWriteShippableSkillsForceOverwritesWithBackup(t *testing.T) {
+	t.Parallel()
+
+	repo := initGitRepo(t)
+	svc := newTestService(t, repo, time.Date(2026, 3, 31, 12, 0, 0, 0, time.UTC))
+	if _, err := svc.Init(false); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	if _, err := svc.WriteShippableSkills(false); err != nil {
+		t.Fatalf("first write: %v", err)
+	}
+
+	skill := filepath.Join(repo, ".claude", "skills", shippableSkills[0], "SKILL.md")
+	embedded, err := os.ReadFile(skill)
+	if err != nil {
+		t.Fatalf("read installed skill: %v", err)
+	}
+	const userMark = "USER EDIT — recover me"
+	if err := os.WriteFile(skill, []byte(userMark), 0o644); err != nil {
+		t.Fatalf("edit skill: %v", err)
+	}
+
+	res, err := svc.WriteShippableSkills(true)
+	if err != nil {
+		t.Fatalf("force write: %v", err)
+	}
+	if len(res.Overwritten) == 0 {
+		t.Fatal("force write reported nothing overwritten")
+	}
+	if len(res.BackedUp) == 0 {
+		t.Fatal("force write reported nothing backed up")
+	}
+
+	// Embedded content is restored over the user edit.
+	got, err := os.ReadFile(skill)
+	if err != nil {
+		t.Fatalf("read skill after force: %v", err)
+	}
+	if string(got) != string(embedded) {
+		t.Errorf("force did not restore embedded content; got %q", string(got))
+	}
+
+	// The user's edit is recoverable from exactly one timestamped backup.
+	backups := backupsFor(t, skill)
+	if len(backups) != 1 {
+		t.Fatalf("want 1 backup, got %d: %v", len(backups), backups)
+	}
+	bak, err := os.ReadFile(backups[0])
+	if err != nil {
+		t.Fatalf("read backup: %v", err)
+	}
+	if string(bak) != userMark {
+		t.Errorf("backup did not preserve user edit; got %q", string(bak))
+	}
+}
+
+// Two successive --force runs must each produce a distinct backup so the first is
+// never clobbered, even when the clock reports the same timestamp for both.
+func TestWriteShippableSkillsForceKeepsDistinctBackups(t *testing.T) {
+	t.Parallel()
+
+	repo := initGitRepo(t)
+	svc := newTestService(t, repo, time.Date(2026, 3, 31, 12, 0, 0, 0, time.UTC))
+	if _, err := svc.Init(false); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	if _, err := svc.WriteShippableSkills(false); err != nil {
+		t.Fatalf("first write: %v", err)
+	}
+
+	skill := filepath.Join(repo, ".claude", "skills", shippableSkills[0], "SKILL.md")
+
+	if err := os.WriteFile(skill, []byte("EDIT ONE"), 0o644); err != nil {
+		t.Fatalf("edit one: %v", err)
+	}
+	if _, err := svc.WriteShippableSkills(true); err != nil {
+		t.Fatalf("first force: %v", err)
+	}
+	if err := os.WriteFile(skill, []byte("EDIT TWO"), 0o644); err != nil {
+		t.Fatalf("edit two: %v", err)
+	}
+	if _, err := svc.WriteShippableSkills(true); err != nil {
+		t.Fatalf("second force: %v", err)
+	}
+
+	backups := backupsFor(t, skill)
+	if len(backups) != 2 {
+		t.Fatalf("want 2 distinct backups, got %d: %v", len(backups), backups)
+	}
+	contents := map[string]bool{}
+	for _, b := range backups {
+		data, err := os.ReadFile(b)
+		if err != nil {
+			t.Fatalf("read backup %s: %v", b, err)
+		}
+		contents[string(data)] = true
+	}
+	if !contents["EDIT ONE"] || !contents["EDIT TWO"] {
+		t.Errorf("backups lost an edit; contents = %v", contents)
+	}
+}
+
+// A --force run over an unmodified install is a no-op: content already matches the
+// embedded set, so nothing is overwritten and no backups accumulate.
+func TestWriteShippableSkillsForceSkipsIdentical(t *testing.T) {
+	t.Parallel()
+
+	repo := initGitRepo(t)
+	svc := newTestService(t, repo, time.Date(2026, 3, 31, 12, 0, 0, 0, time.UTC))
+	if _, err := svc.Init(false); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	if _, err := svc.WriteShippableSkills(false); err != nil {
+		t.Fatalf("first write: %v", err)
+	}
+
+	res, err := svc.WriteShippableSkills(true)
+	if err != nil {
+		t.Fatalf("force write: %v", err)
+	}
+	if len(res.Written) != 0 || len(res.Overwritten) != 0 || len(res.BackedUp) != 0 {
+		t.Errorf("force over identical install changed files: %+v", res)
 	}
 }

@@ -12,6 +12,7 @@ func newInitCmd() *cobra.Command {
 	var opt jsonOption
 	var apply bool
 	var withSkills bool
+	var forceSkills bool
 	cmd := &cobra.Command{
 		Use:   "init",
 		Short: "Initialize or upgrade Taskrail structure in the current repository",
@@ -34,14 +35,14 @@ func newInitCmd() *cobra.Command {
 			}
 			summary := initSummary(result)
 			if withSkills {
-				written, wErr := svc.WriteShippableSkills()
+				res, wErr := svc.WriteShippableSkills(forceSkills)
 				if wErr != nil {
 					// Report what was installed before the failure so the user
 					// knows the partial state, then propagate the error.
-					fmt.Fprintln(cmd.ErrOrStderr(), skillsSummary(written))
+					fmt.Fprintln(cmd.ErrOrStderr(), skillsSummary(res))
 					return wErr
 				}
-				summary += "\n" + skillsSummary(written)
+				summary += "\n" + skillsSummary(res)
 			}
 			return printResult(cmd, opt.json, result, summary)
 		},
@@ -49,16 +50,32 @@ func newInitCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&opt.json, "json", false, "print machine-readable output")
 	cmd.Flags().BoolVar(&apply, "apply", false, "apply a pending layout migration instead of a dry run")
 	cmd.Flags().BoolVar(&withSkills, "with-skills", false, "install the embedded repo-agnostic tracked-work skills (opt-in; installed paths are listed in text output only, not --json)")
+	cmd.Flags().BoolVar(&forceSkills, "force", false, "with --with-skills, reinstall embedded skills over existing copies, backing up locally-modified files first")
 	return cmd
 }
 
-// skillsSummary reports what --with-skills installed. A re-run is
-// non-destructive, so an empty list means every skill was already present.
-func skillsSummary(written []string) string {
-	if len(written) == 0 {
+// skillsSummary reports what --with-skills changed. Without --force a re-run is
+// non-destructive, so an empty result means every skill was already present; with
+// --force it also lists the files overwritten from the embedded set and the
+// timestamped backups written before each overwrite.
+func skillsSummary(res taskrail.SkillInstallResult) string {
+	if len(res.Written) == 0 && len(res.Overwritten) == 0 && len(res.BackedUp) == 0 {
 		return "skills: already installed (no files written)"
 	}
-	return fmt.Sprintf("skills: installed %d file(s)\n%s", len(written), changeLines(written))
+	var b strings.Builder
+	for _, g := range []struct {
+		verb  string
+		files []string
+	}{
+		{"installed", res.Written},
+		{"overwrote", res.Overwritten},
+		{"backed up", res.BackedUp},
+	} {
+		if len(g.files) > 0 {
+			fmt.Fprintf(&b, "skills: %s %d file(s)\n%s", g.verb, len(g.files), changeLines(g.files))
+		}
+	}
+	return strings.TrimRight(b.String(), "\n")
 }
 
 // initSummary renders the human-readable outcome, listing the diff and the

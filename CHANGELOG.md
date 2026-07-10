@@ -35,6 +35,11 @@ All notable user-visible changes to Taskrail will be documented in this file.
   binary); set `TASKRAIL=/path/to/taskrail` (or `go run ./cmd/taskrail`) to override.
 - `taskrail init --with-skills` now also installs the `autonomous-recovery` and
   `autonomous-manual-test` agent skills; still opt-in and non-destructive.
+- `taskrail init --with-skills --force` reinstalls the embedded skills over
+  existing copies for upgrades, backing up any locally-modified file to a
+  timestamped sibling first and reporting the overwritten and backed-up paths.
+  Without `--force`, behavior is unchanged (already-installed skills are left in
+  place).
 - `taskrail repair` also reconciles a `status_summary` that is stale against a
   single `in_progress` task (sets it to `in_progress`); still `STATE.md`-only,
   dry run by default, and never advances a status. The idle/blocked direction and

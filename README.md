@@ -108,7 +108,7 @@ Run `taskrail <command> --help` for full flag details.
 
 | Command | Purpose |
 | --- | --- |
-| `taskrail init` | Version-aware, non-destructive init/upgrade for empty, existing, or non-standard repos. `--with-skills` installs the agent skills; `--apply` writes migrations/retrofits; `--json`. |
+| `taskrail init` | Version-aware, non-destructive init/upgrade for empty, existing, or non-standard repos. `--with-skills` installs the agent skills (add `--force` to reinstall over existing copies, backing up local edits first); `--apply` writes migrations/retrofits; `--json`. |
 | `taskrail retrofit [notes]` | Guided bootstrap for a non-standard repo: detect layout, import notes into a reviewable draft, scaffold `specs/` + `planning/`. Dry run by default; `--apply`, `--emit-prompt`, `--json`. |
 | `taskrail validate` | Validate layout, task shape, dependency/spec references, and `STATE.md` consistency. Read-only. |
 | `taskrail repair` | Reconcile mechanical `STATE.md` drift (stale `current_task` pointer or task counts). Dry run by default; `--apply` rewrites `STATE.md` only; `--json`. |
