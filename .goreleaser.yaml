@@ -26,6 +26,7 @@ builds:
     goos:
       - linux
       - darwin
+      - windows
     goarch:
       - amd64
       - arm64
@@ -36,6 +37,13 @@ archives:
   - id: taskrail
     formats:
       - tar.gz
+    # WinGet requires a zip installer; GoReleaser only emits the winget manifest
+    # as zip+portable when the Windows archive is a zip, so override just that OS
+    # (unix stays tar.gz).
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
     name_template: >-
       {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
     files:
@@ -62,6 +70,43 @@ changelog:
 release:
   draft: false
   prerelease: auto
+
+# WinGet distribution IS automated here, via GoReleaser's built-in winget
+# publisher (open-source tier) -- not the standalone winget-releaser action.
+# GoReleaser packages the Windows zip as InstallerType: zip with
+# NestedInstallerType: portable (Taskrail is a single binary, so no MSI/NSIS
+# authoring is needed) and opens a PR from the Tessariq/winget-pkgs fork against
+# microsoft/winget-pkgs.
+#
+# The default GITHUB_TOKEN cannot open a cross-repository PR, so the release
+# workflow passes a classic PAT with `public_repo` scope as WINGET_TOKEN
+# (release.yml). The fork and that secret are provisioned at release time
+# (T-078); `goreleaser check` validates config syntax, not the fork's existence.
+# See docs/workflow/releasing.md for the moderation-review latency and the
+# first-submission bootstrap.
+winget:
+  - name: taskrail
+    publisher: Tessariq
+    package_identifier: Tessariq.Taskrail
+    license: Apache-2.0
+    homepage: https://github.com/tessariq/taskrail
+    short_description: Deterministic, file-based task and spec tracking CLI for coding agents.
+    publisher_url: https://github.com/tessariq
+    publisher_support_url: https://github.com/tessariq/taskrail/issues
+    # Push to the Tessariq/winget-pkgs fork and open a PR against the upstream
+    # microsoft/winget-pkgs registry; the fork slug is fixed by the
+    # Tessariq.Taskrail identifier (T-078 provisions the actual fork).
+    repository:
+      owner: Tessariq
+      name: winget-pkgs
+      branch: "taskrail-{{ .Version }}"
+      pull_request:
+        enabled: true
+        base:
+          owner: microsoft
+          name: winget-pkgs
+          branch: master
+      token: "{{ .Env.WINGET_TOKEN }}"
 
 # Homebrew distribution is NOT automated here. The formula lives in
 # tessariq/homebrew-tap and is maintained by hand per release (update the

@@ -6,6 +6,9 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ### Added
 
+- Windows install via WinGet: `winget install Tessariq.Taskrail` (amd64/arm64),
+  published from the tagged release. The GitHub Release also gains Windows `.zip`
+  assets. Availability follows a moderated PR to `microsoft/winget-pkgs`.
 - `taskrail unblock <task-id>` — return a blocked task to todo so it re-enters
   `next` selection and drop its `STATE.md` blocker entry (other blocked tasks keep
   theirs); optional `--reason` appends a note. Rejects a non-blocked task with no

@@ -51,6 +51,9 @@ jobs:
           args: release --clean --release-notes=${{ runner.temp }}/release-notes.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Cross-repo PR to microsoft/winget-pkgs; GITHUB_TOKEN cannot open it.
+          # Classic PAT with public_repo scope, provisioned at release time (T-078).
+          WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}
 
       # --- Manual dispatch: snapshot only, no GitHub Release ---
 
