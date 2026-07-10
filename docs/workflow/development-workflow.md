@@ -16,7 +16,7 @@ Contributor and coding-agent workflow for Taskrail tracked work.
 - Tests: `go test ./...`
 - Workflow validation: `go run ./cmd/taskrail validate`
 - CLI smoke: `go run ./cmd/taskrail --help`
-- Skill mirror check: `./scripts/check-skill-mirrors.sh`
+- Skill package parity: `task check:skills`
 
 ## TDD Default
 
@@ -93,4 +93,4 @@ Cleanup rules:
 - Non-trivial logic changes: `gofmt`, `go vet`, targeted tests, then `go test ./...`.
 - User-visible CLI or workflow changes: `gofmt`, `go vet`, `go test ./...`, then manual testing with persisted artifacts.
 - Planning or spec changes: `go run ./cmd/taskrail validate`.
-- Skill changes: `./scripts/check-skill-mirrors.sh`.
+- Skill changes: regenerate committed copies with `task skills:regen` (re-runs the parity check).

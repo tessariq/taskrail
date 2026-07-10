@@ -234,9 +234,13 @@ state nor `validate` depends on it surviving a Git round-trip.
 ├── mise.toml          # optional pinned developer toolchain (mise)
 ├── planning/          # authoritative tracked work and STATE.md
 ├── scripts/
-├── skills/            # workflow skills (dogfooded until the product replaces them)
 └── specs/             # versioned, normative product specs
 ```
+
+The packaged skill set lives in `internal/taskrail/skills/` (embedded; installed
+by `taskrail init --with-skills`). This repository adopts it: committed copies in
+`.agents/skills/` and `.claude/skills/` are kept byte-identical to the package by
+`task check:skills`.
 
 ## Development
 
@@ -270,7 +274,7 @@ go install github.com/evilmartians/lefthook@v1.13.6   # or: brew install lefthoo
 task hooks:install
 ```
 
-- `pre-commit`: `gofmt`, `go vet ./...`, `taskrail validate`, skill-mirror check.
+- `pre-commit`: `gofmt`, `go vet ./...`, `taskrail validate`, skill package-parity check.
 - `commit-msg`: Conventional Commit subject; rejects automated-attribution trailers.
 - `pre-push`: `go test ./...`.
 
@@ -288,7 +292,7 @@ Taskrail is an in-progress open-source project. The current release is `v0.2.0`.
 - `v0.2.0` makes adoption in existing repositories easy — guided `retrofit`, LLM-free `import` of rough notes into spec/task drafts, opt-in shippable agent skills, a version-aware non-destructive `init`, and conservative `STATE.md` repair — while keeping the core CLI provider- and tooling-independent.
 - Later work is tracked under [`specs/v0.3.0.md`](specs/v0.3.0.md).
 
-This repository also dogfoods the Taskrail workflow style — using `planning/`, `docs/workflow/`, and mirrored skills — until the product itself fully replaces that scaffolding.
+This repository also dogfoods the Taskrail workflow style — using `planning/`, `docs/workflow/`, and the packaged skill set it adopts like any adopter — until the product itself fully replaces that scaffolding.
 
 ## License
 

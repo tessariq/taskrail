@@ -21,7 +21,7 @@ pre-commit:
       run: task vet
     validate:
       run: task validate
-    skill-mirrors:
+    skill-parity:
       run: task check:skills
 
 commit-msg:

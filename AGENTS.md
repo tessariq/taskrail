@@ -9,7 +9,7 @@ Guidance for coding agents working in the Taskrail repository.
 - Product specs live under `./specs/`.
 - Planning and tracked work live under `./planning/`.
 - Keep changes small, explicit, and easy to inspect.
-- Until Taskrail is fully usable, this repository dogfoods an adapted workflow using `planning/`, `docs/workflow/`, and mirrored skills.
+- Until Taskrail is fully usable, this repository dogfoods an adapted workflow using `planning/`, `docs/workflow/`, and the packaged skill set it adopts like any adopter.
 
 ## Source-Of-Truth Files
 
@@ -22,8 +22,8 @@ Guidance for coding agents working in the Taskrail repository.
 - Build and convenience commands: `Taskfile.yml`
 - CI checks: `.github/workflows/ci.yml`
 - Local git hooks: `lefthook.yml` (opt-in pre-commit/commit-msg/pre-push; mirrors CI, but `.github/workflows/ci.yml` is authoritative)
-- Canonical skills: `skills/`
-- Mirrored runtime skills: `.agents/skills/` and `.claude/skills/`
+- Packaged skill source (single source of truth): `internal/taskrail/skills/` (embedded; installed by `taskrail init --with-skills`)
+- Committed skill copies (zero-setup clone): `.agents/skills/` and `.claude/skills/`, kept byte-identical to the package by a parity check (`task check:skills`)
 - Skills productization contract: `docs/workflow/skills-productization.md`
 
 ## Toolchain And Environment
@@ -42,6 +42,15 @@ Guidance for coding agents working in the Taskrail repository.
   the single source of toolchain versions locally and on CI. The pins are guarded
   by `internal/toolchain`: `go` matches `go.mod`, `lefthook` matches the
   `task hooks:install` guidance, and CI is asserted to provision via mise-action.
+- The committed skills resolve the binary via `${TASKRAIL:-taskrail}` (T-051), and
+  this repository makes that bare fallback correct by building the working-tree
+  binary onto the mise PATH — run `mise run setup` so `taskrail` on PATH is the
+  working-tree build (T-074); no `TASKRAIL` env override is required. The trap this
+  prevents: without the mise-built binary, `${TASKRAIL:-taskrail}` falls back to the
+  *installed* `taskrail`, which is the shipped v0.2.0 binary and lacks the new
+  v0.3.0 commands (`status`, `stats`, `coverage`, `spec ...`). The T-074 freshness
+  guard (`task taskrail:check`) turns that staleness into a loud failure rather than
+  a silent one.
 - Prefer repository-local, inspectable file operations over hidden automation.
 
 ## Build, Format, And Test Commands
@@ -73,12 +82,12 @@ Guidance for coding agents working in the Taskrail repository.
 
 - Validate Taskrail structure: `go run ./cmd/taskrail validate`
 - Select next task: `go run ./cmd/taskrail next --json`
-- Check skill mirrors: `./scripts/check-skill-mirrors.sh`
+- Check skill package parity: `task check:skills` (asserts committed `.agents/`/`.claude/` skills equal the embedded `--with-skills` package)
 
 ### Git Hooks (Optional)
 
 - Install once: `task hooks:install` (runs `lefthook install`).
-- `lefthook.yml` wires local hooks that mirror CI: `pre-commit` runs `gofmt`, `go vet ./...`, `taskrail validate`, and the skill-mirror check; `commit-msg` enforces Conventional Commits and rejects agent-attribution trailers; `pre-push` runs `go test ./...`.
+- `lefthook.yml` wires local hooks that mirror CI: `pre-commit` runs `gofmt`, `go vet ./...`, `taskrail validate`, and the skill package-parity check; `commit-msg` enforces Conventional Commits and rejects agent-attribution trailers; `pre-push` runs `go test ./...`.
 - Hooks are an opt-in convenience. CI remains the authoritative gate. Do not bypass with `--no-verify`.
 
 ## Repository Workflow Rules
@@ -137,7 +146,7 @@ Guidance for coding agents working in the Taskrail repository.
 - Run `go test ./...` before handing off substantial changes.
 - Run manual testing and persist `plan.md` and `report.md` artifacts for changes that alter Taskrail's visible workflow behavior.
 - Run `go run ./cmd/taskrail validate` when changing planning files, task schema, state schema, or spec references.
-- Run `./scripts/check-skill-mirrors.sh` when changing canonical skills or mirrored skill directories.
+- When changing the packaged skills under `internal/taskrail/skills/`, run `task skills:regen` to regenerate the committed `.agents/`/`.claude/` copies from the package (it re-runs the parity check) so they stay byte-identical.
 - After any `taskrail start`/`next`/`verify`/`complete`/`block`/`spec activate`, run `git status` and stage the regenerated `planning/STATE.md` and rewritten task files with the related change; never leave committed `STATE.md` out of sync with task/spec state.
 - Update `README.md` when CLI commands or workflow expectations change.
 - Update `CHANGELOG.md` for user-visible behavior changes under an Unreleased
@@ -185,7 +194,7 @@ Intentional, non-obvious decisions — do not "fix" these:
 
 **Ask first:**
 
-- Changing the task or state schema, spec contracts, CI checks, or the skill-mirror structure.
+- Changing the task or state schema, spec contracts, CI checks, or the skill package-parity structure.
 - Adding a runtime dependency (prefer the standard library).
 - Broad refactors beyond the task's scope.
 

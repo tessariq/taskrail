@@ -16,9 +16,10 @@ Rationale: adopting repositories have no Go module for Taskrail and no
 `./cmd/taskrail` package. A skill that shells out to `go run` cannot run in any
 repository other than this one.
 
-This repository's own dogfooding skills under `skills/` may keep `go run` until
-the installed binary becomes the dogfooding entry point. Dogfooding portability
-and shipped portability are separated deliberately.
+Since T-055 this is the only rule: the bespoke `skills/` source was retired and
+this repository adopts the packaged set like any adopter, invoking the binary via
+the configurable entry point `${TASKRAIL:-taskrail}` (T-051). The dogfooding-vs-
+shipped portability split no longer exists.
 
 ## Decision 2: Distribution Mechanism
 
@@ -70,11 +71,13 @@ Running a skill remains the agent's responsibility, consistent with the LLM and
 runtime exclusions in the spec. There is no skill-execution, skill-scheduling,
 or skill-orchestration runtime in Taskrail.
 
-## Shippable Versus Dogfooding-Only Skills
+## The Packaged Skill Set
 
-Input list for T-029, which owns the final selection and the portability
-rewrite. Current canonical skills (`skills/`, mirrored to `.agents/skills/` and
-`.claude/skills/`):
+Input list for T-029, which owned the final selection and the portability
+rewrite. Historically this table split canonical dogfooding skills (`skills/`)
+from the shipped set; T-055 retired that split, so every row below is simply part
+of the one packaged set under `internal/taskrail/skills/`, materialized to the
+committed `.agents/skills/` and `.claude/skills/` copies:
 
 | Skill | Disposition | Reason |
 |-------|-------------|--------|
@@ -87,12 +90,12 @@ rewrite. Current canonical skills (`skills/`, mirrored to `.agents/skills/` and
 T-029 may revise this list, but must justify any change against the three
 decisions above.
 
-## Product-Only Onboarding Skills
+## Onboarding Skills
 
-Some shippable skills have no dogfooding counterpart under `skills/`: they onboard
-a repository that is not yet Taskrail-managed, which Taskrail's own already-managed
-repository never needs. They live only in the shippable set
-(`internal/taskrail/skills/`) and honor the same three decisions — repo-agnostic,
+The onboarding skills target a repository that is not yet Taskrail-managed, which
+Taskrail's own already-managed repository never exercises. They live in the same
+packaged set (`internal/taskrail/skills/`) as the tracked-work skills and honor the
+same three decisions — repo-agnostic,
 installed-via-`--with-skills`, and task-creation through a real command rather
 than hand-authored markdown.
 

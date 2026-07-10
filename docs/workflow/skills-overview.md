@@ -2,51 +2,51 @@
 
 Skill catalog for deterministic tracked-work execution in Taskrail.
 
-## Canonical Skills
+## One Packaged Set
+
+Taskrail ships a single, repo-agnostic skill set. There is no dogfooding-vs-shipped
+split: this repository adopts the packaged skills like any adopter (T-055).
+
+- **Source of truth:** `internal/taskrail/skills/`, embedded in the binary and
+  installed by `taskrail init --with-skills` (T-030).
+- **Committed copies (zero-setup clone):** `.agents/skills/` and `.claude/skills/`
+  are kept in the tree so cloning this repo needs no install step.
+- **Parity check:** `task check:skills` (Go test `TestCommittedSkillsMatchPackage`)
+  asserts the committed copies are byte-identical to the embedded `--with-skills`
+  output. It replaces the retired three-way `check-skill-mirrors.sh` diff and runs
+  in CI and lefthook. Regenerate committed copies with `task skills:regen` after
+  editing the package.
+- Productization decisions live in `docs/workflow/skills-productization.md`.
+
+## Packaged Skills
+
+Tracked-work skills (create tasks with `${TASKRAIL:-taskrail} task new`):
 
 - `autonomous-backlog`
-- `autonomous-manual-test`
 - `autonomous-task`
-- `autonomous-recovery`
 - `autonomous-verify`
+- `autonomous-recovery` — routes every correction through `taskrail repair`, never
+  hand-editing authoritative state (shipped in T-054).
+- `autonomous-manual-test` — its `planning/artifacts/manual-test/` artifacts stay
+  ephemeral and gitignored, not a product invariant (shipped in T-081).
+- `taskrail-repair`
 
-## Packaging
+Onboarding skills (create tasks with `${TASKRAIL:-taskrail} import --apply`):
 
-- Canonical dogfooding skill guidance lives in `skills/`.
-- Mirrored runtime copies live in `.agents/skills/` and `.claude/skills/`.
-- Productization decisions live in `docs/workflow/skills-productization.md`.
-- `./scripts/check-skill-mirrors.sh` verifies the mirrored copies stay in sync.
+- `taskrail-import` — notes/draft -> spec/task import.
+- `taskrail-retrofit` — guided retrofit of an existing repository into a Taskrail
+  layout.
 
-## Shippable Skill Set
+## Configurable Entry Point
 
-The repo-agnostic set installed by `taskrail init --with-skills` (T-030) lives
-separately under `internal/taskrail/skills/`. It invokes the installed
-`taskrail` binary (never `go run`) and creates tasks with `taskrail task new`
-(the tracked-work skills) or `taskrail import --apply` (the onboarding skills).
-
-Per `docs/workflow/skills-productization.md`, the split is:
-
-- Shippable: `autonomous-backlog`, `autonomous-task`, `autonomous-verify`,
-  `autonomous-recovery` (routes every correction through `taskrail repair`, never
-  hand-editing state), `autonomous-manual-test` (its
-  `planning/artifacts/manual-test/` artifacts stay ephemeral and gitignored, not a
-  product invariant), and `taskrail-repair`, plus the product-only onboarding
-  skills `taskrail-import` (notes/draft -> spec/task import) and
-  `taskrail-retrofit` (guided retrofit of an existing repository into a Taskrail
-  layout). The onboarding skills have no dogfooding counterpart under `skills/`;
-  they exist only in the shippable set because Taskrail's own repository is
-  already managed.
-- Dogfooding-only: none. `autonomous-recovery` graduated in T-054 and
-  `autonomous-manual-test` in T-081.
-
-The dogfooding skills under `skills/` may keep `go run ./cmd/taskrail ...` until
-the installed binary becomes the dogfooding entry point.
+Skills invoke the binary through `${TASKRAIL:-taskrail}` (T-051), never
+`go run ./cmd/taskrail`. In this repository the bare `taskrail` fallback is made
+correct by building the working-tree binary onto the mise PATH — run
+`mise run setup` (T-074). See `AGENTS.md` for the staleness trap this avoids.
 
 ## Required Behavior
 
-- current canonical (dogfooding) skills must route state transitions through
-  `go run ./cmd/taskrail ...`; shipped skills must instead invoke the installed
-  `taskrail` binary per `docs/workflow/skills-productization.md` Decision 1
+- all skills invoke the binary via `${TASKRAIL:-taskrail}` and never `go run`
 - implementation skills must keep changes scoped to one selected task
 - verification skills must point to concrete artifact paths
-- all skills must preserve the same required flow and safety policy across mirrors
+- committed copies must stay byte-identical to the embedded package (parity check)

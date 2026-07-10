@@ -102,9 +102,22 @@ tasks:
       - go run ./cmd/taskrail next --json
 
   check:skills:
-    desc: Verify mirrored skills are in sync
+    desc: Verify committed .agents/.claude skills match the embedded package (parity)
     cmds:
-      - ./scripts/check-skill-mirrors.sh
+      - go test ./internal/taskrail -run '^TestCommittedSkillsMatchPackage$'
+
+  skills:regen:
+    desc: Regenerate committed .agents/.claude skill copies from the embedded package, then verify parity
+    # Copies straight from the embedded source (internal/taskrail/skills) rather
+    # than `init --with-skills`, so it needs no built binary and never writes the
+    # `.taskrail/` layout marker. Run after editing a packaged skill; the trailing
+    # check:skills fails loud if the copies still diverge.
+    cmds:
+      - rm -rf .agents/skills .claude/skills
+      - mkdir -p .agents/skills .claude/skills
+      - cp -R internal/taskrail/skills/. .agents/skills/
+      - cp -R internal/taskrail/skills/. .claude/skills/
+      - task check:skills
 
   hooks:install:
     desc: Install opt-in git hooks via lefthook (pre-commit, commit-msg, pre-push)

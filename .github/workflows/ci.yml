@@ -26,7 +26,7 @@ jobs:
       - name: Verify formatting
         run: task fmt:check
 
-      - name: Verify mirrored workflow skills
+      - name: Verify committed skills match the package
         run: task check:skills
 
       - name: Build taskrail onto the mise PATH

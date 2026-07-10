@@ -9,8 +9,9 @@ import (
 )
 
 // shippableSkillsDir holds the repo-agnostic skill set embedded and installed by
-// `taskrail init --with-skills` (T-030). It is deliberately separate from the
-// dogfooding skills under the repo-root skills/ tree, which may keep `go run`.
+// `taskrail init --with-skills` (T-030), resolved relative to this package. Since
+// T-055 it is the single skill source: the bespoke repo-root skills/ tree was
+// retired and this repository adopts the packaged set like any adopter.
 const shippableSkillsDir = "skills"
 
 // shippableSkills is the exact set promoted to the product surface, per the
@@ -158,15 +159,20 @@ func TestRepairSkillDrivesConservativeLoop(t *testing.T) {
 // The retargeted recovery skill must route through repair and must no longer
 // permit hand-editing authoritative state (its old bootstrap-edit fallback).
 func TestRecoverySkillRoutesThroughRepair(t *testing.T) {
-	for _, dir := range []string{"../../skills", "../../.agents/skills", "../../.claude/skills"} {
+	// Recovery now lives only in the embedded package and its committed
+	// .agents/.claude copies; the retired repo-root skills/ tree is gone (T-055).
+	for _, dir := range committedSkillTargets {
 		path := filepath.Join(dir, "autonomous-recovery", "SKILL.md")
 		data, err := os.ReadFile(path)
 		if err != nil {
 			t.Fatalf("read %s: %v", path, err)
 		}
 		body := string(data)
-		if !strings.Contains(body, "taskrail repair") {
-			t.Errorf("%s must route recovery through 'taskrail repair'", path)
+		// Matches the resolved subcommand tail of the configurable entry point
+		// (`${TASKRAIL:-taskrail} repair`, T-051/T-055), not a bare `taskrail`
+		// prefix, consistent with the other packaged-skill assertions above.
+		if !strings.Contains(body, "} repair") {
+			t.Errorf("%s must route recovery through the repair command", path)
 		}
 		if strings.Contains(body, "bootstrap-era manual edits") {
 			t.Errorf("%s must drop the bootstrap-era manual-edit fallback", path)
@@ -179,6 +185,33 @@ func TestDogfoodingOnlySkillsAreNotShipped(t *testing.T) {
 	for _, name := range dogfoodingOnlySkills {
 		if _, err := os.Stat(shippableSkillPath(name)); err == nil {
 			t.Errorf("dogfooding-only skill %s must not appear in the shippable set", name)
+		}
+	}
+}
+
+// TestEmbeddedPackageMatchesDeclaredShippableSet asserts the embedded package
+// ships exactly the declared skills — no more, no less. Unlike the dogfooding-only
+// guard above (vacuous while that list is empty), this catches the concrete risk:
+// a skill directory added to internal/taskrail/skills/ but never declared in
+// shippableSkills would silently ship undocumented and unasserted. It also fails
+// if a declared skill's directory disappears from the package.
+func TestEmbeddedPackageMatchesDeclaredShippableSet(t *testing.T) {
+	declared := map[string]bool{}
+	for _, name := range shippableSkills {
+		declared[name] = true
+	}
+	packaged := map[string]bool{}
+	for rel := range embeddedSkillFiles(t) {
+		packaged[strings.SplitN(rel, "/", 2)[0]] = true
+	}
+	for name := range packaged {
+		if !declared[name] {
+			t.Errorf("embedded package ships %q, which is not declared in shippableSkills", name)
+		}
+	}
+	for name := range declared {
+		if !packaged[name] {
+			t.Errorf("declared shippable skill %q has no directory in the embedded package", name)
 		}
 	}
 }
