@@ -228,6 +228,17 @@ func TestRepairFixesStaleTitleOnly(t *testing.T) {
 	svc, _ := repairService(t, "T-002", "Old Title", func(repo string) {
 		writeTask(t, repo, "T-002", "Task Two", "in_progress", "high", "specs/v0.1.0.md#summary", nil)
 	})
+	// Make status_summary already consistent so only the title drifts; QC-1
+	// (status_summary reconciliation) is exercised separately.
+	state, tasks, err := svc.loadStateAndTasks()
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	state.Frontmatter.StatusSummary = "in_progress"
+	state.Body = renderStateBody(state.Frontmatter, tasks)
+	if err := svc.saveState(state); err != nil {
+		t.Fatalf("save: %v", err)
+	}
 
 	result, err := svc.Repair(RepairInput{Apply: true})
 	if err != nil {
@@ -237,7 +248,7 @@ func TestRepairFixesStaleTitleOnly(t *testing.T) {
 		t.Fatalf("expected a single current_task_title correction to Task Two, got %+v", result.Changes)
 	}
 
-	state, _, err := svc.loadStateAndTasks()
+	state, _, err = svc.loadStateAndTasks()
 	if err != nil {
 		t.Fatalf("reload: %v", err)
 	}
@@ -309,6 +320,114 @@ func TestRepairLeavesMultipleInProgressToValidation(t *testing.T) {
 	}
 	if !found {
 		t.Errorf("expected validation to still flag multiple in_progress, got %v", result.Validation.Violations)
+	}
+}
+
+// QC-1: exactly one in_progress task with a stale status_summary is a mechanical
+// drift repair heals in the single deterministic direction — set it to
+// "in_progress" — touching only STATE.md frontmatter, never the task file.
+func TestRepairFixesStaleStatusSummaryInProgress(t *testing.T) {
+	repo := seedFixtureRepo(t)
+	writeTask(t, repo, "T-002", "Task Two", "in_progress", "high", "specs/v0.1.0.md#summary", nil)
+	svc := newTestService(t, repo, time.Date(2026, 4, 1, 12, 0, 0, 0, time.UTC))
+
+	state, tasks, err := svc.loadStateAndTasks()
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	// Pointer correct so only status_summary is stale, isolating the QC-1 case.
+	state.Frontmatter.CurrentTask = "T-002"
+	state.Frontmatter.CurrentTaskTitle = "Task Two"
+	state.Frontmatter.StatusSummary = "idle"
+	state.Body = renderStateBody(state.Frontmatter, tasks)
+	if err := svc.saveState(state); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	before := snapshotTasksDir(t, repo)
+
+	result, err := svc.Repair(RepairInput{Apply: true})
+	if err != nil {
+		t.Fatalf("repair: %v", err)
+	}
+	if len(result.Changes) != 1 || result.Changes[0].Field != "status_summary" ||
+		result.Changes[0].From != "idle" || result.Changes[0].To != "in_progress" {
+		t.Fatalf("expected a single status_summary idle->in_progress correction, got %+v", result.Changes)
+	}
+	if result.Validation == nil || !result.Validation.Valid {
+		t.Fatalf("expected valid state after repair, got %+v", result.Validation)
+	}
+
+	reloaded, err := svc.loadState()
+	if err != nil {
+		t.Fatalf("reload: %v", err)
+	}
+	if reloaded.Frontmatter.StatusSummary != "in_progress" {
+		t.Errorf("status_summary = %q, want in_progress", reloaded.Frontmatter.StatusSummary)
+	}
+	if !strings.Contains(reloaded.Body, "- in_progress") {
+		t.Error("body Status line did not track the corrected status_summary")
+	}
+	for name, content := range before {
+		if snapshotTasksDir(t, repo)[name] != content {
+			t.Errorf("task file %s changed; repair must never touch task files", name)
+		}
+	}
+}
+
+// Excluded direction (audit case D): with no task in_progress, status_summary's
+// correct value (idle vs blocked) reflects the last transition, not task state.
+// Two safe values exist, so repair must leave a stale "in_progress" alone.
+func TestRepairLeavesStatusSummaryWhenNoInProgress(t *testing.T) {
+	repo := seedFixtureRepo(t)
+	writeTask(t, repo, "T-001", "Task One", "todo", "high", "specs/v0.1.0.md#summary", nil)
+	svc := newTestService(t, repo, time.Date(2026, 4, 1, 12, 0, 0, 0, time.UTC))
+
+	state, tasks, err := svc.loadStateAndTasks()
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	state.Frontmatter.CurrentTask = ""
+	state.Frontmatter.CurrentTaskTitle = ""
+	state.Frontmatter.StatusSummary = "in_progress" // stale, but idle/blocked is ambiguous
+	state.Body = renderStateBody(state.Frontmatter, tasks)
+	if err := svc.saveState(state); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+
+	result, err := svc.Repair(RepairInput{Apply: true})
+	if err != nil {
+		t.Fatalf("repair: %v", err)
+	}
+	for _, ch := range result.Changes {
+		if ch.Field == "status_summary" {
+			t.Errorf("repair touched status_summary in the excluded idle/blocked direction: %+v", ch)
+		}
+	}
+	reloaded, err := svc.loadState()
+	if err != nil {
+		t.Fatalf("reload: %v", err)
+	}
+	if reloaded.Frontmatter.StatusSummary != "in_progress" {
+		t.Errorf("status_summary = %q, want left as authored (in_progress)", reloaded.Frontmatter.StatusSummary)
+	}
+}
+
+// Boundary: more than one in_progress task is unresolvable, so QC-1 refuses to
+// touch status_summary just as it refuses to touch the current_task pointer.
+func TestRepairLeavesStatusSummaryUnderMultipleInProgress(t *testing.T) {
+	svc, _ := repairService(t, "T-001", "Task One", func(repo string) {
+		writeTask(t, repo, "T-001", "Task One", "in_progress", "high", "specs/v0.1.0.md#summary", nil)
+		writeTask(t, repo, "T-002", "Task Two", "in_progress", "high", "specs/v0.1.0.md#summary", nil)
+	})
+
+	result, err := svc.Repair(RepairInput{Apply: true})
+	if err != nil {
+		t.Fatalf("repair: %v", err)
+	}
+	for _, ch := range result.Changes {
+		if ch.Field == "status_summary" {
+			t.Errorf("repair changed status_summary under multiple in_progress: %+v", ch)
+		}
 	}
 }
 

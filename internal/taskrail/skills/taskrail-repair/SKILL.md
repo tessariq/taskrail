@@ -6,8 +6,9 @@ description: Conservatively repair mechanical Taskrail STATE.md drift through ta
 # taskrail-repair
 
 Reconcile `planning/STATE.md` with the task files when they have drifted
-mechanically — a `current_task` pointer that disagrees with the in_progress task,
-or stale rendered task counts — without ever hand-editing authoritative state. The
+mechanically — a `current_task` pointer that disagrees with the in_progress task, a
+`status_summary` stale against a single in_progress task, or stale rendered task
+counts — without ever hand-editing authoritative state. The
 `taskrail` binary proposes and applies only conservative, mechanical corrections;
 it never advances a task status or invents work.
 

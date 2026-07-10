@@ -31,6 +31,10 @@ All notable user-visible changes to Taskrail will be documented in this file.
 - Shipped agent skills now invoke the CLI through `${TASKRAIL:-taskrail}` instead
   of a hardcoded `taskrail`. Adopters need nothing (it resolves to the installed
   binary); set `TASKRAIL=/path/to/taskrail` (or `go run ./cmd/taskrail`) to override.
+- `taskrail repair` also reconciles a `status_summary` that is stale against a
+  single `in_progress` task (sets it to `in_progress`); still `STATE.md`-only,
+  dry run by default, and never advances a status. The idle/blocked direction and
+  multiple `in_progress` tasks stay human-resolved.
 
 ### Fixed
 

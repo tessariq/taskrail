@@ -16,7 +16,8 @@ func newRepairCmd() *cobra.Command {
 		Short: "Conservatively repair mechanical STATE.md inconsistencies (dry run by default)",
 		Long: "Reconcile STATE.md with the task files when they have drifted " +
 			"mechanically: a current_task pointer that disagrees with the in_progress " +
-			"task, or stale rendered task counts. It defaults to a dry run that prints " +
+			"task, a status_summary stale against a single in_progress task, or stale " +
+			"rendered task counts. It defaults to a dry run that prints " +
 			"the proposed corrections and body diff; pass --apply to write STATE.md and " +
 			"re-run validation.\n\n" +
 			"Repair only ever rewrites STATE.md — never a task file — so it cannot " +

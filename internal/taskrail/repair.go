@@ -33,8 +33,9 @@ type RepairResult struct {
 }
 
 // Repair conservatively heals mechanical STATE.md inconsistencies: a current_task
-// pointer disagreeing with the task files, and a stale rendered body (task counts
-// / focus). It only ever rewrites STATE.md — never a task file — so it structurally
+// pointer disagreeing with the task files, a status_summary stale against a single
+// in_progress task (QC-1), and a stale rendered body (task counts / focus). It only
+// ever rewrites STATE.md — never a task file — so it structurally
 // cannot advance a status or fabricate work (the Explicitly-Excluded guard). Any
 // violation it cannot mechanically resolve (missing spec_ref, dependency cycles,
 // multiple in_progress tasks) is left for the reviewer and surfaced through
@@ -47,6 +48,7 @@ func (s *Service) Repair(input RepairInput) (RepairResult, error) {
 
 	corrected := state.Frontmatter
 	changes := repairCurrentTask(&corrected, tasks)
+	changes = append(changes, repairStatusSummary(&corrected, tasks)...)
 	newBody := renderStateBody(corrected, tasks)
 	bodyDiff := lineDiff(state.Body, newBody)
 
@@ -101,6 +103,28 @@ func repairCurrentTask(fm *StateFrontmatter, tasks []*Task) []RepairChange {
 		fm.CurrentTaskTitle = wantTitle
 	}
 	return changes
+}
+
+// repairStatusSummary reconciles status_summary with the task files in the one
+// direction the T-052 audit proved deterministic (QC-1): exactly one in_progress
+// task forces the value to "in_progress", the only value Start can set while a
+// task is in_progress. The idle/blocked direction (no in_progress task) is left
+// alone — its correct value reflects the last transition, not current task state,
+// so two safe values exist and repair must not guess. Like repairCurrentTask it
+// refuses when more than one task is in_progress, and mutates only STATE.md
+// frontmatter, so no status advances and no work is fabricated.
+func repairStatusSummary(fm *StateFrontmatter, tasks []*Task) []RepairChange {
+	if len(inProgressTasks(tasks)) != 1 || fm.StatusSummary == "in_progress" {
+		return nil
+	}
+	change := RepairChange{
+		Field:  "status_summary",
+		From:   fm.StatusSummary,
+		To:     "in_progress",
+		Reason: "match the single in_progress task file",
+	}
+	fm.StatusSummary = "in_progress"
+	return []RepairChange{change}
 }
 
 // lineDiff returns a compact, human-readable set of line changes between two
