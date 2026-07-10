@@ -329,7 +329,11 @@ func (s *Service) CreateTask(input CreateTaskInput) (CreateTaskResult, error) {
 			Dependencies: deps,
 			UpdatedAt:    now,
 		},
-		Body:     body,
+		Body: body,
+		// Scaffolds stay bare `T-NNN.md` (id == filename stem): this repo dogfoods
+		// bare ids, and validate enforces `filename == id + ".md"`. nextTaskID keys
+		// on the numeric prefix, so the id never collides even in a slug-suffixed
+		// repo; adopting a slug convention is a separate spec follow-up (T-085).
 		Filename: filepath.Join(s.paths.TasksDir, nextID+".md"),
 	}
 

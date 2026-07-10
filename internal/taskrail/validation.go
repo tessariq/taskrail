@@ -256,6 +256,11 @@ func cycleSignature(cycle []string) string {
 func (s *Service) validateTasks(state *State, tasks []*Task) []string {
 	violations := make([]string, 0)
 	seen := make(map[string]struct{}, len(tasks))
+	// seenPrefix maps a numeric prefix to the first id that claimed it, so two
+	// distinct ids sharing a `^T-(\d+)` prefix (e.g. T-001 and
+	// T-001-milestone-v0.1.0) are reported as a collision even though exact-string
+	// dedup treats them as different tasks.
+	seenPrefix := make(map[int]string, len(tasks))
 	// canonical drops duplicate-id files (each id's first occurrence wins), so the
 	// current_task/in_progress reconciliation below counts a duplicated id once,
 	// matching the shared inProgressTasks contract repair also relies on.
@@ -267,6 +272,14 @@ func (s *Service) validateTasks(state *State, tasks []*Task) []string {
 		}
 		seen[task.Frontmatter.ID] = struct{}{}
 		canonical = append(canonical, task)
+
+		if prefix, ok := taskNumericPrefix(task.Frontmatter.ID); ok {
+			if firstID, collides := seenPrefix[prefix]; collides {
+				violations = append(violations, fmt.Sprintf("tasks %s and %s share numeric id prefix T-%03d", firstID, task.Frontmatter.ID, prefix))
+			} else {
+				seenPrefix[prefix] = task.Frontmatter.ID
+			}
+		}
 
 		if task.Frontmatter.ID == "" {
 			violations = append(violations, fmt.Sprintf("task file %s missing id", relPath(s.paths.RepoRoot, task.Filename)))

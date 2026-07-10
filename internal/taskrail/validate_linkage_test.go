@@ -275,3 +275,33 @@ updated_at: "2026-03-31T00:00:00Z"
 		t.Fatalf("duplicate id must not be counted as multiple in_progress, got %v", res.Violations)
 	}
 }
+
+// Two task files whose ids share the same numeric prefix (T-001 and
+// T-001-milestone-v0.1.0) are a collision even though their full id strings
+// differ: dependency references and renumbering treat the numeric prefix as the
+// task's identity, so validate must reject the pair.
+func TestValidateDetectsNumericPrefixCollision(t *testing.T) {
+	t.Parallel()
+	repo := seedFixtureRepo(t)
+	writeTask(t, repo, "T-001", "One", "todo", "medium", "specs/v0.1.0.md#summary", nil)
+	writeFile(t, filepath.Join(repo, "planning", "tasks", "T-001-milestone-v0.1.0.md"), `---
+id: T-001-milestone-v0.1.0
+title: Milestone
+status: todo
+priority: medium
+spec_ref: specs/v0.1.0.md#summary
+dependencies: []
+updated_at: "2026-03-31T00:00:00Z"
+---
+
+# T-001-milestone-v0.1.0 Milestone
+`)
+
+	res := validateRepo(t, repo)
+	if res.Valid {
+		t.Fatal("expected invalid repo for numeric-prefix collision")
+	}
+	if !hasViolation(res.Violations, "share numeric id prefix") {
+		t.Fatalf("expected numeric-prefix collision violation, got %v", res.Violations)
+	}
+}

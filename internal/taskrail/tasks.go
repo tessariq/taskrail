@@ -2,10 +2,33 @@ package taskrail
 
 import (
 	"fmt"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
 )
+
+// numericPrefixPattern extracts a task id's numeric identity. Ids may be bare
+// (`T-085`) or slug-suffixed (`T-076-ingestion-commands`); the `T-<number>`
+// prefix — not the full string — is what id allocation and collision detection
+// key on, matching how dependencies and renumbering treat task identity. The
+// digits must end at the id or a `-` slug boundary, so a malformed id like
+// `T-1abc` is not mistaken for prefix `1`.
+var numericPrefixPattern = regexp.MustCompile(`^T-(\d+)(?:-.*)?$`)
+
+// taskNumericPrefix returns the numeric prefix of a task id and whether the id
+// has one.
+func taskNumericPrefix(id string) (int, bool) {
+	m := numericPrefixPattern.FindStringSubmatch(id)
+	if m == nil {
+		return 0, false
+	}
+	num, err := strconv.Atoi(m[1])
+	if err != nil {
+		return 0, false
+	}
+	return num, true
+}
 
 func taskByID(tasks []*Task, id string) (*Task, bool) {
 	for _, task := range tasks {
@@ -73,11 +96,7 @@ func appendTaskNote(task *Task, line string) {
 func nextTaskID(tasks []*Task) string {
 	max := 0
 	for _, task := range tasks {
-		if !strings.HasPrefix(task.Frontmatter.ID, "T-") {
-			continue
-		}
-		num, err := strconv.Atoi(strings.TrimPrefix(task.Frontmatter.ID, "T-"))
-		if err == nil && num > max {
+		if num, ok := taskNumericPrefix(task.Frontmatter.ID); ok && num > max {
 			max = num
 		}
 	}
