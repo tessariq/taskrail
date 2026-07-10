@@ -8,6 +8,22 @@ tasks:
     cmds:
       - go build ./cmd/taskrail
 
+  build:cross:
+    desc: Cross-compile ./cmd/taskrail for non-native release targets (compile smoke; publishes nothing)
+    # Pure GOOS/GOARCH compile check for the platforms Taskrail ships to or intends
+    # to run on; -o /dev/null keeps it a smoke (no artifact). windows/arm64 is the
+    # optional T-058 release target, compile-checked so it cannot break silently
+    # between tags. Guarded by TestTaskfileCrossTargetCoversRequiredPlatforms.
+    env:
+      CGO_ENABLED: "0"
+    cmds:
+      - |
+        set -e
+        for target in windows/amd64 windows/arm64 darwin/amd64 darwin/arm64 linux/arm64; do
+          echo "cross-compiling $target"
+          GOOS="${target%/*}" GOARCH="${target#*/}" go build -o /dev/null ./cmd/taskrail
+        done
+
   release:
     desc: Build taskrail CLI with an injected release version (VERSION=v0.1.0 task release)
     vars:
