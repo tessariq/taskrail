@@ -62,5 +62,6 @@ func newTaskNewCmd() *cobra.Command {
 	cmd.Flags().StringVar(&followUp, "follow-up", "", "parent task id: inherit its spec_ref and depend on it")
 	cmd.Flags().BoolVar(&opt.json, "json", false, "print machine-readable output")
 	_ = cmd.MarkFlagRequired("title")
+	_ = cmd.RegisterFlagCompletionFunc("spec-ref", completeSpecRef)
 	return cmd
 }

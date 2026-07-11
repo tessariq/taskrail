@@ -129,6 +129,24 @@ Run `taskrail <command> --help` for full flag details.
 | `taskrail import <source>` | Build spec/task drafts from a markdown source without an LLM. `--to tasks\|spec\|planning`, `--emit-prompt`, `--apply <draft.json>`, `--json`. |
 | `taskrail version` | Print the CLI version (also `--version`). |
 
+### Shell completion
+
+Taskrail ships shell completion via Cobra. Load it for your shell (or add the
+line to your shell profile):
+
+```sh
+source <(taskrail completion bash)   # bash
+taskrail completion zsh > "${fpath[1]}/_taskrail"   # zsh
+taskrail completion fish | source   # fish
+```
+
+Run `taskrail completion --help` for per-shell install steps. Completion is
+read-only: it never writes `STATE.md` or task files. Beyond every command and
+flag, it completes spec versions for `spec show`/`spec activate` and real
+`<path>#<anchor>` values for `task new --spec-ref` (the anchors it offers are
+exactly the ones `validate` accepts, so a completed reference authors a task that
+passes `validate`).
+
 ## Quickstart
 
 Initialize Taskrail inside an existing repository, then confirm it is sane:

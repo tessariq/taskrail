@@ -23,7 +23,9 @@ All notable user-visible changes to Taskrail will be documented in this file.
   `--anchors` its `spec_ref` heading anchors exactly as `validate` accepts them.
   `spec add <version>` scaffolds `specs/<version>.md` with the standard section
   skeleton and adds it to the `specs/README.md` reading order without activating
-  it. `list` and `show` are read-only. Supports `--json`.
+  it. `list` and `show` are read-only. Supports `--json`. Shell completion
+  (`taskrail completion <shell>`) completes spec versions for `spec show`/`spec
+  activate` and real `<path>#<anchor>` values for `task new --spec-ref`.
 - `taskrail coverage` — advisory read-only linkage analysis for the active spec:
   two coverage figures over the same areas — decomposition (any linked task) and
   report-only implementation (every linked task completed) — with per-area state

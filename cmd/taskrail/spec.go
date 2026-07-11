@@ -88,9 +88,10 @@ func newSpecShowCmd() *cobra.Command {
 	var opt jsonOption
 	var anchors bool
 	cmd := &cobra.Command{
-		Use:   "show <version>",
-		Short: "Print a spec, or with --anchors its spec_ref anchors (read-only)",
-		Args:  cobra.ExactArgs(1),
+		Use:               "show <version>",
+		Short:             "Print a spec, or with --anchors its spec_ref anchors (read-only)",
+		Args:              cobra.ExactArgs(1),
+		ValidArgsFunction: completeSpecVersion,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			svc, err := serviceFromCmd(cmd)
 			if err != nil {
@@ -146,9 +147,10 @@ func renderSpecShowText(r taskrail.SpecShowResult) string {
 func newSpecActivateCmd() *cobra.Command {
 	var opt jsonOption
 	cmd := &cobra.Command{
-		Use:   "activate <version>",
-		Short: "Repoint STATE.md's active spec to <version> and re-validate",
-		Args:  cobra.ExactArgs(1),
+		Use:               "activate <version>",
+		Short:             "Repoint STATE.md's active spec to <version> and re-validate",
+		Args:              cobra.ExactArgs(1),
+		ValidArgsFunction: completeSpecVersion,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			svc, err := serviceFromCmd(cmd)
 			if err != nil {
