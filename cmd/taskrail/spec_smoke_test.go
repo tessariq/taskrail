@@ -186,6 +186,50 @@ func TestSpecActivateJSONCoverage(t *testing.T) {
 	}
 }
 
+// TestSpecActivateCallsOutPreviousSpecOrphans verifies the human view lists a
+// task still pointing at the previous spec after the move (T-075) and that
+// activation still exits zero. A todo task on v0.1.0 becomes a fresh orphan when
+// v0.2.0 activates; the --json view carries the same list.
+func TestSpecActivateCallsOutPreviousSpecOrphans(t *testing.T) {
+	// Each activation repoints the active spec, so the "previous spec" moves on a
+	// second run; a fresh repo per assertion keeps v0.1.0 the previous spec.
+	seed := func(t *testing.T) {
+		root := setupRepo(t) // active spec v0.1.0; starter task references v0.1.0#summary
+		if err := os.WriteFile(filepath.Join(root, "specs", "v0.2.0.md"),
+			[]byte("# Taskrail v0.2.0\n\n## Potential Features\n\n### Alpha\n"), 0o644); err != nil {
+			t.Fatalf("write spec: %v", err)
+		}
+		writeTask(t, root, "T-100", "todo", "")
+	}
+
+	t.Run("text", func(t *testing.T) {
+		seed(t)
+		out, err := runRoot(t, "spec", "activate", "v0.2.0")
+		if err != nil {
+			t.Fatalf("spec activate: %v (output %q)", err, out)
+		}
+		if !strings.Contains(out, "still on previous spec specs/v0.1.0.md (1 task(s)):") {
+			t.Fatalf("expected previous-spec orphan callout, got %q", out)
+		}
+		if !strings.Contains(out, "T-100 -> specs/v0.1.0.md#summary") {
+			t.Fatalf("expected orphan task line, got %q", out)
+		}
+	})
+
+	t.Run("json", func(t *testing.T) {
+		seed(t)
+		js, err := runRoot(t, "spec", "activate", "v0.2.0", "--json")
+		if err != nil {
+			t.Fatalf("spec activate --json: %v (output %q)", err, js)
+		}
+		for _, want := range []string{`"previous_spec_path": "specs/v0.1.0.md"`, `"previous_spec_orphans":`, `"task_id": "T-100"`} {
+			if !strings.Contains(js, want) {
+				t.Fatalf("json output missing %q:\n%s", want, js)
+			}
+		}
+	})
+}
+
 // TestSpecListMarksActive verifies `spec list` names the versioned specs, marks
 // the active one, omits specs/README.md, and stays read-only.
 func TestSpecListMarksActive(t *testing.T) {

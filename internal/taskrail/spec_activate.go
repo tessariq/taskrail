@@ -16,11 +16,18 @@ var specVersionPattern = regexp.MustCompile(`^v\d+\.\d+\.\d+$`)
 // SpecActivateResult reports the repoint ActivateSpec performed, the validation
 // it re-ran afterward, and the coverage of the now-active spec. Coverage is
 // informational only — it never affects whether activation succeeds.
+//
+// PreviousSpecOrphans is the migration callout (T-075): the subset of the
+// coverage orphan list whose spec_ref still points at PreviousSpecPath, i.e. the
+// tasks the just-completed repoint turned into orphans. It is informational
+// only, exactly like Coverage.
 type SpecActivateResult struct {
-	ActiveSpecVersion string           `json:"active_spec_version"`
-	ActiveSpecPath    string           `json:"active_spec_path"`
-	Validation        ValidationResult `json:"validation"`
-	Coverage          CoverageReport   `json:"coverage"`
+	ActiveSpecVersion   string           `json:"active_spec_version"`
+	ActiveSpecPath      string           `json:"active_spec_path"`
+	Validation          ValidationResult `json:"validation"`
+	Coverage            CoverageReport   `json:"coverage"`
+	PreviousSpecPath    string           `json:"previous_spec_path"`
+	PreviousSpecOrphans []CoverageOrphan `json:"previous_spec_orphans"`
 }
 
 // ActivateSpec repoints STATE.md's active spec to version. It is the sanctioned
@@ -42,6 +49,9 @@ func (s *Service) ActivateSpec(version string) (SpecActivateResult, error) {
 	if err != nil {
 		return SpecActivateResult{}, err
 	}
+	// Capture the outgoing active spec before the repoint: the migration callout
+	// lists tasks still pointing at it once the active spec has moved on.
+	previousSpecPath := state.Frontmatter.ActiveSpecPath
 
 	state.Frontmatter.ActiveSpecVersion = version
 	state.Frontmatter.ActiveSpecPath = relPath(s.paths.RepoRoot, specFile)
@@ -63,9 +73,30 @@ func (s *Service) ActivateSpec(version string) (SpecActivateResult, error) {
 		return SpecActivateResult{}, err
 	}
 	return SpecActivateResult{
-		ActiveSpecVersion: version,
-		ActiveSpecPath:    state.Frontmatter.ActiveSpecPath,
-		Validation:        validation,
-		Coverage:          coverage,
+		ActiveSpecVersion:   version,
+		ActiveSpecPath:      state.Frontmatter.ActiveSpecPath,
+		Validation:          validation,
+		Coverage:            coverage,
+		PreviousSpecPath:    previousSpecPath,
+		PreviousSpecOrphans: orphansPointingAt(coverage.Orphans, previousSpecPath),
 	}, nil
+}
+
+// orphansPointingAt filters the shared coverage orphan list to those whose
+// spec_ref resolves to specPath, reusing the T-059 orphan computation rather
+// than re-deriving it. A malformed spec_ref never reaches the orphan list, so
+// the parse failure is skipped defensively.
+func orphansPointingAt(orphans []CoverageOrphan, specPath string) []CoverageOrphan {
+	cleaned := filepath.Clean(specPath)
+	matched := make([]CoverageOrphan, 0)
+	for _, o := range orphans {
+		path, _, err := parseSpecRef(o.SpecRef)
+		if err != nil {
+			continue
+		}
+		if filepath.Clean(path) == cleaned {
+			matched = append(matched, o)
+		}
+	}
+	return matched
 }

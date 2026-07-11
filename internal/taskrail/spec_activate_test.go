@@ -71,6 +71,61 @@ func TestActivateSpecReportsCoverageForNewSpec(t *testing.T) {
 	}
 }
 
+// TestActivateSpecCallsOutPreviousSpecOrphans proves the migration callout
+// (T-075): after the active spec moves, activation lists the non-completed tasks
+// whose spec_ref still points at the *previously* active spec — the fresh
+// orphans the move just created — as a subset of the shared coverage orphan
+// list, without touching task files. A completed task on the previous spec is
+// delivered history (not listed); a task pointing at some other non-active spec
+// is an orphan but not a previous-spec orphan.
+func TestActivateSpecCallsOutPreviousSpecOrphans(t *testing.T) {
+	repo := seedFixtureRepo(t) // active spec v0.1.0
+	writeFile(t, filepath.Join(repo, "specs", "v0.2.0.md"),
+		"# Taskrail v0.2.0\n\n## Potential Features\n\n### Alpha\n")
+	writeFile(t, filepath.Join(repo, "specs", "v0.0.9.md"),
+		"# Taskrail v0.0.9\n\n## Summary\n\nOlder spec.\n")
+	// Still on the previous spec after the move — the actionable new orphan.
+	writeTask(t, repo, "T-001", "Still on v0.1.0", "todo", "high", "specs/v0.1.0.md#summary", nil)
+	// Completed on the previous spec: delivered history, never an orphan.
+	writeTask(t, repo, "T-002", "Delivered on v0.1.0", "completed", "high", "specs/v0.1.0.md#summary", nil)
+	// Covers the newly-active spec: not an orphan at all.
+	writeTask(t, repo, "T-003", "Covers Alpha", "todo", "high", "specs/v0.2.0.md#alpha", nil)
+	// Points at a different non-active spec: an orphan, but not a previous-spec orphan.
+	writeTask(t, repo, "T-004", "On v0.0.9", "todo", "high", "specs/v0.0.9.md#summary", nil)
+
+	svc := newTestService(t, repo, time.Date(2026, 7, 10, 12, 0, 0, 0, time.UTC))
+	result, err := svc.ActivateSpec("v0.2.0")
+	if err != nil {
+		t.Fatalf("ActivateSpec: %v", err)
+	}
+
+	if result.PreviousSpecPath != "specs/v0.1.0.md" {
+		t.Fatalf("previous spec path = %q, want specs/v0.1.0.md", result.PreviousSpecPath)
+	}
+	// The callout is a strict subset of the shared coverage orphan list: both
+	// T-001 (previous spec) and T-004 (other spec) are orphans, but only T-001
+	// is a previous-spec orphan.
+	if len(result.Coverage.Orphans) != 2 {
+		t.Fatalf("expected 2 coverage orphans (T-001, T-004), got %d: %+v", len(result.Coverage.Orphans), result.Coverage.Orphans)
+	}
+	if len(result.PreviousSpecOrphans) != 1 {
+		t.Fatalf("expected exactly one previous-spec orphan, got %d: %+v", len(result.PreviousSpecOrphans), result.PreviousSpecOrphans)
+	}
+	o := result.PreviousSpecOrphans[0]
+	if o.TaskID != "T-001" || o.SpecRef != "specs/v0.1.0.md#summary" {
+		t.Fatalf("unexpected orphan: %+v", o)
+	}
+
+	// Informational only: the task files must be untouched by the callout.
+	taskBytes, err := os.ReadFile(filepath.Join(repo, "planning", "tasks", "T-001.md"))
+	if err != nil {
+		t.Fatalf("read task: %v", err)
+	}
+	if !strings.Contains(string(taskBytes), "status: todo") {
+		t.Fatalf("previous-spec orphan task status must be untouched:\n%s", taskBytes)
+	}
+}
+
 // TestActivateSpecRejectsMissingVersion locks the no-write contract: a
 // well-formed version whose spec file does not exist is rejected and STATE.md
 // is left byte-for-byte unchanged.

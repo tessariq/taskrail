@@ -167,12 +167,23 @@ func newSpecActivateCmd() *cobra.Command {
 	return cmd
 }
 
-// renderSpecActivateText summarizes the repoint and the re-run validation
-// outcome for humans.
+// renderSpecActivateText summarizes the repoint, the re-run validation outcome,
+// the coverage of the now-active spec, and the migration callout: tasks still
+// pointing at the previous spec (T-075). The callout is informational — it never
+// affects the exit code and never touches task files.
 func renderSpecActivateText(r taskrail.SpecActivateResult) string {
 	state := "valid"
 	if !r.Validation.Valid {
 		state = fmt.Sprintf("invalid (%d violation(s))", len(r.Validation.Violations))
 	}
-	return fmt.Sprintf("activated %s -> %s; state %s\n%s", r.ActiveSpecVersion, r.ActiveSpecPath, state, coverageSummaryLine(r.Coverage))
+	var b strings.Builder
+	fmt.Fprintf(&b, "activated %s -> %s; state %s\n", r.ActiveSpecVersion, r.ActiveSpecPath, state)
+	b.WriteString(coverageSummaryLine(r.Coverage))
+	if len(r.PreviousSpecOrphans) > 0 {
+		fmt.Fprintf(&b, "\nstill on previous spec %s (%d task(s)):", r.PreviousSpecPath, len(r.PreviousSpecOrphans))
+		for _, o := range r.PreviousSpecOrphans {
+			fmt.Fprintf(&b, "\n  - %s -> %s", o.TaskID, o.SpecRef)
+		}
+	}
+	return b.String()
 }
