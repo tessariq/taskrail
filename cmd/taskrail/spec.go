@@ -23,8 +23,39 @@ func newSpecCmd() *cobra.Command {
 			return cmd.Help()
 		},
 	}
-	cmd.AddCommand(newSpecActivateCmd(), newSpecListCmd(), newSpecShowCmd())
+	cmd.AddCommand(newSpecActivateCmd(), newSpecListCmd(), newSpecShowCmd(), newSpecAddCmd())
 	return cmd
+}
+
+// newSpecAddCmd scaffolds specs/<version>.md and adds it to the specs/README.md
+// reading order. It is the one writer in the spec family that authors a spec
+// file; it never writes STATE.md and never activates the new spec.
+func newSpecAddCmd() *cobra.Command {
+	var opt jsonOption
+	cmd := &cobra.Command{
+		Use:   "add <version>",
+		Short: "Scaffold specs/<version>.md and add it to the reading order (does not activate)",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			svc, err := serviceFromCmd(cmd)
+			if err != nil {
+				return err
+			}
+			result, err := svc.AddSpec(args[0])
+			if err != nil {
+				return err
+			}
+			return printResult(cmd, opt.json, result, renderSpecAddText(result))
+		},
+	}
+	cmd.Flags().BoolVar(&opt.json, "json", false, "print machine-readable output")
+	return cmd
+}
+
+// renderSpecAddText summarizes the scaffold and reiterates that add does not
+// activate, so the follow-up `spec activate` step stays explicit.
+func renderSpecAddText(r taskrail.SpecAddResult) string {
+	return fmt.Sprintf("scaffolded %s (%s); added to %s reading order — not activated", r.Version, r.SpecPath, r.ReadmePath)
 }
 
 // newSpecListCmd lists the versioned specs under specs/ and marks the active one.

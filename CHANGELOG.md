@@ -19,7 +19,9 @@ All notable user-visible changes to Taskrail will be documented in this file.
   or non-conforming version with no write. `spec list` lists the versioned specs
   and marks the active one; `spec show <version>` prints a spec, or with
   `--anchors` its `spec_ref` heading anchors exactly as `validate` accepts them.
-  `list` and `show` are read-only. Supports `--json`.
+  `spec add <version>` scaffolds `specs/<version>.md` with the standard section
+  skeleton and adds it to the `specs/README.md` reading order without activating
+  it. `list` and `show` are read-only. Supports `--json`.
 - `taskrail coverage` — advisory read-only linkage analysis for the active spec:
   two coverage figures over the same areas — decomposition (any linked task) and
   report-only implementation (every linked task completed) — with per-area state

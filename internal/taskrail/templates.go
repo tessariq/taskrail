@@ -48,6 +48,43 @@ func starterSpecV010() string {
 	`) + "\n"
 }
 
+// scaffoldSpec renders the standard section skeleton for a spec authored by
+// `taskrail spec add <version>`. It lives beside starterSpecV010 because both
+// author spec bodies; unlike that fixed v0.1.0 starter, this one is
+// version-parameterized. The Potential Features section is intentionally
+// area-free (no `###` headings) so the fresh spec has zero coverable areas and
+// coverage reports N/A; each section carries a TODO prompting the author.
+func scaffoldSpec(version string) string {
+	return strings.TrimSpace("# Taskrail "+version+`
+
+## Summary
+
+_TODO: one-paragraph summary of what this spec version proves or adds._
+
+## Goals
+
+_TODO: enumerate the goals this spec version commits to._
+
+## Potential Features
+
+_TODO: add `+"`### Feature Area`"+` headings here to define coverable areas.
+Until an area is added, this spec has zero coverable areas and `+"`taskrail coverage`"+`
+reports N/A for it._
+
+## Caution
+
+_TODO: note the risks, sharp edges, and scope traps for this version._
+
+## Recommendation About LLM Support
+
+_TODO: state the stance on built-in LLM/provider integration for this version._
+
+## Explicitly Excluded
+
+_TODO: list what this version deliberately does not do._
+`) + "\n"
+}
+
 // renderNewTaskBody produces the placeholder body for a scaffolded task: the
 // four sections agents and humans fill in before starting work. A non-empty
 // provenance line is appended to the Description so a follow-up records in its

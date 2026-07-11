@@ -80,6 +80,15 @@ func (s *Service) SpecList() (SpecListResult, error) {
 	return SpecListResult{ActiveSpecVersion: active, Specs: specs}, nil
 }
 
+// sortSpecVersions sorts versioned names in place by the numeric version
+// comparison, so callers that hold a plain []string (not []SpecEntry) share one
+// ordering rule with SpecList.
+func sortSpecVersions(versions []string) {
+	sort.Slice(versions, func(i, j int) bool {
+		return lessSpecVersion(versions[i], versions[j])
+	})
+}
+
 // SpecShow returns one versioned spec. With anchorsOnly it returns the stable,
 // deduped spec_ref anchor list (exactly the anchors validation accepts); without
 // it, the spec body. It rejects a non-conforming or missing version before any
