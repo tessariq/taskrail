@@ -38,6 +38,9 @@ jobs:
       - name: Smoke bare taskrail resolves to the working-tree build
         run: taskrail validate
 
+      - name: Gate active-spec self-coverage (coverage --min 100)
+        run: task coverage:gate
+
   build-test:
     needs: checks
     runs-on: ${{ matrix.runner }}

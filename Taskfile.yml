@@ -86,6 +86,16 @@ tasks:
           exit 1
         fi
 
+  coverage:gate:
+    desc: Fail if active-spec decomposition coverage drops below 100% (repo self-coverage gate)
+    # Dogfoods `coverage --min` (T-066): the gate lives only on this command's exit
+    # code, so validate stays advisory (a coverage gap never fails validate). The
+    # threshold pins the current clean 100% self-coverage; a spec area shipped
+    # without a linked task reds the push. N/A (a spec with no coverable areas)
+    # exits zero, so activating a freshly-scaffolded spec does not red the gate.
+    cmds:
+      - go run ./cmd/taskrail coverage --min 100
+
   run:help:
     desc: Run taskrail help
     cmds:
