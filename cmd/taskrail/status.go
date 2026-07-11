@@ -16,7 +16,8 @@ func newStatusCmd() *cobra.Command {
 		Long: "Print a strictly read-only overview of current tracked-work state: " +
 			"active spec, task counts, the next eligible task (computed but not " +
 			"persisted), blocked tasks with reasons, the last verification result, " +
-			"and a one-line coverage summary. Never writes STATE.md or task files.",
+			"a one-line coverage summary, and a one-line orphan/drift summary " +
+			"alongside it. Never writes STATE.md or task files.",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			svc, err := serviceFromCmd(cmd)
 			if err != nil {
@@ -54,6 +55,7 @@ func renderStatusText(r taskrail.StatusReport) string {
 	}
 	fmt.Fprintf(&b, "last verification: %s\n", last)
 	b.WriteString(renderStatusCoverage(r.Coverage))
+	b.WriteString(renderStatusDrift(r.Coverage))
 	return b.String()
 }
 
@@ -68,11 +70,17 @@ func renderStatusNext(n taskrail.StatusNext) string {
 
 func renderStatusCoverage(c taskrail.StatusCoverage) string {
 	if c.DecompositionPercent == nil {
-		return fmt.Sprintf("coverage: N/A (no coverable areas); implementation N/A; %d orphan(s), %d uncovered area(s)\n",
-			c.OrphanTaskCount, c.UncoveredAreaCount)
+		return "coverage: N/A (no coverable areas); implementation N/A\n"
 	}
-	return fmt.Sprintf("coverage: %s (%d/%d areas); implementation %s (%d/%d implemented); %d orphan(s), %d uncovered area(s)\n",
+	return fmt.Sprintf("coverage: %s (%d/%d areas); implementation %s (%d/%d implemented)\n",
 		formatPercent(*c.DecompositionPercent), c.CoveredAreas, c.CoverableAreas,
-		formatPercent(*c.ImplementationPercent), c.ImplementedAreas, c.CoverableAreas,
+		formatPercent(*c.ImplementationPercent), c.ImplementedAreas, c.CoverableAreas)
+}
+
+// renderStatusDrift renders the orphan/drift signals as their own one-line
+// summary alongside the coverage line. The counts come from the same shared
+// coverage computation; the signals are advisory and never make status fail.
+func renderStatusDrift(c taskrail.StatusCoverage) string {
+	return fmt.Sprintf("drift: %d orphan task(s), %d uncovered area(s)\n",
 		c.OrphanTaskCount, c.UncoveredAreaCount)
 }

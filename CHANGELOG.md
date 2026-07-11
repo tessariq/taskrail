@@ -38,8 +38,9 @@ All notable user-visible changes to Taskrail will be documented in this file.
 - `taskrail status` — strictly read-only snapshot of current tracked-work state:
   active spec, task counts (done/active/blocked/todo), the next eligible task
   marked *not persisted*, blocked tasks with reasons, the last verification
-  result, and a one-line coverage summary (`N/A` when the spec has no coverable
-  areas). Leaves the working tree clean. Supports `--json`.
+  result, a one-line coverage summary (`N/A` when the spec has no coverable
+  areas), and a one-line orphan/drift summary (orphan-task and uncovered-area
+  counts) alongside it. Leaves the working tree clean. Supports `--json`.
 - `taskrail stats` — strictly read-only aggregate statistics computed
   snapshot-only from current task files and `STATE.md`: counts and percentages by
   status, the blocked ratio and recorded-blocker count, spec coverage with a

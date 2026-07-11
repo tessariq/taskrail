@@ -59,6 +59,16 @@ type statusJSON struct {
 	} `json:"coverage"`
 }
 
+// lineContaining returns the first line of out that contains sub, or "".
+func lineContaining(out, sub string) string {
+	for _, line := range strings.Split(out, "\n") {
+		if strings.Contains(line, sub) {
+			return line
+		}
+	}
+	return ""
+}
+
 func TestStatusReportsSnapshotAndStaysReadOnly(t *testing.T) {
 	root := setupRepo(t)
 	if err := os.WriteFile(filepath.Join(root, "specs", "v0.1.0.md"), []byte(statusSmokeSpec), 0o644); err != nil {
@@ -86,6 +96,16 @@ func TestStatusReportsSnapshotAndStaysReadOnly(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Errorf("human view missing %q: %q", want, out)
 		}
+	}
+	// Orphan/drift is its own one-line summary alongside the coverage line, not a
+	// suffix folded onto it: 0 orphan tasks (all point at Alpha) and 1 uncovered
+	// area (Beta gained no task).
+	if !strings.Contains(out, "drift: 0 orphan task(s), 1 uncovered area(s)") {
+		t.Errorf("human view missing dedicated drift line: %q", out)
+	}
+	coverageLine := lineContaining(out, "coverage:")
+	if strings.Contains(coverageLine, "orphan") {
+		t.Errorf("orphan/drift must not be folded into the coverage line: %q", coverageLine)
 	}
 
 	after := readAllFiles(t, root)
@@ -211,6 +231,11 @@ func TestStatusCoverageNAWhenNoCoverableAreas(t *testing.T) {
 	}
 	if !strings.Contains(out, "coverage: N/A") {
 		t.Errorf("expected N/A coverage line: %q", out)
+	}
+	// The dedicated drift line still appears on the no-coverable-areas path,
+	// with zero counts — it is not folded into the N/A coverage line.
+	if !strings.Contains(out, "drift: 0 orphan task(s), 0 uncovered area(s)") {
+		t.Errorf("expected drift line on N/A path: %q", out)
 	}
 	if !strings.Contains(out, "next: none") {
 		t.Errorf("expected no eligible next task: %q", out)
