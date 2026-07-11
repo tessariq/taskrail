@@ -25,6 +25,7 @@ var shippableSkills = []string{
 	"taskrail-import",
 	"taskrail-retrofit",
 	"taskrail-repair",
+	"taskrail-spec",
 }
 
 // taskAuthoringSkills create tracked tasks via `taskrail task new`. taskrail-import
@@ -35,6 +36,7 @@ var taskAuthoringSkills = []string{
 	"autonomous-backlog",
 	"autonomous-task",
 	"autonomous-verify",
+	"taskrail-spec",
 }
 
 // dogfoodingOnlySkills lists skills that must never leak into the shippable set.
@@ -178,6 +180,22 @@ func TestRecoverySkillRoutesThroughRepair(t *testing.T) {
 			t.Errorf("%s must drop the bootstrap-era manual-edit fallback", path)
 		}
 	}
+}
+
+// The spec skill drives the spec command family (T-064): it discovers spec_ref
+// anchors with `spec show --anchors --json` before authoring tracked work, and
+// documents `spec list`, `spec activate`, and `spec add`. Anchoring on the
+// resolved subcommand tails (not bare flags) keeps the assertion from passing on
+// unrelated prose.
+func TestSpecSkillCoversSpecCommands(t *testing.T) {
+	assertSkillReferences(t, "taskrail-spec",
+		"} spec show",
+		"--anchors",
+		"} spec list",
+		"} spec activate",
+		"} spec add",
+		"} task new",
+	)
 }
 
 // Dogfooding-only skills stay out of the shippable directory entirely.

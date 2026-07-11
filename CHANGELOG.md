@@ -48,8 +48,9 @@ All notable user-visible changes to Taskrail will be documented in this file.
 - Shipped agent skills now invoke the CLI through `${TASKRAIL:-taskrail}` instead
   of a hardcoded `taskrail`. Adopters need nothing (it resolves to the installed
   binary); set `TASKRAIL=/path/to/taskrail` (or `go run ./cmd/taskrail`) to override.
-- `taskrail init --with-skills` now also installs the `autonomous-recovery` and
-  `autonomous-manual-test` agent skills; still opt-in and non-destructive.
+- `taskrail init --with-skills` now also installs the `autonomous-recovery`,
+  `autonomous-manual-test`, and `taskrail-spec` agent skills; still opt-in and
+  non-destructive.
 - `taskrail init --with-skills --force` reinstalls the embedded skills over
   existing copies for upgrades, backing up any locally-modified file to a
   timestamped sibling first and reporting the overwritten and backed-up paths.
