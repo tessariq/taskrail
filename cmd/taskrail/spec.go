@@ -172,5 +172,5 @@ func renderSpecActivateText(r taskrail.SpecActivateResult) string {
 	if !r.Validation.Valid {
 		state = fmt.Sprintf("invalid (%d violation(s))", len(r.Validation.Violations))
 	}
-	return fmt.Sprintf("activated %s -> %s; state %s", r.ActiveSpecVersion, r.ActiveSpecPath, state)
+	return fmt.Sprintf("activated %s -> %s; state %s\n%s", r.ActiveSpecVersion, r.ActiveSpecPath, state, coverageSummaryLine(r.Coverage))
 }

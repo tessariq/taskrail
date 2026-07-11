@@ -14,9 +14,11 @@ All notable user-visible changes to Taskrail will be documented in this file.
   theirs); optional `--reason` appends a note. Rejects a non-blocked task with no
   write. Supports `--json`.
 - `taskrail spec` — spec command family. `spec activate <version>` repoints the
-  active spec in `STATE.md` to `specs/<version>.md`, re-renders `STATE.md`, and
-  re-validates; it is the CLI-only writer of the active spec and rejects a missing
-  or non-conforming version with no write. `spec list` lists the versioned specs
+  active spec in `STATE.md` to `specs/<version>.md`, re-renders `STATE.md`,
+  re-validates, and prints the one-line coverage summary for the now-active spec
+  (informational — activation succeeds regardless); it is the CLI-only writer of
+  the active spec and rejects a missing or non-conforming version with no write.
+  `spec list` lists the versioned specs
   and marks the active one; `spec show <version>` prints a spec, or with
   `--anchors` its `spec_ref` heading anchors exactly as `validate` accepts them.
   `spec add <version>` scaffolds `specs/<version>.md` with the standard section

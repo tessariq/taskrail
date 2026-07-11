@@ -107,6 +107,85 @@ func TestSpecActivateJSON(t *testing.T) {
 	}
 }
 
+// TestSpecActivatePrintsCoverageSummary verifies the human view echoes the
+// one-line coverage summary for the now-active spec (T-067), matching the first
+// line `taskrail coverage` prints against the same repointed state, and that
+// activation still succeeds regardless of the figure.
+func TestSpecActivatePrintsCoverageSummary(t *testing.T) {
+	root := setupRepo(t)
+	if err := os.WriteFile(filepath.Join(root, "specs", "v0.2.0.md"),
+		[]byte("# Taskrail v0.2.0\n\n## Potential Features\n\n### Alpha\n\n### Beta\n"), 0o644); err != nil {
+		t.Fatalf("write spec: %v", err)
+	}
+
+	out, err := runRoot(t, "spec", "activate", "v0.2.0")
+	if err != nil {
+		t.Fatalf("spec activate: %v (output %q)", err, out)
+	}
+	// No task links either area, so the just-activated spec is 0/2 covered.
+	if !strings.Contains(out, "coverage: 0% (0/2 areas) — specs/v0.2.0.md") {
+		t.Fatalf("expected coverage summary line, got %q", out)
+	}
+
+	cov, err := runRoot(t, "coverage")
+	if err != nil {
+		t.Fatalf("coverage: %v (output %q)", err, cov)
+	}
+	// The activation echo must match coverage's own first line exactly.
+	wantLine := "coverage: 0% (0/2 areas) — specs/v0.2.0.md"
+	if !strings.Contains(cov, wantLine) {
+		t.Fatalf("coverage first line changed, got %q", cov)
+	}
+}
+
+// TestSpecActivatePrintsNACoverage guards the N/A path for this command: a spec
+// with no `## Potential Features` coverable areas reports N/A in the echo and a
+// null coverage_percent in --json, matching `coverage`'s own N/A rendering.
+func TestSpecActivatePrintsNACoverage(t *testing.T) {
+	root := setupRepo(t)
+	// No Potential Features section => no coverable areas => N/A.
+	if err := os.WriteFile(filepath.Join(root, "specs", "v0.2.0.md"),
+		[]byte("# Taskrail v0.2.0\n\n## Summary\n\nNext.\n"), 0o644); err != nil {
+		t.Fatalf("write spec: %v", err)
+	}
+
+	out, err := runRoot(t, "spec", "activate", "v0.2.0")
+	if err != nil {
+		t.Fatalf("spec activate: %v (output %q)", err, out)
+	}
+	if !strings.Contains(out, "coverage: N/A (no coverable areas) — specs/v0.2.0.md") {
+		t.Fatalf("expected N/A coverage summary, got %q", out)
+	}
+
+	js, err := runRoot(t, "spec", "activate", "v0.2.0", "--json")
+	if err != nil {
+		t.Fatalf("spec activate --json: %v (output %q)", err, js)
+	}
+	if !strings.Contains(js, `"coverage_percent": null`) {
+		t.Fatalf("expected null coverage_percent for N/A spec, got %q", js)
+	}
+}
+
+// TestSpecActivateJSONCoverage verifies --json carries the coverage report for
+// the now-active spec and that it agrees with `taskrail coverage --json`.
+func TestSpecActivateJSONCoverage(t *testing.T) {
+	root := setupRepo(t)
+	if err := os.WriteFile(filepath.Join(root, "specs", "v0.2.0.md"),
+		[]byte("# Taskrail v0.2.0\n\n## Potential Features\n\n### Alpha\n\n### Beta\n"), 0o644); err != nil {
+		t.Fatalf("write spec: %v", err)
+	}
+
+	out, err := runRoot(t, "spec", "activate", "v0.2.0", "--json")
+	if err != nil {
+		t.Fatalf("spec activate --json: %v (output %q)", err, out)
+	}
+	for _, want := range []string{`"coverage":`, `"coverage_percent": 0`, `"coverable_areas": 2`} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("json output missing %q:\n%s", want, out)
+		}
+	}
+}
+
 // TestSpecListMarksActive verifies `spec list` names the versioned specs, marks
 // the active one, omits specs/README.md, and stays read-only.
 func TestSpecListMarksActive(t *testing.T) {

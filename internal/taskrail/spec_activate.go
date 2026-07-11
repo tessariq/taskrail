@@ -13,12 +13,14 @@ import (
 // target.
 var specVersionPattern = regexp.MustCompile(`^v\d+\.\d+\.\d+$`)
 
-// SpecActivateResult reports the repoint ActivateSpec performed and the
-// validation it re-ran afterward.
+// SpecActivateResult reports the repoint ActivateSpec performed, the validation
+// it re-ran afterward, and the coverage of the now-active spec. Coverage is
+// informational only — it never affects whether activation succeeds.
 type SpecActivateResult struct {
 	ActiveSpecVersion string           `json:"active_spec_version"`
 	ActiveSpecPath    string           `json:"active_spec_path"`
 	Validation        ValidationResult `json:"validation"`
+	Coverage          CoverageReport   `json:"coverage"`
 }
 
 // ActivateSpec repoints STATE.md's active spec to version. It is the sanctioned
@@ -53,9 +55,17 @@ func (s *Service) ActivateSpec(version string) (SpecActivateResult, error) {
 	if err != nil {
 		return SpecActivateResult{}, err
 	}
+	// Coverage of the just-repointed spec, computed via the shared T-059
+	// capability against the in-memory state/tasks (activation never rewrites
+	// task files). Informational only: activation already succeeded above.
+	coverage, err := s.coverageFor(state, tasks)
+	if err != nil {
+		return SpecActivateResult{}, err
+	}
 	return SpecActivateResult{
 		ActiveSpecVersion: version,
 		ActiveSpecPath:    state.Frontmatter.ActiveSpecPath,
 		Validation:        validation,
+		Coverage:          coverage,
 	}, nil
 }

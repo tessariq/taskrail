@@ -73,11 +73,10 @@ func displayedPercent(p float64) float64 {
 // is "N/A" when the active spec has no coverable areas.
 func renderCoverageText(r taskrail.CoverageReport) string {
 	var b strings.Builder
+	fmt.Fprintf(&b, "%s\n", coverageSummaryLine(r))
 	if r.Percent == nil {
-		fmt.Fprintf(&b, "coverage: N/A (no coverable areas) — %s\n", r.ActiveSpecPath)
 		fmt.Fprintf(&b, "implementation: N/A (no coverable areas) — %s\n", r.ActiveSpecPath)
 	} else {
-		fmt.Fprintf(&b, "coverage: %s (%d/%d areas) — %s\n", formatPercent(*r.Percent), r.CoveredAreas, r.CoverableAreas, r.ActiveSpecPath)
 		fmt.Fprintf(&b, "implementation: %s (%d/%d areas) — %s\n", formatPercent(*r.ImplementationPercent), r.ImplementedAreas, r.CoverableAreas, r.ActiveSpecPath)
 	}
 
@@ -106,6 +105,17 @@ func renderCoverageText(r taskrail.CoverageReport) string {
 
 	fmt.Fprintf(&b, "drift: %d uncovered area(s), %d task(s) pointing away", r.Drift.UncoveredAreaCount, r.Drift.AwayTaskCount)
 	return b.String()
+}
+
+// coverageSummaryLine is the one-line decomposition-coverage summary shared by
+// `coverage` (its first line) and `spec activate` (its post-repoint echo), so
+// the two never drift apart. It reports N/A when the active spec has no
+// coverable areas.
+func coverageSummaryLine(r taskrail.CoverageReport) string {
+	if r.Percent == nil {
+		return fmt.Sprintf("coverage: N/A (no coverable areas) — %s", r.ActiveSpecPath)
+	}
+	return fmt.Sprintf("coverage: %s (%d/%d areas) — %s", formatPercent(*r.Percent), r.CoveredAreas, r.CoverableAreas, r.ActiveSpecPath)
 }
 
 // decomposedNotImplemented returns the anchors of areas that are covered (have a

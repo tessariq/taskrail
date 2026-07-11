@@ -43,6 +43,34 @@ func TestActivateSpecRepointsAndRevalidates(t *testing.T) {
 	}
 }
 
+// TestActivateSpecReportsCoverageForNewSpec proves activation returns the
+// shared coverage report computed for the now-active spec (T-067): the figure
+// reflects the target spec's areas and their linked tasks, matching what
+// `taskrail coverage` would report against the same repointed state.
+func TestActivateSpecReportsCoverageForNewSpec(t *testing.T) {
+	repo := seedFixtureRepo(t)
+	writeFile(t, filepath.Join(repo, "specs", "v0.2.0.md"),
+		"# Taskrail v0.2.0\n\n## Potential Features\n\n### Alpha\n\n### Beta\n")
+	// One task covers Alpha under the newly-activated spec; Beta stays uncovered.
+	writeTask(t, repo, "T-001", "Cover Alpha", "todo", "high", "specs/v0.2.0.md#alpha", nil)
+
+	svc := newTestService(t, repo, time.Date(2026, 7, 10, 12, 0, 0, 0, time.UTC))
+	result, err := svc.ActivateSpec("v0.2.0")
+	if err != nil {
+		t.Fatalf("ActivateSpec: %v", err)
+	}
+
+	if result.Coverage.ActiveSpecPath != "specs/v0.2.0.md" {
+		t.Fatalf("coverage computed for wrong spec: %q", result.Coverage.ActiveSpecPath)
+	}
+	if result.Coverage.CoverableAreas != 2 || result.Coverage.CoveredAreas != 1 {
+		t.Fatalf("unexpected coverage counts: %d/%d", result.Coverage.CoveredAreas, result.Coverage.CoverableAreas)
+	}
+	if result.Coverage.Percent == nil || *result.Coverage.Percent != 50 {
+		t.Fatalf("expected 50%% coverage, got %v", result.Coverage.Percent)
+	}
+}
+
 // TestActivateSpecRejectsMissingVersion locks the no-write contract: a
 // well-formed version whose spec file does not exist is rejected and STATE.md
 // is left byte-for-byte unchanged.
