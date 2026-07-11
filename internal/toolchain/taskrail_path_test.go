@@ -142,6 +142,20 @@ func TestTaskrailBuildsShareReproducibleFlags(t *testing.T) {
 	}
 }
 
+// The freshness check must run on a stock native Windows install (no
+// Git-for-Windows/MSYS/WSL on PATH), so it may not lean on external coreutils
+// that ship only with a POSIX userland. mktemp/cmp/trap are absent there; the
+// check must use a cross-platform mechanism instead (T-082).
+func TestTaskrailCheckIsPortable(t *testing.T) {
+	taskfile := readFile(t, repoRoot(t), "Taskfile.yml")
+	block := strings.Join(taskfileBlock(taskfile, "taskrail:check:"), "\n")
+	for _, tool := range []string{"mktemp", "cmp ", "cmp -", "trap "} {
+		if strings.Contains(block, tool) {
+			t.Errorf("taskrail:check must not rely on %q (absent on stock native Windows); use a cross-platform mechanism", strings.TrimSpace(tool))
+		}
+	}
+}
+
 // CI must exercise the freshness guard so a stale on-PATH binary is caught in
 // the pipeline, not silently trusted.
 func TestCIRunsTaskrailFreshnessCheck(t *testing.T) {

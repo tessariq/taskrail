@@ -43,26 +43,18 @@ tasks:
       - go build -trimpath -o bin/taskrail{{if eq OS "windows"}}.exe{{end}} ./cmd/taskrail
 
   taskrail:check:
-    desc: Fail if the taskrail on PATH is stale versus the working tree (POSIX/CI shell; uses mktemp+cmp)
+    desc: Fail if the taskrail on PATH is stale versus the working tree (cross-platform; native Windows too)
+    # Builds a fresh binary with the same reproducible flags as taskrail:install
+    # (CGO_ENABLED=0 + -trimpath) and hands it to the freshcheck helper, which
+    # resolves the on-PATH taskrail and byte-compares them. That helper stands in
+    # for the POSIX-only coreutils the old check used, so it runs on a stock
+    # native Windows install with none of them on PATH (T-082); the fixed output
+    # path lives under the gitignored bin/ and the helper deletes it.
     env:
       CGO_ENABLED: "0"
     cmds:
-      - |
-        resolved="$(command -v taskrail || true)"
-        if [ -z "$resolved" ]; then
-          echo "taskrail is not on PATH; run 'mise run setup' or 'task taskrail:install'" >&2
-          exit 1
-        fi
-        tmp="$(mktemp)"
-        trap 'rm -f "$tmp"' EXIT
-        if ! go build -trimpath -o "$tmp" ./cmd/taskrail; then
-          echo "taskrail build failed; fix the working tree before checking freshness" >&2
-          exit 1
-        fi
-        if ! cmp -s "$tmp" "$resolved"; then
-          echo "on-PATH taskrail ($resolved) is stale versus the working tree; run 'task taskrail:install'" >&2
-          exit 1
-        fi
+      - go build -trimpath -o bin/taskrail-freshcheck{{if eq OS "windows"}}.exe{{end}} ./cmd/taskrail
+      - go run ./internal/toolchain/cmd/freshcheck bin/taskrail-freshcheck{{if eq OS "windows"}}.exe{{end}}
 
   test:
     desc: Run all tests
