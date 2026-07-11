@@ -178,9 +178,10 @@ func (s *Service) readImportDraft(path string) (ImportDraft, error) {
 	if p == "" {
 		return ImportDraft{}, errors.New("import draft path must not be empty")
 	}
-	data, err := os.ReadFile(s.resolveRepoPath(p))
+	resolved := s.resolveRepoPath(p)
+	data, err := os.ReadFile(resolved)
 	if err != nil {
-		return ImportDraft{}, fmt.Errorf("read import draft: %w", err)
+		return ImportDraft{}, fmt.Errorf("read import draft %s: %w", relPath(s.paths.RepoRoot, resolved), fsCause(err))
 	}
 	return ParseImportDraft(data)
 }

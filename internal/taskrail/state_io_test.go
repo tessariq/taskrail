@@ -9,6 +9,34 @@ import (
 	"time"
 )
 
+// TestFsCauseStripsAbsolutePath proves the read-error helper drops the
+// *fs.PathError's absolute path while preserving errors.Is classification, so
+// callers can still detect not-exist and emit portable, path-free error tails.
+func TestFsCauseStripsAbsolutePath(t *testing.T) {
+	abs := filepath.Join(t.TempDir(), "does-not-exist.md")
+	_, raw := os.ReadFile(abs)
+	if raw == nil {
+		t.Fatal("expected a read error for a missing file")
+	}
+	if !strings.Contains(raw.Error(), abs) {
+		t.Fatalf("precondition: raw error should embed the absolute path: %v", raw)
+	}
+
+	stripped := fsCause(raw)
+	if strings.Contains(stripped.Error(), abs) {
+		t.Fatalf("fsCause must not leak the absolute path: %v", stripped)
+	}
+	if !errors.Is(stripped, os.ErrNotExist) {
+		t.Fatalf("fsCause must preserve not-exist classification: %v", stripped)
+	}
+
+	// A non-PathError passes through unchanged.
+	plain := errors.New("boom")
+	if fsCause(plain) != plain {
+		t.Fatalf("fsCause must return non-PathError errors unchanged")
+	}
+}
+
 // A directory path makes os.WriteFile fail, letting us assert the write-error
 // wrapping without depending on platform-specific errno text.
 func TestSaveStateWrapsWriteError(t *testing.T) {

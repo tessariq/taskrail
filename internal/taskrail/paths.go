@@ -53,7 +53,7 @@ func loadLayoutConfig(root string) (LayoutConfig, error) {
 		if errors.Is(err, os.ErrNotExist) {
 			return defaultLayoutConfig(), nil
 		}
-		return LayoutConfig{}, fmt.Errorf("read layout config: %w", err)
+		return LayoutConfig{}, fmt.Errorf("read layout config %s: %w", relPath(root, path), fsCause(err))
 	}
 
 	cfg := defaultLayoutConfig()
@@ -89,7 +89,7 @@ func readMarker(root string) (LayoutConfig, bool, error) {
 		if errors.Is(err, os.ErrNotExist) {
 			return LayoutConfig{}, false, nil
 		}
-		return LayoutConfig{}, false, fmt.Errorf("read layout marker: %w", err)
+		return LayoutConfig{}, false, fmt.Errorf("read layout marker %s: %w", relPath(root, markerPath(root)), fsCause(err))
 	}
 	cfg := defaultLayoutConfig()
 	if err := yaml.Unmarshal(data, &cfg); err != nil {

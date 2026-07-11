@@ -122,6 +122,8 @@ Run `taskrail <command> --help` for full flag details.
 | `taskrail unblock <task-id>` | Return a blocked task to todo so it re-enters `next` selection; drops its `STATE.md` blocker entry. Optional `--reason` appends a note. `--json`. |
 | `taskrail verify <task-id>` | Record a pass/fail outcome and write artifacts under `planning/artifacts/verify/`. `--result`, `--summary`, `--create-followup`, `--json`. |
 | `taskrail spec activate <version>` | Repoint `STATE.md`'s active spec to a versioned target (e.g. `v0.3.0`), re-render `STATE.md`, and re-validate. CLI-only writer of the active spec; rejects a missing or non-conforming version with no write. `--json`. |
+| `taskrail spec list` | List the versioned specs under `specs/` in version order and mark the active one. Read-only. `--json`. |
+| `taskrail spec show <version>` | Print a versioned spec; with `--anchors`, list its `spec_ref` heading anchors exactly as `validate` accepts them (so `task new --spec-ref <path>#<anchor>` can target a real anchor). Read-only. `--json`. |
 | `taskrail task new` | Scaffold a task file with the next free id. Requires `--title` and `--spec-ref`; `--priority`, repeatable `--dep`, `--follow-up <parent-id>`, `--json`. |
 | `taskrail import <source>` | Build spec/task drafts from a markdown source without an LLM. `--to tasks\|spec\|planning`, `--emit-prompt`, `--apply <draft.json>`, `--json`. |
 | `taskrail version` | Print the CLI version (also `--version`). |

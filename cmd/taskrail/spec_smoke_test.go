@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -103,6 +104,153 @@ func TestSpecActivateJSON(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Fatalf("json output missing %q:\n%s", want, out)
 		}
+	}
+}
+
+// TestSpecListMarksActive verifies `spec list` names the versioned specs, marks
+// the active one, omits specs/README.md, and stays read-only.
+func TestSpecListMarksActive(t *testing.T) {
+	root := setupRepo(t)
+	if err := os.WriteFile(filepath.Join(root, "specs", "v0.2.0.md"), []byte("# v0.2.0\n\n## Summary\n\nNext.\n"), 0o644); err != nil {
+		t.Fatalf("write spec: %v", err)
+	}
+	statePath := filepath.Join(root, "planning", "STATE.md")
+	before, err := os.ReadFile(statePath)
+	if err != nil {
+		t.Fatalf("read STATE.md: %v", err)
+	}
+
+	out, err := runRoot(t, "spec", "list")
+	if err != nil {
+		t.Fatalf("spec list: %v (output %q)", err, out)
+	}
+	if !strings.Contains(out, "v0.1.0") || !strings.Contains(out, "v0.2.0") {
+		t.Fatalf("spec list omits a version: %q", out)
+	}
+	if strings.Contains(out, "README") {
+		t.Fatalf("spec list must not list README.md: %q", out)
+	}
+	// The active v0.1.0 line must carry a marker the inactive v0.2.0 line lacks.
+	if !strings.Contains(out, "active") {
+		t.Fatalf("spec list does not mark the active spec: %q", out)
+	}
+
+	after, err := os.ReadFile(statePath)
+	if err != nil {
+		t.Fatalf("re-read STATE.md: %v", err)
+	}
+	if string(before) != string(after) {
+		t.Fatal("spec list must be read-only but STATE.md changed")
+	}
+}
+
+// TestSpecListJSON verifies the machine-readable shape marks the active spec.
+func TestSpecListJSON(t *testing.T) {
+	setupRepo(t)
+	out, err := runRoot(t, "spec", "list", "--json")
+	if err != nil {
+		t.Fatalf("spec list --json: %v (output %q)", err, out)
+	}
+	var payload struct {
+		ActiveSpecVersion string `json:"active_spec_version"`
+		Specs             []struct {
+			Version string `json:"version"`
+			Path    string `json:"path"`
+			Active  bool   `json:"active"`
+		} `json:"specs"`
+	}
+	if err := json.Unmarshal([]byte(out), &payload); err != nil {
+		t.Fatalf("decode json: %v (output %q)", err, out)
+	}
+	if payload.ActiveSpecVersion != "v0.1.0" || len(payload.Specs) != 1 || !payload.Specs[0].Active {
+		t.Fatalf("unexpected spec list payload: %+v", payload)
+	}
+}
+
+// TestSpecShowPrintsContent verifies `spec show` prints the spec body.
+func TestSpecShowPrintsContent(t *testing.T) {
+	setupRepo(t)
+	out, err := runRoot(t, "spec", "show", "v0.1.0")
+	if err != nil {
+		t.Fatalf("spec show: %v (output %q)", err, out)
+	}
+	if !strings.Contains(out, "Summary") {
+		t.Fatalf("spec show omits spec body: %q", out)
+	}
+}
+
+// TestSpecShowAnchorsAuthorable is the end-to-end acceptance: an anchor drawn from
+// `spec show --anchors --json` authors a task whose spec_ref passes `validate`,
+// proving the listing reuses the real slug rule and stays read-only.
+func TestSpecShowAnchorsAuthorable(t *testing.T) {
+	root := setupRepo(t)
+	statePath := filepath.Join(root, "planning", "STATE.md")
+	before, err := os.ReadFile(statePath)
+	if err != nil {
+		t.Fatalf("read STATE.md: %v", err)
+	}
+
+	out, err := runRoot(t, "spec", "show", "v0.1.0", "--anchors", "--json")
+	if err != nil {
+		t.Fatalf("spec show --anchors --json: %v (output %q)", err, out)
+	}
+	var payload struct {
+		Anchors []struct {
+			Anchor string `json:"anchor"`
+		} `json:"anchors"`
+	}
+	if err := json.Unmarshal([]byte(out), &payload); err != nil {
+		t.Fatalf("decode anchors json: %v (output %q)", err, out)
+	}
+	if len(payload.Anchors) == 0 {
+		t.Fatalf("expected at least one anchor: %q", out)
+	}
+
+	after, err := os.ReadFile(statePath)
+	if err != nil {
+		t.Fatalf("re-read STATE.md: %v", err)
+	}
+	if string(before) != string(after) {
+		t.Fatal("spec show must be read-only but STATE.md changed")
+	}
+
+	// Author a task against the first listed anchor and confirm it validates.
+	writeTaskSpecRef(t, root, "T-900", "specs/v0.1.0.md#"+payload.Anchors[0].Anchor)
+	if out, err := runRoot(t, "validate"); err != nil {
+		t.Fatalf("validate against listed anchor: %v (output %q)", err, out)
+	}
+}
+
+// TestSpecShowRejectsBadVersion confirms a malformed version errors.
+func TestSpecShowRejectsBadVersion(t *testing.T) {
+	setupRepo(t)
+	if _, err := runRoot(t, "spec", "show", "garbage"); err == nil {
+		t.Fatal("expected error for a non-conforming version")
+	}
+}
+
+// writeTaskSpecRef drops a minimal valid task carrying an explicit spec_ref.
+func writeTaskSpecRef(t *testing.T, root, id, specRef string) {
+	t.Helper()
+	content := strings.Join([]string{
+		"---",
+		"id: " + id,
+		"title: Task " + id,
+		"status: todo",
+		"priority: high",
+		"spec_ref: " + specRef,
+		"dependencies: []",
+		`updated_at: "2026-06-19T00:00:00Z"`,
+		"---",
+		"",
+		"# " + id,
+		"",
+		"Body.",
+		"",
+	}, "\n")
+	path := filepath.Join(root, "planning", "tasks", id+".md")
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("write task %s: %v", id, err)
 	}
 }
 

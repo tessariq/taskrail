@@ -367,7 +367,7 @@ func (s *Service) validateSpecRef(specRef string) error {
 	fullPath := filepath.Join(s.paths.RepoRoot, pathPart)
 	data, err := os.ReadFile(fullPath)
 	if err != nil {
-		return fmt.Errorf("read spec file: %w", err)
+		return fmt.Errorf("read spec file %s: %w", pathPart, fsCause(err))
 	}
 	anchors := collectHeadingAnchors(string(data))
 	if _, ok := anchors[anchor]; !ok {
@@ -376,20 +376,51 @@ func (s *Service) validateSpecRef(specRef string) error {
 	return nil
 }
 
+// collectHeadingAnchors is the set view of a spec's spec_ref anchors, used by
+// validateSpecRef to accept or reject a task's heading anchor. It is derived from
+// collectHeadingAnchorList so the anchors `spec show --anchors` lists are exactly
+// the anchors validation accepts — one slug rule, no re-implementation.
 func collectHeadingAnchors(markdown string) map[string]struct{} {
-	anchors := make(map[string]struct{})
+	list := collectHeadingAnchorList(markdown)
+	anchors := make(map[string]struct{}, len(list))
+	for _, a := range list {
+		anchors[a.Anchor] = struct{}{}
+	}
+	return anchors
+}
+
+// collectHeadingAnchorList returns a spec's spec_ref anchors in document order,
+// deduped by slug (first occurrence wins). Empty slugs (headings that are pure
+// punctuation) are skipped: parseSpecRef already rejects an empty anchor, so they
+// are never a valid spec_ref and would only add noise to the listing.
+func collectHeadingAnchorList(markdown string) []SpecAnchor {
+	var list []SpecAnchor
+	seen := make(map[string]struct{})
 	for _, line := range strings.Split(markdown, "\n") {
 		trimmed := strings.TrimSpace(line)
 		if !strings.HasPrefix(trimmed, "#") {
 			continue
 		}
-		heading := strings.TrimSpace(strings.TrimLeft(trimmed, "#"))
+		afterHashes := strings.TrimLeft(trimmed, "#")
+		heading := strings.TrimSpace(afterHashes)
 		if heading == "" {
 			continue
 		}
-		anchors[slugHeading(heading)] = struct{}{}
+		slug := slugHeading(heading)
+		if slug == "" {
+			continue
+		}
+		if _, ok := seen[slug]; ok {
+			continue
+		}
+		seen[slug] = struct{}{}
+		list = append(list, SpecAnchor{
+			Anchor:  slug,
+			Heading: heading,
+			Level:   len(trimmed) - len(afterHashes),
+		})
 	}
-	return anchors
+	return list
 }
 
 func slugHeading(heading string) string {

@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/tessariq/taskrail/internal/taskrail"
@@ -22,8 +23,90 @@ func newSpecCmd() *cobra.Command {
 			return cmd.Help()
 		},
 	}
-	cmd.AddCommand(newSpecActivateCmd())
+	cmd.AddCommand(newSpecActivateCmd(), newSpecListCmd(), newSpecShowCmd())
 	return cmd
+}
+
+// newSpecListCmd lists the versioned specs under specs/ and marks the active one.
+// It is strictly read-only.
+func newSpecListCmd() *cobra.Command {
+	var opt jsonOption
+	cmd := &cobra.Command{
+		Use:   "list",
+		Short: "List versioned specs and mark the active one (read-only)",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			svc, err := serviceFromCmd(cmd)
+			if err != nil {
+				return err
+			}
+			result, err := svc.SpecList()
+			if err != nil {
+				return err
+			}
+			return printResult(cmd, opt.json, result, renderSpecListText(result))
+		},
+	}
+	cmd.Flags().BoolVar(&opt.json, "json", false, "print machine-readable output")
+	return cmd
+}
+
+// newSpecShowCmd prints a versioned spec, or with --anchors its stable spec_ref
+// anchor list. It is strictly read-only.
+func newSpecShowCmd() *cobra.Command {
+	var opt jsonOption
+	var anchors bool
+	cmd := &cobra.Command{
+		Use:   "show <version>",
+		Short: "Print a spec, or with --anchors its spec_ref anchors (read-only)",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			svc, err := serviceFromCmd(cmd)
+			if err != nil {
+				return err
+			}
+			result, err := svc.SpecShow(args[0], anchors)
+			if err != nil {
+				return err
+			}
+			return printResult(cmd, opt.json, result, renderSpecShowText(result))
+		},
+	}
+	cmd.Flags().BoolVar(&anchors, "anchors", false, "list the spec's spec_ref heading anchors instead of its body")
+	cmd.Flags().BoolVar(&opt.json, "json", false, "print machine-readable output")
+	return cmd
+}
+
+// renderSpecListText renders one line per spec, flagging the active one.
+func renderSpecListText(r taskrail.SpecListResult) string {
+	if len(r.Specs) == 0 {
+		return "no versioned specs found"
+	}
+	var b strings.Builder
+	for _, spec := range r.Specs {
+		marker := ""
+		if spec.Active {
+			marker = " (active)"
+		}
+		fmt.Fprintf(&b, "%s%s — %s\n", spec.Version, marker, spec.Path)
+	}
+	return strings.TrimRight(b.String(), "\n")
+}
+
+// renderSpecShowText prints the spec body, or in --anchors mode one line per
+// anchor (`#anchor (Hn) heading`) so a human can copy a real spec_ref anchor.
+func renderSpecShowText(r taskrail.SpecShowResult) string {
+	if r.Content != "" {
+		return strings.TrimRight(r.Content, "\n")
+	}
+	if len(r.Anchors) == 0 {
+		return "no anchors found"
+	}
+	var b strings.Builder
+	for _, a := range r.Anchors {
+		fmt.Fprintf(&b, "#%s (H%d) %s\n", a.Anchor, a.Level, a.Heading)
+	}
+	return strings.TrimRight(b.String(), "\n")
 }
 
 // newSpecActivateCmd repoints STATE.md's active spec to a versioned target. It

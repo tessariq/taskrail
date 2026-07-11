@@ -74,7 +74,7 @@ func (s *Service) coverageFor(state *State, tasks []*Task) (CoverageReport, erro
 	activePath := state.Frontmatter.ActiveSpecPath
 	data, err := os.ReadFile(filepath.Join(s.paths.RepoRoot, filepath.Clean(activePath)))
 	if err != nil {
-		return CoverageReport{}, fmt.Errorf("read active spec: %w", err)
+		return CoverageReport{}, fmt.Errorf("read active spec %s: %w", activePath, fsCause(err))
 	}
 	return computeCoverage(string(data), activePath, tasks), nil
 }

@@ -88,7 +88,7 @@ func (s *Service) readImportSource(sourcePath string) (string, string, error) {
 	absSource := s.resolveRepoPath(source)
 	data, err := os.ReadFile(absSource)
 	if err != nil {
-		return "", "", fmt.Errorf("read import source: %w", err)
+		return "", "", fmt.Errorf("read import source %s: %w", relPath(s.paths.RepoRoot, absSource), fsCause(err))
 	}
 	label := relPath(s.paths.RepoRoot, absSource)
 	if strings.HasPrefix(label, "..") {

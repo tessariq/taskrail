@@ -20,6 +20,30 @@ func hasSkillTree(tree map[string]string, dir string) bool {
 	return false
 }
 
+// TestInstallSkillFileReadErrorOmitsAbsolutePath locks the portable-error
+// contract on the non-ErrNotExist read branch: reading a dest that is a directory
+// (EISDIR, not ErrNotExist) must not leak the absolute repo path.
+func TestInstallSkillFileReadErrorOmitsAbsolutePath(t *testing.T) {
+	repo := initGitRepo(t)
+	svc := newTestService(t, repo, time.Date(2026, 3, 31, 12, 0, 0, 0, time.UTC))
+
+	// A directory at dest makes os.ReadFile fail with EISDIR, hitting the default
+	// (non-ErrNotExist) branch.
+	dest := filepath.Join(repo, ".claude", "skills", "probe")
+	if err := os.MkdirAll(dest, 0o755); err != nil {
+		t.Fatalf("mkdir dest: %v", err)
+	}
+
+	var res SkillInstallResult
+	err := svc.installSkillFile(dest, []byte("x"), false, &res)
+	if err == nil {
+		t.Fatal("expected a read error for a directory dest")
+	}
+	if strings.Contains(err.Error(), repo) {
+		t.Fatalf("error leaks absolute repo path %q: %v", repo, err)
+	}
+}
+
 // Default init must never provision agent-tool skill directories; writing them
 // is opt-in via --with-skills (skills-productization.md Decision 2).
 func TestInitDefaultWritesNoSkillDirs(t *testing.T) {

@@ -9,6 +9,21 @@ import (
 	"time"
 )
 
+// TestReadImportDraftErrorOmitsAbsolutePath locks the portable-error contract for
+// an absolute --draft argument: the missing-file error names a repo-relative path,
+// never the caller's absolute repository location.
+func TestReadImportDraftErrorOmitsAbsolutePath(t *testing.T) {
+	repo := seedFixtureRepo(t)
+	svc := newTestService(t, repo, time.Date(2026, 7, 10, 12, 0, 0, 0, time.UTC))
+
+	abs := filepath.Join(repo, "planning", "imports", "missing.json")
+	if _, err := svc.readImportDraft(abs); err == nil {
+		t.Fatal("expected error for a missing import draft")
+	} else if strings.Contains(err.Error(), repo) {
+		t.Fatalf("error leaks absolute repo path %q: %v", repo, err)
+	}
+}
+
 // applyFixture seeds a repo with an existing spec and no tasks, ready to ingest
 // an agent-produced draft through ApplyImportDraft.
 func applyFixture(t *testing.T) *Service {

@@ -112,7 +112,7 @@ func (s *Service) installSkillFile(dest string, data []byte, force bool, res *Sk
 		res.Written = append(res.Written, relPath(s.paths.RepoRoot, dest))
 		return nil
 	default:
-		return fmt.Errorf("read %s: %w", dest, statErr)
+		return fmt.Errorf("read %s: %w", relPath(s.paths.RepoRoot, dest), fsCause(statErr))
 	}
 }
 
