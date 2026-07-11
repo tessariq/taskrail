@@ -80,6 +80,16 @@ func renderCoverageText(r taskrail.CoverageReport) string {
 		fmt.Fprintf(&b, "implementation: %s (%d/%d areas) — %s\n", formatPercent(*r.ImplementationPercent), r.ImplementedAreas, r.CoverableAreas, r.ActiveSpecPath)
 	}
 
+	// Reverse map: per coverable area, the covering task id(s). This makes the
+	// aggregate percentage auditable — which task covers what, and where an area
+	// is covered by an unexpected task or by more than one (worth reviewing).
+	if len(r.Areas) > 0 {
+		b.WriteString("coverage map:\n")
+		for _, a := range r.Areas {
+			fmt.Fprintf(&b, "  - %s\n", coverageMapLine(a))
+		}
+	}
+
 	if len(r.UncoveredAreas) > 0 {
 		b.WriteString("uncovered areas:\n")
 		for _, area := range r.UncoveredAreas {
@@ -116,6 +126,20 @@ func coverageSummaryLine(r taskrail.CoverageReport) string {
 		return fmt.Sprintf("coverage: N/A (no coverable areas) — %s", r.ActiveSpecPath)
 	}
 	return fmt.Sprintf("coverage: %s (%d/%d areas) — %s", formatPercent(*r.Percent), r.CoveredAreas, r.CoverableAreas, r.ActiveSpecPath)
+}
+
+// coverageMapLine renders one reverse-map row: an area's anchor followed by its
+// covering task id(s), "(uncovered)" when none cover it, and "(double-covered)"
+// when more than one does so the ambiguity is flagged for review.
+func coverageMapLine(a taskrail.CoverageArea) string {
+	if len(a.LinkedTasks) == 0 {
+		return fmt.Sprintf("%s: (uncovered)", a.Anchor)
+	}
+	line := fmt.Sprintf("%s: %s", a.Anchor, strings.Join(a.LinkedTasks, ", "))
+	if len(a.LinkedTasks) > 1 {
+		line += " (double-covered)"
+	}
+	return line
 }
 
 // decomposedNotImplemented returns the anchors of areas that are covered (have a

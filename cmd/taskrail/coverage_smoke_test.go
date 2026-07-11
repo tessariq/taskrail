@@ -225,6 +225,80 @@ func TestCoverageThreeStatesAndReportOnly(t *testing.T) {
 	}
 }
 
+// reverseMapSpec exercises the reverse map: alpha covered by two tasks
+// (double-covered), delta covered only through a #### child (roll-up), and
+// epsilon with no covering task at all.
+const reverseMapSpec = `# Fixture
+
+## Potential Features
+
+### Alpha
+
+Double covered.
+
+### Delta
+
+#### Delta One
+
+### Epsilon
+
+Uncovered.
+`
+
+func TestCoverageReverseMapShowsCoveringTasks(t *testing.T) {
+	root := setupRepo(t)
+	if err := os.WriteFile(filepath.Join(root, "specs", "v0.1.0.md"), []byte(reverseMapSpec), 0o644); err != nil {
+		t.Fatalf("write spec: %v", err)
+	}
+	writeCoverageTaskFile(t, root, "T-1", "todo", "specs/v0.1.0.md#alpha")
+	writeCoverageTaskFile(t, root, "T-2", "todo", "specs/v0.1.0.md#alpha")
+	writeCoverageTaskFile(t, root, "T-3", "todo", "specs/v0.1.0.md#delta-one")
+
+	out, err := runRoot(t, "coverage")
+	if err != nil {
+		t.Fatalf("coverage: %v (output %q)", err, out)
+	}
+	// The reverse map lists, per coverable area, the covering task id(s).
+	for _, want := range []string{
+		"coverage map:",
+		"alpha: T-1, T-2 (double-covered)", // more than one task is distinguishable
+		"delta: T-3",                       // roll-up: a #### child's task covers its parent
+		"epsilon: (uncovered)",             // an area with no covering task is marked
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("coverage map missing %q: %q", want, out)
+		}
+	}
+
+	// --json carries the same per-area covering-task list.
+	jsonOut, err := runRoot(t, "coverage", "--json")
+	if err != nil {
+		t.Fatalf("coverage --json: %v (output %q)", err, jsonOut)
+	}
+	var report struct {
+		Areas []struct {
+			Anchor      string   `json:"anchor"`
+			LinkedTasks []string `json:"linked_tasks"`
+		} `json:"areas"`
+	}
+	if err := json.Unmarshal([]byte(jsonOut), &report); err != nil {
+		t.Fatalf("parse json: %v (output %q)", err, jsonOut)
+	}
+	byAnchor := map[string][]string{}
+	for _, a := range report.Areas {
+		byAnchor[a.Anchor] = a.LinkedTasks
+	}
+	if got := byAnchor["alpha"]; len(got) != 2 || got[0] != "T-1" || got[1] != "T-2" {
+		t.Errorf("alpha linked_tasks = %v, want [T-1 T-2]", got)
+	}
+	if got := byAnchor["delta"]; len(got) != 1 || got[0] != "T-3" {
+		t.Errorf("delta linked_tasks = %v, want [T-3] (roll-up)", got)
+	}
+	if got, ok := byAnchor["epsilon"]; !ok || len(got) != 0 {
+		t.Errorf("epsilon linked_tasks = %v, want [] (uncovered)", got)
+	}
+}
+
 // naSpec has no coverable areas, so coverage is N/A and --min has nothing to
 // gate on.
 const naSpec = `# Fixture
