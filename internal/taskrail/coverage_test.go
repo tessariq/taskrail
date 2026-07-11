@@ -453,3 +453,80 @@ func equalStrings(a, b []string) bool {
 	}
 	return true
 }
+
+func TestCoverageForAreaCoveredArea(t *testing.T) {
+	repo := seedCoverageRepo(t)
+	svc := newTestService(t, repo, time.Date(2026, 7, 9, 0, 0, 0, 0, time.UTC))
+
+	report, err := svc.CoverageForArea("alpha")
+	if err != nil {
+		t.Fatalf("CoverageForArea: %v", err)
+	}
+	if report.CoverableAreas != 1 || len(report.Areas) != 1 {
+		t.Fatalf("expected a single-area report, got coverable=%d areas=%d", report.CoverableAreas, len(report.Areas))
+	}
+	if report.Areas[0].Anchor != "alpha" || !report.Areas[0].Covered {
+		t.Fatalf("expected covered alpha, got %+v", report.Areas[0])
+	}
+	if report.CoveredAreas != 1 || !equalFloatPtr(report.Percent, ptrFloat(100)) {
+		t.Fatalf("covered area must score 100%%: covered=%d percent=%s", report.CoveredAreas, fmtFloatPtr(report.Percent))
+	}
+	if len(report.UncoveredAreas) != 0 || report.Drift.UncoveredAreaCount != 0 {
+		t.Fatalf("covered area must have no gap, got %v", report.UncoveredAreas)
+	}
+}
+
+func TestCoverageForAreaUncoveredArea(t *testing.T) {
+	repo := seedCoverageRepo(t)
+	svc := newTestService(t, repo, time.Date(2026, 7, 9, 0, 0, 0, 0, time.UTC))
+
+	report, err := svc.CoverageForArea("delta")
+	if err != nil {
+		t.Fatalf("CoverageForArea: %v", err)
+	}
+	if report.CoverableAreas != 1 || report.CoveredAreas != 0 {
+		t.Fatalf("uncovered area report shape wrong: coverable=%d covered=%d", report.CoverableAreas, report.CoveredAreas)
+	}
+	if !equalStrings(report.UncoveredAreas, []string{"delta"}) || report.Drift.UncoveredAreaCount != 1 {
+		t.Fatalf("expected delta as the sole gap, got %v", report.UncoveredAreas)
+	}
+	if !equalFloatPtr(report.Percent, ptrFloat(0)) {
+		t.Fatalf("uncovered area must score 0%%, got %s", fmtFloatPtr(report.Percent))
+	}
+}
+
+func TestCoverageForAreaRejectsUnknownAnchor(t *testing.T) {
+	repo := seedCoverageRepo(t)
+	svc := newTestService(t, repo, time.Date(2026, 7, 9, 0, 0, 0, 0, time.UTC))
+
+	// Sub-area anchors roll up into their parent and are not coverable areas.
+	for _, anchor := range []string{"nope", "summary", "delta-one"} {
+		if _, err := svc.CoverageForArea(anchor); err == nil {
+			t.Errorf("anchor %q should be rejected as non-coverable", anchor)
+		}
+	}
+}
+
+func TestCoverageForAreaDropsSpecWideOrphans(t *testing.T) {
+	repo := seedCoverageRepo(t)
+	// A live task pointing at a non-active spec is a spec-wide orphan; it belongs
+	// to no area and must not surface in a single-area view.
+	writeTask(t, repo, "T-9", "Away", "todo", "high", "specs/v0.2.0.md#retrofit", nil)
+	svc := newTestService(t, repo, time.Date(2026, 7, 9, 0, 0, 0, 0, time.UTC))
+
+	full, err := svc.Coverage()
+	if err != nil {
+		t.Fatalf("Coverage: %v", err)
+	}
+	if len(full.Orphans) == 0 {
+		t.Fatal("fixture must have a spec-wide orphan to prove it is dropped")
+	}
+
+	report, err := svc.CoverageForArea("alpha")
+	if err != nil {
+		t.Fatalf("CoverageForArea: %v", err)
+	}
+	if len(report.Orphans) != 0 || report.Drift.AwayTaskCount != 0 {
+		t.Fatalf("area view must drop spec-wide orphans, got %v", report.Orphans)
+	}
+}

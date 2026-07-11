@@ -430,6 +430,115 @@ func TestCoverageMinExitsZeroWhenNotApplicable(t *testing.T) {
 	}
 }
 
+func TestCoverageAreaFiltersReportAndStaysReadOnly(t *testing.T) {
+	root := setupRepo(t)
+	if err := os.WriteFile(filepath.Join(root, "specs", "v0.1.0.md"), []byte(coverageSmokeSpec), 0o644); err != nil {
+		t.Fatalf("write spec: %v", err)
+	}
+	writeCoverageTaskFile(t, root, "T-1", "todo", "specs/v0.1.0.md#alpha")
+	// A live task pointing at another spec is a spec-wide orphan the area view drops.
+	writeCoverageTaskFile(t, root, "T-9", "todo", "specs/v0.2.0.md#retrofit")
+
+	before := readAllFiles(t, root)
+
+	// Covered area: filtered report scores 100% over a denominator of one.
+	out, err := runRoot(t, "coverage", "--area", "alpha")
+	if err != nil {
+		t.Fatalf("coverage --area alpha: %v (output %q)", err, out)
+	}
+	if !strings.Contains(out, "coverage: 100% (1/1 areas)") {
+		t.Errorf("expected single-area 100%% line: %q", out)
+	}
+	if !strings.Contains(out, "alpha: T-1") {
+		t.Errorf("expected alpha's reverse-map row: %q", out)
+	}
+	if strings.Contains(out, "beta") {
+		t.Errorf("filtered report must not mention other areas: %q", out)
+	}
+	if strings.Contains(out, "orphans:") {
+		t.Errorf("area view must drop spec-wide orphans: %q", out)
+	}
+
+	// Uncovered area: filtered report scores 0% and lists the gap.
+	betaOut, err := runRoot(t, "coverage", "--area", "beta")
+	if err != nil {
+		t.Fatalf("coverage --area beta: %v (output %q)", err, betaOut)
+	}
+	if !strings.Contains(betaOut, "coverage: 0% (0/1 areas)") {
+		t.Errorf("expected uncovered single-area 0%% line: %q", betaOut)
+	}
+
+	// --area composes with --json.
+	jsonOut, err := runRoot(t, "coverage", "--area", "alpha", "--json")
+	if err != nil {
+		t.Fatalf("coverage --area --json: %v (output %q)", err, jsonOut)
+	}
+	var report struct {
+		CoverableAreas int `json:"coverable_areas"`
+		Areas          []struct {
+			Anchor string `json:"anchor"`
+		} `json:"areas"`
+		Orphans []struct{} `json:"orphans"`
+	}
+	if err := json.Unmarshal([]byte(jsonOut), &report); err != nil {
+		t.Fatalf("parse json: %v (output %q)", err, jsonOut)
+	}
+	if report.CoverableAreas != 1 || len(report.Areas) != 1 || report.Areas[0].Anchor != "alpha" {
+		t.Errorf("--json area view not narrowed to alpha: %+v", report)
+	}
+	if len(report.Orphans) != 0 {
+		t.Errorf("--json area view must drop orphans, got %+v", report.Orphans)
+	}
+
+	// A non-coverable anchor (a deferred area) is rejected with no output beyond the error.
+	if _, err := runRoot(t, "coverage", "--area", "gamma"); err == nil {
+		t.Error("deferred area gamma is not coverable and must be rejected")
+	}
+	if _, err := runRoot(t, "coverage", "--area", "nope"); err == nil {
+		t.Error("unknown anchor must be rejected")
+	}
+
+	after := readAllFiles(t, root)
+	if len(before) != len(after) {
+		t.Fatalf("coverage --area changed the file set")
+	}
+	for path, content := range before {
+		if after[path] != content {
+			t.Errorf("coverage --area mutated %s", path)
+		}
+	}
+}
+
+func TestCoverageAreaOnSpecWithNoCoverableAreas(t *testing.T) {
+	root := setupRepo(t)
+	if err := os.WriteFile(filepath.Join(root, "specs", "v0.1.0.md"), []byte(naSpec), 0o644); err != nil {
+		t.Fatalf("write spec: %v", err)
+	}
+
+	// A spec with no coverable areas has nothing to narrow to, so any --area
+	// anchor is rejected rather than crashing or reporting N/A.
+	if _, err := runRoot(t, "coverage", "--area", "alpha"); err == nil {
+		t.Fatal("--area against a spec with no coverable areas must be rejected")
+	}
+}
+
+func TestCoverageAreaComposesWithMin(t *testing.T) {
+	root := setupRepo(t)
+	if err := os.WriteFile(filepath.Join(root, "specs", "v0.1.0.md"), []byte(coverageSmokeSpec), 0o644); err != nil {
+		t.Fatalf("write spec: %v", err)
+	}
+	writeCoverageTaskFile(t, root, "T-1", "todo", "specs/v0.1.0.md#alpha")
+
+	// A covered single area scores 100%, so --min 100 passes.
+	if _, err := runRoot(t, "coverage", "--area", "alpha", "--min", "100"); err != nil {
+		t.Errorf("covered area at 100%% must satisfy --min 100: %v", err)
+	}
+	// An uncovered single area scores 0%, so --min 50 gates non-zero.
+	if _, err := runRoot(t, "coverage", "--area", "beta", "--min", "50"); err == nil {
+		t.Error("uncovered area at 0%% must fail --min 50")
+	}
+}
+
 func readAllFiles(t *testing.T, root string) map[string]string {
 	t.Helper()
 	files := make(map[string]string)

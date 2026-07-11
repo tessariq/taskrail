@@ -12,6 +12,7 @@ import (
 func newCoverageCmd() *cobra.Command {
 	var opt jsonOption
 	var minPct float64
+	var area string
 	cmd := &cobra.Command{
 		Use:   "coverage",
 		Short: "Report advisory spec coverage, orphan, and drift signals (read-only)",
@@ -19,7 +20,9 @@ func newCoverageCmd() *cobra.Command {
 			"coverage, orphan tasks, and two-directional drift. Signals are advisory " +
 			"and never make validate fail; the command never writes STATE.md or task files. " +
 			"--min <pct> opts into CI gating: the command exits non-zero when decomposition " +
-			"coverage is below the threshold, leaving validate and the report unchanged.",
+			"coverage is below the threshold, leaving validate and the report unchanged. " +
+			"--area <anchor> narrows the report to a single coverable spec area for a " +
+			"focused \"is this feature decomposed?\" check.",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if cmd.Flags().Changed("min") && (minPct < 0 || minPct > 100) {
 				return fmt.Errorf("--min must be a percentage between 0 and 100, got %s", formatPercent(minPct))
@@ -28,7 +31,7 @@ func newCoverageCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			report, err := svc.Coverage()
+			report, err := coverageReport(svc, cmd.Flags().Changed("area"), area)
 			if err != nil {
 				return err
 			}
@@ -40,7 +43,17 @@ func newCoverageCmd() *cobra.Command {
 	}
 	cmd.Flags().BoolVar(&opt.json, "json", false, "print machine-readable output")
 	cmd.Flags().Float64Var(&minPct, "min", 0, "fail (non-zero exit) when decomposition coverage is below this percentage (0–100); report stays unchanged")
+	cmd.Flags().StringVar(&area, "area", "", "narrow the report to a single coverable spec area (its anchor); rejects a non-coverable anchor")
 	return cmd
+}
+
+// coverageReport returns the full report, or the report narrowed to one coverable
+// area when --area is set. A non-coverable anchor is rejected before any output.
+func coverageReport(svc *taskrail.Service, areaSet bool, area string) (taskrail.CoverageReport, error) {
+	if areaSet {
+		return svc.CoverageForArea(area)
+	}
+	return svc.Coverage()
 }
 
 // coverageGate returns a non-zero-exit error when opt-in --min gating is active

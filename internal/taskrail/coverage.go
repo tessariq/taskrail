@@ -67,6 +67,63 @@ func (s *Service) Coverage() (CoverageReport, error) {
 	return s.coverageFor(state, tasks)
 }
 
+// CoverageForArea computes the full read-only coverage report and narrows it to
+// the single coverable area named by anchor, for focused "is this feature
+// decomposed?" checks. The anchor is matched against the already-slugged area
+// anchors (no re-slugging); an anchor that is not a coverable ### area — an
+// unknown one or a #### sub-area that only rolls up — is rejected with no write.
+func (s *Service) CoverageForArea(anchor string) (CoverageReport, error) {
+	report, err := s.Coverage()
+	if err != nil {
+		return CoverageReport{}, err
+	}
+	return filterCoverageToArea(report, anchor)
+}
+
+// filterCoverageToArea narrows a full coverage report to the one coverable area
+// named by anchor. Spec-wide orphans belong to no area, so the filtered view
+// drops them and reports zero away-drift, keeping the report an internally
+// consistent picture of just that area.
+func filterCoverageToArea(r CoverageReport, anchor string) (CoverageReport, error) {
+	var area CoverageArea
+	found := false
+	for _, a := range r.Areas {
+		if a.Anchor == anchor {
+			area = a
+			found = true
+			break
+		}
+	}
+	if !found {
+		return CoverageReport{}, fmt.Errorf("--area %q is not a coverable area of %s", anchor, r.ActiveSpecPath)
+	}
+
+	covered, implemented := 0, 0
+	uncovered := []string{}
+	if area.Covered {
+		covered = 1
+	} else {
+		uncovered = append(uncovered, area.Anchor)
+	}
+	if area.Implemented {
+		implemented = 1
+	}
+	pct := float64(covered) * 100
+	ipct := float64(implemented) * 100
+	return CoverageReport{
+		ActiveSpecPath:        r.ActiveSpecPath,
+		Percent:               &pct,
+		ImplementationPercent: &ipct,
+		CoveredAreas:          covered,
+		ImplementedAreas:      implemented,
+		CoverableAreas:        1,
+		Areas:                 []CoverageArea{area},
+		UncoveredAreas:        uncovered,
+		Orphans:               []CoverageOrphan{},
+		Drift:                 DriftSummary{UncoveredAreaCount: len(uncovered), AwayTaskCount: 0},
+	}, nil
+}
+
 // coverageFor computes coverage from an already-loaded state and task set, so
 // callers that have paid the load cost (status) reuse the same computation
 // without a second read of STATE.md and the task files.
