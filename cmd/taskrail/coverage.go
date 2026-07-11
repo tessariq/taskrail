@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"math"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -10,12 +11,15 @@ import (
 
 func newCoverageCmd() *cobra.Command {
 	var opt jsonOption
+	var minPct float64
 	cmd := &cobra.Command{
 		Use:   "coverage",
 		Short: "Report advisory spec coverage, orphan, and drift signals (read-only)",
 		Long: "Report read-only linkage analysis for the active spec: decomposition " +
 			"coverage, orphan tasks, and two-directional drift. Signals are advisory " +
-			"and never make validate fail; the command never writes STATE.md or task files.",
+			"and never make validate fail; the command never writes STATE.md or task files. " +
+			"--min <pct> opts into CI gating: the command exits non-zero when decomposition " +
+			"coverage is below the threshold, leaving validate and the report unchanged.",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			svc, err := serviceFromCmd(cmd)
 			if err != nil {
@@ -25,11 +29,41 @@ func newCoverageCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return printResult(cmd, opt.json, report, renderCoverageText(report))
+			if err := printResult(cmd, opt.json, report, renderCoverageText(report)); err != nil {
+				return err
+			}
+			return coverageGate(report, cmd.Flags().Changed("min"), minPct)
 		},
 	}
 	cmd.Flags().BoolVar(&opt.json, "json", false, "print machine-readable output")
+	cmd.Flags().Float64Var(&minPct, "min", 0, "fail (non-zero exit) when decomposition coverage is below this percentage; report stays unchanged")
 	return cmd
+}
+
+// coverageGate returns a non-zero-exit error when opt-in --min gating is active
+// and the decomposition figure is below the threshold. Gating is off unless
+// --min is passed, and never fires on an unscoreable spec (Percent nil => N/A,
+// nothing to gate). The report-only implementation figure never affects the
+// exit code — only decomposition coverage does.
+//
+// The comparison uses the percentage rounded to the displayed precision, not the
+// raw float, so the exit code never contradicts the printed figure: a user who
+// sets --min to the "66.7%" they read must not be failed by the hidden 66.666…
+// value behind it.
+func coverageGate(r taskrail.CoverageReport, gateRequested bool, min float64) error {
+	if !gateRequested || r.Percent == nil {
+		return nil
+	}
+	if displayedPercent(*r.Percent) < min {
+		return fmt.Errorf("coverage %s is below --min %s", formatPercent(*r.Percent), formatPercent(min))
+	}
+	return nil
+}
+
+// displayedPercent rounds to one decimal place, matching formatPercent's
+// rendering, so gating decisions align with the figure the user sees.
+func displayedPercent(p float64) float64 {
+	return math.Round(p*10) / 10
 }
 
 // renderCoverageText builds the human-readable coverage report. The percentage
