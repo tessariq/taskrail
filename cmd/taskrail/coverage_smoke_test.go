@@ -309,6 +309,37 @@ func TestCoverageMinGatesOnDisplayedFractionalFigure(t *testing.T) {
 	}
 }
 
+func TestCoverageMinRejectsOutOfRange(t *testing.T) {
+	cases := []struct {
+		name    string
+		min     string
+		wantErr bool
+	}{
+		{name: "negative rejected", min: "-5", wantErr: true},
+		{name: "above 100 rejected", min: "150", wantErr: true},
+		{name: "zero accepted", min: "0", wantErr: false},
+		{name: "hundred accepted", min: "100", wantErr: false},
+	}
+	// rangeErr is the substring unique to a bounds-validation rejection, so an
+	// in-range value that merely fails the gate is not mistaken for a rejection.
+	const rangeErr = "between 0 and 100"
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			root := setupRepo(t)
+			if err := os.WriteFile(filepath.Join(root, "specs", "v0.1.0.md"), []byte(coverageSmokeSpec), 0o644); err != nil {
+				t.Fatalf("write spec: %v", err)
+			}
+			writeCoverageTaskFile(t, root, "T-1", "todo", "specs/v0.1.0.md#alpha")
+
+			_, err := runRoot(t, "coverage", "--min", tc.min)
+			rejected := err != nil && strings.Contains(err.Error(), rangeErr)
+			if rejected != tc.wantErr {
+				t.Fatalf("--min %s: rejected=%v, want %v (err %v)", tc.min, rejected, tc.wantErr, err)
+			}
+		})
+	}
+}
+
 func TestCoverageMinExitsZeroWhenNotApplicable(t *testing.T) {
 	root := setupRepo(t)
 	if err := os.WriteFile(filepath.Join(root, "specs", "v0.1.0.md"), []byte(naSpec), 0o644); err != nil {

@@ -28,7 +28,7 @@ All notable user-visible changes to Taskrail will be documented in this file.
   (uncovered / decomposed / implemented), orphan tasks (spec_ref pointing at
   another spec), and a two-directional drift summary. `status` and `stats` show
   both figures. Never writes state and never fails `validate`; a spec with no
-  coverable areas reports `N/A`. `--min <pct>` opts into CI gating: exits
+  coverable areas reports `N/A`. `--min <pct>` (0–100) opts into CI gating: exits
   non-zero when decomposition coverage is below the threshold (report unchanged,
   `validate` still advisory, `N/A` never gates). Supports `--json`.
 - `taskrail status` — strictly read-only snapshot of current tracked-work state:

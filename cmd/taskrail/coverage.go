@@ -21,6 +21,9 @@ func newCoverageCmd() *cobra.Command {
 			"--min <pct> opts into CI gating: the command exits non-zero when decomposition " +
 			"coverage is below the threshold, leaving validate and the report unchanged.",
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			if cmd.Flags().Changed("min") && (minPct < 0 || minPct > 100) {
+				return fmt.Errorf("--min must be a percentage between 0 and 100, got %s", formatPercent(minPct))
+			}
 			svc, err := serviceFromCmd(cmd)
 			if err != nil {
 				return err
@@ -36,7 +39,7 @@ func newCoverageCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVar(&opt.json, "json", false, "print machine-readable output")
-	cmd.Flags().Float64Var(&minPct, "min", 0, "fail (non-zero exit) when decomposition coverage is below this percentage; report stays unchanged")
+	cmd.Flags().Float64Var(&minPct, "min", 0, "fail (non-zero exit) when decomposition coverage is below this percentage (0–100); report stays unchanged")
 	return cmd
 }
 
