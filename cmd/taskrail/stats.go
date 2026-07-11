@@ -10,6 +10,7 @@ import (
 
 func newStatsCmd() *cobra.Command {
 	var opt jsonOption
+	var format string
 	cmd := &cobra.Command{
 		Use:   "stats",
 		Short: "Report aggregate tracked-work statistics (read-only)",
@@ -18,10 +19,23 @@ func newStatsCmd() *cobra.Command {
 			"blocked ratio and recorded-blocker count, spec-coverage with a per-area " +
 			"breakdown, and dependency shape (unmet dependencies, longest chain). " +
 			"Taskrail keeps no event log, so stats reports the current distribution, " +
-			"not historical trends. Never writes STATE.md or task files.",
+			"not historical trends. With --format dot|mermaid it instead exports the " +
+			"task dependency DAG as Graphviz DOT or Mermaid text for external " +
+			"rendering. Never writes STATE.md or task files.",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			svc, err := serviceFromCmd(cmd)
 			if err != nil {
+				return err
+			}
+			if format != "" {
+				if opt.json {
+					return fmt.Errorf("--format and --json are mutually exclusive")
+				}
+				graph, err := svc.DependencyGraph(format)
+				if err != nil {
+					return err
+				}
+				_, err = fmt.Fprint(cmd.OutOrStdout(), graph)
 				return err
 			}
 			report, err := svc.Stats()
@@ -32,6 +46,7 @@ func newStatsCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVar(&opt.json, "json", false, "print machine-readable output")
+	cmd.Flags().StringVar(&format, "format", "", "export the dependency DAG instead of stats: dot or mermaid")
 	return cmd
 }
 

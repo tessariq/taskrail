@@ -49,6 +49,8 @@ All notable user-visible changes to Taskrail will be documented in this file.
   status, the blocked ratio and recorded-blocker count, spec coverage with a
   per-area breakdown, and dependency shape (tasks with unmet dependencies,
   longest dependency chain). Leaves the working tree clean. Supports `--json`.
+  `--format dot|mermaid` instead exports the task dependency DAG (nodes = tasks,
+  edges = dependencies) as Graphviz DOT or Mermaid text for external rendering.
 
 ### Changed
 
