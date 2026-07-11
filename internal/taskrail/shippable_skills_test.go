@@ -158,6 +158,22 @@ func TestRepairSkillDrivesConservativeLoop(t *testing.T) {
 	)
 }
 
+// The repair skill covers the parallel-PR merge-conflict scenario (T-089): a
+// conflicting STATE.md is never hand-merged. Because STATE.md is a projection of
+// the task files, the conflict is sidestepped — take either side, then
+// `repair --apply` re-projects from the merged task files. The assertion anchors
+// on the conflict framing, the resolution command, and the boundary repair will
+// not cross (a real conflict on the same task file stays human-resolved), so it
+// fails if any of the three is dropped.
+func TestRepairSkillCoversStateConflict(t *testing.T) {
+	assertSkillReferences(t, "taskrail-repair",
+		"conflict",
+		"take either side",
+		"} repair --apply",
+		"task file",
+	)
+}
+
 // The retargeted recovery skill must route through repair and must no longer
 // permit hand-editing authoritative state (its old bootstrap-edit fallback).
 func TestRecoverySkillRoutesThroughRepair(t *testing.T) {
