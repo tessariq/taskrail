@@ -420,9 +420,16 @@ func TestValidatePassesWithAdvisoryCoverageGap(t *testing.T) {
 // clean (every task's spec_ref resolves to a live anchor).
 func seedCoverageRepo(t *testing.T) string {
 	t.Helper()
-	repo := seedFixtureRepo(t)
-	writeFile(t, filepath.Join(repo, "specs", "v0.1.0.md"), coverageSpecFixture)
 	// One valid task covering Alpha; Delta stays an advisory gap.
+	return seedAreaCoverageRepo(t, coverageSpecFixture)
+}
+
+// seedAreaCoverageRepo seeds a repo whose active spec is specContent, with a
+// single task covering the `alpha` area, shared by the CoverageForArea tests.
+func seedAreaCoverageRepo(t *testing.T, specContent string) string {
+	t.Helper()
+	repo := seedFixtureRepo(t)
+	writeFile(t, filepath.Join(repo, "specs", "v0.1.0.md"), specContent)
 	writeTask(t, repo, "T-1", "Cover alpha", "todo", "high", "specs/v0.1.0.md#alpha", nil)
 	return repo
 }
@@ -572,6 +579,112 @@ func TestCoverageForAreaRejectionMessages(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// degenerateAreaSpec has two degenerate `###` anchors: a punctuation-only title
+// that slugs to the empty string, and a pair of headings that slug to the same
+// anchor. A normal coverable area (`alpha`) sits alongside them so the happy
+// path stays exercised.
+const degenerateAreaSpec = `# Degenerate
+
+## Potential Features
+
+### !!!
+
+Punctuation-only title slugs to the empty anchor.
+
+### Dup Area
+
+First same-slug heading.
+
+### Dup Area
+
+Second same-slug heading.
+
+### Alpha
+
+A normal, unambiguous area.
+`
+
+// seedDegenerateAreaRepo seeds a repo whose active spec carries an empty-slug
+// `###` area and a duplicate-slug `###` pair, for the `--area` rejection tests.
+func seedDegenerateAreaRepo(t *testing.T) string {
+	t.Helper()
+	return seedAreaCoverageRepo(t, degenerateAreaSpec)
+}
+
+// TestCoverageForAreaRejectsEmptyAnchor proves a punctuation-only `###` title
+// (which slugs to "") is never bound by `--area ""`: the request is rejected with
+// a clear message and no write, rather than producing a hollow empty-slug report.
+func TestCoverageForAreaRejectsEmptyAnchor(t *testing.T) {
+	repo := seedDegenerateAreaRepo(t)
+	svc := newTestService(t, repo, time.Date(2026, 7, 9, 0, 0, 0, 0, time.UTC))
+
+	before := snapshotTree(t, repo)
+	_, err := svc.CoverageForArea("")
+	if err == nil {
+		t.Fatal("--area \"\" must be rejected, never matched to an empty-slug area")
+	}
+	if !strings.Contains(err.Error(), "empty") {
+		t.Fatalf("rejection message %q should name the empty anchor", err.Error())
+	}
+	after := snapshotTree(t, repo)
+	if len(before) != len(after) {
+		t.Fatalf("rejection mutated the file set: before %d, after %d", len(before), len(after))
+	}
+	for path, content := range before {
+		if after[path] != content {
+			t.Errorf("rejection mutated %s", path)
+		}
+	}
+}
+
+// TestCoverageForAreaRejectsAmbiguousAnchor proves that when two `###` areas slug
+// to the same anchor, `--area <anchor>` is rejected as ambiguous (naming the
+// collision) rather than silently binding to the first-scanned area.
+func TestCoverageForAreaRejectsAmbiguousAnchor(t *testing.T) {
+	repo := seedDegenerateAreaRepo(t)
+	svc := newTestService(t, repo, time.Date(2026, 7, 9, 0, 0, 0, 0, time.UTC))
+
+	before := snapshotTree(t, repo)
+	_, err := svc.CoverageForArea("dup-area")
+	if err == nil {
+		t.Fatal("--area \"dup-area\" must be rejected as ambiguous, not bound to the first match")
+	}
+	msg := err.Error()
+	for _, want := range []string{"ambiguous", "dup-area"} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("rejection message %q should name the collision (%q)", msg, want)
+		}
+	}
+	after := snapshotTree(t, repo)
+	if len(before) != len(after) {
+		t.Fatalf("rejection mutated the file set: before %d, after %d", len(before), len(after))
+	}
+	for path, content := range before {
+		if after[path] != content {
+			t.Errorf("rejection mutated %s", path)
+		}
+	}
+}
+
+// TestCoverageForAreaNormalAnchorUnaffected proves the rejection guards do not
+// disturb a normal, unambiguous coverable anchor: it still filters to exactly
+// that one area and scores as before.
+func TestCoverageForAreaNormalAnchorUnaffected(t *testing.T) {
+	repo := seedDegenerateAreaRepo(t)
+	svc := newTestService(t, repo, time.Date(2026, 7, 9, 0, 0, 0, 0, time.UTC))
+
+	report, err := svc.CoverageForArea("alpha")
+	if err != nil {
+		t.Fatalf("CoverageForArea(alpha): %v", err)
+	}
+	if report.CoverableAreas != 1 || len(report.Areas) != 1 || report.Areas[0].Anchor != "alpha" {
+		t.Fatalf("expected a single alpha-area report, got %+v", report.Areas)
+	}
+	if !report.Areas[0].Covered || !equalFloatPtr(report.Percent, ptrFloat(100)) {
+		t.Fatalf("covered alpha must score 100%%, got covered=%v percent=%s", report.Areas[0].Covered, fmtFloatPtr(report.Percent))
 	}
 }
 

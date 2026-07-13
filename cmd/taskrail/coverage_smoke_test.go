@@ -514,6 +514,70 @@ func TestCoverageAreaFiltersReportAndStaysReadOnly(t *testing.T) {
 	}
 }
 
+// degenerateAreaSmokeSpec carries a punctuation-only `###` title (slugs to "")
+// and a duplicate-slug `###` pair alongside a normal area, so the CLI-level
+// rejection of empty and ambiguous `--area` anchors can be exercised end to end.
+const degenerateAreaSmokeSpec = `# Fixture
+
+## Potential Features
+
+### !!!
+
+Punctuation-only title slugs to the empty anchor.
+
+### Dup Area
+
+First same-slug heading.
+
+### Dup Area
+
+Second same-slug heading.
+
+### Alpha
+
+A normal, unambiguous area.
+`
+
+// TestCoverageAreaRejectsEmptyAndAmbiguousAnchors pins the two degenerate
+// rejections at the CLI boundary: an empty-slug anchor and a duplicate-slug
+// anchor both exit non-zero through cobra's RunE, and neither mutates the tree.
+func TestCoverageAreaRejectsEmptyAndAmbiguousAnchors(t *testing.T) {
+	root := setupRepo(t)
+	if err := os.WriteFile(filepath.Join(root, "specs", "v0.1.0.md"), []byte(degenerateAreaSmokeSpec), 0o644); err != nil {
+		t.Fatalf("write spec: %v", err)
+	}
+	before := readAllFiles(t, root)
+
+	// An empty anchor (a punctuation-only ### title slugs to "") is rejected
+	// rather than binding to the degenerate empty-slug area.
+	if _, err := runRoot(t, "coverage", "--area", ""); err == nil {
+		t.Error("--area \"\" must be rejected, never matched to an empty-slug area")
+	} else if !strings.Contains(err.Error(), "empty") {
+		t.Errorf("empty-anchor rejection must name its case, got %q", err.Error())
+	}
+	// Two ### areas that slug to the same anchor are rejected as ambiguous,
+	// naming the collision, rather than silently binding to the first.
+	if _, err := runRoot(t, "coverage", "--area", "dup-area"); err == nil {
+		t.Error("ambiguous anchor dup-area must be rejected, not bound to the first match")
+	} else if !strings.Contains(err.Error(), "ambiguous") {
+		t.Errorf("ambiguous rejection must name its case, got %q", err.Error())
+	}
+	// A normal, unambiguous anchor still narrows exactly as before.
+	if _, err := runRoot(t, "coverage", "--area", "alpha"); err != nil {
+		t.Errorf("normal anchor alpha must still filter: %v", err)
+	}
+
+	after := readAllFiles(t, root)
+	if len(before) != len(after) {
+		t.Fatalf("coverage --area changed the file set")
+	}
+	for path, content := range before {
+		if after[path] != content {
+			t.Errorf("coverage --area mutated %s", path)
+		}
+	}
+}
+
 func TestCoverageAreaOnSpecWithNoCoverableAreas(t *testing.T) {
 	root := setupRepo(t)
 	if err := os.WriteFile(filepath.Join(root, "specs", "v0.1.0.md"), []byte(naSpec), 0o644); err != nil {

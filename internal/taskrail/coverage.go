@@ -72,7 +72,10 @@ func (s *Service) Coverage() (CoverageReport, error) {
 // decomposed?" checks. The anchor is matched against the already-slugged area
 // anchors (no re-slugging); an anchor that is not a coverable ### area is
 // rejected with no write, and the rejection names its case (unknown, #### sub-
-// area roll-up, or deferred/subsumed area) from the same single spec parse.
+// area roll-up, or deferred/subsumed area) from the same single spec parse. An
+// empty anchor (a punctuation-only ### title that slugs to "") and an anchor
+// shared by two ### areas are rejected as invalid and ambiguous respectively,
+// rather than binding to a degenerate or first-of-N area.
 func (s *Service) CoverageForArea(anchor string) (CoverageReport, error) {
 	state, tasks, err := s.loadStateAndTasks()
 	if err != nil {
@@ -85,12 +88,28 @@ func (s *Service) CoverageForArea(anchor string) (CoverageReport, error) {
 	}
 	areas, deferred := parseSpecAreas(markdown)
 	report := coverageFromAreas(areas, activePath, tasks)
+	// The empty anchor is never a requestable area: a punctuation-only ### title
+	// slugs to "" and a bare --area "" would otherwise bind to that degenerate
+	// parse. Reject it before the match scan so no empty-slug area is reachable.
+	if anchor == "" {
+		return CoverageReport{}, fmt.Errorf("--area %q is empty and cannot name an area of %s; run spec show --anchors to list the spec's anchors", anchor, activePath)
+	}
+	// Count matches so two ### areas that slug to the same anchor are rejected as
+	// ambiguous rather than silently resolving to the first-scanned one.
+	matches := make([]CoverageArea, 0, 1)
 	for _, a := range report.Areas {
 		if a.Anchor == anchor {
-			return narrowToArea(report, a), nil
+			matches = append(matches, a)
 		}
 	}
-	return CoverageReport{}, areaRejectionError(areas, deferred, anchor, activePath)
+	switch len(matches) {
+	case 0:
+		return CoverageReport{}, areaRejectionError(areas, deferred, anchor, activePath)
+	case 1:
+		return narrowToArea(report, matches[0]), nil
+	default:
+		return CoverageReport{}, fmt.Errorf("--area %q is ambiguous in %s: %d ### areas slug to the same anchor; rename the colliding headings so each area has a unique anchor", anchor, activePath, len(matches))
+	}
 }
 
 // areaRejectionError explains why anchor is not a coverable area, tailoring the
