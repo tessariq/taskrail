@@ -1,6 +1,7 @@
 package taskrail
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -51,6 +52,69 @@ func TestBlockRetainsEveryBlockedTaskReason(t *testing.T) {
 	}
 	if !hasBlocker(blockers, "T-003: waiting on vendor B") {
 		t.Errorf("second blocked task's reason missing: %v", blockers)
+	}
+}
+
+// TestBlockPreservesActiveTaskSummary locks in that blocking a todo while a
+// different task is in_progress leaves the active task's status_summary and
+// next_action pointers intact (never clobbered to "blocked"), while still
+// recording the newly blocked task's reason. Blocking while idle keeps today's
+// behavior: status_summary flips to "blocked".
+func TestBlockPreservesActiveTaskSummary(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name        string
+		startActive bool
+		wantSummary string
+		wantNextHas string
+	}{
+		{
+			name:        "block while another task in_progress",
+			startActive: true,
+			wantSummary: "in_progress",
+			wantNextHas: "T-004",
+		},
+		{
+			name:        "block while idle",
+			startActive: false,
+			wantSummary: "blocked",
+			wantNextHas: "T-003",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			repo := seedFixtureRepo(t)
+			writeTask(t, repo, "T-003", "Blocked", "todo", "high", "specs/v0.1.0.md#summary", nil)
+			writeTask(t, repo, "T-004", "Active", "todo", "high", "specs/v0.1.0.md#summary", nil)
+			svc := newTestService(t, repo, time.Date(2026, 3, 31, 12, 0, 0, 0, time.UTC))
+
+			if tt.startActive {
+				if _, err := svc.Start("T-004"); err != nil {
+					t.Fatalf("start T-004: %v", err)
+				}
+			}
+			if _, err := svc.Block("T-003", "waiting on vendor"); err != nil {
+				t.Fatalf("block T-003: %v", err)
+			}
+
+			state, err := svc.loadState()
+			if err != nil {
+				t.Fatalf("load state: %v", err)
+			}
+			if state.Frontmatter.StatusSummary != tt.wantSummary {
+				t.Errorf("status_summary = %q, want %q", state.Frontmatter.StatusSummary, tt.wantSummary)
+			}
+			if !strings.Contains(state.Frontmatter.NextAction, tt.wantNextHas) {
+				t.Errorf("next_action = %q, want reference to %q", state.Frontmatter.NextAction, tt.wantNextHas)
+			}
+			if tt.startActive && state.Frontmatter.CurrentTask != "T-004" {
+				t.Errorf("current_task = %q, want T-004 still active", state.Frontmatter.CurrentTask)
+			}
+			if !hasBlocker(blockerEntries(t, svc), "T-003: waiting on vendor") {
+				t.Errorf("blocked task's reason not recorded: %v", state.Frontmatter.Blockers)
+			}
+		})
 	}
 }
 

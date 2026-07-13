@@ -446,16 +446,28 @@ func (s *Service) finishTask(taskID, status, note string) (TransitionResult, err
 		state.Frontmatter.CurrentTaskTitle = ""
 	}
 	state.Frontmatter.UpdatedAt = now
-	state.Frontmatter.StatusSummary = "idle"
+	// The blockers ledger is per-task and must always reflect this transition,
+	// even when a different task stays active.
 	if status == "blocked" {
 		state.Frontmatter.Blockers = upsertBlocker(state.Frontmatter.Blockers, taskID, note)
-		state.Frontmatter.StatusSummary = "blocked"
-		state.Frontmatter.NextAction = fmt.Sprintf("Resolve blocker on %s", taskID)
 	} else {
 		// Completing one task must not erase reasons recorded for other tasks that
 		// are still blocked; drop only this task's own entry.
 		state.Frontmatter.Blockers = removeBlocker(state.Frontmatter.Blockers, taskID)
-		state.Frontmatter.NextAction = "Select the next eligible task"
+	}
+
+	// status_summary/next_action belong to the active task. Only reconcile them
+	// when this transition leaves no task in progress (current_task cleared above
+	// iff the finished task was itself active). Mirrors Unblock's guard so blocking
+	// a todo never clobbers a still-active task's summary.
+	if state.Frontmatter.CurrentTask == "" {
+		if status == "blocked" {
+			state.Frontmatter.StatusSummary = "blocked"
+			state.Frontmatter.NextAction = fmt.Sprintf("Resolve blocker on %s", taskID)
+		} else {
+			state.Frontmatter.StatusSummary = "idle"
+			state.Frontmatter.NextAction = "Select the next eligible task"
+		}
 	}
 	state.Body = renderStateBody(state.Frontmatter, tasks)
 
