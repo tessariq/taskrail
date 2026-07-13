@@ -33,7 +33,11 @@ All notable user-visible changes to Taskrail will be documented in this file.
   (uncovered / decomposed / implemented), a reverse map listing the covering
   task id(s) for each area (double-covered areas flagged), orphan tasks (spec_ref
   pointing at another spec), and a two-directional drift summary. `status` and
-  `stats` show both figures. Never writes state and never fails `validate`; a
+  `stats` show both figures. Degenerate `###` area headings (a punctuation-only
+  title that slugs to empty, or two headings sharing a slug) inflate the
+  denominator; `coverage` names them as an advisory diagnostic, and `status`/
+  `stats` show a count pointing back to `coverage` rather than silently reporting
+  the distorted figure. Never writes state and never fails `validate`; a
   spec with no coverable areas reports `N/A`. `--min <pct>` (0–100) opts into CI
   gating: exits non-zero when decomposition coverage is below the threshold
   (report unchanged, `validate` still advisory, `N/A` never gates). `--area

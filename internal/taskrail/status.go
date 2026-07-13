@@ -50,6 +50,11 @@ type StatusCoverage struct {
 	CoverableAreas        int      `json:"coverable_areas"`
 	OrphanTaskCount       int      `json:"orphan_task_count"`
 	UncoveredAreaCount    int      `json:"uncovered_area_count"`
+	// AreaAnchorIssueCount is how many degenerate `###` area headings (empty or
+	// duplicate slugs) inflate the denominator above. status carries only the
+	// count and points the operator at `coverage` for the naming detail, so this
+	// terse snapshot never silently reports a distorted figure.
+	AreaAnchorIssueCount int `json:"area_anchor_issue_count"`
 }
 
 // StatusReport is the strictly read-only snapshot of current tracked-work state.
@@ -97,6 +102,7 @@ func (s *Service) Status() (StatusReport, error) {
 			CoverableAreas:        coverage.CoverableAreas,
 			OrphanTaskCount:       coverage.Drift.AwayTaskCount,
 			UncoveredAreaCount:    coverage.Drift.UncoveredAreaCount,
+			AreaAnchorIssueCount:  len(coverage.AreaAnchorIssues),
 		},
 	}, nil
 }

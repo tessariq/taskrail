@@ -190,3 +190,27 @@ func TestStatsCoverageNAWhenNoCoverableAreas(t *testing.T) {
 		t.Errorf("decomposition_percent = %v, want nil", *report.Coverage.DecompositionPercent)
 	}
 }
+
+func TestStatsHintsDegenerateAreaHeadings(t *testing.T) {
+	root := setupRepo(t)
+	if err := os.WriteFile(filepath.Join(root, "specs", "v0.1.0.md"), []byte(degenerateAreaSpec), 0o644); err != nil {
+		t.Fatalf("write spec: %v", err)
+	}
+	writeCoverageTaskFile(t, root, "T-1", "todo", "specs/v0.1.0.md#alpha")
+
+	out, err := runRoot(t, "stats")
+	if err != nil {
+		t.Fatalf("stats: %v (output %q)", err, out)
+	}
+	if !strings.Contains(out, "area heading issues: 2") || !strings.Contains(out, "coverage") {
+		t.Errorf("expected an anchor-issue hint pointing at coverage: %q", out)
+	}
+
+	jsonOut, err := runRoot(t, "stats", "--json")
+	if err != nil {
+		t.Fatalf("stats --json: %v (output %q)", err, jsonOut)
+	}
+	if !strings.Contains(jsonOut, `"area_anchor_issue_count": 2`) {
+		t.Errorf("expected area_anchor_issue_count: 2 in stats json: %q", jsonOut)
+	}
+}

@@ -126,6 +126,16 @@ func renderCoverageText(r taskrail.CoverageReport) string {
 		}
 	}
 
+	// Advisory only: these degenerate ### headings inflate the denominator above.
+	// Naming them (rather than silently dropping or silently counting them) tells
+	// the author which heading to fix without hiding a typo'd real feature area.
+	if len(r.AreaAnchorIssues) > 0 {
+		b.WriteString("area heading issues (advisory; fix these ### headings — they inflate the coverage denominator):\n")
+		for _, issue := range r.AreaAnchorIssues {
+			fmt.Fprintf(&b, "  - %s\n", areaAnchorIssueLine(issue))
+		}
+	}
+
 	fmt.Fprintf(&b, "drift: %d uncovered area(s), %d task(s) pointing away", r.Drift.UncoveredAreaCount, r.Drift.AwayTaskCount)
 	return b.String()
 }
@@ -165,6 +175,34 @@ func decomposedNotImplemented(areas []taskrail.CoverageArea) []string {
 		}
 	}
 	return gap
+}
+
+// areaAnchorIssueLine renders one advisory anchor-issue row, quoting the
+// offending ### heading title(s): an empty-slug heading has no slug-able text,
+// and a duplicate-slug pair names the shared anchor and every colliding title.
+func areaAnchorIssueLine(issue taskrail.AreaAnchorIssue) string {
+	quoted := make([]string, len(issue.Titles))
+	for i, title := range issue.Titles {
+		quoted[i] = fmt.Sprintf("%q", title)
+	}
+	joined := strings.Join(quoted, ", ")
+	if issue.Kind == "duplicate_slug" {
+		return fmt.Sprintf("duplicate slug %q shared by ### headings %s", issue.Anchor, joined)
+	}
+	return fmt.Sprintf("empty slug (### title has no slug-able text): %s", joined)
+}
+
+// renderAreaAnchorIssueHint is the one-line pointer status and stats print when
+// the shared coverage computation found degenerate `###` area headings. Those
+// terse dashboards carry only the count, not the per-heading naming (that lives
+// in `coverage`), so an operator reading only status/stats still learns the
+// figure above may be inflated and where to get the detail. Empty when there are
+// no issues, so a clean spec stays quiet.
+func renderAreaAnchorIssueHint(count int) string {
+	if count <= 0 {
+		return ""
+	}
+	return fmt.Sprintf("area heading issues: %d degenerate ### heading(s) may inflate coverage — run 'taskrail coverage' to list\n", count)
 }
 
 // formatPercent prints a whole percentage without a decimal and otherwise keeps

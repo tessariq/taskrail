@@ -256,3 +256,46 @@ func TestStatusCoverageNAWhenNoCoverableAreas(t *testing.T) {
 		t.Errorf("implementation_percent = %v, want nil (N/A)", *report.Coverage.ImplementationPercent)
 	}
 }
+
+func TestStatusHintsDegenerateAreaHeadings(t *testing.T) {
+	// status reuses the shared coverage computation, so a spec with degenerate
+	// ### headings would otherwise show the inflated figure with no pointer. It
+	// must count the anchor issues and point the operator at `coverage`.
+	root := setupRepo(t)
+	if err := os.WriteFile(filepath.Join(root, "specs", "v0.1.0.md"), []byte(degenerateAreaSpec), 0o644); err != nil {
+		t.Fatalf("write spec: %v", err)
+	}
+	writeCoverageTaskFile(t, root, "T-1", "todo", "specs/v0.1.0.md#alpha")
+
+	out, err := runRoot(t, "status")
+	if err != nil {
+		t.Fatalf("status: %v (output %q)", err, out)
+	}
+	if !strings.Contains(out, "area heading issues: 2") || !strings.Contains(out, "coverage") {
+		t.Errorf("expected an anchor-issue hint pointing at coverage: %q", out)
+	}
+
+	jsonOut, err := runRoot(t, "status", "--json")
+	if err != nil {
+		t.Fatalf("status --json: %v (output %q)", err, jsonOut)
+	}
+	if !strings.Contains(jsonOut, `"area_anchor_issue_count": 2`) {
+		t.Errorf("expected area_anchor_issue_count: 2 in status json: %q", jsonOut)
+	}
+}
+
+func TestStatusCleanSpecOmitsAnchorIssueHint(t *testing.T) {
+	root := setupRepo(t)
+	if err := os.WriteFile(filepath.Join(root, "specs", "v0.1.0.md"), []byte(statusSmokeSpec), 0o644); err != nil {
+		t.Fatalf("write spec: %v", err)
+	}
+	writeCoverageTaskFile(t, root, "T-1", "todo", "specs/v0.1.0.md#alpha")
+
+	out, err := runRoot(t, "status")
+	if err != nil {
+		t.Fatalf("status: %v (output %q)", err, out)
+	}
+	if strings.Contains(out, "area heading issues") {
+		t.Errorf("clean spec must not emit an anchor-issue hint: %q", out)
+	}
+}

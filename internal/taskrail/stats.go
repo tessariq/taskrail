@@ -28,6 +28,10 @@ type StatsCoverage struct {
 	ImplementedAreas      int            `json:"implemented_areas"`
 	CoverableAreas        int            `json:"coverable_areas"`
 	Areas                 []CoverageArea `json:"areas"`
+	// AreaAnchorIssueCount is how many degenerate `###` area headings (empty or
+	// duplicate slugs) inflate the denominator. stats carries only the count and
+	// points the operator at `coverage` for the naming detail.
+	AreaAnchorIssueCount int `json:"area_anchor_issue_count"`
 }
 
 // DependencyShape describes the current dependency graph: how many tasks are
@@ -85,6 +89,7 @@ func buildStats(state *State, tasks []*Task, coverage CoverageReport) StatsRepor
 			ImplementedAreas:      coverage.ImplementedAreas,
 			CoverableAreas:        coverage.CoverableAreas,
 			Areas:                 coverage.Areas,
+			AreaAnchorIssueCount:  len(coverage.AreaAnchorIssues),
 		},
 		Dependencies: DependencyShape{
 			UnmetDependencyTaskCount: unmetDependencyTaskCount(tasks),

@@ -349,6 +349,54 @@ func TestComputeCoverageIgnoresEmptyTitleHeading(t *testing.T) {
 	}
 }
 
+func TestComputeCoverageSurfacesDegenerateAreaHeadings(t *testing.T) {
+	// A punctuation-only ### title slugs to "" and a same-slug ### pair both count
+	// toward the denominator (T-093 deliberately left this inflation in place).
+	// T-094 does not silently drop them (that could hide a typo'd real area);
+	// instead it surfaces an advisory diagnostic naming the offending headings so
+	// the author fixes the spec. The denominator stays as parsed.
+	const spec = "# Fixture\n\n## Potential Features\n\n" +
+		"### !!!\n\n### Dup Area\n\n### Dup Area\n\n### Alpha\n"
+	report := computeCoverage(spec, "specs/v0.3.0.md", []*Task{
+		fixtureTask("T-1", "todo", "specs/v0.3.0.md#alpha"),
+	})
+
+	// Denominator unchanged: four parsed ### headings still count.
+	if report.CoverableAreas != 4 {
+		t.Fatalf("coverable = %d, want 4 (denominator not silently changed)", report.CoverableAreas)
+	}
+
+	if len(report.AreaAnchorIssues) != 2 {
+		t.Fatalf("area anchor issues = %+v, want 2 (one empty_slug, one duplicate_slug)", report.AreaAnchorIssues)
+	}
+	empty := report.AreaAnchorIssues[0]
+	if empty.Kind != "empty_slug" || empty.Anchor != "" {
+		t.Errorf("first issue = %+v, want kind empty_slug with anchor \"\"", empty)
+	}
+	if len(empty.Titles) != 1 || empty.Titles[0] != "!!!" {
+		t.Errorf("empty_slug titles = %v, want [\"!!!\"]", empty.Titles)
+	}
+	dup := report.AreaAnchorIssues[1]
+	if dup.Kind != "duplicate_slug" || dup.Anchor != "dup-area" {
+		t.Errorf("second issue = %+v, want kind duplicate_slug with anchor dup-area", dup)
+	}
+	if len(dup.Titles) != 2 || dup.Titles[0] != "Dup Area" || dup.Titles[1] != "Dup Area" {
+		t.Errorf("duplicate_slug titles = %v, want two \"Dup Area\"", dup.Titles)
+	}
+}
+
+func TestComputeCoverageCleanSpecHasNoAreaAnchorIssues(t *testing.T) {
+	// A spec with unique, non-empty ### area slugs reports no diagnostic, and the
+	// slice serializes as [] rather than null.
+	report := computeCoverage(coverageSpecFixture, "specs/v0.3.0.md", nil)
+	if report.AreaAnchorIssues == nil {
+		t.Fatalf("AreaAnchorIssues is nil; want non-nil empty slice")
+	}
+	if len(report.AreaAnchorIssues) != 0 {
+		t.Errorf("area anchor issues = %+v, want none for a clean spec", report.AreaAnchorIssues)
+	}
+}
+
 func TestComputeCoverageUncoveredAreaLinkedTasksNotNil(t *testing.T) {
 	// LinkedTasks must serialize as [] (not null) for an uncovered area, to
 	// stay consistent with the report-level slices.
@@ -685,6 +733,35 @@ func TestCoverageForAreaNormalAnchorUnaffected(t *testing.T) {
 	}
 	if !report.Areas[0].Covered || !equalFloatPtr(report.Percent, ptrFloat(100)) {
 		t.Fatalf("covered alpha must score 100%%, got covered=%v percent=%s", report.Areas[0].Covered, fmtFloatPtr(report.Percent))
+	}
+}
+
+// TestCoverageForAreaDropsSpecWideAnchorIssues proves that the narrowed
+// single-area view drops the spec-wide degenerate-heading diagnostic: anchor
+// issues describe the whole spec's `###` headings, not one area, so a valid
+// `--area` request against a spec that also has degenerate headings elsewhere
+// reports no anchor issues.
+func TestCoverageForAreaDropsSpecWideAnchorIssues(t *testing.T) {
+	repo := seedDegenerateAreaRepo(t)
+	svc := newTestService(t, repo, time.Date(2026, 7, 9, 0, 0, 0, 0, time.UTC))
+
+	full, err := svc.Coverage()
+	if err != nil {
+		t.Fatalf("Coverage: %v", err)
+	}
+	if len(full.AreaAnchorIssues) == 0 {
+		t.Fatal("fixture must have anchor issues to prove the narrowed view drops them")
+	}
+
+	report, err := svc.CoverageForArea("alpha")
+	if err != nil {
+		t.Fatalf("CoverageForArea(alpha): %v", err)
+	}
+	if report.AreaAnchorIssues == nil {
+		t.Fatal("narrowed AreaAnchorIssues is nil; want non-nil empty slice")
+	}
+	if len(report.AreaAnchorIssues) != 0 {
+		t.Errorf("narrowed view leaked spec-wide anchor issues: %+v", report.AreaAnchorIssues)
 	}
 }
 

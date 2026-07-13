@@ -30,6 +30,21 @@ type CoverageOrphan struct {
 	SpecRef string `json:"spec_ref"`
 }
 
+// AreaAnchorIssue is an advisory diagnostic about a degenerate `###` area
+// heading that distorts the coverage denominator: a punctuation-only title that
+// slugs to the empty string (Kind "empty_slug", Anchor ""), or two or more
+// headings that slug to the same anchor (Kind "duplicate_slug"). It names the
+// offending heading title(s) in document order so the spec author fixes the
+// heading rather than having the denominator silently misreport. Like every
+// coverage signal it is advisory only and never makes `validate` fail; this
+// mirrors validate's own leniency, which dedupes by slug and skips empty slugs
+// when accepting spec_refs.
+type AreaAnchorIssue struct {
+	Kind   string   `json:"kind"`
+	Anchor string   `json:"anchor"`
+	Titles []string `json:"titles"`
+}
+
 // DriftSummary is the two-directional drift signal: active-spec areas that
 // gained no task, and tasks pointing away from the active spec.
 type DriftSummary struct {
@@ -55,6 +70,9 @@ type CoverageReport struct {
 	UncoveredAreas        []string         `json:"uncovered_areas"`
 	Orphans               []CoverageOrphan `json:"orphans"`
 	Drift                 DriftSummary     `json:"drift"`
+	// AreaAnchorIssues names degenerate `###` area headings (empty or duplicate
+	// slugs) that inflate the denominator; advisory only, never gates.
+	AreaAnchorIssues []AreaAnchorIssue `json:"area_anchor_issues"`
 }
 
 // Coverage computes the read-only decomposition-coverage, orphan, and drift
@@ -162,7 +180,42 @@ func narrowToArea(r CoverageReport, area CoverageArea) CoverageReport {
 		UncoveredAreas:        uncovered,
 		Orphans:               []CoverageOrphan{},
 		Drift:                 DriftSummary{UncoveredAreaCount: len(uncovered), AwayTaskCount: 0},
+		// Anchor issues are a spec-wide diagnostic, not a property of one area, so
+		// the narrowed single-area view drops them like it drops spec-wide orphans.
+		AreaAnchorIssues: []AreaAnchorIssue{},
 	}
+}
+
+// detectAreaAnchorIssues reports the degenerate `###` area headings in areas:
+// every punctuation-only title that slugs to "" is collected into one empty_slug
+// issue, and each non-empty slug shared by two or more headings becomes one
+// duplicate_slug issue naming its colliding titles. Titles and issues preserve
+// document order so the diagnostic is stable. It is read-only over the parsed
+// areas and never alters the coverage denominator.
+func detectAreaAnchorIssues(areas []parsedArea) []AreaAnchorIssue {
+	issues := make([]AreaAnchorIssue, 0)
+	emptyTitles := make([]string, 0)
+	order := make([]string, 0)
+	titlesByAnchor := make(map[string][]string)
+	for _, a := range areas {
+		if a.anchor == "" {
+			emptyTitles = append(emptyTitles, a.title)
+			continue
+		}
+		if _, seen := titlesByAnchor[a.anchor]; !seen {
+			order = append(order, a.anchor)
+		}
+		titlesByAnchor[a.anchor] = append(titlesByAnchor[a.anchor], a.title)
+	}
+	if len(emptyTitles) > 0 {
+		issues = append(issues, AreaAnchorIssue{Kind: "empty_slug", Anchor: "", Titles: emptyTitles})
+	}
+	for _, anchor := range order {
+		if titles := titlesByAnchor[anchor]; len(titles) > 1 {
+			issues = append(issues, AreaAnchorIssue{Kind: "duplicate_slug", Anchor: anchor, Titles: titles})
+		}
+	}
+	return issues
 }
 
 // readActiveSpec reads the active spec's markdown, wrapping any IO error with
@@ -289,6 +342,7 @@ func coverageFromAreas(areas []parsedArea, activeSpecPath string, tasks []*Task)
 		UncoveredAreas:   uncovered,
 		Orphans:          orphans,
 		Drift:            DriftSummary{UncoveredAreaCount: len(uncovered), AwayTaskCount: len(orphans)},
+		AreaAnchorIssues: detectAreaAnchorIssues(areas),
 	}
 	if len(areas) > 0 {
 		denom := float64(len(areas))

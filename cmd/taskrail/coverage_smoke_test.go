@@ -608,6 +608,128 @@ func TestCoverageAreaComposesWithMin(t *testing.T) {
 	}
 }
 
+// degenerateAreaSpec has a punctuation-only ### title (empty slug) and a
+// same-slug ### pair, so coverage should surface both as advisory diagnostics
+// without silently changing the four-area denominator.
+const degenerateAreaSpec = `# Fixture
+
+## Summary
+
+Meta.
+
+## Potential Features
+
+### !!!
+
+Punctuation-only title, slugs to empty.
+
+### Dup Area
+
+First of a colliding pair.
+
+### Dup Area
+
+Second of the colliding pair.
+
+### Alpha
+
+Covered.
+`
+
+func TestCoverageSurfacesDegenerateAreaHeadings(t *testing.T) {
+	root := setupRepo(t)
+	if err := os.WriteFile(filepath.Join(root, "specs", "v0.1.0.md"), []byte(degenerateAreaSpec), 0o644); err != nil {
+		t.Fatalf("write spec: %v", err)
+	}
+	writeCoverageTaskFile(t, root, "T-1", "todo", "specs/v0.1.0.md#alpha")
+
+	before := readAllFiles(t, root)
+
+	out, err := runRoot(t, "coverage")
+	if err != nil {
+		t.Fatalf("coverage: %v (output %q)", err, out)
+	}
+	// Denominator unchanged: four parsed ### headings, one (alpha) covered.
+	if !strings.Contains(out, "coverage: 25% (1/4 areas)") {
+		t.Errorf("expected 1/4 coverage (denominator not silently changed): %q", out)
+	}
+	if !strings.Contains(out, "area heading issues") {
+		t.Errorf("expected an area-heading-issues diagnostic block: %q", out)
+	}
+	if !strings.Contains(out, `empty slug (### title has no slug-able text): "!!!"`) {
+		t.Errorf("expected the empty-slug heading named: %q", out)
+	}
+	if !strings.Contains(out, `duplicate slug "dup-area" shared by ### headings "Dup Area", "Dup Area"`) {
+		t.Errorf("expected the duplicate-slug pair named: %q", out)
+	}
+
+	// JSON mirrors the diagnostic.
+	jsonOut, err := runRoot(t, "coverage", "--json")
+	if err != nil {
+		t.Fatalf("coverage --json: %v (output %q)", err, jsonOut)
+	}
+	var report struct {
+		AreaAnchorIssues []struct {
+			Kind   string   `json:"kind"`
+			Anchor string   `json:"anchor"`
+			Titles []string `json:"titles"`
+		} `json:"area_anchor_issues"`
+	}
+	if err := json.Unmarshal([]byte(jsonOut), &report); err != nil {
+		t.Fatalf("parse json: %v (output %q)", err, jsonOut)
+	}
+	if len(report.AreaAnchorIssues) != 2 {
+		t.Fatalf("area_anchor_issues = %+v, want 2", report.AreaAnchorIssues)
+	}
+	if report.AreaAnchorIssues[0].Kind != "empty_slug" || report.AreaAnchorIssues[0].Anchor != "" {
+		t.Errorf("first issue = %+v, want empty_slug/\"\"", report.AreaAnchorIssues[0])
+	}
+	if report.AreaAnchorIssues[1].Kind != "duplicate_slug" || report.AreaAnchorIssues[1].Anchor != "dup-area" {
+		t.Errorf("second issue = %+v, want duplicate_slug/dup-area", report.AreaAnchorIssues[1])
+	}
+
+	// Advisory only: the diagnostic never makes coverage exit non-zero on its own
+	// and never writes state or task files.
+	after := readAllFiles(t, root)
+	if len(before) != len(after) {
+		t.Fatalf("coverage changed the file set")
+	}
+	for path, content := range before {
+		if after[path] != content {
+			t.Errorf("coverage mutated %s", path)
+		}
+	}
+}
+
+// A clean spec (unique, non-empty ### slugs) emits area_anchor_issues: [] rather
+// than null and no text diagnostic block, so the diagnostic never fires spuriously.
+func TestCoverageCleanSpecEmitsNoAnchorIssues(t *testing.T) {
+	root := setupRepo(t)
+	if err := os.WriteFile(filepath.Join(root, "specs", "v0.1.0.md"), []byte(coverageSmokeSpec), 0o644); err != nil {
+		t.Fatalf("write spec: %v", err)
+	}
+	writeCoverageTaskFile(t, root, "T-1", "todo", "specs/v0.1.0.md#alpha")
+
+	out, err := runRoot(t, "coverage")
+	if err != nil {
+		t.Fatalf("coverage: %v (output %q)", err, out)
+	}
+	if strings.Contains(out, "area heading issues") {
+		t.Errorf("clean spec must emit no area-heading-issues block: %q", out)
+	}
+
+	jsonOut, err := runRoot(t, "coverage", "--json")
+	if err != nil {
+		t.Fatalf("coverage --json: %v (output %q)", err, jsonOut)
+	}
+	if !strings.Contains(jsonOut, `"area_anchor_issues": []`) {
+		t.Errorf("clean spec must emit area_anchor_issues: [], got %q", jsonOut)
+	}
+	if strings.Contains(jsonOut, `"area_anchor_issues": null`) {
+		t.Errorf("area_anchor_issues must never serialize as null, got %q", jsonOut)
+	}
+}
+
 func readAllFiles(t *testing.T, root string) map[string]string {
 	t.Helper()
 	files := make(map[string]string)

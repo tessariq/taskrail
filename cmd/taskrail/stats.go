@@ -60,6 +60,7 @@ func renderStatsText(r taskrail.StatsReport) string {
 	fmt.Fprintf(&b, "blocked ratio: %s; %d task(s) with recorded blockers\n",
 		formatPercent(r.BlockedRatio*100), r.RecordedBlockerCount)
 	b.WriteString(renderStatsCoverage(r.Coverage))
+	b.WriteString(renderAreaAnchorIssueHint(r.Coverage.AreaAnchorIssueCount))
 	fmt.Fprintf(&b, "dependencies: %d task(s) with unmet dependencies, longest chain %d\n",
 		r.Dependencies.UnmetDependencyTaskCount, r.Dependencies.LongestChain)
 

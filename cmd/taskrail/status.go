@@ -56,6 +56,7 @@ func renderStatusText(r taskrail.StatusReport) string {
 	fmt.Fprintf(&b, "last verification: %s\n", last)
 	b.WriteString(renderStatusCoverage(r.Coverage))
 	b.WriteString(renderStatusDrift(r.Coverage))
+	b.WriteString(renderAreaAnchorIssueHint(r.Coverage.AreaAnchorIssueCount))
 	return b.String()
 }
 
