@@ -12,6 +12,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 )
 
 func main() {
@@ -36,6 +37,9 @@ func run(args []string, warn io.Writer) error {
 	// installed taskrail.exe there and plain taskrail on POSIX.
 	resolved, err := exec.LookPath("taskrail")
 	if err != nil {
+		fmt.Fprintf(warn, "freshcheck diagnostic: LookPath(taskrail) failed: %v\n", err)
+		fmt.Fprintf(warn, "freshcheck diagnostic: cwd=%s\n", mustGetwd())
+		fmt.Fprintf(warn, "freshcheck diagnostic: %s\n", diagnosePATH())
 		return fmt.Errorf("taskrail is not on PATH; run 'mise run setup' or 'task taskrail:install'")
 	}
 
@@ -47,6 +51,37 @@ func run(args []string, warn io.Writer) error {
 		return fmt.Errorf("on-PATH taskrail (%s) is stale versus the working tree; run 'task taskrail:install'", resolved)
 	}
 	return nil
+}
+
+func mustGetwd() string {
+	wd, err := os.Getwd()
+	if err != nil {
+		return "unknown"
+	}
+	return wd
+}
+
+// diagnosePATH reports, for a stale/not-found resolution, each PATH directory
+// that actually contains a taskrail executable. It reveals whether the binary is
+// present-but-unresolved versus genuinely absent from the process's PATH — the
+// two failure modes look identical from LookPath's error alone. Temporary aid
+// for the native-Windows CI freshness leg (T-091 follow-up).
+func diagnosePATH() string {
+	raw := os.Getenv("PATH")
+	dirs := filepath.SplitList(raw)
+	var hits []string
+	for _, dir := range dirs {
+		if dir == "" {
+			continue
+		}
+		for _, name := range []string{"taskrail", "taskrail.exe"} {
+			if _, err := os.Stat(filepath.Join(dir, name)); err == nil {
+				hits = append(hits, filepath.Join(dir, name))
+			}
+		}
+	}
+	return fmt.Sprintf("PATH has %d entries; taskrail executables found in PATH dirs: %v; full PATH=%s",
+		len(dirs), hits, raw)
 }
 
 // cleanup removes the throwaway fresh build. A failed removal (e.g. a Windows
