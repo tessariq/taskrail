@@ -86,6 +86,8 @@ committed `.agents/skills/` and `.claude/skills/` copies:
 | `autonomous-verify` | Shippable | Drives `taskrail verify` against acceptance criteria and points at product-level verification artifacts. |
 | `autonomous-recovery` | Shippable | Routes every correction through `taskrail repair` (dry-run -> apply -> re-validate) and never hand-edits authoritative state. Shipped in T-054 once the widened repair surface (T-072) shrank the human-resolved residue to what the skill claims; the earlier "falls back to manual edits" premise is stale. |
 | `autonomous-manual-test` | Shippable | Guides manual testing against task acceptance criteria; repo-agnostic after the binary rewrite. Shipped in T-081 **without** promoting `planning/artifacts/manual-test/` to a product invariant: its artifacts stay ephemeral and gitignored, `init` does not provision the directory, and `validate` stays unaware of it. This resolves the v0.2.0 "Artifact And Init Consistency" deferral in favor of shipping the skill rather than adding an invariant. |
+| `taskrail-repair` | Shippable | Drives the conservative `taskrail repair` loop (dry-run -> apply -> re-validate) to reconcile mechanical `STATE.md` drift; repo-agnostic and never hand-edits authoritative state (T-050). |
+| `taskrail-spec` | Shippable | Inspects and authors specs through the `taskrail spec` command family and anchors tracked work to real `spec_ref` headings; repo-agnostic (T-064). |
 
 T-029 may revise this list, but must justify any change against the three
 decisions above.

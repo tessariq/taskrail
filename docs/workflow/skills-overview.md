@@ -30,6 +30,8 @@ Tracked-work skills (create tasks with `${TASKRAIL:-taskrail} task new`):
 - `autonomous-manual-test` — its `planning/artifacts/manual-test/` artifacts stay
   ephemeral and gitignored, not a product invariant (shipped in T-081).
 - `taskrail-repair`
+- `taskrail-spec` — inspect and author specs, anchoring tracked work to real
+  `spec_ref` headings via the `spec` command family (shipped in T-064).
 
 Onboarding skills (create tasks with `${TASKRAIL:-taskrail} import --apply`):
 
