@@ -5,9 +5,19 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
+
+// exeName appends the Windows executable extension so a seeded fixture is
+// resolvable by exec.LookPath (which honours PATHEXT) on every OS.
+func exeName(base string) string {
+	if runtime.GOOS == "windows" {
+		return base + ".exe"
+	}
+	return base
+}
 
 func writeFile(t *testing.T, dir, name string, data []byte) string {
 	t.Helper()
@@ -92,6 +102,30 @@ func TestRunWarnsWhenCleanupFails(t *testing.T) {
 	_ = run([]string{nonEmpty}, &warn)
 	if !strings.Contains(warn.String(), "warning") {
 		t.Errorf("run must surface the cleanup warning; wrote %q", warn.String())
+	}
+}
+
+// run must resolve the taskrail on PATH, never a shadowing binary in the working
+// directory. On Windows this reproduces the ErrDot failure that broke the CI
+// freshness leg (a cwd taskrail.exe from `task build` differing from the PATH
+// one): without the NoDefaultCurrentDirectoryInExePath opt-out, exec.LookPath
+// returns "cannot run executable found relative to current directory" and run
+// errors. On POSIX LookPath ignores cwd, so this pins the PATH-not-cwd contract.
+func TestRunResolvesPathNotCwd(t *testing.T) {
+	pathDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(pathDir, exeName("taskrail")), []byte("on-path"), 0o755); err != nil {
+		t.Fatalf("seed on-PATH taskrail: %v", err)
+	}
+	cwd := t.TempDir()
+	if err := os.WriteFile(filepath.Join(cwd, exeName("taskrail")), []byte("cwd-decoy-differs"), 0o755); err != nil {
+		t.Fatalf("seed cwd decoy: %v", err)
+	}
+	fresh := writeFile(t, t.TempDir(), "fresh", []byte("on-path")) // matches the on-PATH bytes
+
+	t.Chdir(cwd)
+	t.Setenv("PATH", pathDir)
+	if err := run([]string{fresh}, io.Discard); err != nil {
+		t.Errorf("run must resolve and match the on-PATH taskrail, ignoring the cwd decoy; got %v", err)
 	}
 }
 

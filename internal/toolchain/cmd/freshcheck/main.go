@@ -12,7 +12,6 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"path/filepath"
 )
 
 func main() {
@@ -33,13 +32,20 @@ func run(args []string, warn io.Writer) error {
 	fresh := args[0]
 	defer cleanup(fresh, warn)
 
-	// exec.LookPath honours PATHEXT on Windows, so a bare "taskrail" resolves the
-	// installed taskrail.exe there and plain taskrail on POSIX.
+	// Resolve the taskrail a bare command finds on PATH, ignoring the working
+	// directory. On Windows exec.LookPath probes the cwd first and, when a cwd
+	// binary shadows a different PATH one, refuses with ErrDot ("cannot run
+	// executable found relative to current directory") rather than returning the
+	// PATH match — and CI's build-test job leaves a `taskrail.exe` in the repo
+	// root from `task build`. The freshness guard only cares about the on-PATH
+	// binary, so opt out of the cwd probe via the documented
+	// NoDefaultCurrentDirectoryInExePath signal (honoured on Windows; inert on
+	// POSIX, whose LookPath never scans cwd). exec.LookPath still honours PATHEXT,
+	// so a bare "taskrail" resolves taskrail.exe on Windows and plain taskrail on
+	// POSIX.
+	os.Setenv("NoDefaultCurrentDirectoryInExePath", "1")
 	resolved, err := exec.LookPath("taskrail")
 	if err != nil {
-		fmt.Fprintf(warn, "freshcheck diagnostic: LookPath(taskrail) failed: %v\n", err)
-		fmt.Fprintf(warn, "freshcheck diagnostic: cwd=%s\n", mustGetwd())
-		fmt.Fprintf(warn, "freshcheck diagnostic: %s\n", diagnosePATH())
 		return fmt.Errorf("taskrail is not on PATH; run 'mise run setup' or 'task taskrail:install'")
 	}
 
@@ -51,37 +57,6 @@ func run(args []string, warn io.Writer) error {
 		return fmt.Errorf("on-PATH taskrail (%s) is stale versus the working tree; run 'task taskrail:install'", resolved)
 	}
 	return nil
-}
-
-func mustGetwd() string {
-	wd, err := os.Getwd()
-	if err != nil {
-		return "unknown"
-	}
-	return wd
-}
-
-// diagnosePATH reports, for a stale/not-found resolution, each PATH directory
-// that actually contains a taskrail executable. It reveals whether the binary is
-// present-but-unresolved versus genuinely absent from the process's PATH — the
-// two failure modes look identical from LookPath's error alone. Temporary aid
-// for the native-Windows CI freshness leg (T-091 follow-up).
-func diagnosePATH() string {
-	raw := os.Getenv("PATH")
-	dirs := filepath.SplitList(raw)
-	var hits []string
-	for _, dir := range dirs {
-		if dir == "" {
-			continue
-		}
-		for _, name := range []string{"taskrail", "taskrail.exe"} {
-			if _, err := os.Stat(filepath.Join(dir, name)); err == nil {
-				hits = append(hits, filepath.Join(dir, name))
-			}
-		}
-	}
-	return fmt.Sprintf("PATH has %d entries; taskrail executables found in PATH dirs: %v; full PATH=%s",
-		len(dirs), hits, raw)
 }
 
 // cleanup removes the throwaway fresh build. A failed removal (e.g. a Windows
