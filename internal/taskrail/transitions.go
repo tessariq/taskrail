@@ -101,7 +101,7 @@ func (s *Service) Start(taskID string) (TransitionResult, error) {
 	state.Frontmatter.UpdatedAt = now
 	state.Frontmatter.CurrentTask = task.Frontmatter.ID
 	state.Frontmatter.CurrentTaskTitle = task.Frontmatter.Title
-	state.Frontmatter.StatusSummary = "in_progress"
+	state.Frontmatter.StatusSummary = statusSummaryInProgress
 	// Starting a task clears only its own stale blocker entry (if any); other
 	// tasks may still be blocked and must keep their recorded reasons.
 	state.Frontmatter.Blockers = removeBlocker(state.Frontmatter.Blockers, task.Frontmatter.ID)
@@ -156,19 +156,11 @@ func (s *Service) Unblock(taskID, reason string) (UnblockResult, error) {
 	// Drop only this task's stale blocker entry; other tasks may still be blocked
 	// and must keep their recorded reasons (mirrors finishTask's drop-only path).
 	state.Frontmatter.Blockers = removeBlocker(state.Frontmatter.Blockers, taskID)
-	// Reconcile the summary/next_action pointers without contradicting the
-	// remaining blockers. An active task owns those pointers, so leave them; with
-	// no active task, stay "blocked" (pointing at a still-blocked task, never the
-	// one just unblocked) while any blocker remains, and only fall back to the
-	// neutral idle pointers once the last blocker clears.
+	// An active task owns the summary/next_action pointers, so leave them; only with
+	// no active task does reconcileIdlePointers re-derive them from the ledger just
+	// updated above (never pointing at the task we unblocked, whose entry is gone).
 	if state.Frontmatter.CurrentTask == "" {
-		if remaining := state.Frontmatter.Blockers; len(remaining) > 0 {
-			state.Frontmatter.StatusSummary = "blocked"
-			state.Frontmatter.NextAction = fmt.Sprintf("Resolve blocker on %s", blockerID(remaining[len(remaining)-1]))
-		} else {
-			state.Frontmatter.StatusSummary = "idle"
-			state.Frontmatter.NextAction = "Select the next eligible task"
-		}
+		reconcileIdlePointers(&state.Frontmatter)
 	}
 	state.Body = renderStateBody(state.Frontmatter, tasks)
 
@@ -279,7 +271,7 @@ func (s *Service) Verify(input VerifyInput) (VerifyResult, error) {
 	} else if input.Result == "fail" {
 		state.Frontmatter.NextAction = fmt.Sprintf("Resolve verification findings for %s", task.Frontmatter.ID)
 	} else {
-		state.Frontmatter.NextAction = "Select the next eligible task"
+		state.Frontmatter.NextAction = nextActionSelectEligible
 	}
 	state.Body = renderStateBody(state.Frontmatter, tasks)
 
@@ -421,6 +413,24 @@ func (s *Service) CreateTask(input CreateTaskInput) (CreateTaskResult, error) {
 	}, nil
 }
 
+// reconcileIdlePointers sets status_summary/next_action for the no-active-task
+// state from the blockers ledger, the single reconciliation Unblock and both
+// finishTask branches share. Callers must upsert/drop the ledger for the current
+// transition first, then invoke this only when current_task is empty (an active
+// task owns those pointers). While any blocker remains, stay "blocked" pointing at
+// the most-recently recorded one — for the block branch that is the just-blocked
+// task (upsertBlocker appends it last); for complete/unblock it is a still-blocked
+// sibling. Only once the ledger is empty do the neutral idle pointers apply.
+func reconcileIdlePointers(fm *StateFrontmatter) {
+	if remaining := fm.Blockers; len(remaining) > 0 {
+		fm.StatusSummary = statusSummaryBlocked
+		fm.NextAction = fmt.Sprintf("Resolve blocker on %s", blockerID(remaining[len(remaining)-1]))
+		return
+	}
+	fm.StatusSummary = statusSummaryIdle
+	fm.NextAction = nextActionSelectEligible
+}
+
 func (s *Service) finishTask(taskID, status, note string) (TransitionResult, error) {
 	state, tasks, err := s.loadStateAndTasks()
 	if err != nil {
@@ -456,18 +466,13 @@ func (s *Service) finishTask(taskID, status, note string) (TransitionResult, err
 		state.Frontmatter.Blockers = removeBlocker(state.Frontmatter.Blockers, taskID)
 	}
 
-	// status_summary/next_action belong to the active task. Only reconcile them
-	// when this transition leaves no task in progress (current_task cleared above
-	// iff the finished task was itself active). Mirrors Unblock's guard so blocking
-	// a todo never clobbers a still-active task's summary.
+	// status_summary/next_action belong to the active task, so only reconcile them
+	// when this transition left none in progress (current_task cleared above iff the
+	// finished task was itself active). Mirrors Unblock's guard so blocking a todo
+	// never clobbers a still-active task's summary; the ledger reconciliation itself
+	// lives in reconcileIdlePointers.
 	if state.Frontmatter.CurrentTask == "" {
-		if status == "blocked" {
-			state.Frontmatter.StatusSummary = "blocked"
-			state.Frontmatter.NextAction = fmt.Sprintf("Resolve blocker on %s", taskID)
-		} else {
-			state.Frontmatter.StatusSummary = "idle"
-			state.Frontmatter.NextAction = "Select the next eligible task"
-		}
+		reconcileIdlePointers(&state.Frontmatter)
 	}
 	state.Body = renderStateBody(state.Frontmatter, tasks)
 

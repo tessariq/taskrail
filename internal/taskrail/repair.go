@@ -114,16 +114,16 @@ func repairCurrentTask(fm *StateFrontmatter, tasks []*Task) []RepairChange {
 // refuses when more than one task is in_progress, and mutates only STATE.md
 // frontmatter, so no status advances and no work is fabricated.
 func repairStatusSummary(fm *StateFrontmatter, tasks []*Task) []RepairChange {
-	if len(inProgressTasks(tasks)) != 1 || fm.StatusSummary == "in_progress" {
+	if len(inProgressTasks(tasks)) != 1 || fm.StatusSummary == statusSummaryInProgress {
 		return nil
 	}
 	change := RepairChange{
 		Field:  "status_summary",
 		From:   fm.StatusSummary,
-		To:     "in_progress",
+		To:     statusSummaryInProgress,
 		Reason: "match the single in_progress task file",
 	}
-	fm.StatusSummary = "in_progress"
+	fm.StatusSummary = statusSummaryInProgress
 	return []RepairChange{change}
 }
 

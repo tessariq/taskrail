@@ -144,6 +144,73 @@ func TestUnrelatedTransitionsPreserveBlockers(t *testing.T) {
 	}
 }
 
+// TestCompleteReconcilesSummaryWithRemainingBlockers locks in that completing a
+// task reconciles status_summary/next_action against the blockers ledger the same
+// way Unblock does: it stays "blocked" pointing at a still-blocked task while one
+// remains, and only falls back to the neutral idle pointers once no blocker is
+// left. Previously the complete branch reset to "idle" unconditionally, under-
+// reporting outstanding blockers (T-092).
+func TestCompleteReconcilesSummaryWithRemainingBlockers(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name         string
+		otherBlocked bool
+		wantSummary  string
+		wantNextHas  string
+	}{
+		{
+			name:         "complete while another task remains blocked",
+			otherBlocked: true,
+			wantSummary:  "blocked",
+			wantNextHas:  "T-003",
+		},
+		{
+			name:         "complete clears to idle when no blocker remains",
+			otherBlocked: false,
+			wantSummary:  "idle",
+			wantNextHas:  "Select the next eligible task",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			repo := seedFixtureRepo(t)
+			writeTask(t, repo, "T-003", "Blocked", "todo", "high", "specs/v0.1.0.md#summary", nil)
+			writeTask(t, repo, "T-004", "Active", "todo", "high", "specs/v0.1.0.md#summary", nil)
+			svc := newTestService(t, repo, time.Date(2026, 3, 31, 12, 0, 0, 0, time.UTC))
+
+			if tt.otherBlocked {
+				if _, err := svc.Block("T-003", "waiting on vendor"); err != nil {
+					t.Fatalf("block T-003: %v", err)
+				}
+			}
+			if _, err := svc.Start("T-004"); err != nil {
+				t.Fatalf("start T-004: %v", err)
+			}
+			if _, err := svc.Complete("T-004", "done"); err != nil {
+				t.Fatalf("complete T-004: %v", err)
+			}
+
+			state, err := svc.loadState()
+			if err != nil {
+				t.Fatalf("load state: %v", err)
+			}
+			if state.Frontmatter.CurrentTask != "" {
+				t.Fatalf("current_task = %q, want cleared", state.Frontmatter.CurrentTask)
+			}
+			if state.Frontmatter.StatusSummary != tt.wantSummary {
+				t.Errorf("status_summary = %q, want %q", state.Frontmatter.StatusSummary, tt.wantSummary)
+			}
+			if !strings.Contains(state.Frontmatter.NextAction, tt.wantNextHas) {
+				t.Errorf("next_action = %q, want reference to %q", state.Frontmatter.NextAction, tt.wantNextHas)
+			}
+			if tt.otherBlocked && !hasBlocker(blockerEntries(t, svc), "T-003: waiting on vendor") {
+				t.Errorf("completing T-004 wiped T-003's blocker: %v", state.Frontmatter.Blockers)
+			}
+		})
+	}
+}
+
 // TestUpsertBlockerReplacesWithoutDuplicating locks in the property upsertBlocker
 // exists to guarantee: setting a task's reason replaces its single entry and
 // never appends a duplicate, while leaving other tasks' entries untouched.

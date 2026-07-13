@@ -14,7 +14,7 @@ func starterState(now time.Time) *State {
 		ActiveSpecPath:         "specs/v0.1.0.md",
 		CurrentTask:            "",
 		CurrentTaskTitle:       "",
-		StatusSummary:          "idle",
+		StatusSummary:          statusSummaryIdle,
 		Blockers:               []string{},
 		NextAction:             "Create initial Taskrail tasks and begin tracked work",
 		LastVerificationResult: "Not yet run",

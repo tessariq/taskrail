@@ -86,6 +86,9 @@ All notable user-visible changes to Taskrail will be documented in this file.
 - `taskrail block` now keeps every currently-blocked task's reason in `STATE.md`
   (one entry per task) instead of overwriting the list with only the most recent;
   `taskrail status` reports each blocked task's own reason.
+- `taskrail complete` now leaves `status_summary` as `blocked` (pointing at a
+  still-blocked task) when other tasks remain blocked, instead of resetting to
+  `idle` and under-reporting outstanding blockers.
 
 ## v0.2.0 - 2026-07-07
 

@@ -2,6 +2,20 @@ package taskrail
 
 const stateSchemaVersion = 1
 
+// status_summary values the transition, reconcile, and repair paths write into
+// STATE.md. This axis (idle | in_progress | blocked) is distinct from a task's own
+// status field (validStatuses) even where the strings coincide; centralizing it
+// keeps the writers from drifting apart.
+const (
+	statusSummaryIdle       = "idle"
+	statusSummaryInProgress = "in_progress"
+	statusSummaryBlocked    = "blocked"
+)
+
+// nextActionSelectEligible is the neutral next_action pointer shared by the idle
+// reconciliation and a passing verification, held identical so the two never drift.
+const nextActionSelectEligible = "Select the next eligible task"
+
 var (
 	validStatuses  = map[string]struct{}{"todo": {}, "in_progress": {}, "completed": {}, "blocked": {}, "cancelled": {}}
 	validPriorites = map[string]struct{}{"high": {}, "medium": {}, "low": {}}
