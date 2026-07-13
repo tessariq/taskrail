@@ -101,14 +101,14 @@ func readMarker(root string) (LayoutConfig, bool, error) {
 // writeMarker persists the layout marker, creating `.taskrail/` if needed.
 func writeMarker(root string, cfg LayoutConfig) error {
 	if err := os.MkdirAll(filepath.Join(root, taskrailConfigDir), 0o755); err != nil {
-		return fmt.Errorf("create %s: %w", taskrailConfigDir, err)
+		return fmt.Errorf("create %s: %w", taskrailConfigDir, fsCause(err))
 	}
 	data, err := yaml.Marshal(cfg)
 	if err != nil {
 		return fmt.Errorf("marshal layout marker: %w", err)
 	}
 	if err := os.WriteFile(markerPath(root), data, 0o644); err != nil {
-		return fmt.Errorf("write layout marker: %w", err)
+		return fmt.Errorf("write layout marker %s: %w", relPath(root, markerPath(root)), fsCause(err))
 	}
 	return nil
 }

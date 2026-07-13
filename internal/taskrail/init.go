@@ -225,14 +225,14 @@ func (s *Service) ensureLayout() error {
 	// manual testing; a clean checkout drops it, so pre-creating it here would
 	// leave init and validate inconsistent (T-024/T-025).
 	for _, dir := range []string{s.paths.SpecsDir, s.paths.TasksDir} {
-		if err := ensureDir(dir); err != nil {
+		if err := ensureDir(s.paths.RepoRoot, dir); err != nil {
 			return err
 		}
 	}
-	if err := writeFileIfMissing(filepath.Join(s.paths.SpecsDir, "README.md"), []byte(starterSpecsReadme())); err != nil {
+	if err := writeFileIfMissing(s.paths.RepoRoot, filepath.Join(s.paths.SpecsDir, "README.md"), []byte(starterSpecsReadme())); err != nil {
 		return err
 	}
-	if err := writeFileIfMissing(filepath.Join(s.paths.SpecsDir, "v0.1.0.md"), []byte(starterSpecV010())); err != nil {
+	if err := writeFileIfMissing(s.paths.RepoRoot, filepath.Join(s.paths.SpecsDir, "v0.1.0.md"), []byte(starterSpecV010())); err != nil {
 		return err
 	}
 	if _, err := os.Stat(s.paths.StateFile); errors.Is(err, os.ErrNotExist) {

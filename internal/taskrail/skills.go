@@ -94,20 +94,20 @@ func (s *Service) installSkillFile(dest string, data []byte, force bool, res *Sk
 			return err
 		}
 		if err := os.WriteFile(backup, existing, 0o644); err != nil {
-			return fmt.Errorf("write backup %s: %w", backup, err)
+			return fmt.Errorf("write backup %s: %w", relPath(s.paths.RepoRoot, backup), fsCause(err))
 		}
 		if err := os.WriteFile(dest, data, 0o644); err != nil {
-			return fmt.Errorf("write %s: %w", dest, err)
+			return fmt.Errorf("write %s: %w", relPath(s.paths.RepoRoot, dest), fsCause(err))
 		}
 		res.BackedUp = append(res.BackedUp, relPath(s.paths.RepoRoot, backup))
 		res.Overwritten = append(res.Overwritten, relPath(s.paths.RepoRoot, dest))
 		return nil
 	case errors.Is(statErr, os.ErrNotExist):
-		if err := ensureDir(filepath.Dir(dest)); err != nil {
+		if err := ensureDir(s.paths.RepoRoot, filepath.Dir(dest)); err != nil {
 			return err
 		}
 		if err := os.WriteFile(dest, data, 0o644); err != nil {
-			return fmt.Errorf("write %s: %w", dest, err)
+			return fmt.Errorf("write %s: %w", relPath(s.paths.RepoRoot, dest), fsCause(err))
 		}
 		res.Written = append(res.Written, relPath(s.paths.RepoRoot, dest))
 		return nil

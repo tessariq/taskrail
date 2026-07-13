@@ -299,11 +299,11 @@ func (s *Service) writeImportedSpec(draft ImportDraft) (string, error) {
 	if fileExists(specPath) && !isImportedSpec(specPath) {
 		return "", fmt.Errorf("spec file %s already exists; refusing to overwrite", relPath(s.paths.RepoRoot, specPath))
 	}
-	if err := ensureDir(filepath.Dir(specPath)); err != nil {
+	if err := ensureDir(s.paths.RepoRoot, filepath.Dir(specPath)); err != nil {
 		return "", err
 	}
 	if err := os.WriteFile(specPath, []byte(renderImportedSpec(draft)), 0o644); err != nil {
-		return "", fmt.Errorf("write imported spec: %w", err)
+		return "", fmt.Errorf("write imported spec %s: %w", relPath(s.paths.RepoRoot, specPath), fsCause(err))
 	}
 	return relPath(s.paths.RepoRoot, specPath), nil
 }

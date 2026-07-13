@@ -51,10 +51,10 @@ func (s *Service) AddSpec(version string) (SpecAddResult, error) {
 	}
 
 	if err := os.WriteFile(specFile, []byte(scaffoldSpec(version)), 0o644); err != nil {
-		return SpecAddResult{}, fmt.Errorf("write spec file %s: %w", relPath(s.paths.RepoRoot, specFile), err)
+		return SpecAddResult{}, fmt.Errorf("write spec file %s: %w", relPath(s.paths.RepoRoot, specFile), fsCause(err))
 	}
 	if err := os.WriteFile(readmePath, []byte(updateReadingOrder(string(readme), version)), 0o644); err != nil {
-		return SpecAddResult{}, fmt.Errorf("update specs README %s: %w", relPath(s.paths.RepoRoot, readmePath), err)
+		return SpecAddResult{}, fmt.Errorf("update specs README %s: %w", relPath(s.paths.RepoRoot, readmePath), fsCause(err))
 	}
 
 	return SpecAddResult{

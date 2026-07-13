@@ -83,7 +83,7 @@ func (s *Service) saveState(state *State) error {
 		return err
 	}
 	if err := os.WriteFile(s.paths.StateFile, data, 0o644); err != nil {
-		return fmt.Errorf("write state file: %w", err)
+		return fmt.Errorf("write state file %s: %w", relPath(s.paths.RepoRoot, s.paths.StateFile), fsCause(err))
 	}
 	return nil
 }
@@ -94,26 +94,31 @@ func (s *Service) saveTask(task *Task) error {
 		return fmt.Errorf("marshal task file %s: %w", filepath.Base(task.Filename), err)
 	}
 	if err := os.WriteFile(task.Filename, data, 0o644); err != nil {
-		return fmt.Errorf("write task file %s: %w", filepath.Base(task.Filename), err)
+		return fmt.Errorf("write task file %s: %w", filepath.Base(task.Filename), fsCause(err))
 	}
 	return nil
 }
 
-func ensureDir(path string) error {
+// ensureDir creates path and parents. root anchors the repo-relative path named
+// on failure so the error stays portable (T-088); it carries no repo root of its
+// own, so callers thread theirs.
+func ensureDir(root, path string) error {
 	if err := os.MkdirAll(path, 0o755); err != nil {
-		return fmt.Errorf("create directory %s: %w", path, err)
+		return fmt.Errorf("create directory %s: %w", relPath(root, path), fsCause(err))
 	}
 	return nil
 }
 
-func writeFileIfMissing(path string, data []byte) error {
+// writeFileIfMissing writes data at path only when it does not already exist.
+// root anchors the repo-relative path named on failure (T-088).
+func writeFileIfMissing(root, path string, data []byte) error {
 	if _, err := os.Stat(path); err == nil {
 		return nil
 	} else if !errors.Is(err, os.ErrNotExist) {
-		return fmt.Errorf("stat %s: %w", path, err)
+		return fmt.Errorf("stat %s: %w", relPath(root, path), fsCause(err))
 	}
 	if err := os.WriteFile(path, data, 0o644); err != nil {
-		return fmt.Errorf("write %s: %w", path, err)
+		return fmt.Errorf("write %s: %w", relPath(root, path), fsCause(err))
 	}
 	return nil
 }
@@ -137,10 +142,10 @@ func relPath(root, target string) string {
 }
 
 // fsCause unwraps a filesystem error to its underlying cause (e.g. "no such file
-// or directory") without the *fs.PathError's absolute path. Read helpers name the
-// repo-relative path themselves, so wrapping the raw error would only append the
-// user's absolute repository location — noise that makes emitted error text
-// non-portable. The unwrapped cause still satisfies errors.Is(err, fs.ErrNotExist)
+// or directory") without the *fs.PathError's absolute path. Read and write callers
+// name the repo-relative path themselves, so wrapping the raw error would only
+// append the user's absolute repository location — noise that makes emitted error
+// text non-portable. The unwrapped cause still satisfies errors.Is(err, fs.ErrNotExist)
 // and friends, so callers' error classification is unaffected.
 func fsCause(err error) error {
 	var pathErr *fs.PathError

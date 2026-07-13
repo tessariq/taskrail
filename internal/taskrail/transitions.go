@@ -208,7 +208,7 @@ func (s *Service) Verify(input VerifyInput) (VerifyResult, error) {
 	now := s.now().UTC()
 	ts := now.Format("20060102T150405Z")
 	artifactDir := filepath.Join(s.paths.VerifyDir, task.Frontmatter.ID, ts)
-	if err := ensureDir(artifactDir); err != nil {
+	if err := ensureDir(s.paths.RepoRoot, artifactDir); err != nil {
 		return VerifyResult{}, err
 	}
 
@@ -226,14 +226,14 @@ func (s *Service) Verify(input VerifyInput) (VerifyResult, error) {
 		followupTaskID = newTask.Frontmatter.ID
 	}
 
-	plan := renderVerificationPlan(task, input, followupTaskID)
-	if err := os.WriteFile(planPath, []byte(plan), 0o644); err != nil {
-		return VerifyResult{}, fmt.Errorf("write verification plan: %w", err)
-	}
-
 	relPlan := relPath(s.paths.RepoRoot, planPath)
 	relReport := relPath(s.paths.RepoRoot, reportPath)
 	relReportMarkdown := relPath(s.paths.RepoRoot, reportMarkdownPath)
+
+	plan := renderVerificationPlan(task, input, followupTaskID)
+	if err := os.WriteFile(planPath, []byte(plan), 0o644); err != nil {
+		return VerifyResult{}, fmt.Errorf("write verification plan %s: %w", relPlan, fsCause(err))
+	}
 
 	report := VerificationArtifact{
 		SchemaVersion:  stateSchemaVersion,
@@ -253,12 +253,12 @@ func (s *Service) Verify(input VerifyInput) (VerifyResult, error) {
 		return VerifyResult{}, fmt.Errorf("marshal verification report: %w", err)
 	}
 	if err := os.WriteFile(reportPath, reportBytes, 0o644); err != nil {
-		return VerifyResult{}, fmt.Errorf("write verification report: %w", err)
+		return VerifyResult{}, fmt.Errorf("write verification report %s: %w", relReport, fsCause(err))
 	}
 
 	reportMarkdown := renderVerificationReportMarkdown(report)
 	if err := os.WriteFile(reportMarkdownPath, []byte(reportMarkdown), 0o644); err != nil {
-		return VerifyResult{}, fmt.Errorf("write verification markdown report: %w", err)
+		return VerifyResult{}, fmt.Errorf("write verification markdown report %s: %w", relReportMarkdown, fsCause(err))
 	}
 
 	nowText := timestamp(now)

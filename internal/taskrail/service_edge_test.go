@@ -142,7 +142,7 @@ continuation_notes: []
 
 # STATE
 `)
-	if err := ensureDir(filepath.Join(repo, "planning", "tasks")); err != nil {
+	if err := ensureDir(repo, filepath.Join(repo, "planning", "tasks")); err != nil {
 		t.Fatalf("mkdir tasks: %v", err)
 	}
 
