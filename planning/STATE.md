@@ -1,14 +1,14 @@
 ---
 schema_version: 1
-updated_at: "2026-07-13T20:10:38Z"
+updated_at: "2026-07-13T20:20:30Z"
 active_spec_version: v0.3.0
 active_spec_path: specs/v0.3.0.md
 current_task: ""
 current_task_title: ""
 status_summary: idle
 blockers: []
-next_action: 'Start task T-061: v0.3.0 gap/drift — pre-release spec check'
-last_verification_result: pass for T-078 at 2026-07-13T20:10:32Z
+next_action: Select the next eligible task
+last_verification_result: pass for T-061 at 2026-07-13T20:20:18Z
 relevant_artifacts: []
 continuation_notes:
     - This repository is temporarily dogfooding bootstrap workflow tooling until Taskrail v0.1.0 exists.
@@ -34,11 +34,11 @@ continuation_notes:
 
 ## Last Verification
 
-- pass for T-078 at 2026-07-13T20:10:32Z
+- pass for T-061 at 2026-07-13T20:20:18Z
 
 ## Next Action
 
-- Start task T-061: v0.3.0 gap/drift — pre-release spec check
+- Select the next eligible task
 
 ## Relevant Artifacts
 
@@ -50,8 +50,8 @@ continuation_notes:
 
 ## Task Counts
 
-- todo: 1
+- todo: 0
 - in_progress: 0
-- completed: 92
+- completed: 93
 - blocked: 0
 - cancelled: 0
