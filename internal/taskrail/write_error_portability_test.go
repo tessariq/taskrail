@@ -24,12 +24,25 @@ func assertNoRootLeak(t *testing.T, repo string, err error) {
 	}
 }
 
-// skipIfRoot guards the permission-based fault injections: root bypasses the
-// write bits, so the injected EACCES would never fire.
-func skipIfRoot(t *testing.T) {
+// requireReadOnlyDirBlocksWrites makes dir read-only and verifies the platform
+// actually enforces that against file creation, skipping the test otherwise.
+// The permission-based fault injections below depend on a read-only directory
+// rejecting a write, but that does not hold everywhere: root bypasses the write
+// bits, and native Windows ignores a directory's read-only attribute for file
+// creation. Probing the actual behaviour (rather than keying off GOOS/uid)
+// keeps the check correct across platforms, privilege levels, and filesystems —
+// where the injection cannot fire it is a skip, not a failure. Callers must set
+// dir to mode 0o755 first; a t.Cleanup restores it so t.TempDir removal works.
+func requireReadOnlyDirBlocksWrites(t *testing.T, dir string) {
 	t.Helper()
-	if os.Geteuid() == 0 {
-		t.Skip("permission bits are ignored by root; run as an unprivileged user")
+	if err := os.Chmod(dir, 0o555); err != nil {
+		t.Fatalf("chmod read-only %s: %v", filepath.Base(dir), err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o755) })
+	probe := filepath.Join(dir, ".write-probe")
+	if err := os.WriteFile(probe, []byte("x"), 0o644); err == nil {
+		_ = os.Remove(probe)
+		t.Skip("read-only directory does not block writes here (root or native Windows); permission injection cannot fire")
 	}
 }
 
@@ -68,12 +81,12 @@ func TestEnsureDirErrorOmitsAbsolutePath(t *testing.T) {
 
 func TestWriteFileIfMissingWriteErrorOmitsAbsolutePath(t *testing.T) {
 	t.Parallel()
-	skipIfRoot(t)
 	repo := t.TempDir()
 	ro := filepath.Join(repo, "ro")
-	if err := os.Mkdir(ro, 0o555); err != nil {
-		t.Fatalf("seed read-only dir: %v", err)
+	if err := os.Mkdir(ro, 0o755); err != nil {
+		t.Fatalf("seed dir: %v", err)
 	}
+	requireReadOnlyDirBlocksWrites(t, ro)
 	err := writeFileIfMissing(repo, filepath.Join(ro, "f.md"), []byte("x"))
 	assertPortablePermissionError(t, repo, err)
 }
@@ -118,17 +131,13 @@ func TestSaveTaskWriteErrorOmitsAbsolutePath(t *testing.T) {
 
 func TestInstallSkillFileWriteErrorOmitsAbsolutePath(t *testing.T) {
 	t.Parallel()
-	skipIfRoot(t)
 	repo := initGitRepo(t)
 	svc := newTestService(t, repo, time.Date(2026, 6, 24, 12, 0, 0, 0, time.UTC))
 	dir := filepath.Join(repo, ".claude", "skills")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatalf("seed skills dir: %v", err)
 	}
-	if err := os.Chmod(dir, 0o555); err != nil {
-		t.Fatalf("chmod read-only: %v", err)
-	}
-	t.Cleanup(func() { _ = os.Chmod(dir, 0o755) }) // let TempDir cleanup remove it
+	requireReadOnlyDirBlocksWrites(t, dir)
 	var res SkillInstallResult
 	err := svc.installSkillFile(filepath.Join(dir, "probe.md"), []byte("x"), false, &res)
 	assertPortablePermissionError(t, repo, err)
@@ -146,26 +155,18 @@ func TestWriteMarkerErrorOmitsAbsolutePath(t *testing.T) {
 
 func TestWriteImportedSpecErrorOmitsAbsolutePath(t *testing.T) {
 	t.Parallel()
-	skipIfRoot(t)
 	repo := seedFixtureRepo(t)
 	svc := newTestService(t, repo, time.Date(2026, 6, 24, 12, 0, 0, 0, time.UTC))
-	if err := os.Chmod(svc.paths.SpecsDir, 0o555); err != nil {
-		t.Fatalf("chmod specs dir read-only: %v", err)
-	}
-	t.Cleanup(func() { _ = os.Chmod(svc.paths.SpecsDir, 0o755) })
+	requireReadOnlyDirBlocksWrites(t, svc.paths.SpecsDir)
 	_, err := svc.writeImportedSpec(ImportDraft{Source: "notes.md"})
 	assertPortablePermissionError(t, repo, err)
 }
 
 func TestAddSpecWriteErrorOmitsAbsolutePath(t *testing.T) {
 	t.Parallel()
-	skipIfRoot(t)
 	repo := seedFixtureRepo(t)
 	svc := newTestService(t, repo, time.Date(2026, 6, 24, 12, 0, 0, 0, time.UTC))
-	if err := os.Chmod(svc.paths.SpecsDir, 0o555); err != nil {
-		t.Fatalf("chmod specs dir read-only: %v", err)
-	}
-	t.Cleanup(func() { _ = os.Chmod(svc.paths.SpecsDir, 0o755) })
+	requireReadOnlyDirBlocksWrites(t, svc.paths.SpecsDir)
 	_, err := svc.AddSpec("v9.9.9")
 	assertPortablePermissionError(t, repo, err)
 }
