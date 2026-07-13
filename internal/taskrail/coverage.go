@@ -70,34 +70,56 @@ func (s *Service) Coverage() (CoverageReport, error) {
 // CoverageForArea computes the full read-only coverage report and narrows it to
 // the single coverable area named by anchor, for focused "is this feature
 // decomposed?" checks. The anchor is matched against the already-slugged area
-// anchors (no re-slugging); an anchor that is not a coverable ### area — an
-// unknown one or a #### sub-area that only rolls up — is rejected with no write.
+// anchors (no re-slugging); an anchor that is not a coverable ### area is
+// rejected with no write, and the rejection names its case (unknown, #### sub-
+// area roll-up, or deferred/subsumed area) from the same single spec parse.
 func (s *Service) CoverageForArea(anchor string) (CoverageReport, error) {
-	report, err := s.Coverage()
+	state, tasks, err := s.loadStateAndTasks()
 	if err != nil {
 		return CoverageReport{}, err
 	}
-	return filterCoverageToArea(report, anchor)
-}
-
-// filterCoverageToArea narrows a full coverage report to the one coverable area
-// named by anchor. Spec-wide orphans belong to no area, so the filtered view
-// drops them and reports zero away-drift, keeping the report an internally
-// consistent picture of just that area.
-func filterCoverageToArea(r CoverageReport, anchor string) (CoverageReport, error) {
-	var area CoverageArea
-	found := false
-	for _, a := range r.Areas {
+	activePath := state.Frontmatter.ActiveSpecPath
+	markdown, err := s.readActiveSpec(activePath)
+	if err != nil {
+		return CoverageReport{}, err
+	}
+	areas, deferred := parseSpecAreas(markdown)
+	report := coverageFromAreas(areas, activePath, tasks)
+	for _, a := range report.Areas {
 		if a.Anchor == anchor {
-			area = a
-			found = true
-			break
+			return narrowToArea(report, a), nil
 		}
 	}
-	if !found {
-		return CoverageReport{}, fmt.Errorf("--area %q is not a coverable area of %s", anchor, r.ActiveSpecPath)
-	}
+	return CoverageReport{}, areaRejectionError(areas, deferred, anchor, activePath)
+}
 
+// areaRejectionError explains why anchor is not a coverable area, tailoring the
+// message to the case so the fix is discoverable: a #### sub-area points at the
+// ### parent it rolls up into, a deferred/subsumed area is named as intentionally
+// excluded from the denominator, and anything else is an unknown anchor pointed
+// at `spec show --anchors`. Classification reuses the already-parsed areas and
+// deferred anchors (no second parse, no re-slugging).
+func areaRejectionError(areas []parsedArea, deferred []string, anchor, specPath string) error {
+	for _, a := range areas {
+		for _, sub := range a.subAnchors {
+			if sub == anchor {
+				return fmt.Errorf("--area %q is a #### sub-area of %s that only rolls up into its ### parent; run coverage --area %s to score the parent area", anchor, specPath, a.anchor)
+			}
+		}
+	}
+	for _, d := range deferred {
+		if d == anchor {
+			return fmt.Errorf("--area %q is a deferred or subsumed area of %s, intentionally excluded from the coverage denominator", anchor, specPath)
+		}
+	}
+	return fmt.Errorf("--area %q is not an area of %s; run spec show --anchors to list the spec's anchors", anchor, specPath)
+}
+
+// narrowToArea narrows a full coverage report to the one coverable area. Spec-
+// wide orphans belong to no area, so the narrowed view drops them and reports
+// zero away-drift, keeping the report an internally consistent picture of just
+// that area.
+func narrowToArea(r CoverageReport, area CoverageArea) CoverageReport {
 	covered, implemented := 0, 0
 	uncovered := []string{}
 	if area.Covered {
@@ -121,7 +143,18 @@ func filterCoverageToArea(r CoverageReport, anchor string) (CoverageReport, erro
 		UncoveredAreas:        uncovered,
 		Orphans:               []CoverageOrphan{},
 		Drift:                 DriftSummary{UncoveredAreaCount: len(uncovered), AwayTaskCount: 0},
-	}, nil
+	}
+}
+
+// readActiveSpec reads the active spec's markdown, wrapping any IO error with
+// the same path-portable context both the spec-wide and area-scoped coverage
+// paths report.
+func (s *Service) readActiveSpec(activePath string) (string, error) {
+	data, err := os.ReadFile(filepath.Join(s.paths.RepoRoot, filepath.Clean(activePath)))
+	if err != nil {
+		return "", fmt.Errorf("read active spec %s: %w", activePath, fsCause(err))
+	}
+	return string(data), nil
 }
 
 // coverageFor computes coverage from an already-loaded state and task set, so
@@ -129,11 +162,11 @@ func filterCoverageToArea(r CoverageReport, anchor string) (CoverageReport, erro
 // without a second read of STATE.md and the task files.
 func (s *Service) coverageFor(state *State, tasks []*Task) (CoverageReport, error) {
 	activePath := state.Frontmatter.ActiveSpecPath
-	data, err := os.ReadFile(filepath.Join(s.paths.RepoRoot, filepath.Clean(activePath)))
+	markdown, err := s.readActiveSpec(activePath)
 	if err != nil {
-		return CoverageReport{}, fmt.Errorf("read active spec %s: %w", activePath, fsCause(err))
+		return CoverageReport{}, err
 	}
-	return computeCoverage(string(data), activePath, tasks), nil
+	return computeCoverage(markdown, activePath, tasks), nil
 }
 
 // parsedArea is a coverable `###` area with the anchors (its own plus every
@@ -149,8 +182,15 @@ type parsedArea struct {
 // place. specMarkdown is the active spec's content; activeSpecPath is its
 // repo-relative path used to classify orphans.
 func computeCoverage(specMarkdown, activeSpecPath string, tasks []*Task) CoverageReport {
-	areas := parseCoverableAreas(specMarkdown)
+	areas, _ := parseSpecAreas(specMarkdown)
+	return coverageFromAreas(areas, activeSpecPath, tasks)
+}
 
+// coverageFromAreas computes the coverage report from areas already parsed from
+// the active spec, so a caller that also needs the parse's deferred anchors
+// (CoverageForArea, to classify a rejected anchor) computes coverage from the
+// same single parse.
+func coverageFromAreas(areas []parsedArea, activeSpecPath string, tasks []*Task) CoverageReport {
 	// Map every coverable anchor (area or sub-area) to its owning area so a
 	// task linking a #### sub-area rolls up to its ### parent.
 	areaOf := make(map[string]int, len(areas))
@@ -241,14 +281,24 @@ func computeCoverage(specMarkdown, activeSpecPath string, tasks []*Task) Coverag
 	return report
 }
 
-// parseCoverableAreas returns the coverable `###` feature areas under the
-// `## Potential Features` section. Areas directly followed by a `> Deferred to`
-// or `> Subsumed by` marker are excluded from the denominator; both markers are
-// detected generically, never from hardcoded heading names, so the rule
-// survives future specs. Meta sections outside Potential Features never count.
+// parseCoverableAreas returns just the coverable `###` feature areas, for
+// callers that do not need the excluded (deferred/subsumed) anchors.
 func parseCoverableAreas(markdown string) []parsedArea {
+	areas, _ := parseSpecAreas(markdown)
+	return areas
+}
+
+// parseSpecAreas returns the coverable `###` feature areas under the
+// `## Potential Features` section plus the anchors of `###` areas excluded from
+// the denominator by a `> Deferred to` / `> Subsumed by` marker. Both markers
+// are detected generically, never from hardcoded heading names, so the rule
+// survives future specs. Meta sections outside Potential Features never count.
+// The deferred anchors are retained (not discarded) so a rejected `--area` can
+// be classified from this one parse. Sub-areas of an excluded area are not
+// recorded — that area contributes no coverable anchor at all.
+func parseSpecAreas(markdown string) (areas []parsedArea, deferredAnchors []string) {
 	lines := strings.Split(markdown, "\n")
-	areas := make([]parsedArea, 0)
+	areas = make([]parsedArea, 0)
 	inSection := false
 	current := -1
 	for i, line := range lines {
@@ -264,6 +314,7 @@ func parseCoverableAreas(markdown string) []parsedArea {
 			continue
 		case level == 3:
 			if markerExcludes(lines, i) {
+				deferredAnchors = append(deferredAnchors, slugHeading(title))
 				current = -1
 				continue
 			}
@@ -273,7 +324,7 @@ func parseCoverableAreas(markdown string) []parsedArea {
 			areas[current].subAnchors = append(areas[current].subAnchors, slugHeading(title))
 		}
 	}
-	return areas
+	return areas, deferredAnchors
 }
 
 // headingLevelTitle reports the ATX heading level (number of leading `#`) and

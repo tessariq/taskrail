@@ -38,8 +38,9 @@ All notable user-visible changes to Taskrail will be documented in this file.
   gating: exits non-zero when decomposition coverage is below the threshold
   (report unchanged, `validate` still advisory, `N/A` never gates). `--area
   <anchor>` narrows the report to a single coverable spec area for a focused
-  "is this feature decomposed?" check (a non-coverable anchor is rejected).
-  Supports `--json`.
+  "is this feature decomposed?" check; a non-coverable anchor is rejected with a
+  message naming why — an unknown anchor, a `####` sub-area roll-up, or a
+  deferred/subsumed area. Supports `--json`.
 - `taskrail status` — strictly read-only snapshot of current tracked-work state:
   active spec, task counts (done/active/blocked/todo), the next eligible task
   marked *not persisted*, blocked tasks with reasons, the last verification

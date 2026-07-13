@@ -3,6 +3,7 @@ package taskrail
 import (
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 )
@@ -504,6 +505,89 @@ func TestCoverageForAreaRejectsUnknownAnchor(t *testing.T) {
 		if _, err := svc.CoverageForArea(anchor); err == nil {
 			t.Errorf("anchor %q should be rejected as non-coverable", anchor)
 		}
+	}
+}
+
+// TestCoverageForAreaRejectionMessages proves the rejection message names the
+// specific reason an anchor is not coverable, instead of one generic text: an
+// unknown anchor points at `spec show --anchors`, a #### sub-area points at its
+// ### parent, and a deferred/subsumed area is named as intentionally excluded.
+func TestCoverageForAreaRejectionMessages(t *testing.T) {
+	repo := seedCoverageRepo(t)
+	svc := newTestService(t, repo, time.Date(2026, 7, 9, 0, 0, 0, 0, time.UTC))
+
+	cases := []struct {
+		name        string
+		anchor      string
+		wantSubstrs []string
+		notSubstrs  []string
+	}{
+		{
+			name:   "unknown anchor suggests spec show --anchors",
+			anchor: "nope",
+			// `spec show --anchors` lists every heading anchor, not just coverable
+			// ones, so the message must not claim it lists "coverable" areas.
+			wantSubstrs: []string{"not an area", "spec show --anchors"},
+			notSubstrs:  []string{"sub-area", "deferred", "coverable"},
+		},
+		{
+			name:        "meta-section heading is unknown, not a coverable area",
+			anchor:      "summary",
+			wantSubstrs: []string{"not an area", "spec show --anchors"},
+			notSubstrs:  []string{"coverable"},
+		},
+		{
+			name:        "sub-area points at its parent area",
+			anchor:      "delta-one",
+			wantSubstrs: []string{"sub-area", "delta"},
+			notSubstrs:  []string{"spec show --anchors"},
+		},
+		{
+			name:        "deferred area named as intentionally excluded",
+			anchor:      "beta",
+			wantSubstrs: []string{"deferred or subsumed", "excluded"},
+			notSubstrs:  []string{"sub-area", "spec show --anchors"},
+		},
+		{
+			name:        "subsumed area named as intentionally excluded",
+			anchor:      "gamma",
+			wantSubstrs: []string{"deferred or subsumed", "excluded"},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := svc.CoverageForArea(tc.anchor)
+			if err == nil {
+				t.Fatalf("anchor %q must be rejected", tc.anchor)
+			}
+			msg := err.Error()
+			for _, want := range tc.wantSubstrs {
+				if !strings.Contains(msg, want) {
+					t.Errorf("message for %q = %q, want substring %q", tc.anchor, msg, want)
+				}
+			}
+			for _, not := range tc.notSubstrs {
+				if strings.Contains(msg, not) {
+					t.Errorf("message for %q = %q, must not contain %q", tc.anchor, msg, not)
+				}
+			}
+		})
+	}
+}
+
+// TestAreaRejectionSubAreaOfDeferredParentIsUnknown pins the interaction the
+// parse deliberately drops: a `####` heading under a `> Deferred` `###` parent
+// is recorded neither as a sub-area nor as a deferred anchor, so it classifies
+// as unknown rather than misreporting it as a roll-up or an excluded area.
+func TestAreaRejectionSubAreaOfDeferredParentIsUnknown(t *testing.T) {
+	md := "## Potential Features\n\n### Beta\n\n> Deferred to v9\n\n#### Beta One\n"
+	areas, deferred := parseSpecAreas(md)
+	err := areaRejectionError(areas, deferred, "beta-one", "specs/x.md")
+	if err == nil {
+		t.Fatal("a sub-area of a deferred parent must still be rejected")
+	}
+	if !strings.Contains(err.Error(), "not an area") {
+		t.Fatalf("sub-area of deferred parent should classify as unknown, got %q", err.Error())
 	}
 }
 

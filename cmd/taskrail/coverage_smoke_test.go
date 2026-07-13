@@ -490,12 +490,17 @@ func TestCoverageAreaFiltersReportAndStaysReadOnly(t *testing.T) {
 		t.Errorf("--json area view must drop orphans, got %+v", report.Orphans)
 	}
 
-	// A non-coverable anchor (a deferred area) is rejected with no output beyond the error.
+	// A deferred area is rejected, and the message names it as intentionally excluded.
 	if _, err := runRoot(t, "coverage", "--area", "gamma"); err == nil {
 		t.Error("deferred area gamma is not coverable and must be rejected")
+	} else if !strings.Contains(err.Error(), "deferred or subsumed") {
+		t.Errorf("deferred rejection must name its case, got %q", err.Error())
 	}
+	// An unknown anchor is rejected, and the message points at spec show --anchors.
 	if _, err := runRoot(t, "coverage", "--area", "nope"); err == nil {
 		t.Error("unknown anchor must be rejected")
+	} else if !strings.Contains(err.Error(), "spec show --anchors") {
+		t.Errorf("unknown rejection must point at spec show --anchors, got %q", err.Error())
 	}
 
 	after := readAllFiles(t, root)
