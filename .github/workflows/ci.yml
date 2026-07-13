@@ -70,6 +70,18 @@ jobs:
       - name: Smoke validate
         run: task validate
 
+      # Exercise the cross-platform freshness guard on a stock native Windows
+      # runner (no MSYS/Git-for-Windows coreutils on PATH), which the checks job
+      # covers only on ubuntu-latest. Split into two steps to mirror the checks
+      # job's per-command failure attribution (T-091).
+      - name: Build taskrail onto the mise PATH (native Windows)
+        if: matrix.runner == 'windows-latest'
+        run: task taskrail:install
+
+      - name: Guard taskrail freshness on native Windows
+        if: matrix.runner == 'windows-latest'
+        run: task taskrail:check
+
   cross-compile:
     needs: checks
     runs-on: ubuntu-latest

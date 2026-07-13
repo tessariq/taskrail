@@ -1,8 +1,11 @@
 package main
 
 import (
+	"bytes"
+	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -59,7 +62,7 @@ func TestRunRemovesFreshBuildWhenNotOnPath(t *testing.T) {
 	fresh := writeFile(t, dir, "fresh", []byte("bytes"))
 	t.Setenv("PATH", dir) // no taskrail here
 
-	if err := run([]string{fresh}); err == nil {
+	if err := run([]string{fresh}, io.Discard); err == nil {
 		t.Error("run must fail when taskrail is not on PATH")
 	}
 	if _, err := os.Stat(fresh); !os.IsNotExist(err) {
@@ -68,7 +71,67 @@ func TestRunRemovesFreshBuildWhenNotOnPath(t *testing.T) {
 }
 
 func TestRunRejectsBadArgs(t *testing.T) {
-	if err := run(nil); err == nil {
+	if err := run(nil, io.Discard); err == nil {
 		t.Error("run must reject a missing path argument")
+	}
+}
+
+// run must route cleanup through the warning path, not swallow the removal
+// error: when the throwaway build cannot be removed, the warning must reach
+// run's writer. Guards against a regression back to a bare `defer os.Remove`.
+func TestRunWarnsWhenCleanupFails(t *testing.T) {
+	dir := t.TempDir()
+	nonEmpty := filepath.Join(dir, "sub")
+	if err := os.Mkdir(nonEmpty, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	writeFile(t, nonEmpty, "child", []byte("x")) // makes os.Remove(nonEmpty) fail
+	t.Setenv("PATH", dir)                        // no taskrail: run returns an error, still cleans up
+
+	var warn bytes.Buffer
+	_ = run([]string{nonEmpty}, &warn)
+	if !strings.Contains(warn.String(), "warning") {
+		t.Errorf("run must surface the cleanup warning; wrote %q", warn.String())
+	}
+}
+
+// cleanup must delete the throwaway build and stay silent on success.
+func TestCleanupRemovesAndIsSilentOnSuccess(t *testing.T) {
+	dir := t.TempDir()
+	fresh := writeFile(t, dir, "fresh", []byte("bytes"))
+	var warn bytes.Buffer
+	cleanup(fresh, &warn)
+	if _, err := os.Stat(fresh); !os.IsNotExist(err) {
+		t.Errorf("cleanup must remove the fresh build; stat err = %v", err)
+	}
+	if warn.Len() != 0 {
+		t.Errorf("cleanup must stay silent on success; wrote %q", warn.String())
+	}
+}
+
+// An already-removed build is not a failure: cleanup must not warn about it.
+func TestCleanupSilentWhenAlreadyGone(t *testing.T) {
+	dir := t.TempDir()
+	var warn bytes.Buffer
+	cleanup(filepath.Join(dir, "gone"), &warn)
+	if warn.Len() != 0 {
+		t.Errorf("cleanup must not warn on a missing file; wrote %q", warn.String())
+	}
+}
+
+// A removal that genuinely fails (here: a non-empty directory, which os.Remove
+// refuses on POSIX and Windows alike) must warn to the writer rather than fail
+// the check — a leftover file cannot flip a fresh binary to stale.
+func TestCleanupWarnsOnRemoveFailure(t *testing.T) {
+	dir := t.TempDir()
+	nonEmpty := filepath.Join(dir, "sub")
+	if err := os.Mkdir(nonEmpty, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	writeFile(t, nonEmpty, "child", []byte("x")) // makes os.Remove(nonEmpty) fail
+	var warn bytes.Buffer
+	cleanup(nonEmpty, &warn)
+	if !strings.Contains(warn.String(), "warning") {
+		t.Errorf("cleanup must warn on a failed removal; wrote %q", warn.String())
 	}
 }

@@ -151,3 +151,86 @@ func TestCIMatrixCoversRequiredOSes(t *testing.T) {
 		}
 	}
 }
+
+// ciStepRunsUnderCondition reports whether any workflow step whose `if:`
+// condition equality-matches cond has a `run:` body invoking runCmd. It reuses
+// workflowStepBlocks to split the file into per-step blocks, so the guard
+// asserts a command runs on a specific matrix leg, not merely somewhere else in
+// the file. The `run:` scope persists across `run: |` continuation lines, and
+// cond/runCmd are matched independently within the block so ordering of `if:`
+// versus `run:` does not matter. The condition must be a positive `== '<cond>'`
+// (single or double quoted); a `!=` (run everywhere-except) does not count, so a
+// flipped operator can't silently pass the guard while dropping coverage.
+func ciStepRunsUnderCondition(content, cond, runCmd string) bool {
+	eq := []string{"== '" + cond + "'", `== "` + cond + `"`}
+	for _, block := range workflowStepBlocks(content) {
+		var inRun, sawCond, sawRun bool
+		for _, line := range block {
+			trimmed := strings.TrimSpace(line)
+			if strings.HasPrefix(trimmed, "#") {
+				continue
+			}
+			switch {
+			case strings.HasPrefix(trimmed, "if:"):
+				inRun = false
+				for _, want := range eq {
+					if strings.Contains(line, want) {
+						sawCond = true
+					}
+				}
+			case strings.HasPrefix(trimmed, "run:"):
+				inRun = true
+			}
+			if inRun && strings.Contains(line, runCmd) {
+				sawRun = true
+			}
+		}
+		if sawCond && sawRun {
+			return true
+		}
+	}
+	return false
+}
+
+// TestCIStepRunsUnderConditionScopesToStep guards the parser: a cond in one step
+// and the runCmd in a different step must NOT satisfy it — they must co-occur.
+func TestCIStepRunsUnderConditionScopesToStep(t *testing.T) {
+	twoSteps := "" +
+		"      - name: A\n" +
+		"        if: matrix.runner == 'windows-latest'\n" +
+		"        run: echo hi\n" +
+		"      - name: B\n" +
+		"        run: task taskrail:check\n"
+	if ciStepRunsUnderCondition(twoSteps, "windows-latest", "task taskrail:check") {
+		t.Error("condition and run in different steps must not satisfy the guard")
+	}
+	oneStep := "" +
+		"      - name: A\n" +
+		"        if: matrix.runner == 'windows-latest'\n" +
+		"        run: task taskrail:check\n"
+	if !ciStepRunsUnderCondition(oneStep, "windows-latest", "task taskrail:check") {
+		t.Error("condition and run in the same step must satisfy the guard")
+	}
+
+	// An inverted condition ("run everywhere EXCEPT windows") must NOT satisfy
+	// the guard — otherwise a flipped operator would silently drop the very
+	// Windows coverage T-091 adds while the test still passes.
+	negated := "" +
+		"      - name: A\n" +
+		"        if: matrix.runner != 'windows-latest'\n" +
+		"        run: task taskrail:check\n"
+	if ciStepRunsUnderCondition(negated, "windows-latest", "task taskrail:check") {
+		t.Error("a `!=` condition must not satisfy the equality guard")
+	}
+}
+
+// The Windows portability claim for `taskrail:check` (T-082) was verified only
+// by inspection and a stdlib cross-compile; T-091 requires an actual run on the
+// native windows-latest leg. Assert a windows-conditional CI step exercises the
+// freshness guard so a real Windows regression is caught in the pipeline.
+func TestCIExercisesTaskrailCheckOnWindows(t *testing.T) {
+	ci := readFile(t, repoRoot(t), ".github/workflows/ci.yml")
+	if !ciStepRunsUnderCondition(ci, "windows-latest", "task taskrail:check") {
+		t.Error("ci.yml must run `task taskrail:check` on a windows-latest-conditional step (T-091)")
+	}
+}

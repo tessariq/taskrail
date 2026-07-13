@@ -9,12 +9,13 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 )
 
 func main() {
-	if err := run(os.Args[1:]); err != nil {
+	if err := run(os.Args[1:], os.Stderr); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
@@ -22,13 +23,14 @@ func main() {
 
 // run compares the freshly built binary at args[0] against the taskrail resolved
 // on PATH. It always removes the fresh build (the Taskfile's throwaway) before
-// returning so no cleanup trap is needed.
-func run(args []string) error {
+// returning so no cleanup trap is needed; a failed removal is reported to warn
+// rather than failing the check.
+func run(args []string, warn io.Writer) error {
 	if len(args) != 1 {
 		return fmt.Errorf("usage: freshcheck <fresh-build-path>")
 	}
 	fresh := args[0]
-	defer os.Remove(fresh)
+	defer cleanup(fresh, warn)
 
 	// exec.LookPath honours PATHEXT on Windows, so a bare "taskrail" resolves the
 	// installed taskrail.exe there and plain taskrail on POSIX.
@@ -45,6 +47,17 @@ func run(args []string) error {
 		return fmt.Errorf("on-PATH taskrail (%s) is stale versus the working tree; run 'task taskrail:install'", resolved)
 	}
 	return nil
+}
+
+// cleanup removes the throwaway fresh build. A failed removal (e.g. a Windows
+// file lock on the just-built exe) is a hygiene problem, not a freshness signal:
+// it warns to warn but never fails the check, so a leftover file cannot flip a
+// genuinely fresh binary to "stale". An already-absent file is not a failure.
+// The next build overwrites any leftover, so it self-heals.
+func cleanup(path string, warn io.Writer) {
+	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+		fmt.Fprintf(warn, "warning: could not remove throwaway build %s: %v\n", path, err)
+	}
 }
 
 // sameBytes reports whether the two files have identical contents. It reads both
