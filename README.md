@@ -18,17 +18,16 @@ Taskrail is a deterministic execution harness for humans and AI agents. It turns
 It is built on durable primitives — Git for history and review, plain Markdown with YAML frontmatter for specs, tasks, and state. No database. No hidden automation. No opaque dashboards. Your repo stays inspectable, and the same `taskrail` commands work whether a person or an agent is at the keyboard.
 
 ```sh
-taskrail init                                        # adopt Taskrail in an existing repo
-taskrail next --json                                 # pick the next eligible task, deterministically
-taskrail start T-001
-taskrail complete T-001 --note "implemented"
-taskrail verify T-001 --result pass --summary "acceptance met"
+taskrail init          # adopt Taskrail in an existing repo, non-destructively
+taskrail validate      # confirm the layout and state are consistent
+taskrail status        # see the active spec, task counts, and what's next
 ```
+
+From there, the daily loop is `next → start → complete → verify` (see [Commands](#commands)).
 
 ## Contents
 
 - [Why Taskrail](#why-taskrail)
-- [What It Is](#what-it-is)
 - [What It Is Not](#what-it-is-not)
 - [Install](#install)
 - [Commands](#commands)
@@ -43,20 +42,12 @@ taskrail verify T-001 --result pass --summary "acceptance met"
 
 ## Why Taskrail
 
-- **Deterministic:** next-task selection follows status, dependencies, priority, and stable tie-breaking — same repo, same answer, every time.
+- **Deterministic:** the workflow is `validate → next → start → complete → verify`, and next-task selection follows status, dependencies, priority, and stable tie-breaking — same repo, same answer, every time.
 - **State-first:** one authoritative `planning/STATE.md` is the continuity and control surface for all work.
-- **Verification as a first-class concept:** completing implementation and verifying it are distinct steps, and verification leaves durable artifacts.
+- **Repo-native:** work is tracked as Markdown task files with an explicit, machine-checkable schema — specs under `specs/`, tracked work under `planning/`. No database, no hidden automation.
+- **Verification is first-class:** completing implementation and verifying it are distinct steps; verification records pass/fail outcomes, writes inspectable artifacts, and opens follow-up tasks as needed.
 - **Retrofit-friendly:** `taskrail init` (or `retrofit`) drops the contract into an existing repository with no rewrite.
 - **Agent-ready:** every command has a `--json` path where it matters, so coding agents drive the same workflow humans do.
-
-## What It Is
-
-- A CLI for tracking repo-native work as Markdown task files with an explicit, machine-checkable schema.
-- A deterministic workflow: `validate → next → start → complete → verify`.
-- One authoritative `planning/STATE.md` — the continuity and control surface for all work.
-- Repo-native specs under `specs/` and deterministic tracked work under `planning/`.
-- Task validation (dependency checks, spec references), deterministic next-task selection, and explicit transitions.
-- A verification model that records pass/fail outcomes, writes inspectable artifacts, and opens follow-up tasks as needed.
 
 ## What It Is Not
 
@@ -76,6 +67,13 @@ taskrail --version
 
 This pulls the release binary from the [tessariq/homebrew-tap](https://github.com/tessariq/homebrew-tap) tap.
 
+Windows (WinGet):
+
+```sh
+winget install Tessariq.Taskrail
+taskrail --version
+```
+
 Build from source (needs Go `1.26`):
 
 ```sh
@@ -90,44 +88,39 @@ Plain `go build`/`go install` produce a development build that reports version
 build time:
 
 ```sh
-go build -ldflags "-X main.version=v0.2.0" -o taskrail ./cmd/taskrail
+go build -ldflags "-X main.version=v0.3.0" -o taskrail ./cmd/taskrail
 # or, via Taskfile:
-VERSION=v0.2.0 task release
-./taskrail version   # -> v0.2.0
+VERSION=v0.3.0 task release
+./taskrail version   # -> v0.3.0
 ```
 
-Tagged releases are automated with [GoReleaser](https://goreleaser.com): pushing a
-`v*` tag builds `linux`/`darwin` binaries for `amd64`/`arm64` and publishes archives
-plus checksums to a GitHub Release, with notes taken from the matching `## v<version>`
-section of `CHANGELOG.md`. The Homebrew tap is bumped by hand afterward — see
-[`docs/workflow/releasing.md`](docs/workflow/releasing.md) for the full checklist.
+Tagged `v*` releases are built and published automatically with
+[GoReleaser](https://goreleaser.com) — Linux/macOS/Windows binaries for
+`amd64`/`arm64`, with archives, checksums, and notes from `CHANGELOG.md`. See
+[`docs/workflow/releasing.md`](docs/workflow/releasing.md) for the release checklist.
 
 ## Commands
 
-Run `taskrail <command> --help` for full flag details.
+The core loop is five commands — the ones you run every day:
 
-| Command | Purpose |
-| --- | --- |
-| `taskrail init` | Version-aware, non-destructive init/upgrade for empty, existing, or non-standard repos. `--with-skills` installs the agent skills (add `--force` to reinstall over existing copies, backing up local edits first); `--apply` writes migrations/retrofits; `--json`. |
-| `taskrail retrofit [notes]` | Guided bootstrap for a non-standard repo: detect layout, import notes into a reviewable draft, scaffold `specs/` + `planning/`. Dry run by default; `--apply`, `--emit-prompt`, `--json`. |
-| `taskrail validate` | Validate layout, task shape, dependency/spec references, and `STATE.md` consistency. Read-only. |
-| `taskrail repair` | Reconcile mechanical `STATE.md` drift (stale `current_task` pointer or task counts). Dry run by default; `--apply` rewrites `STATE.md` only; `--json`. |
-| `taskrail coverage` | Report advisory spec coverage for the active spec in two dimensions — decomposition (gating) and report-only implementation — plus a per-area reverse map of covering task id(s) (double-covered areas flagged), orphan tasks, and drift. Read-only; never fails `validate`. `--min <pct>` (0–100) opts into CI gating: exits non-zero when decomposition coverage is below the threshold (report unchanged; `N/A` never gates). `--area <anchor>` narrows the whole report — coverage figures, reverse map, orphan/drift — to a single coverable spec area for a focused "is this feature decomposed?" check (a non-coverable anchor is rejected). `--json`. |
-| `taskrail status` | Print the current tracked-work snapshot: active spec, task counts, next eligible task (computed but not persisted), blocked tasks with reasons, last verification, a one-line coverage summary, and a one-line orphan/drift summary (orphan-task and uncovered-area counts) alongside it. Read-only. `--json`. |
-| `taskrail stats` | Report aggregate statistics computed snapshot-only from current task files and `STATE.md`: counts and percentages by status, blocked ratio and recorded-blocker count, spec coverage with a per-area breakdown, and dependency shape (unmet dependencies, longest chain). Read-only. `--json`. `--format dot\|mermaid` instead exports the task dependency DAG (nodes = tasks, edges = dependencies) as Graphviz DOT or Mermaid text. |
-| `taskrail next` | Deterministically select the next eligible task. `--json`. |
-| `taskrail start <task-id>` | Mark a task active and update `STATE.md`. |
-| `taskrail complete <task-id>` | Mark a task implementation-complete. `--note`. |
-| `taskrail block <task-id>` | Mark a task blocked and record a `--reason`. |
-| `taskrail unblock <task-id>` | Return a blocked task to todo so it re-enters `next` selection; drops its `STATE.md` blocker entry. Optional `--reason` appends a note. `--json`. |
-| `taskrail verify <task-id>` | Record a pass/fail outcome and write artifacts under `planning/artifacts/verify/`. `--result`, `--summary`, `--create-followup`, `--json`. |
-| `taskrail spec activate <version>` | Repoint `STATE.md`'s active spec to a versioned target (e.g. `v0.3.0`), re-render `STATE.md`, and re-validate. CLI-only writer of the active spec; rejects a missing or non-conforming version with no write. `--json`. |
-| `taskrail spec list` | List the versioned specs under `specs/` in version order and mark the active one. Read-only. `--json`. |
-| `taskrail spec show <version>` | Print a versioned spec; with `--anchors`, list its `spec_ref` heading anchors exactly as `validate` accepts them (so `task new --spec-ref <path>#<anchor>` can target a real anchor). Read-only. `--json`. |
-| `taskrail spec add <version>` | Scaffold `specs/<version>.md` with the standard section skeleton and add it to the `specs/README.md` reading order. Never writes `STATE.md` and does not activate the spec; rejects an existing or non-conforming version with no write. `--json`. |
-| `taskrail task new` | Scaffold a task file with the next free id. Requires `--title` and `--spec-ref`; `--priority`, repeatable `--dep`, `--follow-up <parent-id>`, `--json`. |
-| `taskrail import <source>` | Build spec/task drafts from a markdown source without an LLM. `--to tasks\|spec\|planning`, `--emit-prompt`, `--apply <draft.json>`, `--json`. |
-| `taskrail version` | Print the CLI version (also `--version`). |
+```sh
+taskrail validate                                    # check the repo is consistent
+taskrail next --json                                 # pick the next eligible task, deterministically
+taskrail start T-001                                 # mark it active
+taskrail complete T-001 --note "implemented"         # mark implementation done
+taskrail verify T-001 --result pass --summary "acceptance met"
+```
+
+Every command takes `--json` where it matters, so agents drive the same loop.
+
+**Beyond the core loop**
+
+- **Adopt an existing repo** — `init` and `retrofit` scaffold `specs/` + `planning/` non-destructively; `import` turns rough notes into spec/task drafts without an LLM; `repair` reconciles mechanical `STATE.md` drift.
+- **See where work stands** — `status`, `stats`, and `coverage` report a live snapshot, aggregate metrics, and advisory spec-linkage, all read-only.
+- **Author and steer specs** — the `spec` family (`list`, `show`, `add`, `activate`) inspects and evolves versioned specs.
+- **Handle the messy parts** — `block`/`unblock` park and resume work, and `task new` scaffolds a task with the next free id.
+
+Run `taskrail --help`, or `taskrail <command> --help`, for the full command list and every flag.
 
 ### Shell completion
 
@@ -308,11 +301,12 @@ contribution policy, and tracked-work rules.
 
 ## Status
 
-Taskrail is an in-progress open-source project. The current release is `v0.2.0`.
+Taskrail is an in-progress open-source project. The current release is `v0.3.0`.
 
 - `v0.1.0` established the repository contract: deterministic task progression, the authoritative `STATE.md`, and verification as a first-class concept.
 - `v0.2.0` makes adoption in existing repositories easy — guided `retrofit`, LLM-free `import` of rough notes into spec/task drafts, opt-in shippable agent skills, a version-aware non-destructive `init`, and conservative `STATE.md` repair — while keeping the core CLI provider- and tooling-independent.
-- Later work is tracked under [`specs/v0.3.0.md`](specs/v0.3.0.md).
+- `v0.3.0` adds read-only insight into tracked work — `status`, `stats`, and `coverage` — plus the `spec` command family for inspecting and authoring specs, `unblock` to release blocked tasks, and Windows install via WinGet.
+- Later work is tracked under [`specs/README.md`](specs/README.md).
 
 This repository also dogfoods the Taskrail workflow style — using `planning/`, `docs/workflow/`, and the packaged skill set it adopts like any adopter — until the product itself fully replaces that scaffolding.
 
@@ -322,7 +316,7 @@ Apache-2.0. See [LICENSE](LICENSE).
 
 ## Read Next
 
-- [`specs/v0.2.0.md`](specs/v0.2.0.md) — current release scope
+- [`specs/v0.3.0.md`](specs/v0.3.0.md) — current release scope
 - [`specs/README.md`](specs/README.md) — spec reading order and versioning
 - [`planning/STATE.md`](planning/STATE.md) — live execution state
 - [`AGENTS.md`](AGENTS.md) — guidance for coding agents
