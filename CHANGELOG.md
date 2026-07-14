@@ -2,98 +2,62 @@
 
 All notable user-visible changes to Taskrail will be documented in this file.
 
-## Unreleased
+## v0.3.0 - 2026-07-14
+
+Third release. Taskrail gains read-only insight into tracked work — `status`,
+`stats`, and `coverage` report progress, aggregate metrics, and spec-linkage
+without touching state — plus a `spec` command family for inspecting and
+authoring specs, `unblock` to release blocked tasks, and Windows install via
+WinGet. The core CLI stays provider- and tooling-independent.
 
 ### Added
 
-- Windows install via WinGet: `winget install Tessariq.Taskrail` (amd64/arm64),
-  published from the tagged release. The GitHub Release also gains Windows `.zip`
-  assets. Availability follows a moderated PR to `microsoft/winget-pkgs`.
-- `taskrail unblock <task-id>` — return a blocked task to todo so it re-enters
-  `next` selection and drop its `STATE.md` blocker entry (other blocked tasks keep
-  theirs); optional `--reason` appends a note. Rejects a non-blocked task with no
-  write. Supports `--json`.
 - `taskrail spec` — spec command family. `spec activate <version>` repoints the
-  active spec in `STATE.md` to `specs/<version>.md`, re-renders `STATE.md`,
-  re-validates, and prints the one-line coverage summary plus any tasks still
-  pointing at the previously active spec (informational — activation succeeds
-  regardless); it is the CLI-only writer of
-  the active spec and rejects a missing or non-conforming version with no write.
-  `spec list` lists the versioned specs
-  and marks the active one; `spec show <version>` prints a spec, or with
-  `--anchors` its `spec_ref` heading anchors exactly as `validate` accepts them.
-  `spec add <version>` scaffolds `specs/<version>.md` with the standard section
-  skeleton and adds it to the `specs/README.md` reading order without activating
-  it. `list` and `show` are read-only. Supports `--json`. Shell completion
-  (`taskrail completion <shell>`) completes spec versions for `spec show`/`spec
-  activate` and real `<path>#<anchor>` values for `task new --spec-ref`.
-- `taskrail coverage` — advisory read-only linkage analysis for the active spec:
-  two coverage figures over the same areas — decomposition (any linked task) and
-  report-only implementation (every linked task completed) — with per-area state
-  (uncovered / decomposed / implemented), a reverse map listing the covering
-  task id(s) for each area (double-covered areas flagged), orphan tasks (spec_ref
-  pointing at another spec), and a two-directional drift summary. `status` and
-  `stats` show both figures. Degenerate `###` area headings (a punctuation-only
-  title that slugs to empty, or two headings sharing a slug) inflate the
-  denominator; `coverage` names them as an advisory diagnostic, and `status`/
-  `stats` show a count pointing back to `coverage` rather than silently reporting
-  the distorted figure. Never writes state and never fails `validate`; a
-  spec with no coverable areas reports `N/A`. `--min <pct>` (0–100) opts into CI
-  gating: exits non-zero when decomposition coverage is below the threshold
-  (report unchanged, `validate` still advisory, `N/A` never gates). `--area
-  <anchor>` narrows the report to a single coverable spec area for a focused
-  "is this feature decomposed?" check; a non-coverable anchor is rejected with a
-  message naming why — an unknown anchor, a `####` sub-area roll-up, a
-  deferred/subsumed area, an empty anchor, or an anchor shared by two areas
-  (ambiguous). Supports `--json`.
-- `taskrail status` — strictly read-only snapshot of current tracked-work state:
-  active spec, task counts (done/active/blocked/todo), the next eligible task
-  marked *not persisted*, blocked tasks with reasons, the last verification
-  result, a one-line coverage summary (`N/A` when the spec has no coverable
-  areas), and a one-line orphan/drift summary (orphan-task and uncovered-area
-  counts) alongside it. Leaves the working tree clean. Supports `--json`.
-- `taskrail stats` — strictly read-only aggregate statistics computed
-  snapshot-only from current task files and `STATE.md`: counts and percentages by
-  status, the blocked ratio and recorded-blocker count, spec coverage with a
-  per-area breakdown, and dependency shape (tasks with unmet dependencies,
-  longest dependency chain). Leaves the working tree clean. Supports `--json`.
-  `--format dot|mermaid` instead exports the task dependency DAG (nodes = tasks,
-  edges = dependencies) as Graphviz DOT or Mermaid text for external rendering.
+  active spec in `STATE.md` and re-validates (the CLI-only writer of the active
+  spec); `spec list` and `spec show <version>` (with `--anchors` for `spec_ref`
+  values) inspect specs read-only; `spec add <version>` scaffolds a new spec.
+  Completion completes spec versions and `<path>#<anchor>` values. Supports `--json`.
+- `taskrail coverage` — advisory read-only spec-linkage analysis: per-area
+  decomposition and implementation coverage, a reverse map of the covering task
+  id(s), orphan tasks, and a drift summary. `--min <pct>` opts into CI gating;
+  `--area <anchor>` narrows to one area. Never writes state or fails `validate`.
+  Supports `--json`.
+- `taskrail status` — read-only snapshot: active spec, task counts, the next
+  eligible task (marked not persisted), blockers, last verification, and a
+  coverage/drift summary. Leaves the working tree clean. Supports `--json`.
+- `taskrail stats` — read-only aggregate metrics: status distribution, blocked
+  ratio, spec coverage, and dependency shape. `--format dot|mermaid` exports the
+  task dependency DAG instead. Leaves the working tree clean. Supports `--json`.
+- `taskrail unblock <task-id>` — return a blocked task to todo so it re-enters
+  `next` selection and drop its `STATE.md` blocker entry (others keep theirs);
+  `--reason` appends a note. Supports `--json`.
+- Windows install via WinGet: `winget install Tessariq.Taskrail` (amd64/arm64),
+  with Windows `.zip` assets on the GitHub Release. Availability follows a
+  moderated PR to `microsoft/winget-pkgs`.
 
 ### Changed
 
-- CLI file-read errors now name a repo-relative path (e.g. `read spec file
-  specs/v9.9.9.md: no such file or directory`) instead of leaking the absolute
-  repository location.
-- Shipped agent skills now invoke the CLI through `${TASKRAIL:-taskrail}` instead
-  of a hardcoded `taskrail`. Adopters need nothing (it resolves to the installed
-  binary); set `TASKRAIL=/path/to/taskrail` (or `go run ./cmd/taskrail`) to override.
 - `taskrail init --with-skills` now also installs the `autonomous-recovery`,
-  `autonomous-manual-test`, and `taskrail-spec` agent skills; still opt-in and
-  non-destructive.
-- `taskrail init --with-skills --force` reinstalls the embedded skills over
-  existing copies for upgrades, backing up any locally-modified file to a
-  timestamped sibling first and reporting the overwritten and backed-up paths.
-  Without `--force`, behavior is unchanged (already-installed skills are left in
-  place).
-- `taskrail repair` also reconciles a `status_summary` that is stale against a
-  single `in_progress` task (sets it to `in_progress`); still `STATE.md`-only,
-  dry run by default, and never advances a status. The idle/blocked direction and
-  multiple `in_progress` tasks stay human-resolved.
+  `autonomous-manual-test`, and `taskrail-spec` skills; `--force` reinstalls the
+  embedded skills over existing copies, backing up any locally-modified file
+  first. Still opt-in and non-destructive by default.
+- Shipped agent skills now invoke the CLI through `${TASKRAIL:-taskrail}`; set
+  `TASKRAIL=/path/to/taskrail` to override (it resolves to the installed binary
+  otherwise).
+- `taskrail repair` also reconciles a `status_summary` left stale against a single
+  `in_progress` task; still `STATE.md`-only and dry run by default.
+- CLI file-read errors now name a repo-relative path instead of the absolute
+  repository location.
 
 ### Fixed
 
 - `taskrail task new` now allocates the next id from the highest numeric prefix
-  across bare and slug-suffixed ids, so a repo whose ids are all slug-suffixed
-  (e.g. `T-076-ingestion-commands`) no longer restarts at `T-001` and collides.
-  `taskrail validate` now reports two task files that share a numeric prefix
-  (e.g. `T-001` and `T-001-milestone`) as a collision.
-- `taskrail block` now keeps every currently-blocked task's reason in `STATE.md`
-  (one entry per task) instead of overwriting the list with only the most recent;
-  `taskrail status` reports each blocked task's own reason.
-- `taskrail complete` now leaves `status_summary` as `blocked` (pointing at a
-  still-blocked task) when other tasks remain blocked, instead of resetting to
-  `idle` and under-reporting outstanding blockers.
+  across bare and slug-suffixed ids, so all-slug-suffixed repos no longer restart
+  at `T-001` and collide; `validate` now flags two files sharing a numeric prefix.
+- `taskrail block` now keeps every blocked task's reason in `STATE.md` instead of
+  overwriting the list with only the most recent.
+- `taskrail complete` now leaves `status_summary` as `blocked` when other tasks
+  remain blocked, instead of resetting to `idle`.
 
 ## v0.2.0 - 2026-07-07
 
