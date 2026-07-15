@@ -5,6 +5,9 @@ name: CI
 # whose `paths:` set is the exact mirror of the `paths-ignore` below. Keep the two
 # lists identical. release.yml (tags-only) is unaffected.
 on:
+  # Manual trigger to run the full matrix on demand — e.g. to force CI on a branch
+  # whose changes are all in the paths-ignore set below.
+  workflow_dispatch:
   pull_request:
     paths-ignore:
       - 'planning/**'
