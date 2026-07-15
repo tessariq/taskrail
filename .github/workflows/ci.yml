@@ -1,10 +1,32 @@
 name: CI
 
+# Full pipeline (matrix build/test + cross-compile). Skips changes that touch only
+# planning/spec/doc paths — those are gated by the cheap fast lane in planning.yml,
+# whose `paths:` set is the exact mirror of the `paths-ignore` below. Keep the two
+# lists identical. release.yml (tags-only) is unaffected.
 on:
   pull_request:
+    paths-ignore:
+      - 'planning/**'
+      - 'specs/**'
+      - 'docs/**'
+      - 'README.md'
+      - 'AGENTS.md'
+      - 'CLAUDE.md'
+      - 'CHANGELOG.md'
+      - 'CONTRIBUTING.md'
   push:
     branches:
       - main
+    paths-ignore:
+      - 'planning/**'
+      - 'specs/**'
+      - 'docs/**'
+      - 'README.md'
+      - 'AGENTS.md'
+      - 'CLAUDE.md'
+      - 'CHANGELOG.md'
+      - 'CONTRIBUTING.md'
 
 concurrency:
   group: ci-${{ github.ref }}
