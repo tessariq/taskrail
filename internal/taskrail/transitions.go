@@ -331,9 +331,10 @@ type taskValidationOpts struct {
 // valid priority, and existing dependencies — and returns the normalized
 // priority. Writing nothing, it is the shared pre-write validator import
 // pre-flight (T-041) reuses to reject a whole draft before any file lands, so
-// any check added *here* is enforced on both paths. Checks CreateTask keeps to
-// itself (title emptiness) are not covered — the import path relies on
-// ValidateImportDraft for those.
+// any check added *here* is enforced on both paths. Title emptiness is
+// deliberately not checked on either path: CreateTask allows a bare, title-less
+// scaffold (T-095), while the import path independently requires a non-empty
+// title via ValidateImportDraft.
 func (s *Service) validateTaskCreatable(tasks []*Task, specRef, priority string, deps []string, opts taskValidationOpts) (string, error) {
 	if err := s.validateSpecRefWithPending(specRef, opts.pending); err != nil {
 		return "", fmt.Errorf("invalid spec_ref: %w", err)
@@ -360,10 +361,9 @@ func (s *Service) validateTaskCreatable(tasks []*Task, specRef, priority string,
 // the validation `validate` would apply (spec anchor, dependency existence,
 // priority) at creation time so an invalid task never lands on disk.
 func (s *Service) CreateTask(input CreateTaskInput) (CreateTaskResult, error) {
+	// Title is optional: a scaffold with neither a title nor a slug is a legitimate
+	// bare `T-<n>` task, matching the id form validate already accepts.
 	title := strings.TrimSpace(input.Title)
-	if title == "" {
-		return CreateTaskResult{}, errors.New("task title must not be empty")
-	}
 
 	// Load first: a follow-up needs the parent task to inherit spec_ref and wire
 	// the dependency before the shared validation below runs.
@@ -393,7 +393,13 @@ func (s *Service) CreateTask(input CreateTaskInput) (CreateTaskResult, error) {
 		return CreateTaskResult{}, err
 	}
 
+	// The id and filename are two encodings of one identifier: bake the slug (if
+	// any) into the id so `filename == "<id>.md"` holds. nextTaskID keys on the
+	// numeric prefix, so a slug suffix never affects id allocation or collision.
 	nextID := nextTaskID(tasks)
+	if slug := slugify(input.Slug); slug != "" {
+		nextID = nextID + "-" + slug
+	}
 	now := timestamp(s.now())
 	var provenance string
 	if followUpOf != "" {
@@ -410,11 +416,7 @@ func (s *Service) CreateTask(input CreateTaskInput) (CreateTaskResult, error) {
 			Dependencies: deps,
 			UpdatedAt:    now,
 		},
-		Body: body,
-		// Scaffolds stay bare `T-NNN.md` (id == filename stem): this repo dogfoods
-		// bare ids, and validate enforces `filename == id + ".md"`. nextTaskID keys
-		// on the numeric prefix, so the id never collides even in a slug-suffixed
-		// repo; adopting a slug convention is a separate spec follow-up (T-085).
+		Body:     body,
 		Filename: filepath.Join(s.paths.TasksDir, nextID+".md"),
 	}
 

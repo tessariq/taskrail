@@ -20,6 +20,7 @@ func newTaskCmd() *cobra.Command {
 func newTaskNewCmd() *cobra.Command {
 	var (
 		title    string
+		slug     string
 		specRef  string
 		priority string
 		deps     []string
@@ -41,8 +42,15 @@ func newTaskNewCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			// An explicit --slug wins; otherwise the title is the slug source, so a
+			// plain `task new --title "X"` still yields a slugged, scannable id.
+			slugSource := slug
+			if strings.TrimSpace(slugSource) == "" {
+				slugSource = title
+			}
 			result, err := svc.CreateTask(taskrail.CreateTaskInput{
 				Title:        title,
+				Slug:         slugSource,
 				SpecRef:      specRef,
 				Priority:     priority,
 				Dependencies: deps,
@@ -55,13 +63,13 @@ func newTaskNewCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&title, "title", "", "task title")
+	cmd.Flags().StringVar(&title, "title", "", "task title; also the default slug source for the id")
+	cmd.Flags().StringVar(&slug, "slug", "", "curated slug for the id suffix; overrides the title-derived slug")
 	cmd.Flags().StringVar(&specRef, "spec-ref", "", "spec reference as path#anchor")
 	cmd.Flags().StringVar(&priority, "priority", "medium", "task priority: high, medium, or low")
 	cmd.Flags().StringArrayVar(&deps, "dep", nil, "dependency task id (repeatable)")
 	cmd.Flags().StringVar(&followUp, "follow-up", "", "parent task id: inherit its spec_ref and depend on it")
 	cmd.Flags().BoolVar(&opt.json, "json", false, "print machine-readable output")
-	_ = cmd.MarkFlagRequired("title")
 	_ = cmd.RegisterFlagCompletionFunc("spec-ref", completeSpecRef)
 	return cmd
 }

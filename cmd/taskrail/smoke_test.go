@@ -584,17 +584,82 @@ func TestVerifyInvalidResult(t *testing.T) {
 func TestTaskNewScaffoldsAndValidates(t *testing.T) {
 	root := setupRepo(t)
 
+	// A --title derives a slug baked into the id and matching filename.
 	out, err := runRoot(t, "task", "new", "--title", "Scaffolded via CLI", "--spec-ref", "specs/v0.1.0.md#summary", "--priority", "high", "--json")
 	if err != nil {
 		t.Fatalf("task new: %v (output %q)", err, out)
 	}
-	if !strings.Contains(out, `"task_id": "T-001"`) {
-		t.Fatalf("expected T-001 scaffolded, got %q", out)
+	if !strings.Contains(out, `"task_id": "T-001-scaffolded-via-cli"`) {
+		t.Fatalf("expected slugged T-001 scaffolded, got %q", out)
 	}
-	if _, err := os.Stat(filepath.Join(root, "planning", "tasks", "T-001.md")); err != nil {
+	if !strings.Contains(out, `"path": "planning/tasks/T-001-scaffolded-via-cli.md"`) {
+		t.Fatalf("expected slugged path in output, got %q", out)
+	}
+	if _, err := os.Stat(filepath.Join(root, "planning", "tasks", "T-001-scaffolded-via-cli.md")); err != nil {
 		t.Fatalf("expected scaffolded task file: %v", err)
 	}
 
+	if out, err := runRoot(t, "validate"); err != nil {
+		t.Fatalf("validate after scaffold: %v (output %q)", err, out)
+	}
+}
+
+func TestTaskNewCuratedSlugOverridesTitle(t *testing.T) {
+	root := setupRepo(t)
+
+	// An explicit --slug wins over the title-derived slug and is itself normalized.
+	out, err := runRoot(t, "task", "new",
+		"--title", "Curated league-strength coefficients for cross-league OVR comparability",
+		"--slug", "League-Strength Coefficients",
+		"--spec-ref", "specs/v0.1.0.md#summary", "--json")
+	if err != nil {
+		t.Fatalf("task new: %v (output %q)", err, out)
+	}
+	if !strings.Contains(out, `"task_id": "T-001-league-strength-coefficients"`) {
+		t.Fatalf("expected curated-slug id, got %q", out)
+	}
+	if _, err := os.Stat(filepath.Join(root, "planning", "tasks", "T-001-league-strength-coefficients.md")); err != nil {
+		t.Fatalf("expected curated-slug task file: %v", err)
+	}
+	if out, err := runRoot(t, "validate"); err != nil {
+		t.Fatalf("validate after scaffold: %v (output %q)", err, out)
+	}
+}
+
+func TestTaskNewSlugWithoutTitleSlugsId(t *testing.T) {
+	root := setupRepo(t)
+
+	// --slug with no --title: the slug source is the curated slug, so the id is
+	// slugged even though the frontmatter title stays empty.
+	out, err := runRoot(t, "task", "new", "--slug", "Curated Slug", "--spec-ref", "specs/v0.1.0.md#summary", "--json")
+	if err != nil {
+		t.Fatalf("task new: %v (output %q)", err, out)
+	}
+	if !strings.Contains(out, `"task_id": "T-001-curated-slug"`) {
+		t.Fatalf("expected slug-only id, got %q", out)
+	}
+	if _, err := os.Stat(filepath.Join(root, "planning", "tasks", "T-001-curated-slug.md")); err != nil {
+		t.Fatalf("expected slug-only task file: %v", err)
+	}
+	if out, err := runRoot(t, "validate"); err != nil {
+		t.Fatalf("validate after scaffold: %v (output %q)", err, out)
+	}
+}
+
+func TestTaskNewWithoutTitleOrSlugStaysBare(t *testing.T) {
+	root := setupRepo(t)
+
+	// Neither --title nor --slug: the id stays the bare T-<n> form.
+	out, err := runRoot(t, "task", "new", "--spec-ref", "specs/v0.1.0.md#summary", "--json")
+	if err != nil {
+		t.Fatalf("task new: %v (output %q)", err, out)
+	}
+	if !strings.Contains(out, `"task_id": "T-001"`) {
+		t.Fatalf("expected bare T-001, got %q", out)
+	}
+	if _, err := os.Stat(filepath.Join(root, "planning", "tasks", "T-001.md")); err != nil {
+		t.Fatalf("expected bare task file: %v", err)
+	}
 	if out, err := runRoot(t, "validate"); err != nil {
 		t.Fatalf("validate after scaffold: %v (output %q)", err, out)
 	}
@@ -609,8 +674,8 @@ func TestTaskNewRejectsBadSpecRef(t *testing.T) {
 	if _, err := runRoot(t, "task", "new", "--title", "x", "--spec-ref", "specs/v0.1.0.md#nope"); err == nil {
 		t.Fatal("expected error for unknown spec anchor")
 	}
-	if _, err := os.Stat(filepath.Join(root, "planning", "tasks", "T-101.md")); !os.IsNotExist(err) {
-		t.Fatalf("expected no T-101.md written on rejection, stat err=%v", err)
+	if _, err := os.Stat(filepath.Join(root, "planning", "tasks", "T-101-x.md")); !os.IsNotExist(err) {
+		t.Fatalf("expected no T-101-x.md written on rejection, stat err=%v", err)
 	}
 }
 
@@ -621,17 +686,18 @@ func TestTaskNewFollowUpInheritsAndValidates(t *testing.T) {
 		t.Fatalf("scaffold parent: %v", err)
 	}
 	// Follow-up without --spec-ref inherits the parent's and wires the dependency.
-	out, err := runRoot(t, "task", "new", "--title", "Child", "--follow-up", "T-001", "--json")
+	// The parent id carries its title-derived slug, so --follow-up names the full id.
+	out, err := runRoot(t, "task", "new", "--title", "Child", "--follow-up", "T-001-parent", "--json")
 	if err != nil {
 		t.Fatalf("task new follow-up: %v (output %q)", err, out)
 	}
-	if !strings.Contains(out, `"task_id": "T-002"`) {
-		t.Fatalf("expected T-002 follow-up, got %q", out)
+	if !strings.Contains(out, `"task_id": "T-002-child"`) {
+		t.Fatalf("expected T-002-child follow-up, got %q", out)
 	}
 	if !strings.Contains(out, `"spec_ref": "specs/v0.1.0.md#summary"`) {
 		t.Fatalf("expected inherited spec_ref in output, got %q", out)
 	}
-	if _, err := os.Stat(filepath.Join(root, "planning", "tasks", "T-002.md")); err != nil {
+	if _, err := os.Stat(filepath.Join(root, "planning", "tasks", "T-002-child.md")); err != nil {
 		t.Fatalf("expected follow-up task file: %v", err)
 	}
 	if out, err := runRoot(t, "validate"); err != nil {

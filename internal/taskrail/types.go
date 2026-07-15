@@ -137,7 +137,13 @@ type Warning struct {
 }
 
 type CreateTaskInput struct {
-	Title        string
+	Title string
+	// Slug is the raw source for the id's human-scannable suffix. When it slugifies
+	// to a non-empty value the id becomes `T-<n>-<slug>` with a matching filename;
+	// when empty (or all non-alphanumeric) the id stays the bare `T-<n>` form. The
+	// `task new` command passes `--slug` if given, else the title, so CLI-authored
+	// tasks are slugged by default while other callers (import) stay bare.
+	Slug         string
 	SpecRef      string
 	Priority     string
 	Dependencies []string

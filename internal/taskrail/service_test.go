@@ -515,6 +515,101 @@ func TestCreateTaskScaffoldsValidTaskAndUpdatesCounts(t *testing.T) {
 	}
 }
 
+func TestCreateTaskSlugsIdAndFilenameFromSource(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name      string
+		title     string
+		slug      string
+		wantID    string
+		wantStem  string // filename without .md; equals wantID by the invariant
+		wantTitle string
+	}{
+		{
+			name:      "derives slug from source",
+			title:     "Add slug support",
+			slug:      "Add slug support",
+			wantID:    "T-002-add-slug-support",
+			wantStem:  "T-002-add-slug-support",
+			wantTitle: "Add slug support",
+		},
+		{
+			name:      "curated slug overrides and is normalized",
+			title:     "Curated league-strength coefficients for cross-league OVR comparability",
+			slug:      "League-Strength Coefficients",
+			wantID:    "T-002-league-strength-coefficients",
+			wantStem:  "T-002-league-strength-coefficients",
+			wantTitle: "Curated league-strength coefficients for cross-league OVR comparability",
+		},
+		{
+			name:      "empty slug source stays bare",
+			title:     "",
+			slug:      "",
+			wantID:    "T-002",
+			wantStem:  "T-002",
+			wantTitle: "",
+		},
+		{
+			name:      "slug source with no alphanumerics stays bare",
+			title:     "!!!",
+			slug:      "!!!",
+			wantID:    "T-002",
+			wantStem:  "T-002",
+			wantTitle: "!!!",
+		},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			repo := seedFixtureRepo(t)
+			writeTask(t, repo, "T-001", "Existing item", "todo", "high", "specs/v0.1.0.md#summary", nil)
+
+			svc := newTestService(t, repo, time.Date(2026, 6, 24, 12, 0, 0, 0, time.UTC))
+			result, err := svc.CreateTask(CreateTaskInput{
+				Title:    tc.title,
+				Slug:     tc.slug,
+				SpecRef:  "specs/v0.1.0.md#summary",
+				Priority: "high",
+			})
+			if err != nil {
+				t.Fatalf("create task: %v", err)
+			}
+			if result.TaskID != tc.wantID {
+				t.Fatalf("expected id %s, got %s", tc.wantID, result.TaskID)
+			}
+			// The id and filename are two encodings of one identifier.
+			if base := filepath.Base(result.Path); base != tc.wantStem+".md" {
+				t.Fatalf("expected filename %s.md, got %s", tc.wantStem, base)
+			}
+			if _, err := os.Stat(filepath.Join(repo, result.Path)); err != nil {
+				t.Fatalf("expected task file at %s: %v", result.Path, err)
+			}
+
+			_, tasks, err := svc.loadStateAndTasks()
+			if err != nil {
+				t.Fatalf("load: %v", err)
+			}
+			created, ok := taskByID(tasks, tc.wantID)
+			if !ok {
+				t.Fatalf("expected %s in tasks", tc.wantID)
+			}
+			if created.Frontmatter.Title != tc.wantTitle {
+				t.Fatalf("unexpected title: %q", created.Frontmatter.Title)
+			}
+
+			validation, err := svc.Validate()
+			if err != nil {
+				t.Fatalf("validate: %v", err)
+			}
+			if !validation.Valid {
+				t.Fatalf("expected valid repo after scaffold, got %v", validation.Violations)
+			}
+		})
+	}
+}
+
 func TestCreateTaskRejectsInvalidInput(t *testing.T) {
 	t.Parallel()
 
@@ -522,7 +617,6 @@ func TestCreateTaskRejectsInvalidInput(t *testing.T) {
 		name  string
 		input CreateTaskInput
 	}{
-		{"empty title", CreateTaskInput{Title: "  ", SpecRef: "specs/v0.1.0.md#summary"}},
 		{"empty spec ref", CreateTaskInput{Title: "x", SpecRef: ""}},
 		{"unknown spec anchor", CreateTaskInput{Title: "x", SpecRef: "specs/v0.1.0.md#nope"}},
 		{"bad priority", CreateTaskInput{Title: "x", SpecRef: "specs/v0.1.0.md#summary", Priority: "urgent"}},

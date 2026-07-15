@@ -8,6 +8,9 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 - `taskrail next` — warn when the selected task points outside the active spec;
   `--json` includes the advisory warning under `warnings`.
+- `taskrail task new` — derive a slugged id and filename from `--title`
+  (`T-<n>-<slug>`); `--slug` overrides the derived slug. With neither flag the id
+  stays the bare `T-<n>`.
 
 ## v0.3.0 - 2026-07-14
 

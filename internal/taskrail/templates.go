@@ -94,7 +94,9 @@ func renderNewTaskBody(id, title, provenance string) string {
 	if provenance != "" {
 		description += "\n\n" + provenance
 	}
-	return fmt.Sprintf(`# %s %s
+	// A bare scaffold may carry no title; keep the heading free of a trailing space.
+	heading := strings.TrimRight(fmt.Sprintf("# %s %s", id, title), " ")
+	return fmt.Sprintf(`%s
 
 ## Description
 
@@ -109,7 +111,7 @@ func renderNewTaskBody(id, title, provenance string) string {
 - TODO: record verification evidence paths.
 
 ## Implementation Notes
-`, id, title, description)
+`, heading, description)
 }
 
 // renderFollowupTaskBody produces the body for a verify-created follow-up task.
