@@ -430,6 +430,35 @@ func TestNextSelectsTask(t *testing.T) {
 	}
 }
 
+func TestNextWarnsWhenSelectedTaskPointsOutsideActiveSpec(t *testing.T) {
+	root := setupRepo(t)
+	activateSecondSpec(t, root)
+	writeTask(t, root, "T-100", "todo", "")
+
+	out, err := runRoot(t, "next")
+	if err != nil {
+		t.Fatalf("next: %v", err)
+	}
+	for _, want := range []string{"T-100", "warning:", "specs/v0.1.0.md#summary", "specs/v0.2.0.md"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("next output missing %q: %q", want, out)
+		}
+	}
+
+	root = setupRepo(t)
+	activateSecondSpec(t, root)
+	writeTask(t, root, "T-100", "todo", "")
+	out, err = runRoot(t, "next", "--json")
+	if err != nil {
+		t.Fatalf("next --json: %v", err)
+	}
+	for _, want := range []string{`"warnings": [`, `"code": "selected_non_active_spec"`, `"task_id": "T-100"`} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("next json missing %q: %q", want, out)
+		}
+	}
+}
+
 func TestStartCompleteFlow(t *testing.T) {
 	root := setupRepo(t)
 	writeTask(t, root, "T-100", "todo", "")
@@ -450,6 +479,23 @@ func TestStartCompleteFlow(t *testing.T) {
 	// Repo should be valid again with no active task.
 	if out, err := runRoot(t, "validate"); err != nil {
 		t.Fatalf("validate after complete: %v (output %q)", err, out)
+	}
+}
+
+func activateSecondSpec(t *testing.T, root string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(root, "specs", "v0.2.0.md"), []byte("# Taskrail v0.2.0\n\n## Summary\n\nFixture spec.\n"), 0o644); err != nil {
+		t.Fatalf("write second spec: %v", err)
+	}
+	statePath := filepath.Join(root, "planning", "STATE.md")
+	state, err := os.ReadFile(statePath)
+	if err != nil {
+		t.Fatalf("read state: %v", err)
+	}
+	updated := strings.ReplaceAll(string(state), "active_spec_version: v0.1.0", "active_spec_version: v0.2.0")
+	updated = strings.ReplaceAll(updated, "active_spec_path: specs/v0.1.0.md", "active_spec_path: specs/v0.2.0.md")
+	if err := os.WriteFile(statePath, []byte(updated), 0o644); err != nil {
+		t.Fatalf("write state: %v", err)
 	}
 }
 

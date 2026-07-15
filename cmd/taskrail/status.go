@@ -63,10 +63,16 @@ func renderStatusText(r taskrail.StatusReport) string {
 // renderStatusNext renders the next-task line, always marked "not persisted" so
 // the read-only guarantee is visible at a glance.
 func renderStatusNext(n taskrail.StatusNext) string {
+	var b strings.Builder
 	if n.TaskID == "" {
-		return "next: none (no eligible task) — not persisted\n"
+		b.WriteString("next: none (no eligible task) — not persisted\n")
+	} else {
+		fmt.Fprintf(&b, "next: %s %s (%s) — not persisted\n", n.TaskID, n.Title, n.Priority)
 	}
-	return fmt.Sprintf("next: %s %s (%s) — not persisted\n", n.TaskID, n.Title, n.Priority)
+	for _, warning := range n.Warnings {
+		fmt.Fprintf(&b, "%s\n", warning.Message)
+	}
+	return b.String()
 }
 
 func renderStatusCoverage(c taskrail.StatusCoverage) string {

@@ -22,11 +22,12 @@ type StatusCounts struct {
 // false: unlike `next`, status computes the selection without writing it, so the
 // field makes the read-only guarantee explicit to agents.
 type StatusNext struct {
-	TaskID    string `json:"task_id,omitempty"`
-	Title     string `json:"title,omitempty"`
-	Priority  string `json:"priority,omitempty"`
-	Reason    string `json:"reason"`
-	Persisted bool   `json:"persisted"`
+	TaskID    string    `json:"task_id,omitempty"`
+	Title     string    `json:"title,omitempty"`
+	Priority  string    `json:"priority,omitempty"`
+	Reason    string    `json:"reason"`
+	Persisted bool      `json:"persisted"`
+	Warnings  []Warning `json:"warnings,omitempty"`
 }
 
 // BlockedTask is a blocked task paired with its recorded reason.
@@ -91,6 +92,7 @@ func (s *Service) Status() (StatusReport, error) {
 			Priority:  next.Priority,
 			Reason:    next.Reason,
 			Persisted: false,
+			Warnings:  next.Warnings,
 		},
 		Blocked:                blockedTasks(tasks, state.Frontmatter.Blockers),
 		LastVerificationResult: state.Frontmatter.LastVerificationResult,

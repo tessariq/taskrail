@@ -105,13 +105,15 @@ The core loop is five commands — the ones you run every day:
 
 ```sh
 taskrail validate                                    # check the repo is consistent
-taskrail next --json                                 # pick the next eligible task, deterministically
+taskrail next --json                                 # pick the next eligible task; warns on non-active-spec work
 taskrail start T-001                                 # mark it active
 taskrail complete T-001 --note "implemented"         # mark implementation done
 taskrail verify T-001 --result pass --summary "acceptance met"
 ```
 
 Every command takes `--json` where it matters, so agents drive the same loop.
+If `next` selects a task whose `spec_ref` points outside the active spec, human
+output prints a warning and `--json` includes it under `warnings`.
 
 **Beyond the core loop**
 

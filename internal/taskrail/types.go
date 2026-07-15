@@ -120,11 +120,20 @@ type ValidationResult struct {
 }
 
 type NextResult struct {
-	TaskID     string   `json:"task_id,omitempty"`
-	Title      string   `json:"title,omitempty"`
-	Priority   string   `json:"priority,omitempty"`
-	Reason     string   `json:"reason"`
-	Candidates []string `json:"candidates"`
+	TaskID     string    `json:"task_id,omitempty"`
+	Title      string    `json:"title,omitempty"`
+	Priority   string    `json:"priority,omitempty"`
+	Reason     string    `json:"reason"`
+	Candidates []string  `json:"candidates"`
+	Warnings   []Warning `json:"warnings,omitempty"`
+}
+
+type Warning struct {
+	Code           string `json:"code"`
+	Message        string `json:"message"`
+	TaskID         string `json:"task_id,omitempty"`
+	SpecRef        string `json:"spec_ref,omitempty"`
+	ActiveSpecPath string `json:"active_spec_path,omitempty"`
 }
 
 type CreateTaskInput struct {

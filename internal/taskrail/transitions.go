@@ -38,6 +38,7 @@ func computeNext(state *State, tasks []*Task) NextResult {
 				Priority:   task.Frontmatter.Priority,
 				Reason:     "active task already in progress",
 				Candidates: []string{task.Frontmatter.ID},
+				Warnings:   nextSelectionWarnings(state, task),
 			}
 		}
 	}
@@ -58,7 +59,33 @@ func computeNext(state *State, tasks []*Task) NextResult {
 		Priority:   selected.Frontmatter.Priority,
 		Reason:     "next eligible todo by priority and stable task id",
 		Candidates: ids,
+		Warnings:   nextSelectionWarnings(state, selected),
 	}
+}
+
+func nextSelectionWarnings(state *State, task *Task) []Warning {
+	activeSpecPath := strings.TrimSpace(state.Frontmatter.ActiveSpecPath)
+	if activeSpecPath == "" || task == nil {
+		return nil
+	}
+	specPath, _, err := parseSpecRef(task.Frontmatter.SpecRef)
+	if err != nil {
+		return nil
+	}
+	if normalizeSpecPath(specPath) == normalizeSpecPath(activeSpecPath) {
+		return nil
+	}
+	return []Warning{{
+		Code:           "selected_non_active_spec",
+		Message:        fmt.Sprintf("warning: selected task %s points at %s while active spec is %s", task.Frontmatter.ID, task.Frontmatter.SpecRef, activeSpecPath),
+		TaskID:         task.Frontmatter.ID,
+		SpecRef:        task.Frontmatter.SpecRef,
+		ActiveSpecPath: activeSpecPath,
+	}}
+}
+
+func normalizeSpecPath(path string) string {
+	return filepath.ToSlash(filepath.Clean(strings.TrimSpace(path)))
 }
 
 // nextAction renders the STATE.md next_action string that `next` persists for a

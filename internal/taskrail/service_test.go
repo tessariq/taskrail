@@ -204,6 +204,85 @@ func TestNextSelectsByDependencyPriorityAndStableID(t *testing.T) {
 	}
 }
 
+func TestNextWarnsWhenSelectedTaskPointsOutsideActiveSpec(t *testing.T) {
+	t.Parallel()
+
+	repo := seedFixtureRepo(t)
+	writeFile(t, filepath.Join(repo, "specs", "v0.2.0.md"), "# Taskrail v0.2.0\n\n## Summary\n\nFixture spec.\n")
+	writeFixtureState(t, repo, "v0.2.0", "", "", "idle")
+	writeTask(t, repo, "T-002", "Old spec task", "todo", "high", "specs/v0.1.0.md#summary", nil)
+
+	svc := newTestService(t, repo, time.Now().UTC())
+	result, err := svc.Next()
+	if err != nil {
+		t.Fatalf("next: %v", err)
+	}
+	if result.TaskID != "T-002" {
+		t.Fatalf("expected T-002, got %s", result.TaskID)
+	}
+	if len(result.Warnings) != 1 {
+		t.Fatalf("expected one warning, got %+v", result.Warnings)
+	}
+	warning := result.Warnings[0]
+	if warning.Code != "selected_non_active_spec" {
+		t.Fatalf("warning code = %q", warning.Code)
+	}
+	if warning.TaskID != "T-002" || warning.SpecRef != "specs/v0.1.0.md#summary" || warning.ActiveSpecPath != "specs/v0.2.0.md" {
+		t.Fatalf("unexpected warning payload: %+v", warning)
+	}
+}
+
+func TestNextWarnsWhenActiveTaskPointsOutsideActiveSpec(t *testing.T) {
+	t.Parallel()
+
+	repo := seedFixtureRepo(t)
+	writeFile(t, filepath.Join(repo, "specs", "v0.2.0.md"), "# Taskrail v0.2.0\n\n## Summary\n\nFixture spec.\n")
+	writeTask(t, repo, "T-002", "Old spec task", "in_progress", "high", "specs/v0.1.0.md#summary", nil)
+	writeFixtureState(t, repo, "v0.2.0", "T-002", "Old spec task", "in_progress")
+
+	svc := newTestService(t, repo, time.Now().UTC())
+	result, err := svc.Next()
+	if err != nil {
+		t.Fatalf("next: %v", err)
+	}
+	if result.Reason != "active task already in progress" {
+		t.Fatalf("reason = %q", result.Reason)
+	}
+	if len(result.Warnings) != 1 || result.Warnings[0].Code != "selected_non_active_spec" {
+		t.Fatalf("expected selected_non_active_spec warning, got %+v", result.Warnings)
+	}
+}
+
+func TestStatusSurfacesNextWarningReadOnly(t *testing.T) {
+	t.Parallel()
+
+	repo := seedFixtureRepo(t)
+	writeFile(t, filepath.Join(repo, "specs", "v0.2.0.md"), "# Taskrail v0.2.0\n\n## Summary\n\nFixture spec.\n")
+	writeFixtureState(t, repo, "v0.2.0", "", "", "idle")
+	writeTask(t, repo, "T-002", "Old spec task", "todo", "high", "specs/v0.1.0.md#summary", nil)
+	statePath := filepath.Join(repo, "planning", "STATE.md")
+	before, err := os.ReadFile(statePath)
+	if err != nil {
+		t.Fatalf("read state before status: %v", err)
+	}
+
+	svc := newTestService(t, repo, time.Now().UTC())
+	report, err := svc.Status()
+	if err != nil {
+		t.Fatalf("status: %v", err)
+	}
+	if len(report.Next.Warnings) != 1 {
+		t.Fatalf("expected one next warning, got %+v", report.Next.Warnings)
+	}
+	after, err := os.ReadFile(statePath)
+	if err != nil {
+		t.Fatalf("read state after status: %v", err)
+	}
+	if string(after) != string(before) {
+		t.Fatal("status must not rewrite STATE.md")
+	}
+}
+
 func TestStartCompleteAndBlockUpdateState(t *testing.T) {
 	t.Parallel()
 
@@ -636,6 +715,28 @@ updated_at: "2026-03-31T00:00:00Z"
 Fixture task.
 `
 	writeFile(t, filepath.Join(repo, "planning", "tasks", id+".md"), content)
+}
+
+func writeFixtureState(t *testing.T, repo, version, currentTask, currentTitle, statusSummary string) {
+	t.Helper()
+	writeFile(t, filepath.Join(repo, "planning", "STATE.md"), fmt.Sprintf(`---
+schema_version: 1
+updated_at: "2026-03-31T00:00:00Z"
+active_spec_version: %s
+active_spec_path: specs/%s.md
+current_task: "%s"
+current_task_title: "%s"
+status_summary: %s
+blockers: []
+next_action: Start the next task
+last_verification_result: Not yet run
+relevant_artifacts: []
+continuation_notes:
+  - Fixture repo.
+---
+
+# STATE
+`, version, version, currentTask, currentTitle, statusSummary))
 }
 
 func initGitRepo(t *testing.T) string {

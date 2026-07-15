@@ -2,6 +2,13 @@
 
 All notable user-visible changes to Taskrail will be documented in this file.
 
+## Unreleased
+
+### Changed
+
+- `taskrail next` — warn when the selected task points outside the active spec;
+  `--json` includes the advisory warning under `warnings`.
+
 ## v0.3.0 - 2026-07-14
 
 Third release. Taskrail gains read-only insight into tracked work — `status`,
