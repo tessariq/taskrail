@@ -207,6 +207,27 @@ taskrail spec show v0.4.0 --anchors   # list the active spec's valid anchors
 `--area` and `--spec-ref` are mutually exclusive; an unknown anchor fails before
 anything is written and points you at `spec show <active-version> --anchors`.
 
+### The slug-in-id invariant
+
+A task's `id` and its filename are two encodings of one identifier: `validate`
+enforces `filename == "<id>.md"`, so a slugged filename requires a slugged id.
+`task new` produces that pairing directly — `--title "X"` derives a slug and
+writes `T-<n>-x-slug` with a matching `T-<n>-x-slug.md`, `--slug` overrides the
+slug source, and passing neither keeps the bare `T-<n>` / `T-<n>.md` form. Every
+case passes `validate` with no follow-up edit.
+
+Because the id and filename move together, you cannot rename a file for
+readability on its own. A bare `git mv T-<n>.md T-<n>-add-slug.md` changes only
+the filename, leaving the frontmatter `id:` as `T-<n>`, so the next `validate`
+fails with `task <id> filename must be <id>.md`. The fix is `task rename`, which
+re-slugs atomically: it rewrites the `id:` field, renames the file, rewrites
+every inbound `dependencies:` reference to the task, re-projects `STATE.md`, and
+re-runs `validate`.
+
+```sh
+taskrail task rename T-<n> --slug add-slug     # or --title "Add slug"; --dry-run previews
+```
+
 Bootstrap drafts from rough notes without any LLM — preview first, then apply:
 
 ```sh
