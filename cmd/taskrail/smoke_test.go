@@ -430,7 +430,12 @@ func TestNextSelectsTask(t *testing.T) {
 	}
 }
 
-func TestNextWarnsWhenSelectedTaskPointsOutsideActiveSpec(t *testing.T) {
+// TestNextSkipsIdleTaskOutsideActiveSpec is the CLI counterpart to the service
+// selector test: an idle todo linked to an older spec is filtered out of `next`
+// selection, so both human and --json report no eligible task and expose the
+// skipped runnable work as a structured warning (T-108 supersedes the T-103
+// advisory-warning behavior for idle selection).
+func TestNextSkipsIdleTaskOutsideActiveSpec(t *testing.T) {
 	root := setupRepo(t)
 	activateSecondSpec(t, root)
 	writeTask(t, root, "T-100", "todo", "")
@@ -439,7 +444,7 @@ func TestNextWarnsWhenSelectedTaskPointsOutsideActiveSpec(t *testing.T) {
 	if err != nil {
 		t.Fatalf("next: %v", err)
 	}
-	for _, want := range []string{"T-100", "warning:", "specs/v0.1.0.md#summary", "specs/v0.2.0.md"} {
+	for _, want := range []string{"no eligible task", "warning:", "T-100", "specs/v0.2.0.md"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("next output missing %q: %q", want, out)
 		}
@@ -452,7 +457,29 @@ func TestNextWarnsWhenSelectedTaskPointsOutsideActiveSpec(t *testing.T) {
 	if err != nil {
 		t.Fatalf("next --json: %v", err)
 	}
-	for _, want := range []string{`"warnings": [`, `"code": "selected_non_active_spec"`, `"task_id": "T-100"`} {
+	for _, want := range []string{`"reason": "no active-spec eligible task"`, `"warnings": [`, `"code": "skipped_non_active_spec"`, `"task_id": "T-100"`} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("next json missing %q: %q", want, out)
+		}
+	}
+}
+
+// TestNextContinuesActiveOldSpecTaskWithWarning keeps the surviving warning case:
+// an already-active in_progress task pointing outside the active spec is still
+// returned (the active task owns the workflow slot) with the drift warning.
+func TestNextContinuesActiveOldSpecTaskWithWarning(t *testing.T) {
+	root := setupRepo(t)
+	writeTask(t, root, "T-100", "todo", "")
+	if _, err := runRoot(t, "start", "T-100"); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	activateSecondSpec(t, root)
+
+	out, err := runRoot(t, "next", "--json")
+	if err != nil {
+		t.Fatalf("next --json: %v", err)
+	}
+	for _, want := range []string{`"task_id": "T-100"`, `"reason": "active task already in progress"`, `"code": "selected_non_active_spec"`} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("next json missing %q: %q", want, out)
 		}

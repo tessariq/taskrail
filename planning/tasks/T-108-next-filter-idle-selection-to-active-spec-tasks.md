@@ -1,12 +1,12 @@
 ---
 id: T-108-next-filter-idle-selection-to-active-spec-tasks
 title: 'next: filter idle selection to active-spec tasks'
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.4.0.md#active-spec-filtered-next-selection
 dependencies:
     - T-103
-updated_at: "2026-07-16T09:50:17Z"
+updated_at: "2026-07-16T10:10:08Z"
 ---
 
 # T-108-next-filter-idle-selection-to-active-spec-tasks next: filter idle selection to active-spec tasks
@@ -48,3 +48,5 @@ when an already-active `in_progress` task points outside the active spec.
 
 - T-103 shipped the intermediate advisory warning behavior; this task revises idle
   selection semantics while preserving the warning for already-active drift.
+- 2026-07-16T10:10:02Z: verification pass
+- 2026-07-16T10:10:08Z: active-spec-filtered idle next selection

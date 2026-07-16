@@ -24,8 +24,12 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ### Changed
 
-- `taskrail next` — warn when the selected task points outside the active spec;
-  `--json` includes the advisory warning under `warnings`.
+- `taskrail next` — anchor idle selection to the active spec: only `todo` tasks
+  whose `spec_ref` points at the active spec are considered, so older-spec work is
+  skipped, not selected. When only older-spec work is runnable, `next` reports no
+  eligible task and lists it under `warnings` (`skipped_non_active_spec`). An
+  already-active task pointing outside the active spec is still returned with a
+  `selected_non_active_spec` warning. `status` mirrors the same read-only selection.
 - `taskrail task new` — derive a slugged id and filename from `--title`
   (`T-<n>-<slug>`); `--slug` overrides the derived slug. With neither flag the id
   stays the bare `T-<n>`.

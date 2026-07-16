@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -204,7 +205,11 @@ func TestNextSelectsByDependencyPriorityAndStableID(t *testing.T) {
 	}
 }
 
-func TestNextWarnsWhenSelectedTaskPointsOutsideActiveSpec(t *testing.T) {
+// TestNextSkipsIdleTaskOutsideActiveSpec locks in the T-108 idle semantics that
+// supersede the T-103 advisory warning: an eligible todo whose spec_ref points
+// outside the active spec is filtered out of idle selection, so `next` reports no
+// eligible task and exposes the skipped runnable work as a structured warning.
+func TestNextSkipsIdleTaskOutsideActiveSpec(t *testing.T) {
 	t.Parallel()
 
 	repo := seedFixtureRepo(t)
@@ -217,18 +222,73 @@ func TestNextWarnsWhenSelectedTaskPointsOutsideActiveSpec(t *testing.T) {
 	if err != nil {
 		t.Fatalf("next: %v", err)
 	}
-	if result.TaskID != "T-002" {
-		t.Fatalf("expected T-002, got %s", result.TaskID)
+	if result.TaskID != "" {
+		t.Fatalf("expected no selection, got %s", result.TaskID)
+	}
+	if result.Reason != "no active-spec eligible task" {
+		t.Fatalf("reason = %q", result.Reason)
 	}
 	if len(result.Warnings) != 1 {
 		t.Fatalf("expected one warning, got %+v", result.Warnings)
 	}
 	warning := result.Warnings[0]
-	if warning.Code != "selected_non_active_spec" {
+	if warning.Code != "skipped_non_active_spec" {
 		t.Fatalf("warning code = %q", warning.Code)
 	}
 	if warning.TaskID != "T-002" || warning.SpecRef != "specs/v0.1.0.md#summary" || warning.ActiveSpecPath != "specs/v0.2.0.md" {
 		t.Fatalf("unexpected warning payload: %+v", warning)
+	}
+}
+
+// TestNextSelectsActiveSpecTaskOverHigherPriorityOldSpec proves the active-spec
+// filter runs before priority ranking: a lower-priority active-spec task is
+// chosen over a higher-priority task linked to an older spec, with no warning.
+func TestNextSelectsActiveSpecTaskOverHigherPriorityOldSpec(t *testing.T) {
+	t.Parallel()
+
+	repo := seedFixtureRepo(t)
+	writeFile(t, filepath.Join(repo, "specs", "v0.2.0.md"), "# Taskrail v0.2.0\n\n## Summary\n\nFixture spec.\n")
+	writeFixtureState(t, repo, "v0.2.0", "", "", "idle")
+	writeTask(t, repo, "T-002", "Old spec high", "todo", "high", "specs/v0.1.0.md#summary", nil)
+	writeTask(t, repo, "T-003", "Active spec medium", "todo", "medium", "specs/v0.2.0.md#summary", nil)
+
+	svc := newTestService(t, repo, time.Now().UTC())
+	result, err := svc.Next()
+	if err != nil {
+		t.Fatalf("next: %v", err)
+	}
+	if result.TaskID != "T-003" {
+		t.Fatalf("expected active-spec T-003, got %s", result.TaskID)
+	}
+	if !slices.Equal(result.Candidates, []string{"T-003"}) {
+		t.Fatalf("candidates should be scoped to active spec, got %v", result.Candidates)
+	}
+	if len(result.Warnings) != 0 {
+		t.Fatalf("expected no warnings for active-spec selection, got %+v", result.Warnings)
+	}
+}
+
+// TestNextEmptyBacklogDistinctFromSkipped keeps the two "nothing to select"
+// outcomes structurally distinguishable: an empty backlog reports "no eligible
+// task" with no warnings, while skipped old-spec work reports "no active-spec
+// eligible task" plus a skip warning.
+func TestNextEmptyBacklogDistinctFromSkipped(t *testing.T) {
+	t.Parallel()
+
+	repo := seedFixtureRepo(t)
+	writeFile(t, filepath.Join(repo, "specs", "v0.2.0.md"), "# Taskrail v0.2.0\n\n## Summary\n\nFixture spec.\n")
+	writeFixtureState(t, repo, "v0.2.0", "", "", "idle")
+
+	svc := newTestService(t, repo, time.Now().UTC())
+	result, err := svc.Next()
+	if err != nil {
+		t.Fatalf("next: %v", err)
+	}
+	if result.Reason != "no eligible task" {
+		t.Fatalf("empty backlog reason = %q", result.Reason)
+	}
+	if len(result.Warnings) != 0 {
+		t.Fatalf("empty backlog should carry no skip warning, got %+v", result.Warnings)
 	}
 }
 
@@ -271,8 +331,8 @@ func TestStatusSurfacesNextWarningReadOnly(t *testing.T) {
 	if err != nil {
 		t.Fatalf("status: %v", err)
 	}
-	if len(report.Next.Warnings) != 1 {
-		t.Fatalf("expected one next warning, got %+v", report.Next.Warnings)
+	if len(report.Next.Warnings) != 1 || report.Next.Warnings[0].Code != "skipped_non_active_spec" {
+		t.Fatalf("expected one skipped_non_active_spec next warning, got %+v", report.Next.Warnings)
 	}
 	after, err := os.ReadFile(statePath)
 	if err != nil {

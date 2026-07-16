@@ -31,8 +31,17 @@ Rules:
 
 1. Consider only `todo` tasks.
 2. Filter to tasks whose dependencies are resolved.
-3. Sort by priority.
-4. Break ties by stable task identifier.
+3. Filter to tasks whose `spec_ref` points at the active spec.
+4. Sort by priority.
+5. Break ties by stable task identifier.
+
+Steps 3–5 apply to idle selection. When only older/other-spec tasks are runnable,
+`next` reports no eligible task and lists the skipped work under `warnings`
+(`skipped_non_active_spec`) rather than selecting it — recover such work
+explicitly with `start <id>`. An already-active `in_progress` task is always
+returned so it can be continued; if it points outside the active spec, `next`
+adds a `selected_non_active_spec` warning. Read-only `status` computes the same
+selection without writing state.
 
 ## Verification Contract
 

@@ -43,36 +43,77 @@ func computeNext(state *State, tasks []*Task) NextResult {
 		}
 	}
 
-	candidates := eligibleTasks(tasks)
-	ids := make([]string, 0, len(candidates))
-	for _, task := range candidates {
-		ids = append(ids, task.Frontmatter.ID)
-	}
-	if len(candidates) == 0 {
+	// Idle selection is anchored to the active spec: filter eligible candidates to
+	// the active spec before ranking, so higher-priority older-spec work is skipped
+	// rather than selected. Skipped runnable work still surfaces as a structured
+	// warning so agents can distinguish it from an empty backlog (T-108).
+	activeSpecPath := strings.TrimSpace(state.Frontmatter.ActiveSpecPath)
+	inScope, skipped := partitionByActiveSpec(eligibleTasks(tasks), activeSpecPath)
+	ids := taskIDs(inScope)
+	if len(inScope) == 0 {
+		if len(skipped) > 0 {
+			return NextResult{
+				Reason:     "no active-spec eligible task",
+				Candidates: ids,
+				Warnings:   skippedNonActiveSpecWarnings(skipped, activeSpecPath),
+			}
+		}
 		return NextResult{Reason: "no eligible task", Candidates: ids}
 	}
 
-	selected := candidates[0]
+	selected := inScope[0]
 	return NextResult{
 		TaskID:     selected.Frontmatter.ID,
 		Title:      selected.Frontmatter.Title,
 		Priority:   selected.Frontmatter.Priority,
 		Reason:     "next eligible todo by priority and stable task id",
 		Candidates: ids,
-		Warnings:   nextSelectionWarnings(state, selected),
 	}
 }
 
-func nextSelectionWarnings(state *State, task *Task) []Warning {
-	activeSpecPath := strings.TrimSpace(state.Frontmatter.ActiveSpecPath)
-	if activeSpecPath == "" || task == nil {
-		return nil
+// partitionByActiveSpec splits eligible tasks into those linked to the active spec
+// and those pointing elsewhere. An empty activeSpecPath disables filtering, so
+// every eligible task stays in scope (nothing to anchor against).
+func partitionByActiveSpec(eligible []*Task, activeSpecPath string) (inScope, skipped []*Task) {
+	if activeSpecPath == "" {
+		return eligible, nil
 	}
+	for _, task := range eligible {
+		if taskMatchesActiveSpec(task, activeSpecPath) {
+			inScope = append(inScope, task)
+		} else {
+			skipped = append(skipped, task)
+		}
+	}
+	return inScope, skipped
+}
+
+// taskMatchesActiveSpec reports whether task's spec_ref path resolves to the
+// active spec. An unparseable spec_ref is treated as matching so filtering never
+// silently hides a task that validation would otherwise surface.
+func taskMatchesActiveSpec(task *Task, activeSpecPath string) bool {
 	specPath, _, err := parseSpecRef(task.Frontmatter.SpecRef)
 	if err != nil {
-		return nil
+		return true
 	}
-	if normalizeSpecPath(specPath) == normalizeSpecPath(activeSpecPath) {
+	return normalizeSpecPath(specPath) == normalizeSpecPath(activeSpecPath)
+}
+
+func taskIDs(tasks []*Task) []string {
+	ids := make([]string, 0, len(tasks))
+	for _, task := range tasks {
+		ids = append(ids, task.Frontmatter.ID)
+	}
+	return ids
+}
+
+// nextSelectionWarnings surfaces the drift warning for an already-active task
+// whose spec_ref points outside the active spec. Idle selection no longer warns —
+// it filters instead (see computeNext) — so this only fires for the continuation
+// case, where the active task owns the workflow slot and must be returned as-is.
+func nextSelectionWarnings(state *State, task *Task) []Warning {
+	activeSpecPath := strings.TrimSpace(state.Frontmatter.ActiveSpecPath)
+	if activeSpecPath == "" || task == nil || taskMatchesActiveSpec(task, activeSpecPath) {
 		return nil
 	}
 	return []Warning{{
@@ -82,6 +123,23 @@ func nextSelectionWarnings(state *State, task *Task) []Warning {
 		SpecRef:        task.Frontmatter.SpecRef,
 		ActiveSpecPath: activeSpecPath,
 	}}
+}
+
+// skippedNonActiveSpecWarnings reports each eligible task that idle selection
+// skipped because its spec_ref points outside the active spec, giving agents a
+// structured signal that runnable older-spec work exists.
+func skippedNonActiveSpecWarnings(skipped []*Task, activeSpecPath string) []Warning {
+	warnings := make([]Warning, 0, len(skipped))
+	for _, task := range skipped {
+		warnings = append(warnings, Warning{
+			Code:           "skipped_non_active_spec",
+			Message:        fmt.Sprintf("warning: skipped eligible task %s at %s; active spec is %s", task.Frontmatter.ID, task.Frontmatter.SpecRef, activeSpecPath),
+			TaskID:         task.Frontmatter.ID,
+			SpecRef:        task.Frontmatter.SpecRef,
+			ActiveSpecPath: activeSpecPath,
+		})
+	}
+	return warnings
 }
 
 func normalizeSpecPath(path string) string {
@@ -96,6 +154,8 @@ func nextAction(result NextResult) string {
 		return fmt.Sprintf("Continue task %s", result.TaskID)
 	case "no eligible task":
 		return "No eligible task is ready"
+	case "no active-spec eligible task":
+		return "No active-spec task is ready"
 	default:
 		return fmt.Sprintf("Start task %s: %s", result.TaskID, result.Title)
 	}

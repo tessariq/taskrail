@@ -105,15 +105,21 @@ The core loop is five commands — the ones you run every day:
 
 ```sh
 taskrail validate                                    # check the repo is consistent
-taskrail next --json                                 # pick the next eligible task; warns on non-active-spec work
+taskrail next --json                                 # pick the next eligible active-spec task
 taskrail start T-001                                 # mark it active
 taskrail complete T-001 --note "implemented"         # mark implementation done
 taskrail verify T-001 --result pass --summary "acceptance met"
 ```
 
 Every command takes `--json` where it matters, so agents drive the same loop.
-If `next` selects a task whose `spec_ref` points outside the active spec, human
-output prints a warning and `--json` includes it under `warnings`.
+Idle `next` selection is anchored to the active spec: it considers only `todo`
+tasks whose `spec_ref` points at the active spec, so higher-priority older-spec
+work is skipped rather than selected. When only older-spec work is runnable,
+`next` reports no eligible task and lists the skipped tasks under `warnings`
+(`skipped_non_active_spec`). An already-active task that points outside the
+active spec is still returned so you can continue or resolve it, with a
+`selected_non_active_spec` warning. Recover older work explicitly with
+`start <id>`.
 
 **Beyond the core loop**
 
