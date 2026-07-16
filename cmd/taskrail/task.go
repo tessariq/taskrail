@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -14,6 +15,7 @@ func newTaskCmd() *cobra.Command {
 		Short: "Manage Taskrail task files",
 	}
 	cmd.AddCommand(newTaskNewCmd())
+	cmd.AddCommand(newTaskRenameCmd())
 	return cmd
 }
 
@@ -72,4 +74,72 @@ func newTaskNewCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&opt.json, "json", false, "print machine-readable output")
 	_ = cmd.RegisterFlagCompletionFunc("spec-ref", completeSpecRef)
 	return cmd
+}
+
+func newTaskRenameCmd() *cobra.Command {
+	var (
+		slug   string
+		title  string
+		dryRun bool
+		opt    jsonOption
+	)
+
+	cmd := &cobra.Command{
+		Use:   "rename <id>",
+		Short: "Atomically re-slug a task's id, filename, and inbound dependency refs",
+		Long: "Re-slug an existing task: rewrite its id: frontmatter, rename the file " +
+			"to <new-id>.md (git mv under version control, plain rename otherwise), " +
+			"rewrite every inbound dependencies: reference from the old id to the new " +
+			"one, re-project planning/STATE.md, and re-run validation — all as one " +
+			"outcome.\n\n" +
+			"Exactly one of --slug or --title selects the new slug (--title derives it " +
+			"via the same slugify as `task new` and never rewrites the frontmatter " +
+			"title). The numeric T-<n> prefix is preserved; only the slug segment " +
+			"changes. A target id that collides with an existing task fails before any " +
+			"write. --dry-run reports the change set without writing. Rename never " +
+			"advances a task's status.",
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			svc, err := serviceFromCmd(cmd)
+			if err != nil {
+				return err
+			}
+			result, err := svc.RenameTask(taskrail.RenameTaskInput{
+				OldID:  args[0],
+				Slug:   slug,
+				Title:  title,
+				DryRun: dryRun,
+			})
+			if err != nil {
+				return err
+			}
+			return printResult(cmd, opt.json, result, renameSummary(result))
+		},
+	}
+
+	cmd.Flags().StringVar(&slug, "slug", "", "new slug for the id suffix")
+	cmd.Flags().StringVar(&title, "title", "", "title-like source for the new slug (derived via slugify); does not rewrite the task title")
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "report the planned change set without writing")
+	cmd.Flags().BoolVar(&opt.json, "json", false, "print machine-readable output")
+	return cmd
+}
+
+// renameSummary renders the human-readable rename outcome: the planned or applied
+// change set and the resulting validation status.
+func renameSummary(result taskrail.RenameTaskResult) string {
+	var b strings.Builder
+	if result.Applied {
+		fmt.Fprintf(&b, "renamed %s -> %s\n", result.OldID, result.NewID)
+	} else {
+		fmt.Fprintf(&b, "rename dry run: %s -> %s (re-run without --dry-run to write)\n", result.OldID, result.NewID)
+	}
+	for _, ch := range result.Changes {
+		if ch.Kind == "dependency_ref" {
+			fmt.Fprintf(&b, "- %s in %s: %q -> %q\n", ch.Kind, ch.TaskID, ch.From, ch.To)
+			continue
+		}
+		fmt.Fprintf(&b, "- %s: %q -> %q\n", ch.Kind, ch.From, ch.To)
+	}
+	fmt.Fprintf(&b, "validation: %s", validationLabel(result.Validation))
+	return b.String()
 }

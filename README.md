@@ -120,7 +120,7 @@ output prints a warning and `--json` includes it under `warnings`.
 - **Adopt an existing repo** — `init` and `retrofit` scaffold `specs/` + `planning/` non-destructively; `import` turns rough notes into spec/task drafts without an LLM; `repair` reconciles mechanical `STATE.md` drift.
 - **See where work stands** — `status`, `stats`, and `coverage` report a live snapshot, aggregate metrics, and advisory spec-linkage, all read-only.
 - **Author and steer specs** — the `spec` family (`list`, `show`, `add`, `activate`) inspects and evolves versioned specs.
-- **Handle the messy parts** — `block`/`unblock` park and resume work, and `task new` scaffolds a task with the next free id.
+- **Handle the messy parts** — `block`/`unblock` park and resume work, `task new` scaffolds a task with the next free id, and `task rename` atomically re-slugs a task's id, filename, and inbound dependency references.
 
 Run `taskrail --help`, or `taskrail <command> --help`, for the full command list and every flag.
 

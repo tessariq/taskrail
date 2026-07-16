@@ -30,6 +30,18 @@ func taskNumericPrefix(id string) (int, bool) {
 	return num, true
 }
 
+// taskIDPrefix returns the literal `T-<digits>` identity segment of a task id,
+// preserving the digits exactly as written. Rename keeps this segment fixed and
+// swaps only the slug, so it must not reformat the number (which would change the
+// id it claims to preserve).
+func taskIDPrefix(id string) (string, bool) {
+	m := numericPrefixPattern.FindStringSubmatch(id)
+	if m == nil {
+		return "", false
+	}
+	return "T-" + m[1], true
+}
+
 func taskByID(tasks []*Task, id string) (*Task, bool) {
 	for _, task := range tasks {
 		if task.Frontmatter.ID == id {

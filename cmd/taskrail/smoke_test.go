@@ -713,6 +713,52 @@ func TestTaskNewRequiresSpecRefOrFollowUp(t *testing.T) {
 	}
 }
 
+func TestTaskRenameReslugsAndRewritesInboundDeps(t *testing.T) {
+	root := setupRepo(t)
+	writeTask(t, root, "T-001", "completed", "")
+	writeTask(t, root, "T-002", "todo", "T-001")
+
+	out, err := runRoot(t, "task", "rename", "T-001", "--slug", "Base Widget", "--json")
+	if err != nil {
+		t.Fatalf("task rename: %v (output %q)", err, out)
+	}
+	if !strings.Contains(out, `"new_id": "T-001-base-widget"`) {
+		t.Fatalf("expected re-slugged new_id, got %q", out)
+	}
+	if !strings.Contains(out, `"applied": true`) {
+		t.Fatalf("expected applied rename, got %q", out)
+	}
+	if _, err := os.Stat(filepath.Join(root, "planning", "tasks", "T-001.md")); !os.IsNotExist(err) {
+		t.Fatalf("expected old task file removed, stat err=%v", err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "planning", "tasks", "T-001-base-widget.md")); err != nil {
+		t.Fatalf("expected renamed task file: %v", err)
+	}
+	// The inbound dependency in T-002 must now name the new id, so validate passes.
+	if out, err := runRoot(t, "validate"); err != nil {
+		t.Fatalf("validate after rename: %v (output %q)", err, out)
+	}
+}
+
+func TestTaskRenameDryRunWritesNothing(t *testing.T) {
+	root := setupRepo(t)
+	writeTask(t, root, "T-001", "todo", "")
+
+	out, err := runRoot(t, "task", "rename", "T-001", "--slug", "renamed", "--dry-run")
+	if err != nil {
+		t.Fatalf("task rename dry run: %v (output %q)", err, out)
+	}
+	if !strings.Contains(out, "rename dry run") {
+		t.Fatalf("expected dry-run summary, got %q", out)
+	}
+	if _, err := os.Stat(filepath.Join(root, "planning", "tasks", "T-001.md")); err != nil {
+		t.Fatalf("dry run must not move the file: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "planning", "tasks", "T-001-renamed.md")); !os.IsNotExist(err) {
+		t.Fatalf("dry run must not write the target, stat err=%v", err)
+	}
+}
+
 func TestImportPreviewAndApply(t *testing.T) {
 	root := setupRepo(t)
 	notes := strings.Join([]string{

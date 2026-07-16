@@ -4,6 +4,14 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- `taskrail task rename <id>` — atomically re-slug a task: rewrite its `id`,
+  rename the file (`git mv` when tracked), and fix every inbound `dependencies:`
+  reference. `--slug` sets the slug; `--title` derives it. `--dry-run` previews
+  the change set; `--json` emits it. Preserves the `T-<n>` prefix; never advances
+  status.
+
 ### Changed
 
 - `taskrail next` — warn when the selected task points outside the active spec;
