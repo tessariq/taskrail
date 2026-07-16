@@ -14,6 +14,7 @@ func newCoverageCmd() *cobra.Command {
 	var minPct float64
 	var area string
 	var gaps bool
+	var failOn []string
 	cmd := &cobra.Command{
 		Use:   "coverage",
 		Short: "Report advisory spec coverage, orphan, and drift signals (read-only)",
@@ -26,12 +27,23 @@ func newCoverageCmd() *cobra.Command {
 			"focused \"is this feature decomposed?\" check. " +
 			"--gaps switches to advisory structural gap analysis (missing-verification, " +
 			"dependency-anomaly, under-decomposed-area) over covered areas; it composes " +
-			"with --area and never gates.",
+			"with --area and is advisory by default. --fail-on <category> opts into an " +
+			"exit-code gate for --gaps, mirroring --min: the command exits non-zero when a " +
+			"signal of the named category is present, leaving the report and validate unchanged.",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			minSet := cmd.Flags().Changed("min")
 			areaSet := cmd.Flags().Changed("area")
+			failOnSet := cmd.Flags().Changed("fail-on")
 			if gaps && minSet {
 				return fmt.Errorf("--gaps analyses structural gaps and does not gate; --min cannot be combined with it")
+			}
+			if failOnSet && !gaps {
+				return fmt.Errorf("--fail-on gates gap analysis and requires --gaps")
+			}
+			if failOnSet {
+				if err := validateFailOn(failOn); err != nil {
+					return err
+				}
 			}
 			if minSet && (minPct < 0 || minPct > 100) {
 				return fmt.Errorf("--min must be a percentage between 0 and 100, got %s", formatPercent(minPct))
@@ -45,7 +57,10 @@ func newCoverageCmd() *cobra.Command {
 				if err != nil {
 					return err
 				}
-				return printResult(cmd, opt.json, gr, renderGapText(gr))
+				if err := printResult(cmd, opt.json, gr, renderGapText(gr)); err != nil {
+					return err
+				}
+				return gapGate(gr, failOn)
 			}
 			report, err := coverageReport(svc, areaSet, area)
 			if err != nil {
@@ -60,8 +75,53 @@ func newCoverageCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&opt.json, "json", false, "print machine-readable output")
 	cmd.Flags().Float64Var(&minPct, "min", 0, "fail (non-zero exit) when decomposition coverage is below this percentage (0–100); report stays unchanged")
 	cmd.Flags().StringVar(&area, "area", "", "narrow the report to a single coverable spec area (its anchor); rejects a non-coverable anchor")
-	cmd.Flags().BoolVar(&gaps, "gaps", false, "report advisory structural gap candidates over covered areas instead of coverage; composes with --area, never gates")
+	cmd.Flags().BoolVar(&gaps, "gaps", false, "report advisory structural gap candidates over covered areas instead of coverage; composes with --area; advisory unless --fail-on is set")
+	cmd.Flags().StringSliceVar(&failOn, "fail-on", nil, "with --gaps, fail (non-zero exit) when any gap signal of a named category is present (missing-verification, dependency-anomaly, under-decomposed-area); repeatable or comma-separated; report stays unchanged")
 	return cmd
+}
+
+// gapGateCategories is the set of gap-signal kinds --fail-on accepts, matching
+// the T-099 signal kinds computeGaps emits.
+var gapGateCategories = map[string]bool{
+	"missing-verification":  true,
+	"dependency-anomaly":    true,
+	"under-decomposed-area": true,
+}
+
+// validateFailOn rejects an unknown --fail-on category before any work, so a
+// typo'd selector fails fast rather than silently gating on nothing.
+func validateFailOn(categories []string) error {
+	for _, c := range categories {
+		if !gapGateCategories[c] {
+			return fmt.Errorf("--fail-on category %q is not a gap category (missing-verification, dependency-anomaly, under-decomposed-area)", c)
+		}
+	}
+	return nil
+}
+
+// gapGate returns a non-zero-exit error when opt-in --fail-on gating is active
+// and at least one gap signal matches a selected category. Like --min it is an
+// exit-code-only gate: the report (text and --json) is unchanged, gap signals
+// stay advisory to validate, and no state is written. Gating is off unless
+// --fail-on is passed.
+func gapGate(r taskrail.GapReport, failOn []string) error {
+	if len(failOn) == 0 {
+		return nil
+	}
+	selected := make(map[string]bool, len(failOn))
+	for _, c := range failOn {
+		selected[c] = true
+	}
+	var matched []string
+	for _, sig := range r.Signals {
+		if selected[sig.Kind] {
+			matched = append(matched, gapSignalLine(sig))
+		}
+	}
+	if len(matched) == 0 {
+		return nil
+	}
+	return fmt.Errorf("gap analysis found %d signal(s) matching --fail-on:\n  - %s", len(matched), strings.Join(matched, "\n  - "))
 }
 
 // coverageReport returns the full report, or the report narrowed to one coverable

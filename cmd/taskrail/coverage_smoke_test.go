@@ -869,3 +869,91 @@ func TestCoverageGapsRejectsMinCombination(t *testing.T) {
 		t.Fatalf("--gaps --min must be rejected")
 	}
 }
+
+// The fixture produces missing-verification (done-area) and under-decomposed-area
+// (big-area) signals, but no dependency-anomaly — so gating on a present category
+// reds the build while gating on an absent one stays green.
+func TestCoverageGapsFailOnGatesMatchingCategory(t *testing.T) {
+	root := seedGapsSmoke(t)
+	before := readAllFiles(t, root)
+
+	out, err := runRoot(t, "coverage", "--gaps", "--fail-on", "missing-verification")
+	if err == nil {
+		t.Fatalf("--fail-on missing-verification must exit non-zero when the signal is present (output %q)", out)
+	}
+	// Exit-code-only gate: the report is still emitted, and nothing is written.
+	if !strings.Contains(out, "missing-verification: done-area") {
+		t.Errorf("report not emitted under --fail-on: %q", out)
+	}
+	after := readAllFiles(t, root)
+	if len(before) != len(after) {
+		t.Fatalf("--fail-on changed the file set")
+	}
+	for path, content := range before {
+		if after[path] != content {
+			t.Errorf("--fail-on mutated %s", path)
+		}
+	}
+}
+
+func TestCoverageGapsFailOnExitsZeroWithoutMatch(t *testing.T) {
+	seedGapsSmoke(t)
+	out, err := runRoot(t, "coverage", "--gaps", "--fail-on", "dependency-anomaly")
+	if err != nil {
+		t.Fatalf("--fail-on with no matching signal must exit zero: %v (output %q)", err, out)
+	}
+}
+
+func TestCoverageGapsFailOnAcceptsCommaAndRepeat(t *testing.T) {
+	seedGapsSmoke(t)
+	// Comma-separated selector.
+	if _, err := runRoot(t, "coverage", "--gaps", "--fail-on", "dependency-anomaly,missing-verification"); err == nil {
+		t.Fatalf("comma-separated --fail-on must red on a present category")
+	}
+	// Repeated flag.
+	if _, err := runRoot(t, "coverage", "--gaps", "--fail-on", "dependency-anomaly", "--fail-on", "under-decomposed-area"); err == nil {
+		t.Fatalf("repeated --fail-on must red on a present category")
+	}
+}
+
+func TestCoverageGapsFailOnRejectsUnknownCategory(t *testing.T) {
+	seedGapsSmoke(t)
+	if _, err := runRoot(t, "coverage", "--gaps", "--fail-on", "bogus"); err == nil {
+		t.Fatalf("--fail-on with an unknown category must be rejected")
+	}
+}
+
+func TestCoverageFailOnRequiresGaps(t *testing.T) {
+	seedGapsSmoke(t)
+	if _, err := runRoot(t, "coverage", "--fail-on", "missing-verification"); err == nil {
+		t.Fatalf("--fail-on without --gaps must be rejected")
+	}
+}
+
+func TestCoverageGapsFailOnLeavesJSONUnchanged(t *testing.T) {
+	seedGapsSmoke(t)
+	gated, gErr := runRoot(t, "coverage", "--gaps", "--json", "--fail-on", "missing-verification")
+	if gErr == nil {
+		t.Fatalf("--fail-on must still exit non-zero under --json")
+	}
+	plain, err := runRoot(t, "coverage", "--gaps", "--json")
+	if err != nil {
+		t.Fatalf("coverage --gaps --json: %v", err)
+	}
+	if gated != plain {
+		t.Errorf("--fail-on changed --json output:\n gated=%q\n plain=%q", gated, plain)
+	}
+}
+
+// An N/A spec (no coverable areas) yields no signals, so --fail-on has nothing
+// to gate and exits zero regardless of the selected categories.
+func TestCoverageGapsFailOnExitsZeroWhenNoAreas(t *testing.T) {
+	root := setupRepo(t)
+	if err := os.WriteFile(filepath.Join(root, "specs", "v0.1.0.md"), []byte(naSpec), 0o644); err != nil {
+		t.Fatalf("write spec: %v", err)
+	}
+	out, err := runRoot(t, "coverage", "--gaps", "--fail-on", "missing-verification")
+	if err != nil {
+		t.Fatalf("--fail-on on an N/A spec must exit zero: %v (output %q)", err, out)
+	}
+}
