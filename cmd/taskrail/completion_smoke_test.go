@@ -47,6 +47,23 @@ func TestCompleteSpecRefPathPhase(t *testing.T) {
 	}
 }
 
+// TestCompleteAreaSuggestsActiveSpecAnchors verifies `task new --area` completes to
+// the active spec's bare anchors — the same set validation accepts — and never
+// falls back to file completion.
+func TestCompleteAreaSuggestsActiveSpecAnchors(t *testing.T) {
+	setupRepo(t)
+	out, err := runRoot(t, "__complete", "task", "new", "--area", "")
+	if err != nil {
+		t.Fatalf("__complete --area: %v (output %q)", err, out)
+	}
+	if !strings.Contains(out, "summary") {
+		t.Fatalf("area completion omits an active-spec anchor: %q", out)
+	}
+	if !strings.Contains(out, "ShellCompDirectiveNoFileComp") {
+		t.Fatalf("area completion should suppress file completion: %q", out)
+	}
+}
+
 // TestCompleteSpecRefAnchorPhaseAuthorable is the end-to-end acceptance: an anchor
 // suggested by --spec-ref completion authors a task whose spec_ref passes
 // validate, proving completion reuses the real anchor slug rule.

@@ -707,9 +707,41 @@ func TestTaskNewFollowUpInheritsAndValidates(t *testing.T) {
 
 func TestTaskNewRequiresSpecRefOrFollowUp(t *testing.T) {
 	setupRepo(t)
-	// Neither --spec-ref nor --follow-up: the RunE guard must reject before any write.
+	// Neither --spec-ref, --area, nor --follow-up: the RunE guard rejects before any write.
 	if _, err := runRoot(t, "task", "new", "--title", "x"); err == nil {
-		t.Fatal("expected error when neither --spec-ref nor --follow-up provided")
+		t.Fatal("expected error when neither --spec-ref, --area, nor --follow-up provided")
+	}
+}
+
+func TestTaskNewAreaResolvesActiveSpecRef(t *testing.T) {
+	root := setupRepo(t)
+
+	// --area alone satisfies the required-one guard and resolves against the active spec.
+	out, err := runRoot(t, "task", "new", "--title", "Area authored", "--area", "summary", "--json")
+	if err != nil {
+		t.Fatalf("task new --area: %v (output %q)", err, out)
+	}
+	if !strings.Contains(out, `"spec_ref": "specs/v0.1.0.md#summary"`) {
+		t.Fatalf("expected resolved spec_ref in output, got %q", out)
+	}
+	if _, err := os.Stat(filepath.Join(root, "planning", "tasks", "T-001-area-authored.md")); err != nil {
+		t.Fatalf("expected area-authored task file: %v", err)
+	}
+	if out, err := runRoot(t, "validate"); err != nil {
+		t.Fatalf("validate after area scaffold: %v (output %q)", err, out)
+	}
+}
+
+func TestTaskNewAreaConflictsWithSpecRef(t *testing.T) {
+	root := setupRepo(t)
+	writeTask(t, root, "T-100", "todo", "")
+
+	// --area and --spec-ref are mutually exclusive; the request writes nothing.
+	if _, err := runRoot(t, "task", "new", "--title", "x", "--area", "summary", "--spec-ref", "specs/v0.1.0.md#summary"); err == nil {
+		t.Fatal("expected error when --area and --spec-ref are both set")
+	}
+	if _, err := os.Stat(filepath.Join(root, "planning", "tasks", "T-101-x.md")); !os.IsNotExist(err) {
+		t.Fatalf("expected no T-101-x.md written on rejection, stat err=%v", err)
 	}
 }
 

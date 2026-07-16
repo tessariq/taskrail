@@ -24,6 +24,7 @@ func newTaskNewCmd() *cobra.Command {
 		title    string
 		slug     string
 		specRef  string
+		area     string
 		priority string
 		deps     []string
 		followUp string
@@ -35,10 +36,11 @@ func newTaskNewCmd() *cobra.Command {
 		Short: "Scaffold a new task file with the next free id",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			// A follow-up inherits its parent's spec_ref, so --spec-ref is only
-			// required when no parent is named.
-			if strings.TrimSpace(followUp) == "" && strings.TrimSpace(specRef) == "" {
-				return errors.New("either --spec-ref or --follow-up is required")
+			// A follow-up inherits its parent's spec_ref, and --area resolves one
+			// from the active spec, so an explicit --spec-ref is only required when
+			// neither is given.
+			if strings.TrimSpace(followUp) == "" && strings.TrimSpace(specRef) == "" && strings.TrimSpace(area) == "" {
+				return errors.New("one of --spec-ref, --area, or --follow-up is required")
 			}
 			svc, err := serviceFromCmd(cmd)
 			if err != nil {
@@ -54,6 +56,7 @@ func newTaskNewCmd() *cobra.Command {
 				Title:        title,
 				Slug:         slugSource,
 				SpecRef:      specRef,
+				Area:         area,
 				Priority:     priority,
 				Dependencies: deps,
 				FollowUpOf:   followUp,
@@ -68,11 +71,15 @@ func newTaskNewCmd() *cobra.Command {
 	cmd.Flags().StringVar(&title, "title", "", "task title; also the default slug source for the id")
 	cmd.Flags().StringVar(&slug, "slug", "", "curated slug for the id suffix; overrides the title-derived slug")
 	cmd.Flags().StringVar(&specRef, "spec-ref", "", "spec reference as path#anchor")
+	cmd.Flags().StringVar(&area, "area", "", "active-spec anchor shorthand; resolves spec_ref to the active spec path plus this anchor (see `spec show <active-version> --anchors`)")
 	cmd.Flags().StringVar(&priority, "priority", "medium", "task priority: high, medium, or low")
 	cmd.Flags().StringArrayVar(&deps, "dep", nil, "dependency task id (repeatable)")
 	cmd.Flags().StringVar(&followUp, "follow-up", "", "parent task id: inherit its spec_ref and depend on it")
 	cmd.Flags().BoolVar(&opt.json, "json", false, "print machine-readable output")
+	// --area is the active-spec shorthand for --spec-ref; a task has one resolved ref.
+	cmd.MarkFlagsMutuallyExclusive("spec-ref", "area")
 	_ = cmd.RegisterFlagCompletionFunc("spec-ref", completeSpecRef)
+	_ = cmd.RegisterFlagCompletionFunc("area", completeArea)
 	return cmd
 }
 

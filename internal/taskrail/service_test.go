@@ -743,6 +743,155 @@ func TestCreateFollowUpRejectsMissingParent(t *testing.T) {
 	}
 }
 
+func TestCreateTaskAreaResolvesActiveSpecRef(t *testing.T) {
+	t.Parallel()
+
+	repo := seedFixtureRepo(t)
+	svc := newTestService(t, repo, time.Date(2026, 6, 24, 12, 0, 0, 0, time.UTC))
+
+	// --area <anchor> is shorthand for the active spec path plus the anchor.
+	result, err := svc.CreateTask(CreateTaskInput{Title: "Area task", Area: "summary"})
+	if err != nil {
+		t.Fatalf("create with area: %v", err)
+	}
+	if result.SpecRef != "specs/v0.1.0.md#summary" {
+		t.Fatalf("expected resolved spec_ref, got %q", result.SpecRef)
+	}
+
+	_, tasks, err := svc.loadStateAndTasks()
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	created, ok := taskByID(tasks, result.TaskID)
+	if !ok {
+		t.Fatalf("expected %s in tasks", result.TaskID)
+	}
+	if created.Frontmatter.SpecRef != "specs/v0.1.0.md#summary" {
+		t.Fatalf("expected persisted spec_ref, got %q", created.Frontmatter.SpecRef)
+	}
+
+	validation, err := svc.Validate()
+	if err != nil {
+		t.Fatalf("validate: %v", err)
+	}
+	if !validation.Valid {
+		t.Fatalf("expected valid repo after area scaffold, got %v", validation.Violations)
+	}
+}
+
+func TestCreateTaskAreaAndSpecRefMutuallyExclusive(t *testing.T) {
+	t.Parallel()
+
+	repo := seedFixtureRepo(t)
+	svc := newTestService(t, repo, time.Date(2026, 6, 24, 12, 0, 0, 0, time.UTC))
+
+	_, err := svc.CreateTask(CreateTaskInput{
+		Title:   "x",
+		Area:    "summary",
+		SpecRef: "specs/v0.1.0.md#summary",
+	})
+	if err == nil {
+		t.Fatal("expected error when --area and --spec-ref are both set")
+	}
+	if !strings.Contains(err.Error(), "mutually exclusive") {
+		t.Fatalf("expected mutual-exclusion error, got %v", err)
+	}
+	// Nothing is written on rejection.
+	if _, err := os.Stat(filepath.Join(repo, "planning", "tasks", "T-001.md")); !os.IsNotExist(err) {
+		t.Fatalf("expected no task file on rejection, stat err=%v", err)
+	}
+}
+
+func TestCreateTaskAreaUnknownAnchorFailsWithHint(t *testing.T) {
+	t.Parallel()
+
+	repo := seedFixtureRepo(t)
+	svc := newTestService(t, repo, time.Date(2026, 6, 24, 12, 0, 0, 0, time.UTC))
+
+	_, err := svc.CreateTask(CreateTaskInput{Title: "x", Area: "does-not-exist"})
+	if err == nil {
+		t.Fatal("expected error for unknown active-spec area")
+	}
+	if !strings.Contains(err.Error(), "spec show v0.1.0 --anchors") {
+		t.Fatalf("expected error pointing at spec show --anchors, got %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(repo, "planning", "tasks", "T-001.md")); !os.IsNotExist(err) {
+		t.Fatalf("expected no task file on rejection, stat err=%v", err)
+	}
+}
+
+func TestCreateTaskAreaOverridesFollowUpInheritedSpecRef(t *testing.T) {
+	t.Parallel()
+
+	repo := seedFixtureRepo(t)
+	// A two-anchor active spec so the override target differs from the parent's ref.
+	writeFile(t, filepath.Join(repo, "specs", "v0.1.0.md"), "# Taskrail v0.1.0\n\n## Summary\n\nx\n\n## Details\n\ny\n")
+	writeTask(t, repo, "T-002", "Parent item", "todo", "high", "specs/v0.1.0.md#summary", nil)
+
+	svc := newTestService(t, repo, time.Date(2026, 6, 24, 12, 0, 0, 0, time.UTC))
+	result, err := svc.CreateTask(CreateTaskInput{
+		Title:      "Follow-up item",
+		Area:       "details",
+		FollowUpOf: "T-002",
+	})
+	if err != nil {
+		t.Fatalf("create follow-up with area: %v", err)
+	}
+	if result.SpecRef != "specs/v0.1.0.md#details" {
+		t.Fatalf("expected area to override inherited spec_ref, got %q", result.SpecRef)
+	}
+
+	_, tasks, err := svc.loadStateAndTasks()
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	created, ok := taskByID(tasks, result.TaskID)
+	if !ok {
+		t.Fatalf("expected %s in tasks", result.TaskID)
+	}
+	if created.Frontmatter.SpecRef != "specs/v0.1.0.md#details" {
+		t.Fatalf("expected persisted overridden spec_ref, got %q", created.Frontmatter.SpecRef)
+	}
+	// Follow-up wiring is preserved regardless of the area override.
+	if len(created.Frontmatter.Dependencies) != 1 || created.Frontmatter.Dependencies[0] != "T-002" {
+		t.Fatalf("expected parent as sole dependency, got %v", created.Frontmatter.Dependencies)
+	}
+}
+
+func TestCreateTaskAreaRequiresActiveSpec(t *testing.T) {
+	t.Parallel()
+
+	repo := seedFixtureRepo(t)
+	// STATE with an empty active spec path exercises the missing-active-spec guard.
+	writeFile(t, filepath.Join(repo, "planning", "STATE.md"), `---
+schema_version: 1
+updated_at: "2026-03-31T00:00:00Z"
+active_spec_version: ""
+active_spec_path: ""
+current_task: ""
+current_task_title: ""
+status_summary: idle
+blockers: []
+next_action: Start the next task
+last_verification_result: Not yet run
+relevant_artifacts: []
+continuation_notes:
+  - Fixture repo.
+---
+
+# STATE
+`)
+	svc := newTestService(t, repo, time.Date(2026, 6, 24, 12, 0, 0, 0, time.UTC))
+
+	_, err := svc.CreateTask(CreateTaskInput{Title: "x", Area: "summary"})
+	if err == nil {
+		t.Fatal("expected error when no active spec is set")
+	}
+	if !strings.Contains(err.Error(), "active spec") {
+		t.Fatalf("expected missing-active-spec error, got %v", err)
+	}
+}
+
 func newTestService(t *testing.T, repo string, now time.Time) *Service {
 	t.Helper()
 	paths, err := DiscoverPaths(repo)

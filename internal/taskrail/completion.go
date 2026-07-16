@@ -61,3 +61,27 @@ func (s *Service) SpecRefCompletions(toComplete string) ([]string, error) {
 	}
 	return refs, nil
 }
+
+// ActiveSpecAreaCompletions returns the active spec's bare anchors for shell
+// completion of `task new --area <anchor>`. It draws from the same SpecShow
+// --anchors source as spec_ref validation, so completion and the anchors CreateTask
+// accepts never diverge. It is read-only and returns no candidates when no active
+// spec is set.
+func (s *Service) ActiveSpecAreaCompletions() ([]string, error) {
+	active, err := s.activeSpecVersion()
+	if err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(active) == "" {
+		return nil, nil
+	}
+	show, err := s.SpecShow(active, true)
+	if err != nil {
+		return nil, err
+	}
+	anchors := make([]string, 0, len(show.Anchors))
+	for _, a := range show.Anchors {
+		anchors = append(anchors, a.Anchor)
+	}
+	return anchors, nil
+}

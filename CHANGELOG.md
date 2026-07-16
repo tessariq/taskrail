@@ -18,6 +18,9 @@ All notable user-visible changes to Taskrail will be documented in this file.
   reference. `--slug` sets the slug; `--title` derives it. `--dry-run` previews
   the change set; `--json` emits it. Preserves the `T-<n>` prefix; never advances
   status.
+- `taskrail task new --area <anchor>` — active-spec shorthand for `--spec-ref
+  <active-spec-path>#<anchor>`. Mutually exclusive with `--spec-ref`; an unknown
+  anchor fails before writing and points at `spec show <active-version> --anchors`.
 
 ### Changed
 

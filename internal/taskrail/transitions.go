@@ -357,6 +357,22 @@ func (s *Service) validateTaskCreatable(tasks []*Task, specRef, priority string,
 	return priority, nil
 }
 
+// resolveAreaSpecRef turns a `--area <anchor>` shorthand into the full
+// `<active_spec_path>#<anchor>` spec_ref, validating the anchor through the same
+// path as an explicit `--spec-ref` so the set of accepted anchors never diverges.
+// On an unknown anchor it points the operator at the active spec's real anchors.
+func (s *Service) resolveAreaSpecRef(state *State, area string) (string, error) {
+	activePath := strings.TrimSpace(state.Frontmatter.ActiveSpecPath)
+	if activePath == "" {
+		return "", errors.New("--area requires an active spec, but planning/STATE.md has none set")
+	}
+	specRef := activePath + "#" + area
+	if err := s.validateSpecRef(specRef); err != nil {
+		return "", fmt.Errorf("unknown active-spec area %q: %w; run `taskrail spec show %s --anchors` to list valid anchors", area, err, state.Frontmatter.ActiveSpecVersion)
+	}
+	return specRef, nil
+}
+
 // CreateTask scaffolds a well-formed task file with the next free id. It mirrors
 // the validation `validate` would apply (spec anchor, dependency existence,
 // priority) at creation time so an invalid task never lands on disk.
@@ -365,6 +381,15 @@ func (s *Service) CreateTask(input CreateTaskInput) (CreateTaskResult, error) {
 	// bare `T-<n>` task, matching the id form validate already accepts.
 	title := strings.TrimSpace(input.Title)
 
+	// A task has exactly one resolved spec reference: --area is the active-spec
+	// shorthand for --spec-ref, so the two cannot both be given. Reject before any
+	// load or write so a conflicting request lands nothing on disk.
+	area := strings.TrimSpace(input.Area)
+	specRef := strings.TrimSpace(input.SpecRef)
+	if area != "" && specRef != "" {
+		return CreateTaskResult{}, errors.New("--area and --spec-ref are mutually exclusive")
+	}
+
 	// Load first: a follow-up needs the parent task to inherit spec_ref and wire
 	// the dependency before the shared validation below runs.
 	state, tasks, err := s.loadStateAndTasks()
@@ -372,7 +397,15 @@ func (s *Service) CreateTask(input CreateTaskInput) (CreateTaskResult, error) {
 		return CreateTaskResult{}, err
 	}
 
-	specRef := strings.TrimSpace(input.SpecRef)
+	// Resolve --area against STATE.md's active spec before follow-up inheritance so
+	// an explicit area overrides a parent's inherited ref.
+	if area != "" {
+		specRef, err = s.resolveAreaSpecRef(state, area)
+		if err != nil {
+			return CreateTaskResult{}, err
+		}
+	}
+
 	deps := append([]string(nil), input.Dependencies...)
 	followUpOf := strings.TrimSpace(input.FollowUpOf)
 	if followUpOf != "" {

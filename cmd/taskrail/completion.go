@@ -44,3 +44,17 @@ func completeSpecRef(cmd *cobra.Command, _ []string, toComplete string) ([]strin
 	}
 	return refs, directive
 }
+
+// completeArea completes `task new --area` to the active spec's bare anchors —
+// the same set validation accepts — so the shorthand only offers real areas.
+func completeArea(cmd *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
+	svc, err := serviceFromCmd(cmd)
+	if err != nil {
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
+	anchors, err := svc.ActiveSpecAreaCompletions()
+	if err != nil {
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
+	return anchors, cobra.ShellCompDirectiveNoFileComp
+}

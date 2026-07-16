@@ -137,10 +137,11 @@ taskrail completion fish | source   # fish
 
 Run `taskrail completion --help` for per-shell install steps. Completion is
 read-only: it never writes `STATE.md` or task files. Beyond every command and
-flag, it completes spec versions for `spec show`/`spec activate` and real
-`<path>#<anchor>` values for `task new --spec-ref` (the anchors it offers are
-exactly the ones `validate` accepts, so a completed reference authors a task that
-passes `validate`).
+flag, it completes spec versions for `spec show`/`spec activate`, real
+`<path>#<anchor>` values for `task new --spec-ref`, and the active spec's bare
+anchors for `task new --area` (the anchors it offers are exactly the ones
+`validate` accepts, so a completed reference authors a task that passes
+`validate`).
 
 ## Quickstart
 
@@ -194,6 +195,17 @@ taskrail verify T-001 \
   --followup-title "Add dependency validation" \
   --followup-priority high
 ```
+
+Author a task against the active spec without copying the spec path by hand —
+`--area <anchor>` is shorthand for `--spec-ref <active-spec-path>#<anchor>`:
+
+```sh
+taskrail task new --title "Add drift breakdown" --area status-active-spec-drift-breakdown
+taskrail spec show v0.4.0 --anchors   # list the active spec's valid anchors
+```
+
+`--area` and `--spec-ref` are mutually exclusive; an unknown anchor fails before
+anything is written and points you at `spec show <active-version> --anchors`.
 
 Bootstrap drafts from rough notes without any LLM — preview first, then apply:
 

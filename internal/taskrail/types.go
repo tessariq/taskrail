@@ -143,8 +143,13 @@ type CreateTaskInput struct {
 	// when empty (or all non-alphanumeric) the id stays the bare `T-<n>` form. The
 	// `task new` command passes `--slug` if given, else the title, so CLI-authored
 	// tasks are slugged by default while other callers (import) stay bare.
-	Slug         string
+	Slug string
+	// SpecRef is the explicit `path#anchor` spec reference. Area is its active-spec
+	// shorthand: when set, CreateTask resolves SpecRef to
+	// `<active_spec_path>#<Area>` from STATE.md. The two are mutually exclusive — a
+	// task has exactly one resolved spec reference.
 	SpecRef      string
+	Area         string
 	Priority     string
 	Dependencies []string
 	// FollowUpOf names a parent task id. When set, the new task inherits the
