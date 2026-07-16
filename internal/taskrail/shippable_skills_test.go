@@ -26,6 +26,7 @@ var shippableSkills = []string{
 	"taskrail-retrofit",
 	"taskrail-repair",
 	"taskrail-spec",
+	"taskrail-decompose",
 }
 
 // taskAuthoringSkills create tracked tasks via `taskrail task new`. taskrail-import
@@ -130,6 +131,21 @@ func TestShippableSkillsUseTaskNew(t *testing.T) {
 // the installed binary's emit-prompt and apply steps, never a built-in LLM call.
 func TestImportSkillInvokesImportCommand(t *testing.T) {
 	assertSkillReferences(t, "taskrail-import", "} import", "--emit-prompt", "--apply")
+}
+
+// The decompose skill composes the shipped spec-decomposition primitives (T-098):
+// it finds uncovered active-spec areas with `coverage --json`, confirms their live
+// anchors with `spec show --anchors`, then authors tasks through `import --apply`
+// and closes with a validate. It authors via import, not `task new`, so it stays
+// out of taskAuthoringSkills like taskrail-import. Anchoring on resolved subcommand
+// tails (not bare flags) keeps the assertion from passing on unrelated prose.
+func TestDecomposeSkillComposesSpecPrimitives(t *testing.T) {
+	assertSkillReferences(t, "taskrail-decompose",
+		"} coverage --json",
+		"} spec show <version> --anchors",
+		"} import --apply",
+		"} validate",
+	)
 }
 
 // The retrofit skill drives the guided bootstrap end to end (T-043): dry-run

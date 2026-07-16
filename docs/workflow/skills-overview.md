@@ -20,7 +20,7 @@ split: this repository adopts the packaged skills like any adopter (T-055).
 
 ## Packaged Skills
 
-Tracked-work skills (create tasks with `${TASKRAIL:-taskrail} task new`):
+Tracked-work and spec skills (each bullet notes how it creates tasks, if at all):
 
 - `autonomous-backlog`
 - `autonomous-task`
@@ -32,6 +32,9 @@ Tracked-work skills (create tasks with `${TASKRAIL:-taskrail} task new`):
 - `taskrail-repair`
 - `taskrail-spec` — inspect and author specs, anchoring tracked work to real
   `spec_ref` headings via the `spec` command family (shipped in T-064).
+- `taskrail-decompose` — draft spec-anchored tasks for uncovered active-spec areas
+  by composing `coverage --json`, `spec show --anchors`, and `import --apply`
+  (shipped in T-098).
 
 Onboarding skills (create tasks with `${TASKRAIL:-taskrail} import --apply`):
 
