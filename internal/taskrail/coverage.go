@@ -242,11 +242,15 @@ func (s *Service) coverageFor(state *State, tasks []*Task) (CoverageReport, erro
 }
 
 // parsedArea is a coverable `###` area with the anchors (its own plus every
-// `####` sub-area) that count toward its roll-up coverage.
+// `####` sub-area) that count toward its roll-up coverage. requirements is the
+// count of top-level `- ` bullets under the area's `Requirements:` list, used by
+// gap analysis's under-decomposed heuristic; it is a plain count with no content
+// interpretation.
 type parsedArea struct {
-	anchor     string
-	title      string
-	subAnchors []string
+	anchor       string
+	title        string
+	subAnchors   []string
+	requirements int
 }
 
 // computeCoverage is the shared, IO-free coverage computation. `coverage` and
@@ -374,18 +378,31 @@ func parseSpecAreas(markdown string) (areas []parsedArea, deferredAnchors []stri
 	areas = make([]parsedArea, 0)
 	inSection := false
 	current := -1
+	// collecting tracks that we are inside the current area's `Requirements:`
+	// bullet list; reqAllowed is false once we descend into a #### sub-area, so
+	// only a ### area's own top-level Requirements bullets are counted (a #### 's
+	// Requirements never roll up into the parent's denominator).
+	collecting := false
+	reqAllowed := false
 	for i, line := range lines {
 		level, title := headingLevelTitle(strings.TrimSpace(line))
 		switch {
 		case level == 0:
+			if inSection && current >= 0 && reqAllowed {
+				collecting = updateRequirementCount(&areas[current], line, collecting)
+			}
 			continue
 		case level <= 2:
 			// A level-1/2 heading opens or closes the Potential Features section.
 			inSection = slugHeading(title) == "potential-features"
 			current = -1
+			collecting = false
+			reqAllowed = false
 		case !inSection:
 			continue
 		case level == 3:
+			collecting = false
+			reqAllowed = false
 			if markerExcludes(lines, i) {
 				deferredAnchors = append(deferredAnchors, slugHeading(title))
 				current = -1
@@ -393,11 +410,42 @@ func parseSpecAreas(markdown string) (areas []parsedArea, deferredAnchors []stri
 			}
 			areas = append(areas, parsedArea{anchor: slugHeading(title), title: title})
 			current = len(areas) - 1
+			reqAllowed = true
 		case level == 4 && current >= 0:
 			areas[current].subAnchors = append(areas[current].subAnchors, slugHeading(title))
+			collecting = false
+			reqAllowed = false
 		}
 	}
 	return areas, deferredAnchors
+}
+
+// updateRequirementCount advances the `Requirements:` bullet scan for one non-
+// heading line and returns whether the scan stays open. A `Requirements:` line
+// opens the scan; while open, each top-level `- ` bullet increments the count,
+// blank and indented lines (sub-bullets, wrapped text) are passed over, and the
+// first non-indented, non-bullet line (e.g. a trailing `Rationale:` paragraph)
+// closes it. The count is purely structural — bullet lines only, never their
+// content.
+func updateRequirementCount(area *parsedArea, rawLine string, collecting bool) bool {
+	trimmed := strings.TrimSpace(rawLine)
+	if trimmed == "Requirements:" {
+		return true
+	}
+	if !collecting {
+		return false
+	}
+	switch {
+	case trimmed == "":
+		return true
+	case strings.HasPrefix(rawLine, "- "):
+		area.requirements++
+		return true
+	case rawLine[0] == ' ' || rawLine[0] == '\t':
+		return true
+	default:
+		return false
+	}
 }
 
 // headingLevelTitle reports the ATX heading level (number of leading `#`) and

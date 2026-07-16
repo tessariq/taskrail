@@ -284,7 +284,7 @@ func (s *Service) Verify(input VerifyInput) (VerifyResult, error) {
 	// Task files are committed, so the note must stay portable: record the
 	// result and timestamp without a path into gitignored artifacts (mirrors
 	// the path-free state summary below).
-	appendTaskNote(task, fmt.Sprintf("- %s: verification %s", nowText, input.Result))
+	appendTaskNote(task, verificationNoteLine(nowText, input.Result))
 	task.Frontmatter.UpdatedAt = nowText
 
 	state.Frontmatter.UpdatedAt = nowText

@@ -13,6 +13,7 @@ func newCoverageCmd() *cobra.Command {
 	var opt jsonOption
 	var minPct float64
 	var area string
+	var gaps bool
 	cmd := &cobra.Command{
 		Use:   "coverage",
 		Short: "Report advisory spec coverage, orphan, and drift signals (read-only)",
@@ -22,28 +23,44 @@ func newCoverageCmd() *cobra.Command {
 			"--min <pct> opts into CI gating: the command exits non-zero when decomposition " +
 			"coverage is below the threshold, leaving validate and the report unchanged. " +
 			"--area <anchor> narrows the report to a single coverable spec area for a " +
-			"focused \"is this feature decomposed?\" check.",
+			"focused \"is this feature decomposed?\" check. " +
+			"--gaps switches to advisory structural gap analysis (missing-verification, " +
+			"dependency-anomaly, under-decomposed-area) over covered areas; it composes " +
+			"with --area and never gates.",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			if cmd.Flags().Changed("min") && (minPct < 0 || minPct > 100) {
+			minSet := cmd.Flags().Changed("min")
+			areaSet := cmd.Flags().Changed("area")
+			if gaps && minSet {
+				return fmt.Errorf("--gaps analyses structural gaps and does not gate; --min cannot be combined with it")
+			}
+			if minSet && (minPct < 0 || minPct > 100) {
 				return fmt.Errorf("--min must be a percentage between 0 and 100, got %s", formatPercent(minPct))
 			}
 			svc, err := serviceFromCmd(cmd)
 			if err != nil {
 				return err
 			}
-			report, err := coverageReport(svc, cmd.Flags().Changed("area"), area)
+			if gaps {
+				gr, err := gapReport(svc, areaSet, area)
+				if err != nil {
+					return err
+				}
+				return printResult(cmd, opt.json, gr, renderGapText(gr))
+			}
+			report, err := coverageReport(svc, areaSet, area)
 			if err != nil {
 				return err
 			}
 			if err := printResult(cmd, opt.json, report, renderCoverageText(report)); err != nil {
 				return err
 			}
-			return coverageGate(report, cmd.Flags().Changed("min"), minPct)
+			return coverageGate(report, minSet, minPct)
 		},
 	}
 	cmd.Flags().BoolVar(&opt.json, "json", false, "print machine-readable output")
 	cmd.Flags().Float64Var(&minPct, "min", 0, "fail (non-zero exit) when decomposition coverage is below this percentage (0–100); report stays unchanged")
 	cmd.Flags().StringVar(&area, "area", "", "narrow the report to a single coverable spec area (its anchor); rejects a non-coverable anchor")
+	cmd.Flags().BoolVar(&gaps, "gaps", false, "report advisory structural gap candidates over covered areas instead of coverage; composes with --area, never gates")
 	return cmd
 }
 
@@ -54,6 +71,42 @@ func coverageReport(svc *taskrail.Service, areaSet bool, area string) (taskrail.
 		return svc.CoverageForArea(area)
 	}
 	return svc.Coverage()
+}
+
+// gapReport returns the full structural gap report, or the report narrowed to
+// one coverable area when --area is set. A non-coverable anchor is rejected
+// before any output, using the same rules as coverage --area.
+func gapReport(svc *taskrail.Service, areaSet bool, area string) (taskrail.GapReport, error) {
+	if areaSet {
+		return svc.CoverageGapsForArea(area)
+	}
+	return svc.CoverageGaps()
+}
+
+// renderGapText builds the human-readable structural gap report. Each row is an
+// advisory candidate to promote into a real task, never auto-created state; a
+// clean report says so explicitly rather than printing nothing.
+func renderGapText(r taskrail.GapReport) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "gap analysis (advisory; promote a candidate to a task if it is real) — %s\n", r.ActiveSpecPath)
+	if len(r.Signals) == 0 {
+		b.WriteString("no structural gap candidates")
+		return b.String()
+	}
+	for _, sig := range r.Signals {
+		fmt.Fprintf(&b, "  - %s\n", gapSignalLine(sig))
+	}
+	return strings.TrimRight(b.String(), "\n")
+}
+
+// gapSignalLine renders one gap candidate: its kind, the area anchor, the
+// specific task for task-scoped signals, and the mechanical detail.
+func gapSignalLine(sig taskrail.GapSignal) string {
+	scope := sig.Anchor
+	if sig.TaskID != "" {
+		scope += "/" + sig.TaskID
+	}
+	return fmt.Sprintf("%s: %s — %s", sig.Kind, scope, sig.Detail)
 }
 
 // coverageGate returns a non-zero-exit error when opt-in --min gating is active

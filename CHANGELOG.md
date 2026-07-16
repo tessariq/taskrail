@@ -6,6 +6,10 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ### Added
 
+- `taskrail coverage --gaps` — advisory read-only structural gap analysis over
+  covered active-spec areas: `missing-verification`, `dependency-anomaly`, and
+  `under-decomposed-area` candidates to promote into tasks. Composes with
+  `--area`; never gates. Supports `--json`.
 - `taskrail-decompose` skill — `init --with-skills` now also installs it; drafts
   spec-anchored tasks for uncovered active-spec areas by composing `coverage
   --json`, `spec show --anchors`, and `import --apply` (draft-only; no new command).

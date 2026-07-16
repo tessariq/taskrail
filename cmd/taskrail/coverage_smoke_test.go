@@ -756,3 +756,116 @@ func readAllFiles(t *testing.T, root string) map[string]string {
 	}
 	return files
 }
+
+const gapsSmokeSpec = `# GapSmoke
+
+## Potential Features
+
+### Done Area
+
+Requirements:
+
+- one
+
+### Big Area
+
+Requirements:
+
+- a
+- b
+- c
+- d
+- e
+`
+
+// seedGapsSmoke writes the gaps smoke spec plus a completed-unverified task and
+// an under-decomposed area's single task.
+func seedGapsSmoke(t *testing.T) string {
+	t.Helper()
+	root := setupRepo(t)
+	if err := os.WriteFile(filepath.Join(root, "specs", "v0.1.0.md"), []byte(gapsSmokeSpec), 0o644); err != nil {
+		t.Fatalf("write spec: %v", err)
+	}
+	writeCoverageTaskFile(t, root, "T-1", "completed", "specs/v0.1.0.md#done-area")
+	writeCoverageTaskFile(t, root, "T-2", "todo", "specs/v0.1.0.md#big-area")
+	return root
+}
+
+func TestCoverageGapsReportsCandidatesAndStaysReadOnly(t *testing.T) {
+	root := seedGapsSmoke(t)
+	before := readAllFiles(t, root)
+
+	out, err := runRoot(t, "coverage", "--gaps")
+	if err != nil {
+		t.Fatalf("coverage --gaps: %v (output %q)", err, out)
+	}
+	if !strings.Contains(out, "missing-verification: done-area") {
+		t.Errorf("expected missing-verification candidate for done-area: %q", out)
+	}
+	if !strings.Contains(out, "under-decomposed-area: big-area") {
+		t.Errorf("expected under-decomposed candidate for big-area: %q", out)
+	}
+
+	after := readAllFiles(t, root)
+	if len(before) != len(after) {
+		t.Fatalf("coverage --gaps changed the file set")
+	}
+	for path, content := range before {
+		if after[path] != content {
+			t.Errorf("coverage --gaps mutated %s", path)
+		}
+	}
+}
+
+func TestCoverageGapsJSONMirrorsReport(t *testing.T) {
+	seedGapsSmoke(t)
+
+	out, err := runRoot(t, "coverage", "--gaps", "--json")
+	if err != nil {
+		t.Fatalf("coverage --gaps --json: %v (output %q)", err, out)
+	}
+	var report struct {
+		ActiveSpecPath string `json:"active_spec_path"`
+		Signals        []struct {
+			Kind   string `json:"kind"`
+			Anchor string `json:"anchor"`
+			TaskID string `json:"task_id"`
+			Detail string `json:"detail"`
+		} `json:"signals"`
+	}
+	if err := json.Unmarshal([]byte(out), &report); err != nil {
+		t.Fatalf("parse json: %v (output %q)", err, out)
+	}
+	if report.ActiveSpecPath != "specs/v0.1.0.md" {
+		t.Errorf("active_spec_path = %q", report.ActiveSpecPath)
+	}
+	kinds := map[string]bool{}
+	for _, s := range report.Signals {
+		kinds[s.Kind+":"+s.Anchor] = true
+	}
+	if !kinds["missing-verification:done-area"] || !kinds["under-decomposed-area:big-area"] {
+		t.Errorf("json signals missing expected candidates: %q", out)
+	}
+}
+
+func TestCoverageGapsComposesWithArea(t *testing.T) {
+	seedGapsSmoke(t)
+
+	out, err := runRoot(t, "coverage", "--gaps", "--area", "big-area")
+	if err != nil {
+		t.Fatalf("coverage --gaps --area: %v (output %q)", err, out)
+	}
+	if !strings.Contains(out, "under-decomposed-area: big-area") {
+		t.Errorf("expected big-area candidate: %q", out)
+	}
+	if strings.Contains(out, "done-area") {
+		t.Errorf("area-scoped gaps must exclude other areas: %q", out)
+	}
+}
+
+func TestCoverageGapsRejectsMinCombination(t *testing.T) {
+	seedGapsSmoke(t)
+	if _, err := runRoot(t, "coverage", "--gaps", "--min", "50"); err == nil {
+		t.Fatalf("--gaps --min must be rejected")
+	}
+}

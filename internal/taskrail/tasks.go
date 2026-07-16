@@ -96,6 +96,14 @@ func dependenciesResolved(task *Task, tasks []*Task) bool {
 	return true
 }
 
+// verificationNoteLine renders the committed, path-free verification note that
+// `verify` appends to a task body. It is the single source of the note's wording
+// so gap analysis (taskVerificationRecorded) can detect a recorded verification
+// from committed content without the two drifting apart.
+func verificationNoteLine(ts, result string) string {
+	return fmt.Sprintf("- %s: verification %s", ts, result)
+}
+
 func appendTaskNote(task *Task, line string) {
 	section := "## Implementation Notes\n\n"
 	if strings.Contains(task.Body, section) {
