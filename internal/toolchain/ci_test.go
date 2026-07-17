@@ -55,6 +55,47 @@ func TestCIProvisionsToolchainViaMise(t *testing.T) {
 	}
 }
 
+// mise-action v4.2.1 deliberately stopped exporting PATH changes from
+// mise.toml's [env] table. Pin the reviewed action revision so another floating
+// major-tag update cannot silently change CI environment behavior again.
+func TestWorkflowsPinMiseAction(t *testing.T) {
+	const want = "jdx/mise-action@dad1bfd3df957f44999b559dd69dc1671cb4e9ea" // v4.2.1
+	root := repoRoot(t)
+	for _, rel := range []string{".github/workflows/ci.yml", ".github/workflows/planning.yml"} {
+		found := false
+		for _, ref := range ciActionUses(readFile(t, root, rel)) {
+			if !strings.HasPrefix(ref, "jdx/mise-action@") {
+				continue
+			}
+			found = true
+			if ref != want {
+				t.Errorf("%s uses %q, want immutable v4.2.1 pin %q", rel, ref, want)
+			}
+		}
+		if !found {
+			t.Errorf("%s must provision the toolchain via mise-action", rel)
+		}
+	}
+}
+
+// mise-action does not propagate [env] _.path to later workflow steps. CI must
+// therefore expose the working-tree bin directory through GitHub's supported
+// PATH handoff before testing that a bare taskrail resolves to that build.
+func TestCIExposesBinBeforeBareTaskrailSmoke(t *testing.T) {
+	ci := readFile(t, repoRoot(t), ".github/workflows/ci.yml")
+	expose := strings.Index(ci, `echo "${{ github.workspace }}/bin" >> "$GITHUB_PATH"`)
+	smoke := strings.Index(ci, "run: taskrail validate")
+	if expose < 0 {
+		t.Fatal("ci.yml must add the workspace bin directory to GITHUB_PATH")
+	}
+	if smoke < 0 {
+		t.Fatal("ci.yml must smoke a bare `taskrail validate`")
+	}
+	if expose > smoke {
+		t.Error("ci.yml must expose the workspace bin directory before the bare taskrail smoke")
+	}
+}
+
 // ciRunsRawGo reports every non-comment line in a workflow file that invokes the
 // Go toolchain directly (go build/vet/test/run/...). CI must route those through
 // `task` targets so mise.toml + Taskfile.yml stay the single source of build
