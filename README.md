@@ -124,7 +124,7 @@ active spec is still returned so you can continue or resolve it, with a
 **Beyond the core loop**
 
 - **Adopt an existing repo** — `init` and `retrofit` scaffold `specs/` + `planning/` non-destructively; `import` turns rough notes into spec/task drafts without an LLM; `repair` reconciles mechanical `STATE.md` drift.
-- **See where work stands** — `status`, `stats`, and `coverage` report a live snapshot, aggregate metrics, and advisory spec-linkage, all read-only.
+- **See where work stands** — `status`, `stats`, and `coverage` report a live snapshot, aggregate metrics, and advisory spec-linkage, all read-only. `status` also breaks down open work (`todo`/`in_progress`/`blocked`) by how much targets the active spec versus points away from it, listing the away tasks and their `spec_ref`; the away set matches the active-spec filter `next` uses for idle selection.
 - **Author and steer specs** — the `spec` family (`list`, `show`, `add`, `activate`) inspects and evolves versioned specs.
 - **Handle the messy parts** — `block`/`unblock` park and resume work, `task new` scaffolds a task with the next free id, and `task rename` atomically re-slugs a task's id, filename, and inbound dependency references.
 

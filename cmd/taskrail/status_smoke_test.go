@@ -57,6 +57,14 @@ type statusJSON struct {
 		OrphanTaskCount       int      `json:"orphan_task_count"`
 		UncoveredAreaCount    int      `json:"uncovered_area_count"`
 	} `json:"coverage"`
+	ActiveSpecDrift struct {
+		ActiveOpenCount int `json:"active_open_count"`
+		AwayOpenCount   int `json:"away_open_count"`
+		Away            []struct {
+			TaskID  string `json:"task_id"`
+			SpecRef string `json:"spec_ref"`
+		} `json:"away"`
+	} `json:"active_spec_drift"`
 }
 
 // lineContaining returns the first line of out that contains sub, or "".
@@ -177,6 +185,112 @@ func TestStatusJSONMirrorsHumanView(t *testing.T) {
 // TestStatusMultipleBlockedTasksShowAllReasons locks in that when more than one
 // task is blocked, status reports each task's own recorded reason (T-083 makes
 // STATE.md retain them all rather than only the most recent).
+// TestStatusActiveSpecDriftBreakdown locks in the T-106 active-spec drift
+// breakdown: open work (todo/in_progress/blocked) is split into tasks on the
+// active spec versus tasks pointing away from it, completed/cancelled away work
+// is excluded as delivered history, and the away tasks are listed with their
+// spec_ref for inspection in both the human view and JSON.
+func TestStatusActiveSpecDriftBreakdown(t *testing.T) {
+	root := setupRepo(t)
+	if err := os.WriteFile(filepath.Join(root, "specs", "v0.1.0.md"), []byte(statusSmokeSpec), 0o644); err != nil {
+		t.Fatalf("write spec: %v", err)
+	}
+	// On active spec (v0.1.0): one todo, one in_progress.
+	writeCoverageTaskFile(t, root, "T-100", "todo", "specs/v0.1.0.md#alpha")
+	writeCoverageTaskFile(t, root, "T-101", "in_progress", "specs/v0.1.0.md#alpha")
+	// Away from active spec, open: one todo, one blocked.
+	writeCoverageTaskFile(t, root, "T-200", "todo", "specs/v0.2.0.md#legacy")
+	writeCoverageTaskFile(t, root, "T-201", "blocked", "specs/v0.3.0.md#older")
+	// Away from active spec but delivered history: excluded from the away count.
+	writeCoverageTaskFile(t, root, "T-090", "completed", "specs/v0.2.0.md#legacy")
+	writeCoverageTaskFile(t, root, "T-091", "cancelled", "specs/v0.2.0.md#legacy")
+
+	out, err := runRoot(t, "status", "--json")
+	if err != nil {
+		t.Fatalf("status --json: %v (output %q)", err, out)
+	}
+	var report statusJSON
+	if err := json.Unmarshal([]byte(out), &report); err != nil {
+		t.Fatalf("parse json: %v (output %q)", err, out)
+	}
+	if report.ActiveSpecDrift.ActiveOpenCount != 2 {
+		t.Errorf("active_open_count = %d, want 2", report.ActiveSpecDrift.ActiveOpenCount)
+	}
+	if report.ActiveSpecDrift.AwayOpenCount != 2 {
+		t.Errorf("away_open_count = %d, want 2", report.ActiveSpecDrift.AwayOpenCount)
+	}
+	gotAway := map[string]string{}
+	for _, a := range report.ActiveSpecDrift.Away {
+		gotAway[a.TaskID] = a.SpecRef
+	}
+	wantAway := map[string]string{
+		"T-200": "specs/v0.2.0.md#legacy",
+		"T-201": "specs/v0.3.0.md#older",
+	}
+	if len(gotAway) != len(wantAway) {
+		t.Fatalf("away list = %+v, want %+v", report.ActiveSpecDrift.Away, wantAway)
+	}
+	for id, ref := range wantAway {
+		if gotAway[id] != ref {
+			t.Errorf("away[%s] = %q, want %q", id, gotAway[id], ref)
+		}
+	}
+
+	human, err := runRoot(t, "status")
+	if err != nil {
+		t.Fatalf("status: %v", err)
+	}
+	// Concise breakdown line names both counts.
+	if !strings.Contains(human, "active-spec: 2 open on active spec, 2 open away") {
+		t.Errorf("human view missing active-spec breakdown line: %q", human)
+	}
+	// Away tasks are listed with their spec_ref for inspection.
+	for _, want := range []string{"T-200 specs/v0.2.0.md#legacy", "T-201 specs/v0.3.0.md#older"} {
+		if !strings.Contains(human, want) {
+			t.Errorf("human view missing away entry %q: %q", want, human)
+		}
+	}
+	// Delivered history never appears in the away section.
+	for _, notWant := range []string{"T-090", "T-091"} {
+		if strings.Contains(lineContaining(human, "away"), notWant) {
+			t.Errorf("delivered history %s must not appear in away section: %q", notWant, human)
+		}
+	}
+}
+
+// TestStatusActiveSpecDriftNoAwayWork locks in that when all open work is on the
+// active spec, the breakdown reports zero away and omits the away section.
+func TestStatusActiveSpecDriftNoAwayWork(t *testing.T) {
+	root := setupRepo(t)
+	if err := os.WriteFile(filepath.Join(root, "specs", "v0.1.0.md"), []byte(statusSmokeSpec), 0o644); err != nil {
+		t.Fatalf("write spec: %v", err)
+	}
+	writeCoverageTaskFile(t, root, "T-100", "todo", "specs/v0.1.0.md#alpha")
+
+	human, err := runRoot(t, "status")
+	if err != nil {
+		t.Fatalf("status: %v", err)
+	}
+	if !strings.Contains(human, "active-spec: 1 open on active spec, 0 open away") {
+		t.Errorf("human view missing zero-away breakdown line: %q", human)
+	}
+	if strings.Contains(human, "away from active spec:") {
+		t.Errorf("no away section expected when all work is on active spec: %q", human)
+	}
+
+	out, err := runRoot(t, "status", "--json")
+	if err != nil {
+		t.Fatalf("status --json: %v", err)
+	}
+	var report statusJSON
+	if err := json.Unmarshal([]byte(out), &report); err != nil {
+		t.Fatalf("parse json: %v (output %q)", err, out)
+	}
+	if report.ActiveSpecDrift.AwayOpenCount != 0 || len(report.ActiveSpecDrift.Away) != 0 {
+		t.Errorf("away = %+v, want empty", report.ActiveSpecDrift)
+	}
+}
+
 func TestStatusMultipleBlockedTasksShowAllReasons(t *testing.T) {
 	root := setupRepo(t)
 	writeCoverageTaskFile(t, root, "T-201", "todo", "specs/v0.1.0.md#summary")

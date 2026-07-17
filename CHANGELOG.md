@@ -6,6 +6,11 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ### Added
 
+- `taskrail status` — active-spec drift breakdown: counts open work
+  (`todo`/`in_progress`/`blocked`) on the active spec versus away from it, and
+  lists the away tasks with their `spec_ref`. The away set matches the
+  active-spec filter `next` uses for idle selection. Read-only; `--json` mirrors
+  the counts and task/spec-ref pairs.
 - `taskrail coverage --gaps` — advisory read-only structural gap analysis over
   covered active-spec areas: `missing-verification`, `dependency-anomaly`, and
   `under-decomposed-area` candidates to promote into tasks. Composes with

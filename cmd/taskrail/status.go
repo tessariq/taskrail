@@ -16,8 +16,12 @@ func newStatusCmd() *cobra.Command {
 		Long: "Print a strictly read-only overview of current tracked-work state: " +
 			"active spec, task counts, the next eligible task (computed but not " +
 			"persisted), blocked tasks with reasons, the last verification result, " +
-			"a one-line coverage summary, and a one-line orphan/drift summary " +
-			"alongside it. Never writes STATE.md or task files.",
+			"a one-line coverage summary, a one-line orphan/drift summary " +
+			"alongside it, and an active-spec drift breakdown counting open work " +
+			"(todo/in_progress/blocked) on the active spec versus away from it, " +
+			"listing the away tasks and their spec_ref. The away set matches the " +
+			"active-spec filter next uses for idle selection. Never writes STATE.md " +
+			"or task files.",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			svc, err := serviceFromCmd(cmd)
 			if err != nil {
@@ -57,6 +61,24 @@ func renderStatusText(r taskrail.StatusReport) string {
 	b.WriteString(renderStatusCoverage(r.Coverage))
 	b.WriteString(renderStatusDrift(r.Coverage))
 	b.WriteString(renderAreaAnchorIssueHint(r.Coverage.AreaAnchorIssueCount))
+	b.WriteString(renderActiveSpecDrift(r.ActiveSpecDrift))
+	return b.String()
+}
+
+// renderActiveSpecDrift renders the active-spec drift breakdown: a concise line
+// counting open work on versus away from the active spec, plus an inspectable
+// section naming each away task and its spec_ref. It is reporting only and never
+// describes selection filtering.
+func renderActiveSpecDrift(d taskrail.StatusActiveSpecDrift) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "active-spec: %d open on active spec, %d open away\n",
+		d.ActiveOpenCount, d.AwayOpenCount)
+	if len(d.Away) > 0 {
+		b.WriteString("away from active spec:\n")
+		for _, task := range d.Away {
+			fmt.Fprintf(&b, "  - %s %s\n", task.TaskID, task.SpecRef)
+		}
+	}
 	return b.String()
 }
 

@@ -58,15 +58,36 @@ type StatusCoverage struct {
 	AreaAnchorIssueCount int `json:"area_anchor_issue_count"`
 }
 
+// AwayTask is an open task whose spec_ref points away from the active spec,
+// paired with that spec_ref for inspection.
+type AwayTask struct {
+	TaskID  string `json:"task_id"`
+	SpecRef string `json:"spec_ref"`
+}
+
+// StatusActiveSpecDrift is the reporting-only breakdown of open work
+// (todo/in_progress/blocked) between the active spec and everything pointing
+// away from it. It answers "how much open work is still outside the active
+// spec?" at a glance. Completed and cancelled tasks are delivered history and
+// are excluded, matching the coverage orphan rule. Away membership uses the same
+// active-spec match as the `next` idle filter, so the breakdown mirrors that
+// selection scope without filtering or writing state.
+type StatusActiveSpecDrift struct {
+	ActiveOpenCount int        `json:"active_open_count"`
+	AwayOpenCount   int        `json:"away_open_count"`
+	Away            []AwayTask `json:"away"`
+}
+
 // StatusReport is the strictly read-only snapshot of current tracked-work state.
 type StatusReport struct {
-	ActiveSpecVersion      string         `json:"active_spec_version"`
-	ActiveSpecPath         string         `json:"active_spec_path"`
-	Counts                 StatusCounts   `json:"counts"`
-	Next                   StatusNext     `json:"next"`
-	Blocked                []BlockedTask  `json:"blocked"`
-	LastVerificationResult string         `json:"last_verification_result"`
-	Coverage               StatusCoverage `json:"coverage"`
+	ActiveSpecVersion      string                `json:"active_spec_version"`
+	ActiveSpecPath         string                `json:"active_spec_path"`
+	Counts                 StatusCounts          `json:"counts"`
+	Next                   StatusNext            `json:"next"`
+	Blocked                []BlockedTask         `json:"blocked"`
+	LastVerificationResult string                `json:"last_verification_result"`
+	Coverage               StatusCoverage        `json:"coverage"`
+	ActiveSpecDrift        StatusActiveSpecDrift `json:"active_spec_drift"`
 }
 
 // Status returns the current tracked-work snapshot. It is strictly read-only: it
@@ -106,7 +127,45 @@ func (s *Service) Status() (StatusReport, error) {
 			UncoveredAreaCount:    coverage.Drift.UncoveredAreaCount,
 			AreaAnchorIssueCount:  len(coverage.AreaAnchorIssues),
 		},
+		ActiveSpecDrift: activeSpecDrift(tasks, state.Frontmatter.ActiveSpecPath),
 	}, nil
+}
+
+// activeSpecDrift splits open work between the active spec and tasks pointing
+// away from it. Open work is todo/in_progress/blocked; completed and cancelled
+// tasks are delivered history and excluded. Away membership reuses the `next`
+// idle filter's active-spec match, so an empty activeSpecPath (no anchor)
+// disables the away split and every open task counts as on the active spec.
+func activeSpecDrift(tasks []*Task, activeSpecPath string) StatusActiveSpecDrift {
+	activeSpecPath = strings.TrimSpace(activeSpecPath)
+	away := make([]AwayTask, 0)
+	activeCount := 0
+	for _, task := range tasks {
+		if !isOpenStatus(task.Frontmatter.Status) {
+			continue
+		}
+		if activeSpecPath == "" || taskMatchesActiveSpec(task, activeSpecPath) {
+			activeCount++
+			continue
+		}
+		away = append(away, AwayTask{TaskID: task.Frontmatter.ID, SpecRef: task.Frontmatter.SpecRef})
+	}
+	return StatusActiveSpecDrift{
+		ActiveOpenCount: activeCount,
+		AwayOpenCount:   len(away),
+		Away:            away,
+	}
+}
+
+// isOpenStatus reports whether a task is open work: todo, in_progress, or
+// blocked. Completed and cancelled tasks are delivered history.
+func isOpenStatus(status string) bool {
+	switch status {
+	case "todo", "in_progress", "blocked":
+		return true
+	default:
+		return false
+	}
 }
 
 func countByStatus(tasks []*Task) StatusCounts {
