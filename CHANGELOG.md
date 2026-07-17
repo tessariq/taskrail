@@ -16,6 +16,10 @@ All notable user-visible changes to Taskrail will be documented in this file.
 - `taskrail-decompose` skill — `init --with-skills` now also installs it; drafts
   spec-anchored tasks for uncovered active-spec areas by composing `coverage
   --json`, `spec show --anchors`, and `import --apply` (draft-only; no new command).
+- `taskrail-gap` skill — `init --with-skills` now also installs it; pairs
+  `coverage --gaps --json` structural candidates with agent semantic gap review
+  over covered active-spec areas, proposing tasks a human promotes via `task new`
+  / `import --apply` (advisory-only; no new command).
 - `taskrail task rename <id>` — atomically re-slug a task: rewrite its `id`,
   rename the file (`git mv` when tracked), and fix every inbound `dependencies:`
   reference. `--slug` sets the slug; `--title` derives it. `--dry-run` previews

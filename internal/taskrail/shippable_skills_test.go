@@ -27,6 +27,7 @@ var shippableSkills = []string{
 	"taskrail-repair",
 	"taskrail-spec",
 	"taskrail-decompose",
+	"taskrail-gap",
 }
 
 // taskAuthoringSkills create tracked tasks via `taskrail task new`. taskrail-import
@@ -145,6 +146,23 @@ func TestDecomposeSkillComposesSpecPrimitives(t *testing.T) {
 		"} spec show <version> --anchors",
 		"} import --apply",
 		"} validate",
+	)
+}
+
+// The gap skill composes the structural gap detector with an agent's semantic
+// review (T-101): it runs `coverage --gaps --json` for mechanical candidates, then
+// routes the agent's judgement-derived candidates to human promotion via `task new`
+// or `import --apply`, never auto-creating state. Anchoring on resolved subcommand
+// tails (not bare flags) keeps the assertion from passing on unrelated prose; the
+// "structural"/"semantic" terms guard that the mechanical-vs-judgement split stays
+// documented.
+func TestGapSkillComposesStructuralAndSemantic(t *testing.T) {
+	assertSkillReferences(t, "taskrail-gap",
+		"} coverage --gaps --json",
+		"} task new",
+		"} import --apply",
+		"structural",
+		"semantic",
 	)
 }
 

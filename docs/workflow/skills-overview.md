@@ -35,6 +35,10 @@ Tracked-work and spec skills (each bullet notes how it creates tasks, if at all)
 - `taskrail-decompose` — draft spec-anchored tasks for uncovered active-spec areas
   by composing `coverage --json`, `spec show --anchors`, and `import --apply`
   (shipped in T-098).
+- `taskrail-gap` — review covered active-spec areas for missing work: run
+  `coverage --gaps --json` for structural candidates, add agent semantic judgement,
+  and propose tasks a human promotes via `task new` / `import --apply` (shipped in
+  T-101).
 
 Onboarding skills (create tasks with `${TASKRAIL:-taskrail} import --apply`):
 
