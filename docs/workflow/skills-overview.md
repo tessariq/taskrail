@@ -38,7 +38,11 @@ Tracked-work and spec skills (each bullet notes how it creates tasks, if at all)
 - `taskrail-gap` — review covered active-spec areas for missing work: run
   `coverage --gaps --json` for structural candidates, add agent semantic judgement,
   and propose tasks a human promotes via `task new` / `import --apply` (shipped in
-  T-101).
+  T-101). This is a deliberate split: the binary's `coverage --gaps` stays
+  **mechanical** — count, graph, and state signals only, **never semantic** "this
+  needs a test" inference — and the skill supplies the semantic half. Structural
+  signals are candidates to promote, not violations; see the "Coverage vs gap
+  analysis" section in `README.md` for the full boundary.
 
 Onboarding skills (create tasks with `${TASKRAIL:-taskrail} import --apply`):
 

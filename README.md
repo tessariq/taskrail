@@ -130,6 +130,31 @@ active spec is still returned so you can continue or resolve it, with a
 
 Run `taskrail --help`, or `taskrail <command> --help`, for the full command list and every flag.
 
+### Coverage vs gap analysis
+
+`coverage` and `coverage --gaps` sit one word apart and answer different questions —
+keep them distinct:
+
+- `coverage` answers **"is this spec area linked to any task?"** — decomposition
+  coverage, orphan tasks, and two-directional drift.
+- `coverage --gaps` answers **"does a *covered* area lack a verification/companion
+  task, have a dependency-graph anomaly, or look under-decomposed?"** — it emits
+  structural candidates (`missing-verification`, `dependency-anomaly`,
+  `under-decomposed-area`) over areas that already have tasks.
+
+Both are **read-only** — they never write `STATE.md` or task files and never make
+`validate` fail — and **advisory** by default. `--gaps` opts into gating only through
+`--fail-on <category>`, which exits non-zero when a signal of that category is
+present (mirroring `coverage --min`); the report itself is unchanged.
+
+The hard limit: `--gaps` is **mechanical only**. It reports count, graph, and state
+signals — never a semantic "this needs a test" judgement. Its signals are
+**candidates, not violations**: false positives are expected, and each one is
+something a human or agent inspects and promotes into a real task, not a rule the
+repo broke. For the semantic half — "is this area *actually* missing work?" — use
+the `taskrail-gap` skill, which layers agent judgement on top of these structural
+candidates.
+
 ### Shell completion
 
 Taskrail ships shell completion via Cobra. Load it for your shell (or add the
