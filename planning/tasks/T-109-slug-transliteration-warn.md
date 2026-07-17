@@ -40,6 +40,12 @@ rather than a silent bare id. `slugify` is shared by `task new` (T-095) and
   corrupt machine-readable stdout.
 - Transliteration and the empty-slug warning apply identically on the
   `task rename` path (shared `slugify`), verified by a rename test.
+- On `task rename`, a `--slug`/`--title` that normalizes to an empty slug
+  **de-slugs** the task to the bare `T-<n>` id: `T-<n>-<slug>.md` is renamed to
+  `T-<n>.md`, inbound references are rewritten, the same empty-slug warning is
+  printed to stderr, and `validate` passes. Assert with a rename test that starts
+  from a slugged id and ends at the bare id (symmetric with creation's bare-id
+  fallback, per the v0.4.0 Task Rename And Re-Slug amendment).
 
 ## Verification Notes
 

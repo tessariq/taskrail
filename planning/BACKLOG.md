@@ -4,16 +4,11 @@ Durable home for post-review ideas that were deliberately deferred out of the
 current tracked version. These are candidates, not committed work: promote one
 to a task (`taskrail task new`) against the version whose spec adopts it.
 
-## Deferred to v0.4.0
+## Adopted into v0.4.0
 
 - **`taskrail spec diff <v1> <v2>`** — mechanical anchor-set diff between two
-  spec versions (areas added / removed / renamed), reusing the existing
-  `collectHeadingAnchors` slug logic. Supports migration: when `spec activate`
-  advances the active spec, the diff shows which areas are new (need tasks) and
-  which vanished (orphan existing tasks). Read-only, deterministic, fits the
-  `spec` command family and the drift theme. Deferred from the v0.3.0 task review
-  because it is not core to the v0.3.0 threads and `specs/v0.4.0.md` does not
-  exist yet; raise it when authoring the v0.4.0 spec.
+  spec versions (areas added / removed / renamed). Adopted into `specs/v0.4.0.md`
+  (Spec Version Diff area) during the v0.4.0 task review and tracked as **T-113**.
 
 ## Ideas
 
@@ -69,4 +64,5 @@ the version whose spec adopts it.
   `spec diff` exists, a guided migration that, on `spec activate`, walks the
   added areas (offer `task new` for each) and the vanished areas (flag orphaned
   tasks for re-point or cancel). Turns the anchor-set delta into actionable
-  tracked-work moves. Depends on the v0.4.0 `spec diff` idea above.
+  tracked-work moves. Depends on the v0.4.0 `spec diff` (T-113) and composes with
+  `task repoint` (T-114) for the re-point step.

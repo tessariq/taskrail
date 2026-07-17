@@ -4,7 +4,8 @@ title: Add next --include-off-spec recovery flag
 status: todo
 priority: medium
 spec_ref: specs/v0.4.0.md#active-spec-filtered-next-selection
-dependencies: []
+dependencies:
+    - T-108-next-filter-idle-selection-to-active-spec-tasks
 updated_at: "2026-07-17T11:20:55Z"
 ---
 
