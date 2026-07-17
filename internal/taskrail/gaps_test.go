@@ -333,6 +333,48 @@ func TestServiceCoverageGapsForAreaFilters(t *testing.T) {
 	if !hasSignal(report.Signals, "missing-verification", "unverified-area", "") {
 		t.Fatalf("expected the unverified-area signal, got %+v", report.Signals)
 	}
+	// A narrowed report identifies which area was scoped, so a consumer can tell
+	// the reported signals apart from a full-spec run even when the set is small.
+	if report.SelectedArea != "unverified-area" {
+		t.Fatalf("narrowed report must name the selected area, got %q", report.SelectedArea)
+	}
+}
+
+// A coverable area with no structural gap (here verified-area: covered and
+// verified) still yields a narrowed report that names the selected area, so the
+// empty result is distinguishable from a full-spec run that happened to be clean.
+func TestServiceCoverageGapsForAreaEmptyIdentifiesArea(t *testing.T) {
+	repo := seedGapsRepo(t)
+	svc := newTestService(t, repo, time.Date(2026, 7, 16, 0, 0, 0, 0, time.UTC))
+
+	report, err := svc.CoverageGapsForArea("verified-area")
+	if err != nil {
+		t.Fatalf("CoverageGapsForArea: %v", err)
+	}
+	if len(report.Signals) != 0 {
+		t.Fatalf("verified-area must raise no gap signals, got %+v", report.Signals)
+	}
+	if report.SelectedArea != "verified-area" {
+		t.Fatalf("empty narrowed report must still name the selected area, got %q", report.SelectedArea)
+	}
+	if report.ActiveSpecPath == "" {
+		t.Fatalf("empty narrowed report must still identify the active spec path")
+	}
+}
+
+// The full-spec report is not area-scoped, so it carries no SelectedArea; the
+// field distinguishes a narrowed run from a full one.
+func TestServiceCoverageGapsFullReportHasNoSelectedArea(t *testing.T) {
+	repo := seedGapsRepo(t)
+	svc := newTestService(t, repo, time.Date(2026, 7, 16, 0, 0, 0, 0, time.UTC))
+
+	report, err := svc.CoverageGaps()
+	if err != nil {
+		t.Fatalf("CoverageGaps: %v", err)
+	}
+	if report.SelectedArea != "" {
+		t.Fatalf("full-spec report must not name a selected area, got %q", report.SelectedArea)
+	}
 }
 
 func TestServiceCoverageGapsForAreaRejectsUnknownAnchor(t *testing.T) {
@@ -340,5 +382,55 @@ func TestServiceCoverageGapsForAreaRejectsUnknownAnchor(t *testing.T) {
 	svc := newTestService(t, repo, time.Date(2026, 7, 16, 0, 0, 0, 0, time.UTC))
 	if _, err := svc.CoverageGapsForArea("nope"); err == nil {
 		t.Fatalf("unknown anchor must be rejected")
+	}
+}
+
+// TestServiceCoverageGapsForAreaRejectionParity proves --gaps --area rejects the
+// full range of non-coverable anchors (unknown, meta section, #### sub-area,
+// deferred, subsumed, empty slug, duplicate slug) with byte-identical messages
+// to coverage --area, and writes nothing. Gap review reuses coverage's anchor
+// classification rather than inventing a second, drift-prone vocabulary.
+func TestServiceCoverageGapsForAreaRejectionParity(t *testing.T) {
+	t.Run("classified rejections", func(t *testing.T) {
+		repo := seedCoverageRepo(t)
+		svc := newTestService(t, repo, time.Date(2026, 7, 9, 0, 0, 0, 0, time.UTC))
+		for _, anchor := range []string{"nope", "summary", "delta-one", "beta", "gamma"} {
+			assertGapAreaRejectionMatchesCoverage(t, svc, repo, anchor)
+		}
+	})
+	t.Run("degenerate anchors", func(t *testing.T) {
+		repo := seedDegenerateAreaRepo(t)
+		svc := newTestService(t, repo, time.Date(2026, 7, 9, 0, 0, 0, 0, time.UTC))
+		for _, anchor := range []string{"", "dup-area"} {
+			assertGapAreaRejectionMatchesCoverage(t, svc, repo, anchor)
+		}
+	})
+}
+
+// assertGapAreaRejectionMatchesCoverage checks that CoverageGapsForArea rejects
+// the anchor with the same error text as CoverageForArea and leaves the repo
+// unchanged (rejection is read-only).
+func assertGapAreaRejectionMatchesCoverage(t *testing.T, svc *Service, repo, anchor string) {
+	t.Helper()
+	before := snapshotTree(t, repo)
+	_, covErr := svc.CoverageForArea(anchor)
+	_, gapErr := svc.CoverageGapsForArea(anchor)
+	if covErr == nil {
+		t.Fatalf("anchor %q must be non-coverable for coverage --area", anchor)
+	}
+	if gapErr == nil {
+		t.Fatalf("anchor %q must be rejected by --gaps --area", anchor)
+	}
+	if gapErr.Error() != covErr.Error() {
+		t.Fatalf("anchor %q: gaps rejection %q must match coverage rejection %q", anchor, gapErr.Error(), covErr.Error())
+	}
+	after := snapshotTree(t, repo)
+	if len(before) != len(after) {
+		t.Fatalf("rejection of %q mutated the file set: before %d, after %d", anchor, len(before), len(after))
+	}
+	for path, content := range before {
+		if after[path] != content {
+			t.Errorf("rejection of %q mutated %s", anchor, path)
+		}
 	}
 }

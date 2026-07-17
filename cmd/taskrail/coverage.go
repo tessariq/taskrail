@@ -148,7 +148,11 @@ func gapReport(svc *taskrail.Service, areaSet bool, area string) (taskrail.GapRe
 // clean report says so explicitly rather than printing nothing.
 func renderGapText(r taskrail.GapReport) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "gap analysis (advisory; promote a candidate to a task if it is real) — %s\n", r.ActiveSpecPath)
+	scope := r.ActiveSpecPath
+	if r.SelectedArea != "" {
+		scope += " (area: " + r.SelectedArea + ")"
+	}
+	fmt.Fprintf(&b, "gap analysis (advisory; promote a candidate to a task if it is real) — %s\n", scope)
 	if len(r.Signals) == 0 {
 		b.WriteString("no structural gap candidates")
 		return b.String()

@@ -38,8 +38,12 @@ type GapSignal struct {
 // mechanical companion signals over covered areas. It is strictly read-only and
 // never a source of committed state.
 type GapReport struct {
-	ActiveSpecPath string      `json:"active_spec_path"`
-	Signals        []GapSignal `json:"signals"`
+	ActiveSpecPath string `json:"active_spec_path"`
+	// SelectedArea names the coverable area a `--area` run was narrowed to; it is
+	// empty for a full-spec report. It identifies the scope even when Signals is
+	// empty, so an area with no gaps is distinguishable from an unscoped run.
+	SelectedArea string      `json:"selected_area,omitempty"`
+	Signals      []GapSignal `json:"signals"`
 }
 
 // CoverageGaps computes the read-only structural gap signals for the active
@@ -83,7 +87,7 @@ func (s *Service) CoverageGapsForArea(anchor string) (GapReport, error) {
 			scoped = append(scoped, sig)
 		}
 	}
-	return GapReport{ActiveSpecPath: activePath, Signals: scoped}, nil
+	return GapReport{ActiveSpecPath: activePath, SelectedArea: anchor, Signals: scoped}, nil
 }
 
 // validateGapAnchor rejects an anchor that is not a coverable ### area, reusing

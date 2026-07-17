@@ -776,6 +776,12 @@ Requirements:
 - c
 - d
 - e
+
+### Clean Area
+
+Requirements:
+
+- one
 `
 
 // seedGapsSmoke writes the gaps smoke spec plus a completed-unverified task and
@@ -860,6 +866,88 @@ func TestCoverageGapsComposesWithArea(t *testing.T) {
 	}
 	if strings.Contains(out, "done-area") {
 		t.Errorf("area-scoped gaps must exclude other areas: %q", out)
+	}
+}
+
+// A narrowed --json report identifies both the active spec path and the selected
+// area, so a consumer can tell an area-scoped run apart from a full-spec one.
+func TestCoverageGapsAreaJSONIdentifiesSelectedArea(t *testing.T) {
+	seedGapsSmoke(t)
+
+	out, err := runRoot(t, "coverage", "--gaps", "--area", "big-area", "--json")
+	if err != nil {
+		t.Fatalf("coverage --gaps --area --json: %v (output %q)", err, out)
+	}
+	var report struct {
+		ActiveSpecPath string `json:"active_spec_path"`
+		SelectedArea   string `json:"selected_area"`
+		Signals        []struct {
+			Anchor string `json:"anchor"`
+		} `json:"signals"`
+	}
+	if err := json.Unmarshal([]byte(out), &report); err != nil {
+		t.Fatalf("parse json: %v (output %q)", err, out)
+	}
+	if report.ActiveSpecPath != "specs/v0.1.0.md" {
+		t.Errorf("active_spec_path = %q", report.ActiveSpecPath)
+	}
+	if report.SelectedArea != "big-area" {
+		t.Errorf("selected_area = %q, want big-area", report.SelectedArea)
+	}
+	for _, s := range report.Signals {
+		if s.Anchor != "big-area" {
+			t.Errorf("narrowed signals must be big-area only, got %q", s.Anchor)
+		}
+	}
+}
+
+// A coverable area with no gap signals (clean-area is uncovered, so it raises
+// nothing) exits zero and still names the selected area in both text and JSON,
+// so the empty narrowed result is distinguishable from a full-spec run.
+func TestCoverageGapsAreaEmptyExitsZeroAndNamesArea(t *testing.T) {
+	seedGapsSmoke(t)
+
+	out, err := runRoot(t, "coverage", "--gaps", "--area", "clean-area")
+	if err != nil {
+		t.Fatalf("empty narrowed gap area must exit zero: %v (output %q)", err, out)
+	}
+	if !strings.Contains(out, "clean-area") {
+		t.Errorf("empty narrowed report must name the selected area: %q", out)
+	}
+
+	jsonOut, err := runRoot(t, "coverage", "--gaps", "--area", "clean-area", "--json")
+	if err != nil {
+		t.Fatalf("empty narrowed gap area --json must exit zero: %v (output %q)", err, jsonOut)
+	}
+	var report struct {
+		SelectedArea string     `json:"selected_area"`
+		Signals      []struct{} `json:"signals"`
+	}
+	if err := json.Unmarshal([]byte(jsonOut), &report); err != nil {
+		t.Fatalf("parse json: %v (output %q)", err, jsonOut)
+	}
+	if report.SelectedArea != "clean-area" {
+		t.Errorf("empty narrowed json must name selected_area, got %q", report.SelectedArea)
+	}
+	if len(report.Signals) != 0 {
+		t.Errorf("clean-area must report an empty signal set, got %d", len(report.Signals))
+	}
+}
+
+// The --fail-on gate evaluates the narrowed result, not the full spec: gating on
+// a category present only in another area stays green, while gating on a category
+// present in the selected area reds the build.
+func TestCoverageGapsFailOnEvaluatesNarrowedArea(t *testing.T) {
+	seedGapsSmoke(t)
+
+	// done-area carries the only missing-verification signal; narrowing to
+	// big-area must exclude it, so the gate stays green.
+	if out, err := runRoot(t, "coverage", "--gaps", "--area", "big-area", "--fail-on", "missing-verification"); err != nil {
+		t.Fatalf("narrowed --fail-on on an absent category must exit zero: %v (output %q)", err, out)
+	}
+	// big-area itself carries under-decomposed-area, so gating on it reds.
+	if out, err := runRoot(t, "coverage", "--gaps", "--area", "big-area", "--fail-on", "under-decomposed-area"); err == nil {
+		t.Fatalf("narrowed --fail-on on a present category must exit non-zero (output %q)", out)
 	}
 }
 

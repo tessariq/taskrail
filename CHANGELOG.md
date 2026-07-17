@@ -9,7 +9,9 @@ All notable user-visible changes to Taskrail will be documented in this file.
 - `taskrail coverage --gaps` — advisory read-only structural gap analysis over
   covered active-spec areas: `missing-verification`, `dependency-anomaly`, and
   `under-decomposed-area` candidates to promote into tasks. Composes with
-  `--area`. Advisory by default; `--fail-on <category>` opts into an exit-code
+  `--area` to scope the report to one coverable area; the narrowed report names
+  the selected area (even when it has no gaps). Advisory by default;
+  `--fail-on <category>` opts into an exit-code
   CI gate that reds the build when a signal of a named category is present
   (repeatable or comma-separated; report unchanged, never affects `validate`).
   Supports `--json`.
