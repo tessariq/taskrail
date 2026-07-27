@@ -73,7 +73,7 @@ func TestWriteShippableSkillsInstallsToTargets(t *testing.T) {
 		t.Fatalf("init: %v", err)
 	}
 
-	res, err := svc.WriteShippableSkills(false)
+	res, err := svc.WriteShippableSkills("v0.0.0-test", false)
 	if err != nil {
 		t.Fatalf("write shippable skills: %v", err)
 	}
@@ -117,7 +117,7 @@ func TestWriteShippableSkillsIdempotent(t *testing.T) {
 	if _, err := svc.Init(false); err != nil {
 		t.Fatalf("init: %v", err)
 	}
-	if _, err := svc.WriteShippableSkills(false); err != nil {
+	if _, err := svc.WriteShippableSkills("v0.0.0-test", false); err != nil {
 		t.Fatalf("first write: %v", err)
 	}
 
@@ -127,7 +127,7 @@ func TestWriteShippableSkillsIdempotent(t *testing.T) {
 		t.Fatalf("edit skill: %v", err)
 	}
 
-	res, err := svc.WriteShippableSkills(false)
+	res, err := svc.WriteShippableSkills("v0.0.0-test", false)
 	if err != nil {
 		t.Fatalf("second write: %v", err)
 	}
@@ -171,7 +171,7 @@ func TestWriteShippableSkillsForceOverwritesWithBackup(t *testing.T) {
 	if _, err := svc.Init(false); err != nil {
 		t.Fatalf("init: %v", err)
 	}
-	if _, err := svc.WriteShippableSkills(false); err != nil {
+	if _, err := svc.WriteShippableSkills("v0.0.0-test", false); err != nil {
 		t.Fatalf("first write: %v", err)
 	}
 
@@ -185,7 +185,7 @@ func TestWriteShippableSkillsForceOverwritesWithBackup(t *testing.T) {
 		t.Fatalf("edit skill: %v", err)
 	}
 
-	res, err := svc.WriteShippableSkills(true)
+	res, err := svc.WriteShippableSkills("v0.0.0-test", true)
 	if err != nil {
 		t.Fatalf("force write: %v", err)
 	}
@@ -229,7 +229,7 @@ func TestWriteShippableSkillsForceKeepsDistinctBackups(t *testing.T) {
 	if _, err := svc.Init(false); err != nil {
 		t.Fatalf("init: %v", err)
 	}
-	if _, err := svc.WriteShippableSkills(false); err != nil {
+	if _, err := svc.WriteShippableSkills("v0.0.0-test", false); err != nil {
 		t.Fatalf("first write: %v", err)
 	}
 
@@ -238,13 +238,13 @@ func TestWriteShippableSkillsForceKeepsDistinctBackups(t *testing.T) {
 	if err := os.WriteFile(skill, []byte("EDIT ONE"), 0o644); err != nil {
 		t.Fatalf("edit one: %v", err)
 	}
-	if _, err := svc.WriteShippableSkills(true); err != nil {
+	if _, err := svc.WriteShippableSkills("v0.0.0-test", true); err != nil {
 		t.Fatalf("first force: %v", err)
 	}
 	if err := os.WriteFile(skill, []byte("EDIT TWO"), 0o644); err != nil {
 		t.Fatalf("edit two: %v", err)
 	}
-	if _, err := svc.WriteShippableSkills(true); err != nil {
+	if _, err := svc.WriteShippableSkills("v0.0.0-test", true); err != nil {
 		t.Fatalf("second force: %v", err)
 	}
 
@@ -275,11 +275,11 @@ func TestWriteShippableSkillsForceSkipsIdentical(t *testing.T) {
 	if _, err := svc.Init(false); err != nil {
 		t.Fatalf("init: %v", err)
 	}
-	if _, err := svc.WriteShippableSkills(false); err != nil {
+	if _, err := svc.WriteShippableSkills("v0.0.0-test", false); err != nil {
 		t.Fatalf("first write: %v", err)
 	}
 
-	res, err := svc.WriteShippableSkills(true)
+	res, err := svc.WriteShippableSkills("v0.0.0-test", true)
 	if err != nil {
 		t.Fatalf("force write: %v", err)
 	}

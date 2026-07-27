@@ -1,6 +1,6 @@
 ---
 schema_version: 1
-updated_at: "2026-07-27T13:49:41Z"
+updated_at: "2026-07-27T14:15:46Z"
 active_spec_version: v0.4.0
 active_spec_path: specs/v0.4.0.md
 current_task: ""
@@ -8,7 +8,7 @@ current_task_title: ""
 status_summary: idle
 blockers: []
 next_action: Select the next eligible task
-last_verification_result: pass for T-119-heal-duplicate-notes-headings at 2026-07-27T13:37:20Z
+last_verification_result: pass for T-121-skill-version-marker at 2026-07-27T14:15:46Z
 relevant_artifacts: []
 continuation_notes:
     - This repository is temporarily dogfooding bootstrap workflow tooling until Taskrail v0.1.0 exists.
@@ -34,7 +34,7 @@ continuation_notes:
 
 ## Last Verification
 
-- pass for T-119-heal-duplicate-notes-headings at 2026-07-27T13:37:20Z
+- pass for T-121-skill-version-marker at 2026-07-27T14:15:46Z
 
 ## Next Action
 
@@ -50,8 +50,8 @@ continuation_notes:
 
 ## Task Counts
 
-- todo: 9
+- todo: 8
 - in_progress: 0
-- completed: 113
+- completed: 114
 - blocked: 0
 - cancelled: 0

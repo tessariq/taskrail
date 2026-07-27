@@ -41,16 +41,17 @@ type SkillInstallResult struct {
 }
 
 // WriteShippableSkills materializes the embedded skill set into the agent-tool
-// skill directories.
+// skill directories, stamping each file with the writing binary's version.
 //
 // Without force it is non-destructive (writeFileIfMissing semantics, consistent
 // with the T-019 Init): an existing skill is left untouched, so upgrading the
 // binary never refreshes materialized copies. With force it reinstalls the
 // embedded copy over an existing file whose content differs, first backing up the
 // on-disk version to a timestamped sibling so a local edit stays recoverable. A
-// file already identical to the embedded copy is skipped in both modes, so a
-// force run over an unmodified install writes nothing and accumulates no backups.
-func (s *Service) WriteShippableSkills(force bool) (SkillInstallResult, error) {
+// file already identical to the stamped embedded copy is skipped in both modes, so
+// a force run of the same version over an unmodified install writes nothing and
+// accumulates no backups; a force run from a different version restamps.
+func (s *Service) WriteShippableSkills(version string, force bool) (SkillInstallResult, error) {
 	var res SkillInstallResult
 	err := fs.WalkDir(shippableSkillsFS, shippableSkillsRoot, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -63,6 +64,7 @@ func (s *Service) WriteShippableSkills(force bool) (SkillInstallResult, error) {
 		if err != nil {
 			return fmt.Errorf("read embedded skill %s: %w", p, err)
 		}
+		data = stampSkillVersion(data, version)
 		rel := strings.TrimPrefix(p, shippableSkillsRoot+"/")
 		for _, target := range shippableSkillTargets {
 			dest := filepath.Join(s.paths.RepoRoot, target, filepath.FromSlash(rel))

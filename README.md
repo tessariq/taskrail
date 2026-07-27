@@ -330,7 +330,10 @@ state nor `validate` depends on it surviving a Git round-trip.
 The packaged skill set lives in `internal/taskrail/skills/` (embedded; installed
 by `taskrail init --with-skills`). This repository adopts it: committed copies in
 `.agents/skills/` and `.claude/skills/` are kept byte-identical to the package by
-`task check:skills`.
+`task check:skills`. Installed skills additionally record the Taskrail version
+that wrote them in a `taskrail_version` frontmatter key, so an install left behind
+by an older binary stays detectable; refresh one with
+`taskrail init --with-skills --force`.
 
 ## Development
 

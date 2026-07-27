@@ -35,7 +35,7 @@ func newInitCmd() *cobra.Command {
 			}
 			summary := initSummary(result)
 			if withSkills {
-				res, wErr := svc.WriteShippableSkills(forceSkills)
+				res, wErr := svc.WriteShippableSkills(version, forceSkills)
 				if wErr != nil {
 					// Report what was installed before the failure so the user
 					// knows the partial state, then propagate the error.

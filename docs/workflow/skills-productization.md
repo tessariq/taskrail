@@ -44,6 +44,18 @@ Rejected alternative:
 Note: writing skills on default `taskrail init` was never an option — it is
 ruled out by the constraint above, not a considered alternative.
 
+Materialized skill files carry a `taskrail_version` frontmatter key recording the
+binary that wrote them (T-121), because a non-destructive install means upgrading
+the binary never refreshes an existing on-disk copy. Agent tools read
+`name`/`description`, so the extra key is inert where the skill is used.
+
+This repository's committed `.agents/`/`.claude/` copies are regenerated from the
+embedded package by `task skills:regen`, which copies the package source and
+therefore carries no marker — that is what keeps `task check:skills` parity
+byte-exact against a version the ldflags-injected binary would otherwise vary.
+Do not regenerate the committed copies with `init --with-skills`; the stamped
+output would fail parity.
+
 ## Decision 3: Relationship To Task-Creation Ergonomics
 
 Shipped skills call the real `taskrail task new` command (see T-027 / T-028)

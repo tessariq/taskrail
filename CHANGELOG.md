@@ -6,6 +6,10 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ### Added
 
+- `taskrail init --with-skills` — installed skill files now record the Taskrail
+  version that wrote them as a `taskrail_version` frontmatter key, so a skill
+  installed by an older binary is detectable. `--force` restamps; re-running the
+  same version stays a no-op and writes no backups.
 - `taskrail status` — active-spec drift breakdown: counts open work
   (`todo`/`in_progress`/`blocked`) on the active spec versus away from it, and
   lists the away tasks with their `spec_ref`. The away set matches the

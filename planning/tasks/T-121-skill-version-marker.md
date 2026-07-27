@@ -1,11 +1,11 @@
 ---
 id: T-121-skill-version-marker
 title: Stamp the writing Taskrail version into materialized skill files
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.4.0.md#version-skew-detection
 dependencies: []
-updated_at: "2026-07-27T13:49:41Z"
+updated_at: "2026-07-27T14:15:46Z"
 ---
 
 # T-121-skill-version-marker Stamp the writing Taskrail version into materialized skill files
@@ -43,3 +43,5 @@ not record which binary wrote it.
 - TODO: record verification evidence paths.
 
 ## Implementation Notes
+
+- 2026-07-27T14:15:46Z: verification pass
