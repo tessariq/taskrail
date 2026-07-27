@@ -32,6 +32,22 @@ func printWarnings(cmd *cobra.Command, warnings []taskrail.Warning) {
 	}
 }
 
+// warnOnSkillSkew reports materialized skills the running binary did not write.
+// It never gates: a repository Taskrail cannot even discover, or a skew read that
+// fails, stays silent rather than turning an advisory signal into a command
+// failure (specs/v0.4.0.md#version-skew-detection).
+func warnOnSkillSkew(cmd *cobra.Command, _ []string) {
+	svc, err := serviceFromCmd(cmd)
+	if err != nil {
+		return
+	}
+	warnings, err := svc.SkillSkewWarnings(version)
+	if err != nil {
+		return
+	}
+	printWarnings(cmd, warnings)
+}
+
 // printJSON writes a value as indented JSON followed by a newline.
 func printJSON(cmd *cobra.Command, value any) error {
 	data, err := json.MarshalIndent(value, "", "  ")

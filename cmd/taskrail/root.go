@@ -9,6 +9,10 @@ func newRootCmd() *cobra.Command {
 		Version:       version,
 		SilenceUsage:  true,
 		SilenceErrors: true,
+		// Skill skew is reported before the command runs, not after, so it is still
+		// visible when the command fails — a skill written by a newer binary fails
+		// exactly at the point of use, and the skew is the explanation.
+		PersistentPreRun: warnOnSkillSkew,
 	}
 	cmd.SetVersionTemplate("{{.Version}}\n")
 

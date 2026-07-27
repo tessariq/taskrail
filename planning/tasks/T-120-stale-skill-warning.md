@@ -1,12 +1,12 @@
 ---
 id: T-120-stale-skill-warning
 title: Warn when installed skill files are outdated
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.4.0.md#version-skew-detection
 dependencies:
     - T-121-skill-version-marker
-updated_at: "2026-07-27T13:49:41Z"
+updated_at: "2026-07-27T14:45:43Z"
 ---
 
 # T-120-stale-skill-warning Warn when installed skill files are outdated
@@ -51,3 +51,5 @@ Depends on T-121 for the version marker that makes the skew detectable.
 - TODO: record verification evidence paths.
 
 ## Implementation Notes
+
+- 2026-07-27T14:45:37Z: verification pass

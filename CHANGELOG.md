@@ -10,6 +10,11 @@ All notable user-visible changes to Taskrail will be documented in this file.
   version that wrote them as a `taskrail_version` frontmatter key, so a skill
   installed by an older binary is detectable. `--force` restamps; re-running the
   same version stays a no-op and writes no backups.
+- Every command now warns on stderr when the installed skills were written by a
+  different Taskrail version, naming the affected skills, both versions, and
+  `taskrail init --with-skills --force`. Skills with no marker report once as
+  unknown-version and prescribe no remedy. Advisory only: `--json` stdout stays
+  parseable, `validate` still passes, and no transition is blocked.
 - `taskrail status` — active-spec drift breakdown: counts open work
   (`todo`/`in_progress`/`blocked`) on the active spec versus away from it, and
   lists the away tasks with their `spec_ref`. The away set matches the

@@ -332,8 +332,14 @@ by `taskrail init --with-skills`). This repository adopts it: committed copies i
 `.agents/skills/` and `.claude/skills/` are kept byte-identical to the package by
 `task check:skills`. Installed skills additionally record the Taskrail version
 that wrote them in a `taskrail_version` frontmatter key, so an install left behind
-by an older binary stays detectable; refresh one with
-`taskrail init --with-skills --force`.
+by an older binary stays detectable: every command warns on stderr when the
+recorded version is not the running one, naming the affected skills and both
+versions. The warning is advisory — it never fails `validate` or blocks a
+transition — and `taskrail init --with-skills --force` resolves it. The committed
+copies in this repository carry no marker, since parity keeps them byte-identical
+to the unstamped package, so commands run here report them once as
+unknown-version and prescribe no remedy; do not "resolve" that with
+`--force`, which would break `task check:skills`.
 
 ## Development
 

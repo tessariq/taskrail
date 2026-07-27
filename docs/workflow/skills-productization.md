@@ -56,6 +56,15 @@ byte-exact against a version the ldflags-injected binary would otherwise vary.
 Do not regenerate the committed copies with `init --with-skills`; the stamped
 output would fail parity.
 
+A consequence for this repository: because the committed copies carry no marker,
+every command run here reports them once on stderr as unknown-version (T-120).
+That is expected and correct — nothing recorded a version, so no skew can be
+determined. The warning deliberately prescribes no remedy in that case; do not
+"resolve" it with `taskrail init --with-skills --force`, which would stamp the
+committed copies and break `task check:skills`. Adopters, whose copies are
+installed rather than parity-checked, see the remedy only when a real version
+mismatch is readable.
+
 ## Decision 3: Relationship To Task-Creation Ergonomics
 
 Shipped skills call the real `taskrail task new` command (see T-027 / T-028)
