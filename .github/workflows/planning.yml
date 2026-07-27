@@ -3,8 +3,9 @@ name: Planning checks
 # Fast lane for planning-/spec-/doc-only changes. The full CI matrix and cross-compile
 # in ci.yml skip these paths (see paths-ignore there), so this workflow preserves the two
 # cheap gates that matter most exactly when planning files change — taskrail state
-# validation and active-spec coverage — without spinning up the cross-platform build/test
-# matrix. Its `paths:` set is the exact mirror of the paths ignored by ci.yml; keep them
+# validation, task-body hygiene, and active-spec coverage — without spinning up the
+# cross-platform build/test matrix. A gate that guards committed planning content has to
+# live here: ci.yml never runs for a change that touches only these paths. Its `paths:` set is the exact mirror of the paths ignored by ci.yml; keep them
 # identical. release.yml (tags-only) is unaffected.
 on:
   push:
@@ -50,6 +51,9 @@ jobs:
 
       - name: Validate Taskrail planning structure
         run: task validate
+
+      - name: Check task bodies for duplicate Implementation Notes headings
+        run: task check:task-bodies
 
       - name: Gate active-spec self-coverage (coverage --min 100)
         run: task coverage:gate

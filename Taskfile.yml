@@ -108,6 +108,11 @@ tasks:
     cmds:
       - go test ./internal/taskrail -run '^TestCommittedSkillsMatchPackage$'
 
+  check:task-bodies:
+    desc: Verify no task file carries a duplicate Implementation Notes heading
+    cmds:
+      - go test ./internal/taskrail -run '^TestCorpusTasksHaveOneImplementationNotesSection$'
+
   skills:regen:
     desc: Regenerate committed .agents/.claude skill copies from the embedded package, then verify parity
     # Copies straight from the embedded source (internal/taskrail/skills) rather
