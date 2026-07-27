@@ -149,6 +149,12 @@ type CreateTaskInput struct {
 	// `task new` command passes `--slug` if given, else the title, so CLI-authored
 	// tasks are slugged by default while other callers (import) stay bare.
 	Slug string
+	// SlugExplicit reports that Slug is an operator-curated `--slug`, not the
+	// title fallback. A title-derived slug is length-capped (see capSlug); an
+	// explicit one is written verbatim after normalization, since the operator
+	// owns that choice. The CLI collapses `--slug`/title into Slug, so this flag
+	// carries the distinction the cap needs.
+	SlugExplicit bool
 	// SpecRef is the explicit `path#anchor` spec reference. Area is its active-spec
 	// shorthand: when set, CreateTask resolves SpecRef to
 	// `<active_spec_path>#<Area>` from STATE.md. The two are mutually exclusive — a

@@ -767,6 +767,71 @@ func TestCreateTaskSlugsIdAndFilenameFromSource(t *testing.T) {
 	}
 }
 
+// TestCreateTaskCapsTitleDerivedSlugOnly pins the v0.4.0 cap: a title-derived
+// slug is bounded near slugMaxLen (trimmed on a hyphen boundary), while an
+// explicit --slug the operator curated is written verbatim after normalization,
+// however long. Both cases leave a repo that validates with no further edits.
+func TestCreateTaskCapsTitleDerivedSlugOnly(t *testing.T) {
+	t.Parallel()
+
+	longTitle := "Cap the title derived slug length at roughly fifty characters boundary aware"
+	longSlug := "an-intentionally-long-but-curated-slug-the-operator-owns-verbatim"
+
+	cases := []struct {
+		name         string
+		slug         string
+		slugExplicit bool
+		wantID       string
+	}{
+		{
+			name:   "title-derived slug is capped on a hyphen boundary",
+			slug:   longTitle,
+			wantID: "T-002-cap-the-title-derived-slug-length-at-roughly",
+		},
+		{
+			name:         "explicit slug is not capped",
+			slug:         longSlug,
+			slugExplicit: true,
+			wantID:       "T-002-" + longSlug,
+		},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			repo := seedFixtureRepo(t)
+			writeTask(t, repo, "T-001", "Existing item", "todo", "high", "specs/v0.1.0.md#summary", nil)
+
+			svc := newTestService(t, repo, time.Date(2026, 6, 24, 12, 0, 0, 0, time.UTC))
+			result, err := svc.CreateTask(CreateTaskInput{
+				Title:        longTitle,
+				Slug:         tc.slug,
+				SlugExplicit: tc.slugExplicit,
+				SpecRef:      "specs/v0.1.0.md#summary",
+				Priority:     "high",
+			})
+			if err != nil {
+				t.Fatalf("create task: %v", err)
+			}
+			if result.TaskID != tc.wantID {
+				t.Fatalf("expected id %s, got %s", tc.wantID, result.TaskID)
+			}
+			// The id and filename are two encodings of one identifier.
+			if base := filepath.Base(result.Path); base != tc.wantID+".md" {
+				t.Fatalf("expected filename %s.md, got %s", tc.wantID, base)
+			}
+
+			validation, err := svc.Validate()
+			if err != nil {
+				t.Fatalf("validate: %v", err)
+			}
+			if !validation.Valid {
+				t.Fatalf("expected valid repo after scaffold, got %v", validation.Violations)
+			}
+		})
+	}
+}
+
 // TestCreateTaskWarnsOnEmptyDerivedSlug pins the bare-id fallback as visible
 // rather than silent: a supplied slug source that normalizes to nothing still
 // writes the legitimate bare id, but reports why. No selector at all is the

@@ -47,14 +47,17 @@ func newTaskNewCmd() *cobra.Command {
 				return err
 			}
 			// An explicit --slug wins; otherwise the title is the slug source, so a
-			// plain `task new --title "X"` still yields a slugged, scannable id.
+			// plain `task new --title "X"` still yields a slugged, scannable id. The
+			// explicit slug is written verbatim; the title fallback is length-capped.
 			slugSource := slug
-			if strings.TrimSpace(slugSource) == "" {
+			slugExplicit := strings.TrimSpace(slug) != ""
+			if !slugExplicit {
 				slugSource = title
 			}
 			result, err := svc.CreateTask(taskrail.CreateTaskInput{
 				Title:        title,
 				Slug:         slugSource,
+				SlugExplicit: slugExplicit,
 				SpecRef:      specRef,
 				Area:         area,
 				Priority:     priority,

@@ -64,6 +64,31 @@ func dropCombiningMarks(s string) string {
 	}, s)
 }
 
+// slugMaxLen bounds a title-derived slug so ids and filenames stay short amid
+// curated siblings and never brush the filesystem name limit. "Roughly 50" is
+// deliberate: capSlug trims back to a hyphen boundary, so the result is usually a
+// few characters under this rather than exactly at it.
+const slugMaxLen = 50
+
+// capSlug bounds a title-derived slug near slugMaxLen, trimmed on a hyphen
+// boundary so no word is cut mid-token and no stray boundary hyphen survives.
+// It runs on an already-slugified value (pure ASCII `[a-z0-9-]`, transliteration
+// and the non-alphanumeric collapse already applied), so byte length equals
+// character count and a multibyte source can never blow the budget. A single
+// token longer than the cap has no boundary to trim to and is hard-truncated —
+// still bounded, just not on a word edge. Only the title-derived path caps; an
+// explicit `--slug` the operator curated is written verbatim.
+func capSlug(slug string) string {
+	if len(slug) <= slugMaxLen {
+		return slug
+	}
+	truncated := slug[:slugMaxLen]
+	if idx := strings.LastIndexByte(truncated, '-'); idx > 0 {
+		truncated = truncated[:idx]
+	}
+	return strings.Trim(truncated, "-")
+}
+
 // slugify normalizes an arbitrary string into a slug: lowercased, accented letters
 // folded to ASCII however the input spelled them, non-alphanumeric runs collapsed to
 // single hyphens and leading/trailing hyphens trimmed. It underpins the slug segment

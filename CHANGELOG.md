@@ -64,9 +64,9 @@ All notable user-visible changes to Taskrail will be documented in this file.
   (`T-<n>-<slug>`); `--slug` overrides the derived slug. With neither flag the id
   stays the bare `T-<n>`. Accented letters transliterate to ASCII before slugifying
   (`Über Fußball` → `ueber-fussball`, `Łódź Điện` → `lodz-dien`, in precomposed or
-  decomposed input alike), and
-  a `--title`/`--slug` that normalizes to no slug keeps the bare id but warns on
-  stderr.
+  decomposed input alike). A title-derived slug is length-capped (~50 chars, on a
+  hyphen boundary); an explicit `--slug` is written verbatim. A `--title`/`--slug`
+  that normalizes to no slug keeps the bare id but warns on stderr.
 
 ### Fixed
 

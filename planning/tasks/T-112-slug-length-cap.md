@@ -1,12 +1,12 @@
 ---
 id: T-112-slug-length-cap
 title: Cap title-derived slug length
-status: todo
+status: completed
 priority: medium
 spec_ref: specs/v0.4.0.md#slugged-task-creation
 dependencies:
     - T-109-slug-transliteration-warn
-updated_at: "2026-07-17T11:21:18Z"
+updated_at: "2026-07-27T22:58:14Z"
 ---
 
 # T-112-slug-length-cap Cap title-derived slug length
@@ -40,3 +40,5 @@ warning first so the cap operates on already-transliterated text.
 - TODO: record verification evidence paths.
 
 ## Implementation Notes
+
+- 2026-07-27T22:58:09Z: verification pass

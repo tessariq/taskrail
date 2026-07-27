@@ -544,6 +544,9 @@ func (s *Service) CreateTask(input CreateTaskInput) (CreateTaskResult, error) {
 	nextID := nextTaskID(tasks)
 	var warnings []Warning
 	if slug := slugify(input.Slug); slug != "" {
+		if !input.SlugExplicit {
+			slug = capSlug(slug)
+		}
 		nextID = nextID + "-" + slug
 	} else {
 		warnings = emptySlugWarnings(input.Slug, nextID)

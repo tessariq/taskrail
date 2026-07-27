@@ -687,6 +687,36 @@ func TestTaskNewCuratedSlugOverridesTitle(t *testing.T) {
 	}
 }
 
+// TestTaskNewCapsTitleDerivedSlugButNotExplicit exercises the length cap through
+// the real flag-parsing path: it pins the `slugExplicit := --slug != ""` wiring in
+// task.go, so a regression there — capping an explicit slug, or failing to cap the
+// title fallback — is caught at the CLI boundary, not just the service layer.
+func TestTaskNewCapsTitleDerivedSlugButNotExplicit(t *testing.T) {
+	setupRepo(t)
+
+	longTitle := "Cap the title derived slug length at roughly fifty characters boundary aware"
+	out, err := runRoot(t, "task", "new", "--title", longTitle, "--spec-ref", "specs/v0.1.0.md#summary", "--json")
+	if err != nil {
+		t.Fatalf("task new: %v (output %q)", err, out)
+	}
+	if !strings.Contains(out, `"task_id": "T-001-cap-the-title-derived-slug-length-at-roughly"`) {
+		t.Fatalf("expected capped title-derived id, got %q", out)
+	}
+
+	// An explicit --slug the operator curated is written verbatim, however long.
+	longSlug := "an-intentionally-long-but-curated-slug-the-operator-owns-verbatim"
+	out, err = runRoot(t, "task", "new", "--title", longTitle, "--slug", longSlug, "--spec-ref", "specs/v0.1.0.md#summary", "--json")
+	if err != nil {
+		t.Fatalf("task new: %v (output %q)", err, out)
+	}
+	if !strings.Contains(out, `"task_id": "T-002-`+longSlug+`"`) {
+		t.Fatalf("expected verbatim explicit-slug id, got %q", out)
+	}
+	if out, err := runRoot(t, "validate"); err != nil {
+		t.Fatalf("validate after scaffold: %v (output %q)", err, out)
+	}
+}
+
 func TestTaskNewSlugWithoutTitleSlugsId(t *testing.T) {
 	root := setupRepo(t)
 

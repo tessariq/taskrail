@@ -1,6 +1,7 @@
 package taskrail
 
 import (
+	"strings"
 	"testing"
 
 	"golang.org/x/text/unicode/norm"
@@ -170,5 +171,47 @@ func TestSlugifyLeavesCompatibilityLigatures(t *testing.T) {
 	// The plain two-letter spelling is unaffected, so this only bites pasted text.
 	if got := slugify("final"); got != "final" {
 		t.Fatalf("slugify(%q) = %q, want %q", "final", got, "final")
+	}
+}
+
+// TestCapSlug pins the title-derived length cap: a long slug is bounded near
+// slugMaxLen, trimmed on a hyphen boundary so no token is cut mid-word and no
+// leading/trailing hyphen survives, while a slug already within budget is
+// returned untouched.
+func TestCapSlug(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{"short slug untouched", "add-slug-support", "add-slug-support"},
+		{
+			name: "long slug trimmed on hyphen boundary",
+			in:   "cap-the-title-derived-slug-length-at-roughly-fifty-characters-boundary-aware",
+			want: "cap-the-title-derived-slug-length-at-roughly",
+		},
+		{
+			name: "single mega-token hard-capped without a hyphen",
+			in:   "supercalifragilisticexpialidocioussupercalifragilisticexpialidocious",
+			want: "supercalifragilisticexpialidocioussupercalifragili",
+		},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := capSlug(tc.in)
+			if got != tc.want {
+				t.Fatalf("capSlug(%q) = %q, want %q", tc.in, got, tc.want)
+			}
+			if len(got) > slugMaxLen {
+				t.Fatalf("capSlug(%q) len %d exceeds cap %d", tc.in, len(got), slugMaxLen)
+			}
+			if got != strings.Trim(got, "-") {
+				t.Fatalf("capSlug(%q) = %q has a stray boundary hyphen", tc.in, got)
+			}
+		})
 	}
 }
