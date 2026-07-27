@@ -1,12 +1,18 @@
 package taskrail
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 )
+
+// strayTaskContent is a task file whose id disagrees with its filename (the
+// drift repair heals). Renames that would land on it must refuse rather than
+// clobber it, so its content doubles as the survival marker the tests assert on.
+const strayTaskContent = "---\nid: T-900\ntitle: Precious\nstatus: todo\npriority: low\nspec_ref: specs/v0.1.0.md#summary\ndependencies: []\nupdated_at: \"2026-01-01T00:00:00Z\"\n---\n\n# PRECIOUS DATA MUST SURVIVE\n"
 
 func renameFixture(t *testing.T) (*Service, string) {
 	t.Helper()
@@ -15,6 +21,15 @@ func renameFixture(t *testing.T) (*Service, string) {
 	writeTask(t, repo, "T-002", "Dependent", "todo", "high", "specs/v0.1.0.md#summary", []string{"T-001"})
 	svc := newTestService(t, repo, time.Date(2026, 7, 16, 12, 0, 0, 0, time.UTC))
 	return svc, repo
+}
+
+func readBytes(t *testing.T, path string) string {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", filepath.Base(path), err)
+	}
+	return string(data)
 }
 
 func taskDeps(t *testing.T, svc *Service, id string) []string {
@@ -177,21 +192,15 @@ func TestRenameTaskRefusesWhenDestinationFileExists(t *testing.T) {
 	t.Parallel()
 	svc, repo := renameFixture(t)
 
-	// A stray file already occupies the rename's target path (a filename!=id drift
-	// the repair tooling exists to heal). Its content must survive: a plain
-	// os.Rename would silently clobber it.
+	// A stray file already occupies the rename's target path; a plain os.Rename
+	// would silently clobber it.
 	stray := filepath.Join(repo, "planning", "tasks", "T-001-widget.md")
-	strayContent := "---\nid: T-900\ntitle: Precious\nstatus: todo\npriority: low\nspec_ref: specs/v0.1.0.md#summary\ndependencies: []\nupdated_at: \"2026-01-01T00:00:00Z\"\n---\n\n# PRECIOUS DATA MUST SURVIVE\n"
-	writeFile(t, stray, strayContent)
+	writeFile(t, stray, strayTaskContent)
 
 	if _, err := svc.RenameTask(RenameTaskInput{OldID: "T-001", Slug: "Widget"}); err == nil {
 		t.Fatal("expected error when the target file already exists")
 	}
-	got, err := os.ReadFile(stray)
-	if err != nil {
-		t.Fatalf("stray file lost: %v", err)
-	}
-	if string(got) != strayContent {
+	if got := readBytes(t, stray); got != strayTaskContent {
 		t.Fatalf("stray file overwritten:\n%s", got)
 	}
 	if !fileExists(filepath.Join(repo, "planning", "tasks", "T-001.md")) {
@@ -260,6 +269,77 @@ func TestRenameTaskRewritesAllInboundDependents(t *testing.T) {
 	}
 	if v, err := svc.Validate(); err != nil || !v.Valid {
 		t.Fatalf("validate: valid=%v violations=%v err=%v", v.Valid, v.Violations, err)
+	}
+}
+
+func TestRenameTaskRollsBackWhenInboundWriteFails(t *testing.T) {
+	t.Parallel()
+	svc, repo := renameFixture(t)
+	tasksDir := filepath.Join(repo, "planning", "tasks")
+	source := filepath.Join(tasksDir, "T-001.md")
+	inbound := filepath.Join(tasksDir, "T-002.md")
+	stateFile := filepath.Join(repo, "planning", "STATE.md")
+
+	// Fail the rename *after* the file move and the target rewrite have landed:
+	// the inbound dependent is the third coupled write, so this is the exact
+	// partial-write window the atomicity contract has to close.
+	requireReadOnlyFileBlocksWrites(t, inbound)
+	sourceBefore, inboundBefore, stateBefore := readBytes(t, source), readBytes(t, inbound), readBytes(t, stateFile)
+
+	_, err := svc.RenameTask(RenameTaskInput{OldID: "T-001", Slug: "base"})
+	if err == nil {
+		t.Fatal("expected rename to fail on the unwritable inbound task file")
+	}
+	assertNoRootLeak(t, repo, err)
+	// A permission-denied write never truncates, so restoring it is a no-op: the
+	// rollback fully succeeded and the operator must be told the tree is clean,
+	// not sent to repair for drift that does not exist.
+	if !strings.Contains(err.Error(), "no changes were applied") {
+		t.Fatalf("clean rollback reported as failed: %v", err)
+	}
+
+	if fileExists(filepath.Join(tasksDir, "T-001-base.md")) {
+		t.Fatal("renamed file left behind after rollback")
+	}
+	if got := readBytes(t, source); got != sourceBefore {
+		t.Fatalf("source task file not restored:\n%s", got)
+	}
+	if got := readBytes(t, inbound); got != inboundBefore {
+		t.Fatalf("inbound task file changed:\n%s", got)
+	}
+	if got := readBytes(t, stateFile); got != stateBefore {
+		t.Fatalf("STATE.md changed despite the failed rename:\n%s", got)
+	}
+	if v, err := svc.Validate(); err != nil || !v.Valid {
+		t.Fatalf("tree not valid after rollback: valid=%v violations=%v err=%v", v.Valid, v.Violations, err)
+	}
+}
+
+func TestRenameFailureReportsRollbackOutcome(t *testing.T) {
+	t.Parallel()
+	cause := errors.New("write task file T-002.md: permission denied")
+
+	rolledBack := renameFailure("T-001", "T-001-base", cause, nil)
+	if !errors.Is(rolledBack, cause) {
+		t.Fatalf("cause not wrapped: %v", rolledBack)
+	}
+	if !strings.Contains(rolledBack.Error(), "no changes were applied") {
+		t.Fatalf("clean rollback must say the tree is unchanged: %v", rolledBack)
+	}
+	if strings.Contains(rolledBack.Error(), "repair") {
+		t.Fatalf("clean rollback must not send the operator to repair: %v", rolledBack)
+	}
+
+	// Rollback itself failed, so the tree may be half renamed: the error is the
+	// operator's only signal and must name the reconcile commands.
+	stuck := renameFailure("T-001", "T-001-base", cause, errors.New("restore T-001.md: read-only file system"))
+	if !errors.Is(stuck, cause) {
+		t.Fatalf("cause not wrapped: %v", stuck)
+	}
+	for _, want := range []string{"taskrail validate", "taskrail repair --apply", "restore T-001.md"} {
+		if !strings.Contains(stuck.Error(), want) {
+			t.Fatalf("rollback-failure error missing %q: %v", want, stuck)
+		}
 	}
 }
 

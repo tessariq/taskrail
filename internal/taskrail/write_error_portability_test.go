@@ -46,6 +46,24 @@ func requireReadOnlyDirBlocksWrites(t *testing.T, dir string) {
 	}
 }
 
+// requireReadOnlyFileBlocksWrites makes an existing file read-only and verifies
+// the platform actually rejects writing to it, skipping otherwise for the same
+// reasons as requireReadOnlyDirBlocksWrites (root bypasses the mode bits). It
+// probes by opening for write instead of writing, so the file content the caller
+// asserts on stays untouched.
+func requireReadOnlyFileBlocksWrites(t *testing.T, path string) {
+	t.Helper()
+	if err := os.Chmod(path, 0o444); err != nil {
+		t.Fatalf("chmod read-only %s: %v", filepath.Base(path), err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(path, 0o644) })
+	probe, err := os.OpenFile(path, os.O_WRONLY, 0)
+	if err == nil {
+		_ = probe.Close()
+		t.Skip("read-only file does not block writes here (root or native Windows); permission injection cannot fire")
+	}
+}
+
 // assertPortablePermissionError requires err to name a repo-relative path (no
 // absolute root leak) while still classifying as fs.ErrPermission through fsCause.
 func assertPortablePermissionError(t *testing.T, repo string, err error) {

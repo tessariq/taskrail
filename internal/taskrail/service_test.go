@@ -964,6 +964,15 @@ func newTestService(t *testing.T, repo string, now time.Time) *Service {
 func seedFixtureRepo(t *testing.T) string {
 	t.Helper()
 	repo := initGitRepo(t)
+	seedFixtureTree(t, repo)
+	return repo
+}
+
+// seedFixtureTree writes the fixture planning/spec content into an existing repo
+// root, split out of seedFixtureRepo so tests that need a real `git init` root
+// (rather than the stub .git directory) seed the same tree.
+func seedFixtureTree(t *testing.T, repo string) {
+	t.Helper()
 	writeFile(t, filepath.Join(repo, "specs", "README.md"), "# Specs\n")
 	writeFile(t, filepath.Join(repo, "specs", "v0.1.0.md"), "# Taskrail v0.1.0\n\n## Summary\n\nFixture spec.\n")
 	writeFile(t, filepath.Join(repo, "planning", "STATE.md"), `---
@@ -989,7 +998,6 @@ continuation_notes:
 	}
 	// No artifacts tree: it is gitignored output that verify creates on demand,
 	// so a fixture must not pre-create it (T-036).
-	return repo
 }
 
 func writeTask(t *testing.T, repo, id, title, status, priority, specRef string, deps []string) {

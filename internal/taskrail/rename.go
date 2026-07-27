@@ -1,6 +1,7 @@
 package taskrail
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"os"
@@ -159,17 +160,35 @@ func renameChanges(root, oldID, newID, oldPath, newPath string, inbound []*Task)
 	return changes
 }
 
-// applyRename performs the coupled writes in an order that keeps the tree as
-// consistent as possible: move the file first (preserving git rename tracking),
-// rewrite the renamed task's id, rewrite each inbound dependency edge, then
-// re-project STATE.md. state and the task pointers are mutated in place so the
-// STATE.md projection reflects the new ids.
+// applyRename performs the coupled writes as one outcome: a failure partway
+// through unwinds every write already made, so the tree is either fully renamed
+// or untouched. Ordering keeps the tree as consistent as possible while the
+// writes run: move the file first (preserving git rename tracking), rewrite the
+// renamed task's id, rewrite each inbound dependency edge, then re-project
+// STATE.md.
 func (s *Service) applyRename(state *State, tasks []*Task, target *Task, inbound []*Task, oldID, newID, oldPath, newPath string) error {
+	undo := &renameUndo{root: s.paths.RepoRoot}
+	if err := s.renameWrites(undo, state, tasks, target, inbound, newID, oldPath, newPath); err != nil {
+		return renameFailure(oldID, newID, err, undo.run())
+	}
+	return nil
+}
+
+// renameWrites applies the coupled edits, registering each compensating action
+// with undo before the write it compensates. state and the task pointers are
+// mutated in place so the STATE.md projection reflects the new ids; those
+// in-memory edits are discarded with the loaded set when the rename fails.
+func (s *Service) renameWrites(undo *renameUndo, state *State, tasks []*Task, target *Task, inbound []*Task, newID, oldPath, newPath string) error {
+	oldID := target.Frontmatter.ID
 	if err := s.moveTaskFile(oldPath, newPath); err != nil {
 		return err
 	}
+	undo.push(func() error { return s.moveTaskFile(newPath, oldPath) })
 	now := timestamp(s.now())
 
+	if err := undo.snapshot(newPath); err != nil {
+		return err
+	}
 	target.Frontmatter.ID = newID
 	target.Frontmatter.UpdatedAt = now
 	target.Filename = newPath
@@ -178,6 +197,9 @@ func (s *Service) applyRename(state *State, tasks []*Task, target *Task, inbound
 	}
 
 	for _, task := range inbound {
+		if err := undo.snapshot(task.Filename); err != nil {
+			return err
+		}
 		for i, dep := range task.Frontmatter.Dependencies {
 			if dep == oldID {
 				task.Frontmatter.Dependencies[i] = newID
@@ -199,7 +221,71 @@ func (s *Service) applyRename(state *State, tasks []*Task, target *Task, inbound
 	// Current Focus section and counts stay consistent with the new ids, matching
 	// every other state-writing path.
 	state.Body = renderStateBody(state.Frontmatter, tasks)
+	if err := undo.snapshot(s.paths.StateFile); err != nil {
+		return err
+	}
 	return s.saveState(state)
+}
+
+// renameUndo collects the compensating actions for the writes a rename has
+// already made. Actions run last-in-first-out, so a file's content is restored
+// before the file itself is moved back. root anchors repo-relative paths in the
+// errors it emits (T-088).
+type renameUndo struct {
+	root    string
+	actions []func() error
+}
+
+func (u *renameUndo) push(action func() error) { u.actions = append(u.actions, action) }
+
+// snapshot captures path's current bytes and registers the action that restores
+// them. Callers must snapshot *before* the write it compensates: os.WriteFile
+// truncates first, so a write that fails partway still needs the original bytes.
+func (u *renameUndo) snapshot(path string) error {
+	before, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("read %s: %w", relPath(u.root, path), fsCause(err))
+	}
+	u.push(func() error {
+		// A write that failed at open (permission denied, the failure mode this
+		// rollback exists for) never truncated the file, so its bytes still match
+		// the snapshot and rewriting them would fail for the same reason — turning
+		// a clean rollback into a spurious "may be partially renamed" report.
+		if current, err := os.ReadFile(path); err == nil && bytes.Equal(current, before) {
+			return nil
+		}
+		if err := os.WriteFile(path, before, 0o644); err != nil {
+			return fmt.Errorf("restore %s: %w", relPath(u.root, path), fsCause(err))
+		}
+		return nil
+	})
+	return nil
+}
+
+// run unwinds the recorded actions and reports the first failure, which is the
+// point where the tree stopped being restorable — later actions are still
+// attempted so as much of the tree as possible returns to its original shape.
+func (u *renameUndo) run() error {
+	var firstErr error
+	for i := len(u.actions) - 1; i >= 0; i-- {
+		if err := u.actions[i](); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	return firstErr
+}
+
+// renameFailure composes the error a failed rename returns. A clean rollback
+// leaves the tree exactly as it was, so the operator only needs the cause; a
+// failed rollback may leave the tree half renamed, and the error is the only
+// signal they get — so it names the reconcile commands rather than letting the
+// drift be discovered by a later validate.
+func renameFailure(oldID, newID string, cause, undoErr error) error {
+	if undoErr == nil {
+		return fmt.Errorf("rename %s to %s failed, no changes were applied: %w", oldID, newID, cause)
+	}
+	return fmt.Errorf("rename %s to %s failed and the rollback failed (%v); the tree may be partially renamed — run `taskrail validate` then `taskrail repair --apply` to reconcile: %w",
+		oldID, newID, undoErr, cause)
 }
 
 // moveTaskFile renames the task file, preferring `git mv` when the repository is
