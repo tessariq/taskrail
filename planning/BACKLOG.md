@@ -10,6 +10,13 @@ to a task (`taskrail task new`) against the version whose spec adopts it.
   spec versions (areas added / removed / renamed). Adopted into `specs/v0.4.0.md`
   (Spec Version Diff area) during the v0.4.0 task review and tracked as **T-113**.
 
+- **Version skew detection** — materialized skills never refresh on a binary
+  upgrade, and the `layout_version` refusal only fires in `init`. Adopted into
+  `specs/v0.4.0.md` (Version Skew Detection area) after the T-119 review and
+  tracked as **T-120**/**T-121** (stale-skill warning and its version marker),
+  **T-122** (layout guard in every command), and **T-123** (the contributor-side
+  binary resolution trap that surfaced it).
+
 ## Ideas
 
 Unversioned extension ideas from a competitive scan against OpenSpec
