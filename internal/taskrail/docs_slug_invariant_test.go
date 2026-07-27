@@ -101,6 +101,33 @@ func TestReadmeQuotedValidateErrorMatchesRuntime(t *testing.T) {
 	}
 }
 
+// TestReadmeDocumentsRenameIsNotRetitle guards the T-111 requirement that the
+// slug-in-id section states `task rename` re-encodes the identifier only: it
+// changes the id/slug and filename but never rewrites the `title:` frontmatter
+// field, and there is no `task retitle` command in this version. Without this,
+// an operator may run `rename --title "New Title"` expecting the visible title to
+// change too. It checks presence of the load-bearing phrases, not exact prose.
+func TestReadmeDocumentsRenameIsNotRetitle(t *testing.T) {
+	section := readmeSection(readReadme(t), slugInvariantHeading)
+	if section == "" {
+		t.Fatalf("README.md missing %q section", slugInvariantHeading)
+	}
+
+	markers := []struct {
+		phrase string
+		why    string
+	}{
+		{"title:", "rename never rewrites the title: frontmatter field"},
+		{"task retitle", "there is no task retitle command in this version"},
+		{`rename --title "New Title"`, "rename --title derives a new slug with an unchanged title"},
+	}
+	for _, m := range markers {
+		if !strings.Contains(section, m.phrase) {
+			t.Errorf("%q section missing %q (%s)", slugInvariantHeading, m.phrase, m.why)
+		}
+	}
+}
+
 func readReadme(t *testing.T) string {
 	t.Helper()
 	path := filepath.Join("..", "..", "README.md")

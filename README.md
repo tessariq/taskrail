@@ -270,6 +270,13 @@ Rename is symmetric with creation: a selector that normalizes to no slug strips
 the slug instead of failing, renaming `T-<n>-<slug>.md` back to `T-<n>.md` (with
 the same stderr warning), so a bad slug can be undone.
 
+`task rename` re-encodes the identifier only: it changes the id/slug and filename
+but never rewrites the `title:` frontmatter field. Re-slugging a task and
+retitling its human-readable title are distinct operations, and there is no
+`task retitle` command in this version — so `task rename --title "New Title"`
+derives a new slug and leaves the title unchanged, by design. To change the
+visible title, edit the task's `title:` field directly.
+
 Bootstrap drafts from rough notes without any LLM — preview first, then apply:
 
 ```sh

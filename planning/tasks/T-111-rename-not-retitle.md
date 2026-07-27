@@ -1,11 +1,11 @@
 ---
 id: T-111-rename-not-retitle
 title: Document that rename re-encodes id only, not the frontmatter title
-status: todo
+status: completed
 priority: medium
 spec_ref: specs/v0.4.0.md#slug-in-id-invariant-documentation
 dependencies: []
-updated_at: "2026-07-17T11:20:55Z"
+updated_at: "2026-07-27T22:29:52Z"
 ---
 
 # T-111-rename-not-retitle Document that rename re-encodes id only, not the frontmatter title
@@ -40,3 +40,7 @@ Documentation-only task; no CLI behavior change.
 - TODO: record verification evidence paths.
 
 ## Implementation Notes
+
+## Implementation Notes
+
+- 2026-07-27T22:29:48Z: verification pass
