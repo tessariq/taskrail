@@ -41,6 +41,4 @@ Documentation-only task; no CLI behavior change.
 
 ## Implementation Notes
 
-## Implementation Notes
-
 - 2026-07-27T22:29:48Z: verification pass

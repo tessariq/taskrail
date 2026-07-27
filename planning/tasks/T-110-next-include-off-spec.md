@@ -47,7 +47,5 @@ off-active-spec pick.
 
 ## Implementation Notes
 
-## Implementation Notes
-
 - 2026-07-27T22:19:45Z: verification pass
 - 2026-07-27T22:19:45Z: Implemented, reviewed (go-reviewer: approve, no high/medium), verified.
