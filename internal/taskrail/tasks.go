@@ -104,13 +104,39 @@ func verificationNoteLine(ts, result string) string {
 	return fmt.Sprintf("- %s: verification %s", ts, result)
 }
 
-func appendTaskNote(task *Task, line string) {
-	section := "## Implementation Notes\n\n"
-	if strings.Contains(task.Body, section) {
-		task.Body = strings.TrimRight(task.Body, "\n") + "\n" + line + "\n"
-		return
+// implementationNotesHeading is the section verify and block append their notes to.
+const implementationNotesHeading = "## Implementation Notes"
+
+// hasImplementationNotesHeading reports whether body already carries the section.
+// It matches a whole line, so neither a heading that merely starts with the same
+// words nor a mention inside prose counts as the section.
+func hasImplementationNotesHeading(body string) bool {
+	for _, line := range strings.Split(body, "\n") {
+		if strings.TrimRight(line, " \t") == implementationNotesHeading {
+			return true
+		}
 	}
-	task.Body = strings.TrimRight(task.Body, "\n") + "\n\n" + section + line + "\n"
+	return false
+}
+
+// appendTaskNote adds one note line to the task's Implementation Notes section,
+// scaffolding the section only when the body genuinely lacks it. Matching the
+// heading line itself matters: renderNewTaskBody ends the scaffold *at* the heading
+// with no blank line after it, so a probe for "heading + blank line" misses every
+// fresh task and stamps a duplicate heading into a committed file.
+func appendTaskNote(task *Task, line string) {
+	body := strings.TrimRight(task.Body, "\n")
+	if !hasImplementationNotesHeading(body) {
+		body += "\n\n" + implementationNotesHeading
+	}
+	// A body that ends at the heading — including one just scaffolded above — needs
+	// the section's blank line before its first note; one that already has notes
+	// just continues the list.
+	separator := "\n"
+	if strings.HasSuffix(body, implementationNotesHeading) {
+		separator = "\n\n"
+	}
+	task.Body = body + separator + line + "\n"
 }
 
 func nextTaskID(tasks []*Task) string {

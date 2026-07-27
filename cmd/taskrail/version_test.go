@@ -6,15 +6,26 @@ import (
 	"testing"
 )
 
+// runRoot reports both streams as one blob, which is what most assertions want:
+// they search the output for a fragment and do not care which stream carried it.
 func runRoot(t *testing.T, args ...string) (string, error) {
 	t.Helper()
+	stdout, stderr, err := runRootSplit(t, args...)
+	return stdout + stderr, err
+}
+
+// runRootSplit keeps stdout and stderr apart, for the cases where the stream a
+// message lands on is itself the contract — a warning must not corrupt
+// machine-readable stdout.
+func runRootSplit(t *testing.T, args ...string) (stdout, stderr string, err error) {
+	t.Helper()
 	cmd := newRootCmd()
-	var out bytes.Buffer
+	var out, errOut bytes.Buffer
 	cmd.SetOut(&out)
-	cmd.SetErr(&out)
+	cmd.SetErr(&errOut)
 	cmd.SetArgs(args)
-	err := cmd.Execute()
-	return out.String(), err
+	err = cmd.Execute()
+	return out.String(), errOut.String(), err
 }
 
 func TestVersionSubcommand(t *testing.T) {

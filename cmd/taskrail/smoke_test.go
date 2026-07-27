@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -689,6 +690,99 @@ func TestTaskNewWithoutTitleOrSlugStaysBare(t *testing.T) {
 	}
 	if out, err := runRoot(t, "validate"); err != nil {
 		t.Fatalf("validate after scaffold: %v (output %q)", err, out)
+	}
+}
+
+func TestTaskNewTransliteratesAccentedTitle(t *testing.T) {
+	root := setupRepo(t)
+
+	out, err := runRoot(t, "task", "new", "--title", "Über Fußball", "--spec-ref", "specs/v0.1.0.md#summary", "--json")
+	if err != nil {
+		t.Fatalf("task new: %v (output %q)", err, out)
+	}
+	if !strings.Contains(out, `"task_id": "T-001-ueber-fussball"`) {
+		t.Fatalf("expected transliterated id, got %q", out)
+	}
+	if _, err := os.Stat(filepath.Join(root, "planning", "tasks", "T-001-ueber-fussball.md")); err != nil {
+		t.Fatalf("expected transliterated task file: %v", err)
+	}
+	if out, err := runRoot(t, "validate"); err != nil {
+		t.Fatalf("validate after scaffold: %v (output %q)", err, out)
+	}
+}
+
+// TestTaskNewWarnsOnEmptyDerivedSlugToStderr pins the stream split: the bare-id
+// fallback is announced on stderr while stdout stays parseable JSON, so an agent
+// piping `--json` is unaffected by the warning it still sees on the terminal.
+func TestTaskNewWarnsOnEmptyDerivedSlugToStderr(t *testing.T) {
+	root := setupRepo(t)
+
+	stdout, stderr, err := runRootSplit(t, "task", "new", "--slug", "!!!", "--spec-ref", "specs/v0.1.0.md#summary", "--json")
+	if err != nil {
+		t.Fatalf("task new: %v (stdout %q stderr %q)", err, stdout, stderr)
+	}
+	if !strings.Contains(stderr, "!!!") || !strings.Contains(stderr, "T-001") {
+		t.Fatalf("expected empty-slug warning on stderr, got %q", stderr)
+	}
+	var decoded struct {
+		TaskID string `json:"task_id"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &decoded); err != nil {
+		t.Fatalf("stdout is not clean json (%v): %q", err, stdout)
+	}
+	if decoded.TaskID != "T-001" {
+		t.Fatalf("expected bare id T-001, got %q", decoded.TaskID)
+	}
+	if _, err := os.Stat(filepath.Join(root, "planning", "tasks", "T-001.md")); err != nil {
+		t.Fatalf("expected bare task file: %v", err)
+	}
+	if out, err := runRoot(t, "validate"); err != nil {
+		t.Fatalf("validate after bare-id fallback: %v (output %q)", err, out)
+	}
+}
+
+// TestTaskNewWithoutSlugSourceIsSilent guards the other side of the signal: the
+// intentional bare-id case must not warn, or the warning stops meaning anything.
+func TestTaskNewWithoutSlugSourceIsSilent(t *testing.T) {
+	setupRepo(t)
+
+	_, stderr, err := runRootSplit(t, "task", "new", "--spec-ref", "specs/v0.1.0.md#summary", "--json")
+	if err != nil {
+		t.Fatalf("task new: %v (stderr %q)", err, stderr)
+	}
+	if strings.TrimSpace(stderr) != "" {
+		t.Fatalf("expected no warning for the intentional bare-id case, got %q", stderr)
+	}
+}
+
+// TestTaskRenameDeSlugsWithWarningToStderr covers the rename counterpart: an
+// empty-normalizing selector strips the slug back to the bare id and says so on
+// stderr, leaving stdout parseable.
+func TestTaskRenameDeSlugsWithWarningToStderr(t *testing.T) {
+	root := setupRepo(t)
+	writeTask(t, root, "T-001-base-widget", "todo", "")
+
+	stdout, stderr, err := runRootSplit(t, "task", "rename", "T-001-base-widget", "--slug", "!!!", "--json")
+	if err != nil {
+		t.Fatalf("task rename: %v (stdout %q stderr %q)", err, stdout, stderr)
+	}
+	if !strings.Contains(stderr, "!!!") || !strings.Contains(stderr, "T-001") {
+		t.Fatalf("expected empty-slug warning on stderr, got %q", stderr)
+	}
+	var decoded struct {
+		NewID string `json:"new_id"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &decoded); err != nil {
+		t.Fatalf("stdout is not clean json (%v): %q", err, stdout)
+	}
+	if decoded.NewID != "T-001" {
+		t.Fatalf("expected de-slug to T-001, got %q", decoded.NewID)
+	}
+	if _, err := os.Stat(filepath.Join(root, "planning", "tasks", "T-001.md")); err != nil {
+		t.Fatalf("expected bare task file after de-slug: %v", err)
+	}
+	if out, err := runRoot(t, "validate"); err != nil {
+		t.Fatalf("validate after de-slug: %v (output %q)", err, out)
 	}
 }
 

@@ -490,8 +490,11 @@ func (s *Service) CreateTask(input CreateTaskInput) (CreateTaskResult, error) {
 	// any) into the id so `filename == "<id>.md"` holds. nextTaskID keys on the
 	// numeric prefix, so a slug suffix never affects id allocation or collision.
 	nextID := nextTaskID(tasks)
+	var warnings []Warning
 	if slug := slugify(input.Slug); slug != "" {
 		nextID = nextID + "-" + slug
+	} else {
+		warnings = emptySlugWarnings(input.Slug, nextID)
 	}
 	now := timestamp(s.now())
 	var provenance string
@@ -532,6 +535,7 @@ func (s *Service) CreateTask(input CreateTaskInput) (CreateTaskResult, error) {
 		Priority: priority,
 		SpecRef:  specRef,
 		Path:     relPath(s.paths.RepoRoot, newTask.Filename),
+		Warnings: warnings,
 	}, nil
 }
 

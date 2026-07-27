@@ -24,8 +24,11 @@ type RenameTaskInput struct {
 
 // RenameChange records one coupled edit a rename performs (or would perform on a
 // dry run), named so a reviewer can inspect the change set before it lands. Kind
-// is "frontmatter_id", "file_rename", or "dependency_ref"; TaskID names the task
-// file the edit touches (the inbound task for a dependency_ref).
+// is "frontmatter_id", "file_rename", "body_heading", or "dependency_ref"; TaskID
+// names the task file the edit touches (the inbound task for a dependency_ref).
+// A "body_heading" change is reported only when the body actually opens with a
+// heading naming the old id, so the change set never claims an edit that does not
+// happen.
 type RenameChange struct {
 	Kind   string `json:"kind"`
 	TaskID string `json:"task_id,omitempty"`
@@ -42,6 +45,10 @@ type RenameTaskResult struct {
 	Applied    bool              `json:"applied"`
 	Changes    []RenameChange    `json:"changes"`
 	Validation *ValidationResult `json:"validation,omitempty"`
+	// Warnings reports the empty-derived-slug de-slug, the one non-fatal signal a
+	// rename can raise. Omitted when empty so an ordinary re-slug's shape is
+	// unchanged.
+	Warnings []Warning `json:"warnings,omitempty"`
 }
 
 // RenameTask atomically re-slugs a task: it rewrites the `id:` frontmatter,
@@ -56,7 +63,7 @@ func (s *Service) RenameTask(input RenameTaskInput) (RenameTaskResult, error) {
 	if oldID == "" {
 		return RenameTaskResult{}, errors.New("task id is required")
 	}
-	slug, err := renameSlug(input)
+	slug, slugSource, err := renameSlug(input)
 	if err != nil {
 		return RenameTaskResult{}, err
 	}
@@ -78,6 +85,9 @@ func (s *Service) RenameTask(input RenameTaskInput) (RenameTaskResult, error) {
 		newID += "-" + slug
 	}
 	if newID == oldID {
+		if slug == "" {
+			return RenameTaskResult{}, fmt.Errorf("task %s is already bare and %q produces no slug segment", oldID, slugSource)
+		}
 		return RenameTaskResult{}, fmt.Errorf("task %s already carries slug %q", oldID, slug)
 	}
 	if _, exists := taskByID(tasks, newID); exists {
@@ -94,7 +104,7 @@ func (s *Service) RenameTask(input RenameTaskInput) (RenameTaskResult, error) {
 		return RenameTaskResult{}, fmt.Errorf("target file %s already exists", relPath(s.paths.RepoRoot, newPath))
 	}
 	inbound := inboundDependents(tasks, oldID)
-	changes := renameChanges(s.paths.RepoRoot, oldID, newID, oldPath, newPath, inbound)
+	changes := renameChanges(s.paths.RepoRoot, oldID, newID, oldPath, newPath, target.Body, inbound)
 
 	if !input.DryRun {
 		if err := s.applyRename(state, tasks, target, inbound, oldID, newID, oldPath, newPath); err != nil {
@@ -106,30 +116,36 @@ func (s *Service) RenameTask(input RenameTaskInput) (RenameTaskResult, error) {
 	if err != nil {
 		return RenameTaskResult{}, err
 	}
-	return RenameTaskResult{OldID: oldID, NewID: newID, Applied: !input.DryRun, Changes: changes, Validation: &validation}, nil
+	var warnings []Warning
+	if slug == "" {
+		warnings = emptySlugWarnings(slugSource, newID)
+	}
+	return RenameTaskResult{
+		OldID:      oldID,
+		NewID:      newID,
+		Applied:    !input.DryRun,
+		Changes:    changes,
+		Validation: &validation,
+		Warnings:   warnings,
+	}, nil
 }
 
 // renameSlug resolves the new slug from exactly one selector, sharing slugify
 // with task creation (T-095) so slugs are normalized identically on both paths.
-func renameSlug(input RenameTaskInput) (string, error) {
+// It returns the normalized slug alongside the raw source: a source that
+// normalizes to "" de-slugs the task to its bare id (symmetric with creation's
+// bare-id fallback), and the caller warns using the source the operator supplied.
+func renameSlug(input RenameTaskInput) (slug, source string, err error) {
 	hasSlug := strings.TrimSpace(input.Slug) != ""
 	hasTitle := strings.TrimSpace(input.Title) != ""
 	if hasSlug == hasTitle {
-		return "", errors.New("exactly one of --slug or --title is required")
+		return "", "", errors.New("exactly one of --slug or --title is required")
 	}
-	source := input.Title
+	source = input.Title
 	if hasSlug {
 		source = input.Slug
 	}
-	// A selector was given, so it must yield a real slug. Unlike `task new` (where a
-	// bare id is a valid no-selector outcome), rename always changes the slug
-	// segment, so a value that normalizes to "" is a mistake, not a request to
-	// strip the slug — reject it rather than silently drop to a bare id.
-	slug := slugify(source)
-	if slug == "" {
-		return "", fmt.Errorf("slug %q normalizes to empty", source)
-	}
-	return slug, nil
+	return slugify(source), source, nil
 }
 
 // inboundDependents returns the tasks (other than id itself) whose dependencies
@@ -147,12 +163,46 @@ func inboundDependents(tasks []*Task, id string) []*Task {
 	return dependents
 }
 
+// renameBodyHeading repoints a task body's opening `# <id> <title>` heading at the
+// new id, returning the rewritten body and whether it changed. The id and the
+// heading are two places the same identifier is written, so leaving the heading
+// behind makes the file name two different tasks. It is deliberately conservative:
+// only a leading H1 whose first token is exactly the old id is a heading Taskrail
+// wrote, and the title text after it is content the rename must not disturb.
+func renameBodyHeading(body, oldID, newID string) (string, bool) {
+	rest, ok := strings.CutPrefix(body, "# "+oldID)
+	if !ok {
+		return body, false
+	}
+	// Guard against a longer id sharing this one as a prefix: only a space (a title
+	// follows) or the end of the line ends the id token.
+	if rest != "" && !strings.HasPrefix(rest, " ") && !strings.HasPrefix(rest, "\n") {
+		return body, false
+	}
+	return "# " + newID + rest, true
+}
+
+// bodyHeadingLine returns the first line of body, which is where a task's H1 lives.
+func bodyHeadingLine(body string) string {
+	line, _, _ := strings.Cut(body, "\n")
+	return line
+}
+
 // renameChanges builds the reviewable change set: the frontmatter id rewrite, the
-// file rename, and one dependency_ref edit per inbound task.
-func renameChanges(root, oldID, newID, oldPath, newPath string, inbound []*Task) []RenameChange {
+// file rename, the body heading rewrite when the body carries one, and one
+// dependency_ref edit per inbound task.
+func renameChanges(root, oldID, newID, oldPath, newPath, body string, inbound []*Task) []RenameChange {
 	changes := []RenameChange{
 		{Kind: "frontmatter_id", TaskID: oldID, From: oldID, To: newID},
 		{Kind: "file_rename", TaskID: oldID, From: relPath(root, oldPath), To: relPath(root, newPath)},
+	}
+	if rewritten, ok := renameBodyHeading(body, oldID, newID); ok {
+		changes = append(changes, RenameChange{
+			Kind:   "body_heading",
+			TaskID: oldID,
+			From:   bodyHeadingLine(body),
+			To:     bodyHeadingLine(rewritten),
+		})
 	}
 	for _, task := range inbound {
 		changes = append(changes, RenameChange{Kind: "dependency_ref", TaskID: task.Frontmatter.ID, From: oldID, To: newID})
@@ -192,6 +242,7 @@ func (s *Service) renameWrites(undo *renameUndo, state *State, tasks []*Task, ta
 	target.Frontmatter.ID = newID
 	target.Frontmatter.UpdatedAt = now
 	target.Filename = newPath
+	target.Body, _ = renameBodyHeading(target.Body, oldID, newID)
 	if err := s.saveTask(target); err != nil {
 		return err
 	}

@@ -164,6 +164,10 @@ type CreateTaskResult struct {
 	Priority string `json:"priority"`
 	SpecRef  string `json:"spec_ref"`
 	Path     string `json:"path"`
+	// Warnings reports non-fatal signals about the created task — currently only
+	// the empty-derived-slug fallback. Omitted when empty so the machine-readable
+	// shape of an ordinary creation is unchanged.
+	Warnings []Warning `json:"warnings,omitempty"`
 }
 
 type TransitionResult struct {

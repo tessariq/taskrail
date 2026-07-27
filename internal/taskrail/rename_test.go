@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -232,22 +233,263 @@ func TestRenameTaskReprojectsStateBody(t *testing.T) {
 	}
 }
 
-func TestRenameTaskRejectsSlugNormalizingToEmpty(t *testing.T) {
+// TestRenameTaskDeSlugsOnEmptyDerivedSlug pins the symmetric counterpart of
+// creation's bare-id fallback: a selector that normalizes to nothing strips the
+// slug rather than failing, so an operator can undo a bad slug. The de-slug is a
+// full rename — inbound edges follow — and it warns for the same reason creation
+// does.
+func TestRenameTaskDeSlugsOnEmptyDerivedSlug(t *testing.T) {
+	t.Parallel()
+	repo := seedFixtureRepo(t)
+	writeTask(t, repo, "T-042-old-slug", "Slugged", "todo", "high", "specs/v0.1.0.md#summary", nil)
+	writeTask(t, repo, "T-043", "Dependent", "todo", "high", "specs/v0.1.0.md#summary", []string{"T-042-old-slug"})
+	svc := newTestService(t, repo, time.Date(2026, 7, 16, 12, 0, 0, 0, time.UTC))
+
+	result, err := svc.RenameTask(RenameTaskInput{OldID: "T-042-old-slug", Slug: "!!!"})
+	if err != nil {
+		t.Fatalf("rename: %v", err)
+	}
+	if result.NewID != "T-042" {
+		t.Fatalf("expected de-slug to bare T-042, got %s", result.NewID)
+	}
+	if fileExists(filepath.Join(repo, "planning", "tasks", "T-042-old-slug.md")) {
+		t.Fatal("old slugged file still present after de-slug")
+	}
+	if !fileExists(filepath.Join(repo, "planning", "tasks", "T-042.md")) {
+		t.Fatal("expected bare T-042.md after de-slug")
+	}
+	if len(result.Warnings) != 1 || result.Warnings[0].Code != "empty_derived_slug" {
+		t.Fatalf("expected one empty-slug warning, got %v", result.Warnings)
+	}
+	if !strings.Contains(result.Warnings[0].Message, "!!!") || !strings.Contains(result.Warnings[0].Message, "T-042") {
+		t.Fatalf("warning must name the source and the bare id, got %q", result.Warnings[0].Message)
+	}
+
+	// De-slugging is a rename like any other: inbound edges must follow the id.
+	_, tasks, err := svc.loadStateAndTasks()
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	dependent, ok := taskByID(tasks, "T-043")
+	if !ok {
+		t.Fatal("expected T-043 in tasks")
+	}
+	if !slices.Contains(dependent.Frontmatter.Dependencies, "T-042") {
+		t.Fatalf("inbound dependency not repointed: %v", dependent.Frontmatter.Dependencies)
+	}
+	if result.Validation == nil || !result.Validation.Valid {
+		t.Fatalf("expected valid state after de-slug, got %+v", result.Validation)
+	}
+}
+
+// TestRenameTaskRewritesBodyHeading pins the last place the old id survived a
+// rename: the body's `# <id> <title>` H1. Frontmatter, filename and inbound edges
+// already followed the new id, so a stale heading left the file naming two
+// different ids. The title text is not part of the identifier and must survive
+// untouched — rename re-slugs, it never retitles.
+func TestRenameTaskRewritesBodyHeading(t *testing.T) {
 	t.Parallel()
 	repo := seedFixtureRepo(t)
 	writeTask(t, repo, "T-042-old-slug", "Slugged", "todo", "high", "specs/v0.1.0.md#summary", nil)
 	svc := newTestService(t, repo, time.Date(2026, 7, 16, 12, 0, 0, 0, time.UTC))
 
-	// A garbage slug that normalizes to "" must error, not silently strip the slug
-	// and convert the task to a bare id.
-	if _, err := svc.RenameTask(RenameTaskInput{OldID: "T-042-old-slug", Slug: "!!!"}); err == nil {
-		t.Fatal("expected error when the slug normalizes to empty")
+	result, err := svc.RenameTask(RenameTaskInput{OldID: "T-042-old-slug", Slug: "new-slug"})
+	if err != nil {
+		t.Fatalf("rename: %v", err)
+	}
+	body := readBytes(t, filepath.Join(repo, "planning", "tasks", "T-042-new-slug.md"))
+	if !strings.Contains(body, "# T-042-new-slug Slugged") {
+		t.Fatalf("body heading not repointed to the new id:\n%s", body)
+	}
+	if strings.Contains(body, "T-042-old-slug") {
+		t.Fatalf("body still names the old id:\n%s", body)
+	}
+
+	// The heading edit is part of the reported change set, so --dry-run and --json
+	// disclose it instead of it happening invisibly.
+	change, ok := bodyHeadingChange(result.Changes)
+	if !ok {
+		t.Fatalf("missing body_heading change: %+v", result.Changes)
+	}
+	if change.From != "# T-042-old-slug Slugged" || change.To != "# T-042-new-slug Slugged" {
+		t.Fatalf("unexpected body_heading change: %+v", change)
+	}
+}
+
+// bodyHeadingChange returns the rename's body_heading change, which the change set
+// carries only when a heading was actually rewritten.
+func bodyHeadingChange(changes []RenameChange) (RenameChange, bool) {
+	for _, change := range changes {
+		if change.Kind == "body_heading" {
+			return change, true
+		}
+	}
+	return RenameChange{}, false
+}
+
+// TestRenameBodyHeadingMatchesWholeIDToken guards the boundary the prefix check
+// exists for: `T-1` is a string prefix of `T-10`, so a bare HasPrefix would rewrite
+// the heading of a task the rename is not about. The id token has to end at a space
+// or the end of the line to count.
+func TestRenameBodyHeadingMatchesWholeIDToken(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name    string
+		body    string
+		oldID   string
+		want    string
+		changed bool
+	}{
+		{
+			name:    "id followed by a title",
+			body:    "# T-1 Some title\n\n## Description\n",
+			oldID:   "T-1",
+			want:    "# T-9 Some title\n\n## Description\n",
+			changed: true,
+		},
+		{
+			name:    "id alone on the heading line",
+			body:    "# T-1\n\n## Description\n",
+			oldID:   "T-1",
+			want:    "# T-9\n\n## Description\n",
+			changed: true,
+		},
+		{
+			name:    "longer id merely starting with the old one",
+			body:    "# T-10 Other task\n\n## Description\n",
+			oldID:   "T-1",
+			want:    "# T-10 Other task\n\n## Description\n",
+			changed: false,
+		},
+		{
+			name:    "slug suffix is part of the id token",
+			body:    "# T-1-slug Other task\n",
+			oldID:   "T-1",
+			want:    "# T-1-slug Other task\n",
+			changed: false,
+		},
+		{
+			name:    "heading not at the start of the body",
+			body:    "Preamble\n\n# T-1 Some title\n",
+			oldID:   "T-1",
+			want:    "Preamble\n\n# T-1 Some title\n",
+			changed: false,
+		},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got, changed := renameBodyHeading(tc.body, tc.oldID, "T-9")
+			if changed != tc.changed {
+				t.Fatalf("changed = %v, want %v (body %q)", changed, tc.changed, tc.body)
+			}
+			if got != tc.want {
+				t.Fatalf("renameBodyHeading(%q) = %q, want %q", tc.body, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestRenameTaskLeavesUnrelatedBodyHeadingAlone keeps the rewrite conservative: a
+// hand-authored body whose H1 does not lead with the task's id is content, not an
+// identifier encoding, so the rename must not touch it — and must not claim it did.
+func TestRenameTaskLeavesUnrelatedBodyHeadingAlone(t *testing.T) {
+	t.Parallel()
+	repo := seedFixtureRepo(t)
+	writeTask(t, repo, "T-042-old-slug", "Slugged", "todo", "high", "specs/v0.1.0.md#summary", nil)
+	path := filepath.Join(repo, "planning", "tasks", "T-042-old-slug.md")
+	original := readBytes(t, path)
+	custom := strings.Replace(original, "# T-042-old-slug Slugged", "# A hand-written heading", 1)
+	if custom == original {
+		t.Fatal("fixture heading not replaced; the test would prove nothing")
+	}
+	writeFile(t, path, custom)
+	svc := newTestService(t, repo, time.Date(2026, 7, 16, 12, 0, 0, 0, time.UTC))
+
+	result, err := svc.RenameTask(RenameTaskInput{OldID: "T-042-old-slug", Slug: "new-slug"})
+	if err != nil {
+		t.Fatalf("rename: %v", err)
+	}
+	body := readBytes(t, filepath.Join(repo, "planning", "tasks", "T-042-new-slug.md"))
+	if !strings.Contains(body, "# A hand-written heading") {
+		t.Fatalf("hand-written heading was rewritten:\n%s", body)
+	}
+	if change, ok := bodyHeadingChange(result.Changes); ok {
+		t.Fatalf("reported a body_heading change that did not happen: %+v", change)
+	}
+}
+
+// TestRenameTaskDryRunLeavesBodyHeading keeps the heading inside the dry-run
+// contract: previewed, never written.
+func TestRenameTaskDryRunLeavesBodyHeading(t *testing.T) {
+	t.Parallel()
+	repo := seedFixtureRepo(t)
+	writeTask(t, repo, "T-042-old-slug", "Slugged", "todo", "high", "specs/v0.1.0.md#summary", nil)
+	svc := newTestService(t, repo, time.Date(2026, 7, 16, 12, 0, 0, 0, time.UTC))
+
+	result, err := svc.RenameTask(RenameTaskInput{OldID: "T-042-old-slug", Slug: "new-slug", DryRun: true})
+	if err != nil {
+		t.Fatalf("rename dry run: %v", err)
+	}
+	if _, ok := bodyHeadingChange(result.Changes); !ok {
+		t.Fatalf("dry run should preview the heading edit: %+v", result.Changes)
+	}
+	body := readBytes(t, filepath.Join(repo, "planning", "tasks", "T-042-old-slug.md"))
+	if !strings.Contains(body, "# T-042-old-slug Slugged") {
+		t.Fatalf("dry run rewrote the heading:\n%s", body)
+	}
+}
+
+// TestRenameTaskDeSlugDryRunWritesNothing keeps the de-slug inside the dry-run
+// contract: a preview of a slug-stripping rename still reports the change set and
+// the warning, but the task keeps its slugged filename until the run is repeated
+// for real.
+func TestRenameTaskDeSlugDryRunWritesNothing(t *testing.T) {
+	t.Parallel()
+	repo := seedFixtureRepo(t)
+	writeTask(t, repo, "T-042-old-slug", "Slugged", "todo", "high", "specs/v0.1.0.md#summary", nil)
+	svc := newTestService(t, repo, time.Date(2026, 7, 16, 12, 0, 0, 0, time.UTC))
+
+	result, err := svc.RenameTask(RenameTaskInput{OldID: "T-042-old-slug", Slug: "!!!", DryRun: true})
+	if err != nil {
+		t.Fatalf("rename dry run: %v", err)
+	}
+	if result.Applied {
+		t.Fatal("dry run must not apply the de-slug")
+	}
+	if result.NewID != "T-042" {
+		t.Fatalf("expected planned de-slug to T-042, got %s", result.NewID)
+	}
+	if len(result.Changes) == 0 {
+		t.Fatal("dry run should still report the planned change set")
+	}
+	if len(result.Warnings) != 1 || result.Warnings[0].Code != "empty_derived_slug" {
+		t.Fatalf("expected one empty-slug warning on the preview, got %v", result.Warnings)
 	}
 	if !fileExists(filepath.Join(repo, "planning", "tasks", "T-042-old-slug.md")) {
-		t.Fatal("source file changed despite empty-slug rejection")
+		t.Fatal("dry run moved the slugged file")
 	}
 	if fileExists(filepath.Join(repo, "planning", "tasks", "T-042.md")) {
-		t.Fatal("slug silently stripped to a bare id")
+		t.Fatal("dry run wrote the bare-id target")
+	}
+}
+
+// TestRenameTaskRejectsEmptySlugOnAlreadyBareTask keeps the no-op guard: with no
+// slug to strip, an empty-normalizing selector cannot change the id, so it fails
+// instead of reporting a rename that did nothing.
+func TestRenameTaskRejectsEmptySlugOnAlreadyBareTask(t *testing.T) {
+	t.Parallel()
+	repo := seedFixtureRepo(t)
+	writeTask(t, repo, "T-042", "Bare", "todo", "high", "specs/v0.1.0.md#summary", nil)
+	svc := newTestService(t, repo, time.Date(2026, 7, 16, 12, 0, 0, 0, time.UTC))
+
+	if _, err := svc.RenameTask(RenameTaskInput{OldID: "T-042", Slug: "!!!"}); err == nil {
+		t.Fatal("expected error when de-slugging an already-bare task")
+	}
+	if !fileExists(filepath.Join(repo, "planning", "tasks", "T-042.md")) {
+		t.Fatal("bare task file disturbed by the rejected rename")
 	}
 }
 

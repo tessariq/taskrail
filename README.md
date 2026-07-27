@@ -245,19 +245,28 @@ enforces `filename == "<id>.md"`, so a slugged filename requires a slugged id.
 `task new` produces that pairing directly — `--title "X"` derives a slug and
 writes `T-<n>-x-slug` with a matching `T-<n>-x-slug.md`, `--slug` overrides the
 slug source, and passing neither keeps the bare `T-<n>` / `T-<n>.md` form. Every
-case passes `validate` with no follow-up edit.
+case passes `validate` with no follow-up edit. Accented letters transliterate to
+ASCII first, so `--title "Über Fußball"` yields `T-<n>-ueber-fussball` and
+`--title "Łódź Điện"` yields `T-<n>-lodz-dien` rather than a mangled slug — however
+your keyboard encoded the accent. If the value you pass normalizes to no slug at all (`--slug "!!!"`,
+a fully non-Latin title), the bare `T-<n>` id is written and a warning naming the
+source goes to stderr — `--json` on stdout stays clean.
 
 Because the id and filename move together, you cannot rename a file for
 readability on its own. A bare `git mv T-<n>.md T-<n>-add-slug.md` changes only
 the filename, leaving the frontmatter `id:` as `T-<n>`, so the next `validate`
 fails with `task <id> filename must be <id>.md`. The fix is `task rename`, which
-re-slugs atomically: it rewrites the `id:` field, renames the file, rewrites
-every inbound `dependencies:` reference to the task, re-projects `STATE.md`, and
-re-runs `validate`.
+re-slugs atomically: it rewrites the `id:` field, renames the file, repoints the
+body's `# <id> <title>` heading, rewrites every inbound `dependencies:` reference
+to the task, re-projects `STATE.md`, and re-runs `validate`.
 
 ```sh
 taskrail task rename T-<n> --slug add-slug     # or --title "Add slug"; --dry-run previews
 ```
+
+Rename is symmetric with creation: a selector that normalizes to no slug strips
+the slug instead of failing, renaming `T-<n>-<slug>.md` back to `T-<n>.md` (with
+the same stderr warning), so a bad slug can be undone.
 
 Bootstrap drafts from rough notes without any LLM — preview first, then apply:
 

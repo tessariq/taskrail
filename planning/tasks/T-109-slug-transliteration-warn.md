@@ -1,11 +1,11 @@
 ---
 id: T-109-slug-transliteration-warn
 title: Transliterate Latin-1 in slugs and warn on empty derived slug
-status: todo
+status: completed
 priority: medium
 spec_ref: specs/v0.4.0.md#slugged-task-creation
 dependencies: []
-updated_at: "2026-07-17T11:20:55Z"
+updated_at: "2026-07-27T12:31:59Z"
 ---
 
 # T-109-slug-transliteration-warn Transliterate Latin-1 in slugs and warn on empty derived slug
@@ -52,3 +52,5 @@ rather than a silent bare id. `slugify` is shared by `task new` (T-095) and
 - TODO: record verification evidence paths.
 
 ## Implementation Notes
+
+- 2026-07-27T12:31:48Z: verification pass

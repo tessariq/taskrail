@@ -24,6 +24,14 @@ func printResult(cmd *cobra.Command, asJSON bool, value any, fallback string) er
 	return printJSON(cmd, value)
 }
 
+// printWarnings writes non-fatal signals to stderr, so they stay visible on a
+// terminal without corrupting the machine-readable stdout an agent parses.
+func printWarnings(cmd *cobra.Command, warnings []taskrail.Warning) {
+	for _, warning := range warnings {
+		fmt.Fprintln(cmd.ErrOrStderr(), warning.Message)
+	}
+}
+
 // printJSON writes a value as indented JSON followed by a newline.
 func printJSON(cmd *cobra.Command, value any) error {
 	data, err := json.MarshalIndent(value, "", "  ")

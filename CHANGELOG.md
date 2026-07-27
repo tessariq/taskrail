@@ -31,7 +31,9 @@ All notable user-visible changes to Taskrail will be documented in this file.
   rename the file (`git mv` when tracked), and fix every inbound `dependencies:`
   reference. `--slug` sets the slug; `--title` derives it. `--dry-run` previews
   the change set; `--json` emits it. Preserves the `T-<n>` prefix; never advances
-  status.
+  status. A selector that normalizes to no slug de-slugs the task back to the bare
+  `T-<n>` id and warns on stderr. Also repoints the body's `# <id> <title>`
+  heading, reported as a `body_heading` change.
 - `taskrail task new --area <anchor>` — active-spec shorthand for `--spec-ref
   <active-spec-path>#<anchor>`. Mutually exclusive with `--spec-ref`; an unknown
   anchor fails before writing and points at `spec show <active-version> --anchors`.
@@ -46,7 +48,16 @@ All notable user-visible changes to Taskrail will be documented in this file.
   `selected_non_active_spec` warning. `status` mirrors the same read-only selection.
 - `taskrail task new` — derive a slugged id and filename from `--title`
   (`T-<n>-<slug>`); `--slug` overrides the derived slug. With neither flag the id
-  stays the bare `T-<n>`.
+  stays the bare `T-<n>`. Accented letters transliterate to ASCII before slugifying
+  (`Über Fußball` → `ueber-fussball`, `Łódź Điện` → `lodz-dien`, in precomposed or
+  decomposed input alike), and
+  a `--title`/`--slug` that normalizes to no slug keeps the bare id but warns on
+  stderr.
+
+### Fixed
+
+- `taskrail verify` and `taskrail block` no longer append a second
+  `## Implementation Notes` heading when writing the first note to a task.
 
 ## v0.3.0 - 2026-07-14
 

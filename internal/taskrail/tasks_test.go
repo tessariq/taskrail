@@ -1,6 +1,86 @@
 package taskrail
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
+
+// TestAppendTaskNoteReusesExistingSection covers the shapes a task body arrives in
+// when verify/block append a note. The load-bearing case is a body ending at the
+// bare `## Implementation Notes` heading — exactly what renderNewTaskBody scaffolds
+// — which the old heading+blank-line probe missed, so every first note stamped a
+// second copy of the heading into a committed file.
+func TestAppendTaskNoteReusesExistingSection(t *testing.T) {
+	t.Parallel()
+
+	const note = "- 2026-07-27T00:00:00Z: verification pass"
+	cases := []struct {
+		name         string
+		body         string
+		wantHeadings int
+		wantContains []string
+	}{
+		{
+			name:         "scaffolded body ending at the heading",
+			body:         "# T-001 Task\n\n## Implementation Notes\n",
+			wantHeadings: 1,
+			wantContains: []string{"## Implementation Notes\n\n" + note},
+		},
+		{
+			name:         "section with an existing note appends at the end",
+			body:         "# T-001 Task\n\n## Implementation Notes\n\n- earlier note\n",
+			wantHeadings: 1,
+			wantContains: []string{"- earlier note\n" + note},
+		},
+		{
+			name:         "body without the section gets one scaffolded",
+			body:         "# T-001 Task\n\n## Description\n\nBody.\n",
+			wantHeadings: 1,
+			wantContains: []string{"## Implementation Notes\n\n" + note},
+		},
+		{
+			name:         "a longer heading is not the section",
+			body:         "# T-001 Task\n\n## Implementation Notes For Reviewers\n",
+			wantHeadings: 1,
+			wantContains: []string{"## Implementation Notes For Reviewers", "## Implementation Notes\n\n" + note},
+		},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			task := &Task{Body: tc.body}
+			appendTaskNote(task, note)
+
+			if got := strings.Count(task.Body, "## Implementation Notes\n"); got != tc.wantHeadings {
+				t.Fatalf("got %d %q headings, want %d:\n%s", got, "## Implementation Notes", tc.wantHeadings, task.Body)
+			}
+			for _, want := range tc.wantContains {
+				if !strings.Contains(task.Body, want) {
+					t.Fatalf("body missing %q:\n%s", want, task.Body)
+				}
+			}
+		})
+	}
+}
+
+// TestAppendTaskNoteTwiceKeepsOneHeading is the regression the corpus shows: notes
+// accumulate over a task's life (block, then verify), and every append after the
+// first must land in the section the first one established.
+func TestAppendTaskNoteTwiceKeepsOneHeading(t *testing.T) {
+	t.Parallel()
+
+	task := &Task{Body: "# T-001 Task\n\n## Implementation Notes\n"}
+	appendTaskNote(task, "- first")
+	appendTaskNote(task, "- second")
+
+	if got := strings.Count(task.Body, "## Implementation Notes"); got != 1 {
+		t.Fatalf("got %d headings after two notes, want 1:\n%s", got, task.Body)
+	}
+	if !strings.Contains(task.Body, "- first\n- second\n") {
+		t.Fatalf("notes not appended in order:\n%s", task.Body)
+	}
+}
 
 // nextTaskID derives the next number from the numeric prefix (^T-(\d+)) of every
 // task id, so slug-suffixed ids (T-076-ingestion-commands) allocate correctly and

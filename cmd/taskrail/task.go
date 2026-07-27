@@ -64,6 +64,7 @@ func newTaskNewCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			printWarnings(cmd, result.Warnings)
 			return printResult(cmd, opt.json, result, result.Path)
 		},
 	}
@@ -102,9 +103,10 @@ func newTaskRenameCmd() *cobra.Command {
 			"Exactly one of --slug or --title selects the new slug (--title derives it " +
 			"via the same slugify as `task new` and never rewrites the frontmatter " +
 			"title). The numeric T-<n> prefix is preserved; only the slug segment " +
-			"changes. A target id that collides with an existing task fails before any " +
-			"write. --dry-run reports the change set without writing. Rename never " +
-			"advances a task's status.",
+			"changes. A selector that normalizes to no slug de-slugs the task back to " +
+			"the bare T-<n> id and warns on stderr. A target id that collides with an " +
+			"existing task fails before any write. --dry-run reports the change set " +
+			"without writing. Rename never advances a task's status.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			svc, err := serviceFromCmd(cmd)
@@ -120,6 +122,7 @@ func newTaskRenameCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			printWarnings(cmd, result.Warnings)
 			return printResult(cmd, opt.json, result, renameSummary(result))
 		},
 	}

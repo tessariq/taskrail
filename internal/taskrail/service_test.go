@@ -670,6 +670,102 @@ func TestCreateTaskSlugsIdAndFilenameFromSource(t *testing.T) {
 	}
 }
 
+// TestCreateTaskWarnsOnEmptyDerivedSlug pins the bare-id fallback as visible
+// rather than silent: a supplied slug source that normalizes to nothing still
+// writes the legitimate bare id, but reports why. No selector at all is the
+// intentional bare-id case and stays warning-free.
+func TestCreateTaskWarnsOnEmptyDerivedSlug(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name        string
+		slugSource  string
+		wantWarning bool
+	}{
+		{"punctuation-only slug source warns", "!!!", true},
+		{"non-latin slug source warns", "日本語", true},
+		{"no slug source stays silent", "", false},
+		{"whitespace-only slug source stays silent", "   ", false},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			repo := seedFixtureRepo(t)
+			svc := newTestService(t, repo, time.Date(2026, 7, 27, 12, 0, 0, 0, time.UTC))
+
+			result, err := svc.CreateTask(CreateTaskInput{
+				Slug:     tc.slugSource,
+				SpecRef:  "specs/v0.1.0.md#summary",
+				Priority: "high",
+			})
+			if err != nil {
+				t.Fatalf("create task: %v", err)
+			}
+			// The bare id is legitimate in every case; only the signal differs.
+			if result.TaskID != "T-001" {
+				t.Fatalf("expected bare id T-001, got %s", result.TaskID)
+			}
+			if !tc.wantWarning {
+				if len(result.Warnings) != 0 {
+					t.Fatalf("expected no warning, got %v", result.Warnings)
+				}
+				return
+			}
+			if len(result.Warnings) != 1 {
+				t.Fatalf("expected one warning, got %v", result.Warnings)
+			}
+			warning := result.Warnings[0]
+			if warning.Code != "empty_derived_slug" {
+				t.Fatalf("expected code empty_derived_slug, got %s", warning.Code)
+			}
+			if !strings.Contains(warning.Message, tc.slugSource) || !strings.Contains(warning.Message, "T-001") {
+				t.Fatalf("warning must name the source and the bare id, got %q", warning.Message)
+			}
+
+			validation, err := svc.Validate()
+			if err != nil {
+				t.Fatalf("validate: %v", err)
+			}
+			if !validation.Valid {
+				t.Fatalf("expected valid repo after bare-id fallback, got %v", validation.Violations)
+			}
+		})
+	}
+}
+
+// TestScaffoldedTaskVerifiedKeepsOneNotesSection ties the note writer to the body
+// scaffold it has to append into: the two shipped together for the whole life of
+// the corpus while disagreeing about the section's shape, so a freshly created task
+// grew a second Implementation Notes heading the first time it was verified. Only
+// an end-to-end pass over both catches that class of drift.
+func TestScaffoldedTaskVerifiedKeepsOneNotesSection(t *testing.T) {
+	t.Parallel()
+
+	repo := seedFixtureRepo(t)
+	svc := newTestService(t, repo, time.Date(2026, 7, 27, 12, 0, 0, 0, time.UTC))
+	created, err := svc.CreateTask(CreateTaskInput{
+		Title:    "Scaffolded",
+		Slug:     "scaffolded",
+		SpecRef:  "specs/v0.1.0.md#summary",
+		Priority: "high",
+	})
+	if err != nil {
+		t.Fatalf("create task: %v", err)
+	}
+	if _, err := svc.Verify(VerifyInput{TaskID: created.TaskID, Result: "pass", Summary: "checked"}); err != nil {
+		t.Fatalf("verify: %v", err)
+	}
+
+	body := readFileString(t, filepath.Join(repo, created.Path))
+	if got := strings.Count(body, "## Implementation Notes"); got != 1 {
+		t.Fatalf("got %d Implementation Notes headings after one verify, want 1:\n%s", got, body)
+	}
+	if !strings.Contains(body, "verification pass") {
+		t.Fatalf("verification note missing from the body:\n%s", body)
+	}
+}
+
 func TestCreateTaskRejectsInvalidInput(t *testing.T) {
 	t.Parallel()
 
