@@ -240,6 +240,21 @@ taskrail spec show v0.4.0 --anchors   # list the active spec's valid anchors
 `--area` and `--spec-ref` are mutually exclusive; an unknown anchor fails before
 anything is written and points you at `spec show <active-version> --anchors`.
 
+Before advancing the active spec, inspect what changed between two versions with a
+read-only, mechanical anchor-set delta:
+
+```sh
+taskrail spec diff v0.3.0 v0.4.0   # added / removed / candidate-rename areas
+```
+
+Added areas are the ones a migration must decompose into tasks; removed areas are
+the ones whose existing tasks become orphaned drift; rename candidates are
+best-effort only (an added and a removed anchor sharing a normalized stem) and
+labeled for you to verify, never asserted as fact. Like `coverage` and `validate`
+it is side-effect-free: it never writes `STATE.md` or task files and never gates
+validation. `--json` mirrors the output with structured `added`/`removed`/`renamed`
+lists.
+
 ### The slug-in-id invariant
 
 A task's `id` and its filename are two encodings of one identifier: `validate`

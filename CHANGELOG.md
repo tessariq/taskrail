@@ -6,6 +6,11 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ### Added
 
+- `taskrail spec diff <from> <to>` — read-only, mechanical anchor-set delta between
+  two specs: added areas (need decomposition), removed areas (orphan existing
+  tasks), and best-effort rename candidates. Reuses the `spec show --anchors` slug
+  logic; never writes `STATE.md` or task files and never gates `validate`. Supports
+  `--json`.
 - `taskrail next --include-off-spec` — one-shot recovery that ranks eligible
   `todo` tasks across all specs and flags an off-spec pick (`off-spec:` marker,
   `off_spec:true`, and a `selected_off_spec` warning in `--json`). Default `next`
@@ -70,6 +75,11 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ### Fixed
 
+- `taskrail complete`, `block`, and `unblock` now reject a `--note`/`--reason`
+  that embeds a gitignored `planning/artifacts/` file path before writing,
+  pointing you at a path-free summary — previously the transition wrote committed
+  state that `validate` then failed. `verify --create-followup` applies the same
+  guard to the follow-up task's title/description (`--summary`/`--details`).
 - `taskrail verify` and `taskrail block` no longer append a second
   `## Implementation Notes` heading when writing the first note to a task.
 

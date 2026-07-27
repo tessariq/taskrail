@@ -93,4 +93,8 @@ Cleanup rules:
 - Non-trivial logic changes: `gofmt`, `go vet`, targeted tests, then `go test ./...`.
 - User-visible CLI or workflow changes: `gofmt`, `go vet`, `go test ./...`, then manual testing with persisted artifacts.
 - Planning or spec changes: `go run ./cmd/taskrail validate`.
+- Before advancing the active spec: `go run ./cmd/taskrail spec diff <from> <to>` to
+  inspect the read-only anchor-set delta (added areas to decompose, removed areas
+  that orphan tasks, best-effort rename candidates). Like `validate`/`coverage` it
+  writes nothing and never gates.
 - Skill changes: regenerate committed copies with `task skills:regen` (re-runs the parity check).

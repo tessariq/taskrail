@@ -1,11 +1,11 @@
 ---
 id: T-113-spec-diff
 title: 'spec diff: mechanical anchor-set delta between two spec versions'
-status: todo
+status: completed
 priority: medium
 spec_ref: specs/v0.4.0.md#spec-version-diff
 dependencies: []
-updated_at: "2026-07-17T12:04:24Z"
+updated_at: "2026-07-27T23:16:26Z"
 ---
 
 # T-113-spec-diff spec diff: mechanical anchor-set delta between two spec versions
@@ -56,3 +56,5 @@ advances status.
   during the v0.4.0 task review.
 - Pairs with a future `spec migrate` (guided act-on-the-delta flow) which stays out
   of scope here.
+- 2026-07-27T23:16:20Z: verification pass
+- 2026-07-27T23:16:26Z: spec diff shipped; read-only anchor-set delta verified against acceptance (manual-test + verify artifacts recorded locally under planning/artifacts/, gitignored)

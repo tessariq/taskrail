@@ -284,6 +284,10 @@ func (s *Service) Unblock(taskID, reason string) (UnblockResult, error) {
 		return UnblockResult{}, fmt.Errorf("task %s is not blocked", taskID)
 	}
 
+	if err := ensurePortableNote("reason", strings.TrimSpace(reason)); err != nil {
+		return UnblockResult{}, err
+	}
+
 	now := timestamp(s.now())
 	task.Frontmatter.Status = "todo"
 	task.Frontmatter.UpdatedAt = now
@@ -612,6 +616,30 @@ func reconcileIdlePointers(fm *StateFrontmatter) {
 	fm.NextAction = nextActionSelectEligible
 }
 
+// ensurePortableNote rejects a transition note that embeds a concrete gitignored
+// artifact path. Complete/block/unblock notes land in the committed task body (and
+// block reasons in the validated blockers ledger), so such a path would make
+// validate fail right after the transition wrote it. Failing at the boundary keeps
+// a transition from producing state validate would reject
+// (specs/v0.2.0.md#no-local-paths-in-task-notes). It reuses the same
+// danglingArtifactPaths detector validate uses, so it accepts exactly what
+// validate accepts — no second path rule.
+func ensurePortableNote(field, note string) error {
+	if paths := danglingArtifactPaths(note); len(paths) > 0 {
+		return fmt.Errorf("%s references gitignored artifact path %s: record a path-free summary instead (paths under planning/artifacts/ are gitignored and never resolve for anyone who clones the repo)", field, paths[0])
+	}
+	return nil
+}
+
+// noteField labels the note argument in a portability error the way the operator
+// typed it: complete takes a --note, block a --reason.
+func noteField(status string) string {
+	if status == "blocked" {
+		return "reason"
+	}
+	return "note"
+}
+
 func (s *Service) finishTask(taskID, status, note string) (TransitionResult, error) {
 	state, tasks, err := s.loadStateAndTasks()
 	if err != nil {
@@ -623,6 +651,10 @@ func (s *Service) finishTask(taskID, status, note string) (TransitionResult, err
 	}
 	if task.Frontmatter.Status != "in_progress" && !(status == "blocked" && task.Frontmatter.Status == "todo") {
 		return TransitionResult{}, fmt.Errorf("task %s is not in a transitionable state", taskID)
+	}
+
+	if err := ensurePortableNote(noteField(status), note); err != nil {
+		return TransitionResult{}, err
 	}
 
 	now := timestamp(s.now())
@@ -684,6 +716,17 @@ func (s *Service) createFollowupTask(tasks []*Task, source *Task, input VerifyIn
 	}
 	if description == "" {
 		description = "Investigate and resolve the verification finding recorded for this task."
+	}
+	// The follow-up task is committed, so its title and body must stay portable —
+	// the same contract finishTask/Unblock enforce for notes. The verified task's
+	// own note is fixed-format, but a follow-up's title falls back to --summary and
+	// its body to --details, either of which an operator may paste a gitignored
+	// evidence path into. Guard before Verify writes any artifact or task file.
+	if err := ensurePortableNote("follow-up title", title); err != nil {
+		return nil, err
+	}
+	if err := ensurePortableNote("follow-up description", description); err != nil {
+		return nil, err
 	}
 
 	body := renderFollowupTaskBody(nextID, title, description)

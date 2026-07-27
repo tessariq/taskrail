@@ -543,6 +543,39 @@ func TestStartCompleteFlow(t *testing.T) {
 	}
 }
 
+// TestCompleteRejectsGitignoredArtifactNote is the end-to-end guard: a
+// `complete --note` embedding a gitignored artifact path fails, and the repo is
+// left valid, clean, and with the task still in_progress — no partial transition.
+func TestCompleteRejectsGitignoredArtifactNote(t *testing.T) {
+	root := setupRepo(t)
+	writeTask(t, root, "T-100", "todo", "")
+	if out, err := runRoot(t, "start", "T-100"); err != nil {
+		t.Fatalf("start: %v (output %q)", err, out)
+	}
+
+	taskPath := filepath.Join(root, "planning", "tasks", "T-100.md")
+	statePath := filepath.Join(root, "planning", "STATE.md")
+	taskBefore, _ := os.ReadFile(taskPath)
+	stateBefore, _ := os.ReadFile(statePath)
+
+	badNote := "evidence at planning/artifacts/manual-test/T-100/20260101T000000Z/report.md"
+	if _, err := runRoot(t, "complete", "T-100", "--note", badNote); err == nil {
+		t.Fatal("expected complete to reject a note embedding a gitignored artifact path")
+	}
+
+	taskAfter, _ := os.ReadFile(taskPath)
+	stateAfter, _ := os.ReadFile(statePath)
+	if string(taskBefore) != string(taskAfter) {
+		t.Fatal("rejected complete must not rewrite the task file")
+	}
+	if string(stateBefore) != string(stateAfter) {
+		t.Fatal("rejected complete must not rewrite STATE.md")
+	}
+	if out, err := runRoot(t, "validate"); err != nil {
+		t.Fatalf("validate after rejected complete: %v (output %q)", err, out)
+	}
+}
+
 func activateSecondSpec(t *testing.T, root string) {
 	t.Helper()
 	if err := os.WriteFile(filepath.Join(root, "specs", "v0.2.0.md"), []byte("# Taskrail v0.2.0\n\n## Summary\n\nFixture spec.\n"), 0o644); err != nil {

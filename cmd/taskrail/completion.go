@@ -14,6 +14,22 @@ func completeSpecVersion(cmd *cobra.Command, args []string, _ string) ([]string,
 	if len(args) != 0 {
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
+	return specVersionCompletions(cmd)
+}
+
+// completeSpecDiffVersions completes both positional slots of `spec diff <from>
+// <to>` to the versioned specs — unlike the single-positional spec commands, it
+// keeps offering versions for the second argument.
+func completeSpecDiffVersions(cmd *cobra.Command, args []string, _ string) ([]string, cobra.ShellCompDirective) {
+	if len(args) >= 2 {
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
+	return specVersionCompletions(cmd)
+}
+
+// specVersionCompletions lists the versioned specs under specs/, never falling
+// back to file completion so a version slot cannot resolve to arbitrary paths.
+func specVersionCompletions(cmd *cobra.Command) ([]string, cobra.ShellCompDirective) {
 	svc, err := serviceFromCmd(cmd)
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveNoFileComp

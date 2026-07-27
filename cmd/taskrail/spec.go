@@ -23,8 +23,70 @@ func newSpecCmd() *cobra.Command {
 			return cmd.Help()
 		},
 	}
-	cmd.AddCommand(newSpecActivateCmd(), newSpecListCmd(), newSpecShowCmd(), newSpecAddCmd())
+	cmd.AddCommand(newSpecActivateCmd(), newSpecListCmd(), newSpecShowCmd(), newSpecAddCmd(), newSpecDiffCmd())
 	return cmd
+}
+
+// newSpecDiffCmd prints the mechanical anchor-set delta between two versioned
+// specs. It is strictly read-only: it never writes STATE.md or task files and
+// never gates validation.
+func newSpecDiffCmd() *cobra.Command {
+	var opt jsonOption
+	cmd := &cobra.Command{
+		Use:               "diff <from-version> <to-version>",
+		Short:             "Show the anchor-set delta between two specs (read-only)",
+		Args:              cobra.ExactArgs(2),
+		ValidArgsFunction: completeSpecDiffVersions,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			svc, err := serviceFromCmd(cmd)
+			if err != nil {
+				return err
+			}
+			result, err := svc.SpecDiff(args[0], args[1])
+			if err != nil {
+				return err
+			}
+			return printResult(cmd, opt.json, result, renderSpecDiffText(result))
+		},
+	}
+	cmd.Flags().BoolVar(&opt.json, "json", false, "print machine-readable output")
+	return cmd
+}
+
+// renderSpecDiffText summarizes the delta: added areas (need decomposition),
+// removed areas (orphan existing tasks), and best-effort rename candidates. It
+// labels each section by its migration meaning so the output is a worklist, not a
+// bare set difference.
+func renderSpecDiffText(r taskrail.SpecDiffResult) string {
+	if len(r.Added) == 0 && len(r.Removed) == 0 && len(r.Renamed) == 0 {
+		return fmt.Sprintf("no anchor changes between %s and %s", r.FromVersion, r.ToVersion)
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "spec diff %s -> %s\n", r.FromVersion, r.ToVersion)
+	fmt.Fprintf(&b, "added (%d, need decomposition into tasks):", len(r.Added))
+	appendAnchorLines(&b, r.Added)
+	fmt.Fprintf(&b, "\nremoved (%d, existing tasks now orphaned):", len(r.Removed))
+	appendAnchorLines(&b, r.Removed)
+	fmt.Fprintf(&b, "\nrename candidates (%d, best-effort, verify before acting):", len(r.Renamed))
+	if len(r.Renamed) == 0 {
+		b.WriteString("\n  (none)")
+	}
+	for _, rc := range r.Renamed {
+		fmt.Fprintf(&b, "\n  - #%s -> #%s", rc.From.Anchor, rc.To.Anchor)
+	}
+	return b.String()
+}
+
+// appendAnchorLines writes one `#anchor heading` line per anchor, or a "(none)"
+// placeholder when the section is empty.
+func appendAnchorLines(b *strings.Builder, anchors []taskrail.SpecAnchor) {
+	if len(anchors) == 0 {
+		b.WriteString("\n  (none)")
+		return
+	}
+	for _, a := range anchors {
+		fmt.Fprintf(b, "\n  - #%s %s", a.Anchor, a.Heading)
+	}
 }
 
 // newSpecAddCmd scaffolds specs/<version>.md and adds it to the specs/README.md
