@@ -6,6 +6,11 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ### Added
 
+- `taskrail next --include-off-spec` — one-shot recovery that ranks eligible
+  `todo` tasks across all specs and flags an off-spec pick (`off-spec:` marker,
+  `off_spec:true`, and a `selected_off_spec` warning in `--json`). Default `next`
+  stays active-spec-filtered; writes no more state than a normal selection probe.
+
 - `taskrail init --with-skills` — installed skill files now record the Taskrail
   version that wrote them as a `taskrail_version` frontmatter key, so a skill
   installed by an older binary is detectable. `--force` restamps; re-running the

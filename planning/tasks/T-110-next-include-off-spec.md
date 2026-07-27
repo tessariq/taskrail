@@ -1,12 +1,12 @@
 ---
 id: T-110-next-include-off-spec
 title: Add next --include-off-spec recovery flag
-status: todo
+status: completed
 priority: medium
 spec_ref: specs/v0.4.0.md#active-spec-filtered-next-selection
 dependencies:
     - T-108-next-filter-idle-selection-to-active-spec-tasks
-updated_at: "2026-07-17T11:20:55Z"
+updated_at: "2026-07-27T22:19:45Z"
 ---
 
 # T-110-next-include-off-spec Add next --include-off-spec recovery flag
@@ -46,3 +46,8 @@ off-active-spec pick.
 - TODO: record verification evidence paths.
 
 ## Implementation Notes
+
+## Implementation Notes
+
+- 2026-07-27T22:19:45Z: verification pass
+- 2026-07-27T22:19:45Z: Implemented, reviewed (go-reviewer: approve, no high/medium), verified.

@@ -487,6 +487,39 @@ func TestNextContinuesActiveOldSpecTaskWithWarning(t *testing.T) {
 	}
 }
 
+// TestNextIncludeOffSpecRecoversOlderSpecTask is the CLI counterpart to the
+// service recovery test (T-110): with only older-spec work eligible, plain
+// `next` reports none, while `next --include-off-spec` returns the off-spec task
+// flagged in both human and --json output.
+func TestNextIncludeOffSpecRecoversOlderSpecTask(t *testing.T) {
+	root := setupRepo(t)
+	activateSecondSpec(t, root)
+	writeTask(t, root, "T-100", "todo", "")
+
+	out, err := runRoot(t, "next", "--include-off-spec")
+	if err != nil {
+		t.Fatalf("next --include-off-spec: %v", err)
+	}
+	for _, want := range []string{"T-100", "off-spec", "specs/v0.1.0.md"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("human output missing %q: %q", want, out)
+		}
+	}
+
+	root = setupRepo(t)
+	activateSecondSpec(t, root)
+	writeTask(t, root, "T-100", "todo", "")
+	out, err = runRoot(t, "next", "--include-off-spec", "--json")
+	if err != nil {
+		t.Fatalf("next --include-off-spec --json: %v", err)
+	}
+	for _, want := range []string{`"task_id": "T-100"`, `"off_spec": true`, `"code": "selected_off_spec"`} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("json output missing %q: %q", want, out)
+		}
+	}
+}
+
 func TestStartCompleteFlow(t *testing.T) {
 	root := setupRepo(t)
 	writeTask(t, root, "T-100", "todo", "")

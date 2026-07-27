@@ -292,6 +292,103 @@ func TestNextEmptyBacklogDistinctFromSkipped(t *testing.T) {
 	}
 }
 
+// TestNextIncludeOffSpecRecoversOlderSpecTask locks in the T-110 recovery path:
+// with only older-spec todo work eligible, the default filtered Next reports
+// none, while NextIncludingOffSpec returns the ranked off-spec task with the
+// off-spec flag and a structured warning. Ranking still spans specs, so the
+// higher-priority older-spec task wins even though it is off-spec.
+func TestNextIncludeOffSpecRecoversOlderSpecTask(t *testing.T) {
+	t.Parallel()
+
+	repo := seedFixtureRepo(t)
+	writeFile(t, filepath.Join(repo, "specs", "v0.2.0.md"), "# Taskrail v0.2.0\n\n## Summary\n\nFixture spec.\n")
+	writeFixtureState(t, repo, "v0.2.0", "", "", "idle")
+	writeTask(t, repo, "T-002", "Old spec high", "todo", "high", "specs/v0.1.0.md#summary", nil)
+	writeTask(t, repo, "T-003", "Old spec low", "todo", "low", "specs/v0.1.0.md#summary", nil)
+
+	svc := newTestService(t, repo, time.Now().UTC())
+	plain, err := svc.Next()
+	if err != nil {
+		t.Fatalf("next: %v", err)
+	}
+	if plain.TaskID != "" || plain.Reason != "no active-spec eligible task" {
+		t.Fatalf("plain next should skip off-spec work, got %+v", plain)
+	}
+
+	result, err := svc.NextIncludingOffSpec()
+	if err != nil {
+		t.Fatalf("next include-off-spec: %v", err)
+	}
+	if result.TaskID != "T-002" {
+		t.Fatalf("expected ranked off-spec T-002, got %s", result.TaskID)
+	}
+	if !result.OffSpec {
+		t.Fatalf("expected OffSpec flag set, got %+v", result)
+	}
+	if !slices.Equal(result.Candidates, []string{"T-002", "T-003"}) {
+		t.Fatalf("candidates should span all specs by rank, got %v", result.Candidates)
+	}
+	if len(result.Warnings) != 1 || result.Warnings[0].Code != "selected_off_spec" {
+		t.Fatalf("expected one selected_off_spec warning, got %+v", result.Warnings)
+	}
+	warning := result.Warnings[0]
+	if warning.TaskID != "T-002" || warning.SpecRef != "specs/v0.1.0.md#summary" || warning.ActiveSpecPath != "specs/v0.2.0.md" {
+		t.Fatalf("unexpected warning payload: %+v", warning)
+	}
+}
+
+// TestNextIncludeOffSpecDoesNotFlagActiveSpecPick proves --include-off-spec only
+// relaxes the filter: when the top-ranked eligible task is on the active spec it
+// wins with no off-spec flag or warning, so the recovery flag never mislabels
+// on-spec work.
+func TestNextIncludeOffSpecDoesNotFlagActiveSpecPick(t *testing.T) {
+	t.Parallel()
+
+	repo := seedFixtureRepo(t)
+	writeFile(t, filepath.Join(repo, "specs", "v0.2.0.md"), "# Taskrail v0.2.0\n\n## Summary\n\nFixture spec.\n")
+	writeFixtureState(t, repo, "v0.2.0", "", "", "idle")
+	writeTask(t, repo, "T-002", "Old spec low", "todo", "low", "specs/v0.1.0.md#summary", nil)
+	writeTask(t, repo, "T-003", "Active spec high", "todo", "high", "specs/v0.2.0.md#summary", nil)
+
+	svc := newTestService(t, repo, time.Now().UTC())
+	result, err := svc.NextIncludingOffSpec()
+	if err != nil {
+		t.Fatalf("next include-off-spec: %v", err)
+	}
+	if result.TaskID != "T-003" {
+		t.Fatalf("active-spec high priority should win, got %s", result.TaskID)
+	}
+	if result.OffSpec {
+		t.Fatalf("active-spec pick must not be flagged off-spec, got %+v", result)
+	}
+	if len(result.Warnings) != 0 {
+		t.Fatalf("active-spec pick must carry no warning, got %+v", result.Warnings)
+	}
+}
+
+// TestNextIncludeOffSpecEmptyBacklog keeps the empty-backlog outcome identical on
+// the recovery path: with nothing eligible anywhere, --include-off-spec reports
+// "no eligible task" with no off-spec flag or warning.
+func TestNextIncludeOffSpecEmptyBacklog(t *testing.T) {
+	t.Parallel()
+
+	repo := seedFixtureRepo(t)
+	writeFile(t, filepath.Join(repo, "specs", "v0.2.0.md"), "# Taskrail v0.2.0\n\n## Summary\n\nFixture spec.\n")
+	writeFixtureState(t, repo, "v0.2.0", "", "", "idle")
+
+	svc := newTestService(t, repo, time.Now().UTC())
+	result, err := svc.NextIncludingOffSpec()
+	if err != nil {
+		t.Fatalf("next include-off-spec: %v", err)
+	}
+	if result.TaskID != "" || result.Reason != "no eligible task" {
+		t.Fatalf("empty backlog should report no eligible task, got %+v", result)
+	}
+	if result.OffSpec || len(result.Warnings) != 0 {
+		t.Fatalf("empty backlog must carry no off-spec flag or warning, got %+v", result)
+	}
+}
+
 func TestNextWarnsWhenActiveTaskPointsOutsideActiveSpec(t *testing.T) {
 	t.Parallel()
 

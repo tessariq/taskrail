@@ -102,7 +102,9 @@ func (s *Service) Status() (StatusReport, error) {
 		return StatusReport{}, err
 	}
 
-	next := computeNext(state, tasks)
+	// status always reports the active-spec-filtered idle selection; the
+	// --include-off-spec recovery relaxation is a `next`-only opt-out.
+	next := computeNext(state, tasks, false)
 	return StatusReport{
 		ActiveSpecVersion: state.Frontmatter.ActiveSpecVersion,
 		ActiveSpecPath:    state.Frontmatter.ActiveSpecPath,

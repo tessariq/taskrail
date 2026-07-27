@@ -119,7 +119,9 @@ work is skipped rather than selected. When only older-spec work is runnable,
 (`skipped_non_active_spec`). An already-active task that points outside the
 active spec is still returned so you can continue or resolve it, with a
 `selected_non_active_spec` warning. Recover older work explicitly with
-`start <id>`.
+`start <id>`, or run `next --include-off-spec` for a one-shot pick that ranks
+`todo` tasks across all specs and flags an off-spec selection (`off_spec` /
+`selected_off_spec`).
 
 **Beyond the core loop**
 

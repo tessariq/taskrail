@@ -11,12 +11,25 @@ import (
 )
 
 func (s *Service) Next() (NextResult, error) {
+	return s.next(false)
+}
+
+// NextIncludingOffSpec runs the --include-off-spec recovery selection: it ranks
+// eligible todo tasks across all specs with the original ranking and flags an
+// off-spec pick, giving agents a deterministic path to older unfinished work. It
+// writes the same next_action/updated_at probe as Next and never bypasses
+// start's transition rules.
+func (s *Service) NextIncludingOffSpec() (NextResult, error) {
+	return s.next(true)
+}
+
+func (s *Service) next(includeOffSpec bool) (NextResult, error) {
 	state, tasks, err := s.loadStateAndTasks()
 	if err != nil {
 		return NextResult{}, err
 	}
 
-	result := computeNext(state, tasks)
+	result := computeNext(state, tasks, includeOffSpec)
 	state.Frontmatter.UpdatedAt = timestamp(s.now())
 	state.Frontmatter.NextAction = nextAction(result)
 	state.Body = renderStateBody(state.Frontmatter, tasks)
@@ -29,7 +42,7 @@ func (s *Service) Next() (NextResult, error) {
 // computeNext resolves the next-task selection without persisting anything.
 // Next() wraps it to also record next_action/updated_at; status reuses it to
 // report the selection read-only, so the selection logic lives in one place.
-func computeNext(state *State, tasks []*Task) NextResult {
+func computeNext(state *State, tasks []*Task, includeOffSpec bool) NextResult {
 	if state.Frontmatter.CurrentTask != "" {
 		if task, ok := taskByID(tasks, state.Frontmatter.CurrentTask); ok && task.Frontmatter.Status == "in_progress" {
 			return NextResult{
@@ -43,11 +56,19 @@ func computeNext(state *State, tasks []*Task) NextResult {
 		}
 	}
 
+	activeSpecPath := strings.TrimSpace(state.Frontmatter.ActiveSpecPath)
+
+	// --include-off-spec is a one-shot opt-out of the active-spec filter: rank
+	// every eligible todo across specs and flag a pick that points away from the
+	// active spec, so agents can recover older unfinished work (T-110).
+	if includeOffSpec {
+		return computeNextAcrossSpecs(eligibleTasks(tasks), activeSpecPath)
+	}
+
 	// Idle selection is anchored to the active spec: filter eligible candidates to
 	// the active spec before ranking, so higher-priority older-spec work is skipped
 	// rather than selected. Skipped runnable work still surfaces as a structured
 	// warning so agents can distinguish it from an empty backlog (T-108).
-	activeSpecPath := strings.TrimSpace(state.Frontmatter.ActiveSpecPath)
 	inScope, skipped := partitionByActiveSpec(eligibleTasks(tasks), activeSpecPath)
 	ids := taskIDs(inScope)
 	if len(inScope) == 0 {
@@ -61,14 +82,45 @@ func computeNext(state *State, tasks []*Task) NextResult {
 		return NextResult{Reason: "no eligible task", Candidates: ids}
 	}
 
-	selected := inScope[0]
+	return selectedTodoResult(inScope[0], ids)
+}
+
+// selectedTodoResult builds the NextResult for the top-ranked eligible todo,
+// shared by the active-spec and across-specs selection paths so their pick shape
+// and reason stay identical.
+func selectedTodoResult(selected *Task, candidates []string) NextResult {
 	return NextResult{
 		TaskID:     selected.Frontmatter.ID,
 		Title:      selected.Frontmatter.Title,
 		Priority:   selected.Frontmatter.Priority,
 		Reason:     "next eligible todo by priority and stable task id",
-		Candidates: ids,
+		Candidates: candidates,
 	}
+}
+
+// computeNextAcrossSpecs ranks eligible todo tasks over all specs (the
+// --include-off-spec recovery path) and marks a pick whose spec_ref points away
+// from the active spec, so the relaxed selection still reports when it steps
+// outside the active spec. An empty activeSpecPath means nothing to anchor
+// against, so no pick is treated as off-spec.
+func computeNextAcrossSpecs(eligible []*Task, activeSpecPath string) NextResult {
+	ids := taskIDs(eligible)
+	if len(eligible) == 0 {
+		return NextResult{Reason: "no eligible task", Candidates: ids}
+	}
+	selected := eligible[0]
+	result := selectedTodoResult(selected, ids)
+	if activeSpecPath != "" && !taskMatchesActiveSpec(selected, activeSpecPath) {
+		result.OffSpec = true
+		result.Warnings = []Warning{{
+			Code:           "selected_off_spec",
+			Message:        fmt.Sprintf("off-spec: selected task %s points at %s while active spec is %s", selected.Frontmatter.ID, selected.Frontmatter.SpecRef, activeSpecPath),
+			TaskID:         selected.Frontmatter.ID,
+			SpecRef:        selected.Frontmatter.SpecRef,
+			ActiveSpecPath: activeSpecPath,
+		}}
+	}
+	return result
 }
 
 // partitionByActiveSpec splits eligible tasks into those linked to the active spec

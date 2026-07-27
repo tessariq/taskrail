@@ -120,12 +120,17 @@ type ValidationResult struct {
 }
 
 type NextResult struct {
-	TaskID     string    `json:"task_id,omitempty"`
-	Title      string    `json:"title,omitempty"`
-	Priority   string    `json:"priority,omitempty"`
-	Reason     string    `json:"reason"`
-	Candidates []string  `json:"candidates"`
-	Warnings   []Warning `json:"warnings,omitempty"`
+	TaskID     string   `json:"task_id,omitempty"`
+	Title      string   `json:"title,omitempty"`
+	Priority   string   `json:"priority,omitempty"`
+	Reason     string   `json:"reason"`
+	Candidates []string `json:"candidates"`
+	// OffSpec reports whether the selected task's spec_ref points away from the
+	// active spec. It can only be true on the --include-off-spec recovery path
+	// (default idle selection filters off-spec work out); it is always emitted so
+	// agents can distinguish an active-spec pick from an off-spec pick.
+	OffSpec  bool      `json:"off_spec"`
+	Warnings []Warning `json:"warnings,omitempty"`
 }
 
 type Warning struct {
