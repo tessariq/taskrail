@@ -51,6 +51,31 @@ Guidance for coding agents working in the Taskrail repository.
   v0.3.0 commands (`status`, `stats`, `coverage`, `spec ...`). The T-074 freshness
   guard (`task taskrail:check`) turns that staleness into a loud failure rather than
   a silent one.
+- **The wrong-binary trap has a loud variant and a silent one; assume the silent one
+  is happening.** Loud: a new flag is rejected — `taskrail task new --slug ...` fails
+  with `unknown flag: --slug` because the on-PATH binary is a shipped release.
+  Silent and far more expensive: a *state-writing* command (`verify`, `complete`,
+  `start`, `block`) runs against a binary older than the working tree, succeeds, and
+  stamps task files with the behavior the working tree had already fixed. Nothing
+  errors; the damage is only visible by reading the files. This happened during
+  T-109–T-118, where an older `./bin` build wrote the very duplicate
+  `## Implementation Notes` heading that change set was removing. It is why the
+  opt-in `pre-commit` hook runs `task taskrail:check`: a stale binary must not be
+  able to write committed state here (T-123, `docs/binary-resolution-findings.md`).
+- The two binary guards name the remedy that resolves what they detected, so read
+  which one fired (T-123):
+  - `task taskrail:install` fails when its output is not reachable as `taskrail` —
+    the build succeeded but `${TASKRAIL:-taskrail}` still runs something else. Fix
+    the *resolution*, not the build: `mise run setup`, or export an absolute
+    `TASKRAIL` for that shell. Rebuilding changes nothing.
+  - `task taskrail:check` checks the binary `${TASKRAIL:-taskrail}` would run — an
+    exported `TASKRAIL` wins over PATH, as it does for the skills — and separates
+    four causes of a byte difference: `TASKRAIL` points somewhere other than the
+    working-tree build (repoint or unset it), the on-PATH binary is a different
+    file (PATH fix), the two builds came from different Go toolchains (`mise.toml`
+    floats `go = "1.26"` to a patch release, so a system `/usr/local/go` produces
+    different bytes from identical source — rerun both halves under `mise exec --`),
+    or the source genuinely moved on (`task taskrail:install`).
 - Prefer repository-local, inspectable file operations over hidden automation.
 
 ## Build, Format, And Test Commands
@@ -88,7 +113,7 @@ Guidance for coding agents working in the Taskrail repository.
 ### Git Hooks (Optional)
 
 - Install once: `task hooks:install` (runs `lefthook install`).
-- `lefthook.yml` wires local hooks that mirror CI: `pre-commit` runs `gofmt`, `go vet ./...`, `taskrail validate`, and the skill package-parity check; `commit-msg` enforces Conventional Commits and rejects agent-attribution trailers; `pre-push` runs `go test ./...`.
+- `lefthook.yml` wires local hooks that mirror CI: `pre-commit` runs `gofmt`, `go vet ./...`, `taskrail validate`, the skill package-parity check, and the binary freshness guard (`task taskrail:check`, so a stale binary cannot write committed tracked-work state); `commit-msg` enforces Conventional Commits and rejects agent-attribution trailers; `pre-push` runs `go test ./...`.
 - Hooks are an opt-in convenience. CI remains the authoritative gate. Do not bypass with `--no-verify`.
 
 ## Repository Workflow Rules

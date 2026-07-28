@@ -1,9 +1,16 @@
-// Command freshcheck fails loud when the taskrail binary on PATH is stale versus
-// a freshly built one, without relying on external coreutils (mktemp/cmp/trap)
-// that are absent on a stock native Windows install. The Taskfile builds a fresh
-// binary with the reproducible flags and passes its path here; this helper
-// resolves the on-PATH taskrail, compares the two byte-for-byte, and removes the
-// throwaway build. See Taskfile.yml taskrail:check and T-082.
+// Command freshcheck fails loud when the taskrail binary on PATH is not the
+// current working-tree build, without relying on external coreutils
+// (mktemp/cmp/trap) that are absent on a stock native Windows install. The
+// Taskfile builds a fresh binary with the reproducible flags and passes its path
+// here alongside the path taskrail:install writes to; this helper resolves the
+// on-PATH taskrail, works out why it differs, and removes the throwaway build.
+//
+// Working out why is the point. A byte difference has three causes with three
+// different remedies: the on-PATH binary is a different file (fix PATH), the two
+// binaries came from different Go toolchains (build both under one toolchain), or
+// the source moved on (rebuild). Reporting all three as "stale" sends the
+// contributor to a remedy that cannot resolve what was detected. See Taskfile.yml
+// taskrail:check, T-082 and T-123.
 package main
 
 import (
@@ -11,7 +18,8 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
+
+	"github.com/tessariq/taskrail/internal/toolchain/binpath"
 )
 
 func main() {
@@ -22,41 +30,79 @@ func main() {
 }
 
 // run compares the freshly built binary at args[0] against the taskrail resolved
-// on PATH. It always removes the fresh build (the Taskfile's throwaway) before
+// on PATH, where args[1] is the path taskrail:install writes the working-tree
+// build to. It always removes the fresh build (the Taskfile's throwaway) before
 // returning so no cleanup trap is needed; a failed removal is reported to warn
 // rather than failing the check.
 func run(args []string, warn io.Writer) error {
-	if len(args) != 1 {
-		return fmt.Errorf("usage: freshcheck <fresh-build-path>")
+	if len(args) != 2 {
+		return fmt.Errorf("usage: freshcheck <fresh-build-path> <working-tree-build-path>")
 	}
-	fresh := args[0]
+	fresh, installed := args[0], args[1]
 	defer cleanup(fresh, warn)
 
-	// Resolve the taskrail a bare command finds on PATH, ignoring the working
-	// directory. On Windows exec.LookPath probes the cwd first and, when a cwd
-	// binary shadows a different PATH one, refuses with ErrDot ("cannot run
-	// executable found relative to current directory") rather than returning the
-	// PATH match — and CI's build-test job leaves a `taskrail.exe` in the repo
-	// root from `task build`. The freshness guard only cares about the on-PATH
-	// binary, so opt out of the cwd probe via the documented
-	// NoDefaultCurrentDirectoryInExePath signal (honoured on Windows; inert on
-	// POSIX, whose LookPath never scans cwd). exec.LookPath still honours PATHEXT,
-	// so a bare "taskrail" resolves taskrail.exe on Windows and plain taskrail on
-	// POSIX.
-	os.Setenv("NoDefaultCurrentDirectoryInExePath", "1")
-	resolved, err := exec.LookPath("taskrail")
-	if err != nil {
-		return fmt.Errorf("taskrail is not on PATH; run 'mise run setup' or 'task taskrail:install'")
+	// Check the binary the workflows would actually run. They invoke
+	// ${TASKRAIL:-taskrail}, and exporting TASKRAIL is one of the two fixes these
+	// guards prescribe — checking PATH regardless would fail a contributor for
+	// having done exactly what the message told them to.
+	target, override := os.LookupEnv("TASKRAIL")
+	override = override && target != ""
+	if !override {
+		var err error
+		if target, err = binpath.Resolve(); err != nil {
+			return err
+		}
 	}
 
-	same, err := sameBytes(fresh, resolved)
+	same, err := sameBytes(fresh, target)
 	if err != nil {
+		if override {
+			return fmt.Errorf("TASKRAIL=%s cannot be read: %w;\n"+
+				"  repoint it at the working-tree build, or unset it and run 'mise run setup'", target, err)
+		}
 		return err
 	}
-	if !same {
-		return fmt.Errorf("on-PATH taskrail (%s) is stale versus the working tree; run 'task taskrail:install'", resolved)
+	if same {
+		return nil
 	}
-	return nil
+
+	// A byte difference only means "stale" once the binary that would run is the
+	// working-tree build. An unreadable or absent install path counts as pointing
+	// elsewhere too: either way what runs is not the build taskrail:install owns.
+	isWorkingTreeBuild, _ := binpath.SameFile(target, installed)
+	if !isWorkingTreeBuild {
+		if override {
+			return binpath.OverrideError(installed, target)
+		}
+		return binpath.ShadowedError(installed, target)
+	}
+	return differenceError(target, goVersion(fresh), goVersion(target))
+}
+
+// goVersion reports the Go toolchain recorded in a binary, or "" when it cannot
+// be determined. An unknown toolchain is not evidence of a toolchain difference,
+// so callers must compare only two known versions.
+func goVersion(path string) string {
+	v, err := binpath.GoVersion(path)
+	if err != nil {
+		return ""
+	}
+	return v
+}
+
+// differenceError explains a byte difference between the fresh build and an
+// on-PATH binary already established to be the working-tree build. Identical
+// source built by two Go toolchains differs in bytes, so prescribing a rebuild
+// there yields an install/check loop that never converges — name the toolchain as
+// the variable instead.
+func differenceError(resolved, freshGo, resolvedGo string) error {
+	if freshGo != "" && resolvedGo != "" && freshGo != resolvedGo {
+		return fmt.Errorf("on-PATH taskrail (%s) was built by %s but this check built with %s;\n"+
+			"  the Go toolchain is the difference, not the source — rebuilding in this shell will not converge.\n"+
+			"  Run both halves under one toolchain: 'mise exec -- task taskrail:install && mise exec -- task taskrail:check'",
+			resolved, resolvedGo, freshGo)
+	}
+	return fmt.Errorf("on-PATH taskrail (%s) is stale versus the working tree; run 'task taskrail:install'", resolved)
 }
 
 // cleanup removes the throwaway fresh build. A failed removal (e.g. a Windows

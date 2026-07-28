@@ -28,6 +28,17 @@ func writeFile(t *testing.T, dir, name string, data []byte) string {
 	return p
 }
 
+// seedTaskrail writes a `taskrail` fixture into dir. The exec bit and the
+// Windows .exe suffix are what let a PATH lookup resolve it when dir is on PATH.
+func seedTaskrail(t *testing.T, dir string, data []byte) string {
+	t.Helper()
+	p := filepath.Join(dir, exeName("taskrail"))
+	if err := os.WriteFile(p, data, 0o755); err != nil {
+		t.Fatalf("seed taskrail in %s: %v", dir, err)
+	}
+	return p
+}
+
 func TestSameBytes(t *testing.T) {
 	dir := t.TempDir()
 	a := writeFile(t, dir, "a", []byte("taskrail-binary-bytes"))
@@ -70,9 +81,10 @@ func TestSameBytesMissingFile(t *testing.T) {
 func TestRunRemovesFreshBuildWhenNotOnPath(t *testing.T) {
 	dir := t.TempDir()
 	fresh := writeFile(t, dir, "fresh", []byte("bytes"))
+	t.Setenv("TASKRAIL", "")
 	t.Setenv("PATH", dir) // no taskrail here
 
-	if err := run([]string{fresh}, io.Discard); err == nil {
+	if err := run([]string{fresh, filepath.Join(dir, exeName("taskrail"))}, io.Discard); err == nil {
 		t.Error("run must fail when taskrail is not on PATH")
 	}
 	if _, err := os.Stat(fresh); !os.IsNotExist(err) {
@@ -83,6 +95,149 @@ func TestRunRemovesFreshBuildWhenNotOnPath(t *testing.T) {
 func TestRunRejectsBadArgs(t *testing.T) {
 	if err := run(nil, io.Discard); err == nil {
 		t.Error("run must reject a missing path argument")
+	}
+	// The working-tree build path is what separates "stale" from "shadowed", so
+	// the old single-argument form must not silently keep working.
+	if err := run([]string{"fresh"}, io.Discard); err == nil {
+		t.Error("run must reject a missing working-tree build path argument")
+	}
+}
+
+// AC-2: a byte difference against a taskrail resolved from somewhere other than
+// the working-tree build is a PATH problem, not staleness. Reporting it as stale
+// sends the contributor to a rebuild that leaves the same binary in front of them.
+func TestRunReportsShadowingRatherThanStale(t *testing.T) {
+	pathDir := t.TempDir()
+	seedTaskrail(t, pathDir, []byte("installed release"))
+	installed := seedTaskrail(t, t.TempDir(), []byte("working-tree build"))
+	fresh := writeFile(t, t.TempDir(), "fresh", []byte("working-tree build"))
+
+	t.Setenv("TASKRAIL", "")
+	t.Setenv("PATH", pathDir)
+	err := run([]string{fresh, installed}, io.Discard)
+	if err == nil {
+		t.Fatal("run must fail when the on-PATH taskrail is not the working-tree build")
+	}
+	if strings.Contains(err.Error(), "stale") {
+		t.Errorf("a shadowed binary must not be reported as stale; got %q", err)
+	}
+	if !strings.Contains(err.Error(), "mise run setup") {
+		t.Errorf("a shadowed binary must name the PATH remedy; got %q", err)
+	}
+}
+
+// The complement: once the on-PATH taskrail *is* the working-tree build, a byte
+// difference from equally-built sources is genuine staleness and a rebuild fixes it.
+func TestRunReportsStaleForTheWorkingTreeBuild(t *testing.T) {
+	pathDir := t.TempDir()
+	installed := seedTaskrail(t, pathDir, []byte("old build"))
+	fresh := writeFile(t, t.TempDir(), "fresh", []byte("new build"))
+
+	t.Setenv("TASKRAIL", "")
+	t.Setenv("PATH", pathDir)
+	err := run([]string{fresh, installed}, io.Discard)
+	if err == nil {
+		t.Fatal("run must fail when the working-tree build is stale")
+	}
+	if !strings.Contains(err.Error(), "stale") || !strings.Contains(err.Error(), "task taskrail:install") {
+		t.Errorf("a stale working-tree build must name the rebuild remedy; got %q", err)
+	}
+}
+
+// The guards prescribe `export TASKRAIL=<build>` as one of two working fixes, so
+// the freshness guard has to honour it: ${TASKRAIL:-taskrail} is what the skills
+// execute, and checking PATH instead would fail a contributor who did exactly
+// what the message told them to.
+func TestRunChecksTheOverrideRatherThanPath(t *testing.T) {
+	pathDir := t.TempDir()
+	seedTaskrail(t, pathDir, []byte("installed release"))
+	installed := seedTaskrail(t, t.TempDir(), []byte("working-tree build"))
+	fresh := writeFile(t, t.TempDir(), "fresh", []byte("working-tree build"))
+
+	t.Setenv("PATH", pathDir)
+	t.Setenv("TASKRAIL", installed)
+	if err := run([]string{fresh, installed}, io.Discard); err != nil {
+		t.Errorf("run must check the TASKRAIL override, not PATH; got %v", err)
+	}
+}
+
+// An override left pointing at some other binary is still the wrong binary — but
+// the remedy is to repoint TASKRAIL, not to fix PATH, so it must not be reported
+// as a PATH problem.
+func TestRunReportsAStaleOverride(t *testing.T) {
+	pathDir := t.TempDir()
+	current := seedTaskrail(t, pathDir, []byte("working-tree build"))
+	override := writeFile(t, t.TempDir(), "taskrail-old", []byte("installed release"))
+	fresh := writeFile(t, t.TempDir(), "fresh", []byte("working-tree build"))
+
+	t.Setenv("PATH", pathDir)
+	t.Setenv("TASKRAIL", override)
+	err := run([]string{fresh, current}, io.Discard)
+	if err == nil {
+		t.Fatal("run must fail when TASKRAIL points at something other than the working-tree build")
+	}
+	if !strings.Contains(err.Error(), "TASKRAIL") {
+		t.Errorf("a misdirected override must name TASKRAIL as the thing to fix; got %q", err)
+	}
+	if strings.Contains(err.Error(), "stale") {
+		t.Errorf("a misdirected override is not staleness; got %q", err)
+	}
+}
+
+// An override that points nowhere is the same class of contributor mistake as
+// one pointing at the wrong binary, so it must name TASKRAIL rather than surface
+// a bare open error the reader cannot act on.
+func TestRunReportsAnUnreadableOverride(t *testing.T) {
+	pathDir := t.TempDir()
+	current := seedTaskrail(t, pathDir, []byte("working-tree build"))
+	fresh := writeFile(t, t.TempDir(), "fresh", []byte("working-tree build"))
+
+	t.Setenv("PATH", pathDir)
+	t.Setenv("TASKRAIL", filepath.Join(t.TempDir(), "gone"))
+	err := run([]string{fresh, current}, io.Discard)
+	if err == nil {
+		t.Fatal("run must fail when TASKRAIL points at a path it cannot read")
+	}
+	if !strings.Contains(err.Error(), "TASKRAIL") {
+		t.Errorf("an unreadable override must name TASKRAIL as the cause; got %q", err)
+	}
+}
+
+// AC-3: identical source built by two Go toolchains differs in bytes without
+// being stale, and rerunning the rebuild in the same shell never converges. The
+// message must name the toolchain as the variable.
+func TestDifferenceErrorNamesToolchainWhenBuildersDiffer(t *testing.T) {
+	err := differenceError("/repo/bin/taskrail", "go1.26.5", "go1.26.0")
+	if err == nil {
+		t.Fatal("differenceError must return an error")
+	}
+	msg := err.Error()
+	for _, want := range []string{"go1.26.5", "go1.26.0", "toolchain", "mise exec"} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("toolchain-difference message %q must mention %q", msg, want)
+		}
+	}
+	if strings.Contains(msg, "stale") {
+		t.Errorf("a toolchain difference must not be reported as staleness; got %q", msg)
+	}
+}
+
+// An unknown toolchain on either side is not evidence of a toolchain difference,
+// so the guard must fall back to the staleness verdict rather than invent one.
+func TestDifferenceErrorFallsBackToStale(t *testing.T) {
+	cases := map[string][2]string{
+		"same toolchain":   {"go1.26.5", "go1.26.5"},
+		"fresh unknown":    {"", "go1.26.0"},
+		"resolved unknown": {"go1.26.5", ""},
+		"both unknown":     {"", ""},
+	}
+	for name, versions := range cases {
+		t.Run(name, func(t *testing.T) {
+			err := differenceError("/repo/bin/taskrail", versions[0], versions[1])
+			if err == nil || !strings.Contains(err.Error(), "stale") {
+				t.Errorf("want a staleness verdict, got %v", err)
+			}
+		})
 	}
 }
 
@@ -96,10 +251,11 @@ func TestRunWarnsWhenCleanupFails(t *testing.T) {
 		t.Fatalf("mkdir: %v", err)
 	}
 	writeFile(t, nonEmpty, "child", []byte("x")) // makes os.Remove(nonEmpty) fail
-	t.Setenv("PATH", dir)                        // no taskrail: run returns an error, still cleans up
+	t.Setenv("TASKRAIL", "")
+	t.Setenv("PATH", dir) // no taskrail: run returns an error, still cleans up
 
 	var warn bytes.Buffer
-	_ = run([]string{nonEmpty}, &warn)
+	_ = run([]string{nonEmpty, filepath.Join(dir, exeName("taskrail"))}, &warn)
 	if !strings.Contains(warn.String(), "warning") {
 		t.Errorf("run must surface the cleanup warning; wrote %q", warn.String())
 	}
@@ -113,18 +269,15 @@ func TestRunWarnsWhenCleanupFails(t *testing.T) {
 // errors. On POSIX LookPath ignores cwd, so this pins the PATH-not-cwd contract.
 func TestRunResolvesPathNotCwd(t *testing.T) {
 	pathDir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(pathDir, exeName("taskrail")), []byte("on-path"), 0o755); err != nil {
-		t.Fatalf("seed on-PATH taskrail: %v", err)
-	}
+	installed := seedTaskrail(t, pathDir, []byte("on-path"))
 	cwd := t.TempDir()
-	if err := os.WriteFile(filepath.Join(cwd, exeName("taskrail")), []byte("cwd-decoy-differs"), 0o755); err != nil {
-		t.Fatalf("seed cwd decoy: %v", err)
-	}
+	seedTaskrail(t, cwd, []byte("cwd-decoy-differs"))
 	fresh := writeFile(t, t.TempDir(), "fresh", []byte("on-path")) // matches the on-PATH bytes
 
 	t.Chdir(cwd)
+	t.Setenv("TASKRAIL", "")
 	t.Setenv("PATH", pathDir)
-	if err := run([]string{fresh}, io.Discard); err != nil {
+	if err := run([]string{fresh, installed}, io.Discard); err != nil {
 		t.Errorf("run must resolve and match the on-PATH taskrail, ignoring the cwd decoy; got %v", err)
 	}
 }

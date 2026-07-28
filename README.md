@@ -428,7 +428,8 @@ go install github.com/evilmartians/lefthook@v1.13.6   # or: brew install lefthoo
 task hooks:install
 ```
 
-- `pre-commit`: `gofmt`, `go vet ./...`, `taskrail validate`, skill package-parity check.
+- `pre-commit`: `gofmt`, `go vet ./...`, `taskrail validate`, skill package-parity check,
+  `task taskrail:check` (the on-PATH `taskrail` must be the current working-tree build).
 - `commit-msg`: Conventional Commit subject; rejects automated-attribution trailers.
 - `pre-push`: `go test ./...`.
 

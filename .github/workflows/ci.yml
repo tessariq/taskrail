@@ -54,12 +54,15 @@ jobs:
       - name: Verify committed skills match the package
         run: task check:skills
 
-      - name: Build taskrail onto the mise PATH
-        run: task taskrail:install
-
-      # mise-action does not export [env] _.path to later workflow steps.
+      # mise-action does not export [env] _.path to later workflow steps. This
+      # must precede taskrail:install: that target now fails when its output is
+      # not reachable as `taskrail` (T-123), which is the runner's own situation
+      # until bin/ is on PATH.
       - name: Expose working-tree taskrail on the runner PATH
         run: echo "${{ github.workspace }}/bin" >> "$GITHUB_PATH"
+
+      - name: Build taskrail onto the mise PATH
+        run: task taskrail:install
 
       - name: Guard taskrail freshness on PATH
         run: task taskrail:check
@@ -83,6 +86,13 @@ jobs:
 
       - name: Provision toolchain (mise)
         uses: jdx/mise-action@dad1bfd3df957f44999b559dd69dc1671cb4e9ea # v4.2.1
+
+      # `task test` depends on taskrail:install, which fails when its output is
+      # not reachable as `taskrail` (T-123). shell: bash so the same POSIX
+      # redirection works on the native Windows leg.
+      - name: Expose working-tree taskrail on the runner PATH
+        shell: bash
+        run: echo "${{ github.workspace }}/bin" >> "$GITHUB_PATH"
 
       - name: Build
         run: task build

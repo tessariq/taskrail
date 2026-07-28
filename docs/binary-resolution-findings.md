@@ -1,7 +1,13 @@
 # Findings: `taskrail` binary resolution and the freshness guard
 
 Investigated 2026-07-27 while completing T-120. Feeds `T-123-contributor-binary-resolution`.
-Not yet turned into tracked work — the second finding may warrant its own task.
+
+**Resolved by T-123 (2026-07-28).** Both findings are now reported by guards that name a
+remedy which resolves what they detected: `task taskrail:install` fails when its output is
+not reachable as `taskrail` (Finding 1), and `task taskrail:check` distinguishes a shadowed
+binary, a Go toolchain difference (Finding 2), and genuine staleness. The `pre-commit` hook
+runs the freshness guard so a stale binary cannot write committed tracked-work state. The
+findings below are kept as the investigation record.
 
 Context: `mise run setup` had already been run in this working copy. It worked. The two
 problems below are independent of it.

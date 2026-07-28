@@ -156,6 +156,134 @@ func TestTaskrailCheckIsPortable(t *testing.T) {
 	}
 }
 
+// Building onto a directory nothing resolves `taskrail` from leaves the caller
+// no better off, which is how a shipped release silently kept serving
+// tracked-work commands (T-123). The install target must therefore verify its own
+// output is reachable, not just that the build succeeded.
+func TestTaskrailInstallGuardsPathReachability(t *testing.T) {
+	taskfile := readFile(t, repoRoot(t), "Taskfile.yml")
+	block := strings.Join(taskfileBlock(taskfile, "taskrail:install:"), "\n")
+	if !strings.Contains(block, "cmd/pathcheck") {
+		t.Errorf("taskrail:install must verify its output is reachable as `taskrail`; got:\n%s", block)
+	}
+}
+
+// The freshness guard can only tell "stale" from "you are running a different
+// binary" if it knows where taskrail:install writes. Passing that path is what
+// makes its two messages distinguishable (T-123).
+func TestTaskrailCheckKnowsTheWorkingTreeBuildPath(t *testing.T) {
+	taskfile := readFile(t, repoRoot(t), "Taskfile.yml")
+	// Strip go-template expressions (the Windows .exe suffix) so the invocation
+	// splits into plain arguments.
+	block := regexp.MustCompile(`\{\{[^}]*\}\}`).ReplaceAllString(
+		strings.Join(taskfileBlock(taskfile, "taskrail:check:"), "\n"), "")
+	freshcheck := regexp.MustCompile(`cmd/freshcheck\s+(\S+)\s+(\S+)`).FindStringSubmatch(block)
+	if freshcheck == nil {
+		t.Fatalf("taskrail:check must pass the working-tree build path to freshcheck; got:\n%s", block)
+	}
+	if !strings.HasPrefix(freshcheck[2], "bin/taskrail") {
+		t.Errorf("freshcheck's working-tree build argument %q must be the taskrail:install output", freshcheck[2])
+	}
+}
+
+// Tracked-work commands write task and state files, so a stale binary here
+// corrupts committed workflow state silently — the expensive variant of the
+// T-123 trap. The opt-in pre-commit hook closes that window locally by refusing
+// a commit whose binary is not the working-tree build.
+func TestLefthookGuardsBinaryFreshnessBeforeCommit(t *testing.T) {
+	lefthook := readFile(t, repoRoot(t), "lefthook.yml")
+	_, stage, found := strings.Cut(lefthook, "pre-commit:")
+	if !found {
+		t.Fatal("lefthook.yml must define a pre-commit stage")
+	}
+	// The stage ends where the next one begins; absent a later stage it runs to
+	// the end of the file, which is what Cut's miss already returns.
+	stage, _, _ = strings.Cut(stage, "\ncommit-msg:")
+	if !strings.Contains(stage, "task taskrail:check") {
+		t.Errorf("lefthook pre-commit must run `task taskrail:check` so a stale binary cannot write committed state; got:\n%s", stage)
+	}
+}
+
+// ciJobBlocks splits a workflow file into its top-level jobs, keyed by job id.
+// Job ids sit at two-space indent under `jobs:`; anything shallower ends the
+// section. Splitting by job is what lets a guard assert ordering *within* a job
+// rather than across the whole file.
+func ciJobBlocks(content string) map[string][]string {
+	jobs := map[string][]string{}
+	id := regexp.MustCompile(`^  ([a-z][a-z0-9-]*):\s*$`)
+	current := ""
+	inJobs := false
+	for _, line := range strings.Split(content, "\n") {
+		if strings.HasPrefix(line, "jobs:") {
+			inJobs = true
+			continue
+		}
+		if !inJobs {
+			continue
+		}
+		if m := id.FindStringSubmatch(line); m != nil {
+			current = m[1]
+			continue
+		}
+		if current != "" {
+			jobs[current] = append(jobs[current], line)
+		}
+	}
+	return jobs
+}
+
+// A job id in one place and a step in another must not be conflated: the
+// splitter has to attribute each line to the job it sits under.
+func TestCIJobBlocksAttributesStepsToJobs(t *testing.T) {
+	jobs := ciJobBlocks("jobs:\n  first:\n    steps:\n      - run: a\n  second:\n    steps:\n      - run: b\n")
+	if len(jobs) != 2 {
+		t.Fatalf("want two jobs, got %d: %v", len(jobs), jobs)
+	}
+	if !strings.Contains(strings.Join(jobs["first"], "\n"), "run: a") ||
+		strings.Contains(strings.Join(jobs["first"], "\n"), "run: b") {
+		t.Errorf("steps attributed to the wrong job: %v", jobs)
+	}
+}
+
+// firstIndexContaining returns the index of the first non-comment line
+// containing any of needles, or -1. Comment lines are skipped so a step
+// annotated with the command it guards cannot masquerade as that command.
+func firstIndexContaining(lines []string, needles ...string) int {
+	for i, line := range lines {
+		if strings.HasPrefix(strings.TrimSpace(line), "#") {
+			continue
+		}
+		for _, needle := range needles {
+			if strings.Contains(line, needle) {
+				return i
+			}
+		}
+	}
+	return -1
+}
+
+// mise-action does not propagate [env] _.path to workflow steps, so any CI job
+// that installs the working-tree binary must first expose the bin directory
+// through GitHub's PATH handoff. Without that the install guard would fail on the
+// runner for the very reason it exists to report (T-123).
+func TestCIExposesBinBeforeBuildingTaskrail(t *testing.T) {
+	ci := readFile(t, repoRoot(t), ".github/workflows/ci.yml")
+	for job, lines := range ciJobBlocks(ci) {
+		install := firstIndexContaining(lines, "task taskrail:install", "task test")
+		if install < 0 {
+			continue
+		}
+		expose := firstIndexContaining(lines, `/bin" >> "$GITHUB_PATH"`)
+		if expose < 0 {
+			t.Errorf("ci.yml job %q builds the working-tree taskrail but never exposes bin/ on the runner PATH", job)
+			continue
+		}
+		if expose > install {
+			t.Errorf("ci.yml job %q must expose bin/ on the runner PATH before building the working-tree taskrail", job)
+		}
+	}
+}
+
 // CI must exercise the freshness guard so a stale on-PATH binary is caught in
 // the pipeline, not silently trusted.
 func TestCIRunsTaskrailFreshnessCheck(t *testing.T) {

@@ -1,11 +1,11 @@
 ---
 id: T-123-contributor-binary-resolution
 title: Make the working-tree taskrail binary unmissable for contributors
-status: todo
+status: completed
 priority: low
 spec_ref: specs/v0.4.0.md#version-skew-detection
 dependencies: []
-updated_at: "2026-07-27T13:49:41Z"
+updated_at: "2026-07-28T13:30:23Z"
 ---
 
 # T-123-contributor-binary-resolution Make the working-tree taskrail binary unmissable for contributors
@@ -73,3 +73,5 @@ tracked here rather than split.
 - TODO: record verification evidence paths.
 
 ## Implementation Notes
+
+- 2026-07-28T13:30:17Z: verification pass

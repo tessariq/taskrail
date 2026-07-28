@@ -23,6 +23,12 @@ pre-commit:
       run: task validate
     skill-parity:
       run: task check:skills
+    # Tracked-work commands write task and state files. A binary older than the
+    # working tree writes them without erroring, so the damage is only visible by
+    # reading the files afterwards (T-123). Refusing the commit closes that window
+    # locally; CI's freshness leg remains the authoritative gate.
+    taskrail-freshness:
+      run: task taskrail:check
 
 commit-msg:
   commands:
