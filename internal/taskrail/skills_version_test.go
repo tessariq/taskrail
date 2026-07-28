@@ -177,6 +177,50 @@ func TestInstalledSkillVersionsReportsUnmarkedAsUnknown(t *testing.T) {
 	}
 }
 
+// The read reports whether each materialized skill is byte-identical to the copy
+// the running binary embeds, which is what lets the skew check tell a marker-free
+// parity copy apart from a genuinely unknown install (T-124). The comparison is
+// against the in-binary package only — never against another install.
+func TestInstalledSkillVersionsFlagsPackageParity(t *testing.T) {
+	t.Parallel()
+
+	repo, svc := installedSkillsRepo(t, "v0.4.0")
+
+	// Stripping the marker restores the embedded bytes, which is exactly what
+	// copying the package source (task skills:regen) produces.
+	parity := shippableSkills[0]
+	restampSkill(t, repo, ".claude/skills", parity, "")
+
+	diverged := shippableSkills[1]
+	divergeSkill(t, repo, ".claude/skills", diverged)
+
+	installed, err := svc.InstalledSkillVersions()
+	if err != nil {
+		t.Fatalf("installed skill versions: %v", err)
+	}
+
+	want := map[string]bool{
+		filepath.Join(".claude", "skills", parity, "SKILL.md"):   true,
+		filepath.Join(".claude", "skills", diverged, "SKILL.md"): false,
+		// A stamped skill differs from the package by its own marker line.
+		filepath.Join(".claude", "skills", shippableSkills[2], "SKILL.md"): false,
+	}
+	got := map[string]bool{}
+	for _, s := range installed {
+		got[s.Path] = s.MatchesPackage
+	}
+	for path, expected := range want {
+		matches, reported := got[path]
+		if !reported {
+			t.Errorf("%s missing from the report", path)
+			continue
+		}
+		if matches != expected {
+			t.Errorf("%s: MatchesPackage = %v, want %v", path, matches, expected)
+		}
+	}
+}
+
 // A repository with no materialized skills reports nothing and does not error, so
 // the read side stays silent instead of noisy.
 func TestInstalledSkillVersionsWithoutSkillsIsEmpty(t *testing.T) {

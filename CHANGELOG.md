@@ -23,7 +23,8 @@ All notable user-visible changes to Taskrail will be documented in this file.
 - Every command now warns on stderr when the installed skills were written by a
   different Taskrail version, naming the affected skills, both versions, and
   `taskrail init --with-skills --force`. Skills with no marker report once as
-  unknown-version and prescribe no remedy. Advisory only: `--json` stdout stays
+  unknown-version and prescribe no remedy — unless they are byte-identical to the
+  binary's embedded package, which is silent. Advisory only: `--json` stdout stays
   parseable, `validate` still passes, and no transition is blocked.
 - `taskrail status` — active-spec drift breakdown: counts open work
   (`todo`/`in_progress`/`blocked`) on the active spec versus away from it, and

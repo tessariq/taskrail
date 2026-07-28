@@ -1,10 +1,12 @@
 package taskrail
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 )
@@ -35,6 +37,12 @@ type InstalledSkill struct {
 	Path    string `json:"path"`    // repo-relative path to the skill file
 	Skill   string `json:"skill"`   // skill directory name
 	Version string `json:"version"` // writing Taskrail version, empty when unknown
+
+	// MatchesPackage reports that the file is byte-identical to the copy this
+	// binary embeds, which is what separates a marker-free parity copy — one
+	// produced by copying the package source rather than installing it — from a
+	// genuinely unknown install (see isPackageParityCopy).
+	MatchesPackage bool `json:"matches_package"`
 }
 
 // stampSkillVersion appends the writing-version marker to a skill's frontmatter.
@@ -64,9 +72,12 @@ func stampSkillVersion(data []byte, version string) []byte {
 }
 
 // InstalledSkillVersions reports which version wrote each materialized skill in
-// this repository, in deterministic path order. It is read-only and reads only the
-// recorded marker, never diffing skill contents, so callers can run it on ordinary
-// commands. A repository with no materialized skills reports nothing.
+// this repository, in deterministic path order. It is read-only, and stays cheap
+// enough for ordinary commands: one read per skill file, from which it takes both
+// the recorded marker and an equality check against the copy embedded in this
+// binary. It never compares one install against another and never inspects a
+// difference beyond "identical or not". A repository with no materialized skills
+// reports nothing.
 func (s *Service) InstalledSkillVersions() ([]InstalledSkill, error) {
 	var installed []InstalledSkill
 	for _, target := range shippableSkillTargets {
@@ -81,14 +92,18 @@ func (s *Service) InstalledSkillVersions() ([]InstalledSkill, error) {
 			if d.IsDir() || d.Name() != skillFileName {
 				return nil
 			}
-			version, err := readSkillVersion(path)
+			data, err := os.ReadFile(path)
 			if err != nil {
 				return fmt.Errorf("read %s: %w", relPath(s.paths.RepoRoot, path), fsCause(err))
 			}
+			// WalkDir only yields paths under root, so the target-relative path —
+			// which is also the path inside the embedded package — is a plain trim.
+			rel := strings.TrimPrefix(path, root+string(filepath.Separator))
 			installed = append(installed, InstalledSkill{
-				Path:    relPath(s.paths.RepoRoot, path),
-				Skill:   filepath.Base(filepath.Dir(path)),
-				Version: version,
+				Path:           relPath(s.paths.RepoRoot, path),
+				Skill:          filepath.Base(filepath.Dir(path)),
+				Version:        skillVersionOf(data),
+				MatchesPackage: matchesPackagedSkill(rel, data),
 			})
 			return nil
 		})
@@ -99,17 +114,25 @@ func (s *Service) InstalledSkillVersions() ([]InstalledSkill, error) {
 	return installed, nil
 }
 
-// readSkillVersion returns the marker recorded in a skill file, or an empty string
-// when the file carries none. Unparseable frontmatter is unknown rather than an
-// error: an adopter's hand-edited skill must not fail an advisory read.
-func readSkillVersion(path string) (string, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return "", err
-	}
+// skillVersionOf returns the marker recorded in a skill file's frontmatter, or an
+// empty string when it carries none. Unparseable frontmatter is unknown rather
+// than an error: an adopter's hand-edited skill must not fail an advisory read.
+func skillVersionOf(data []byte) string {
 	marker, _, err := parseFrontmatter[skillVersionMarker](data)
 	if err != nil {
-		return "", nil
+		return ""
 	}
-	return marker.Version, nil
+	return marker.Version
+}
+
+// matchesPackagedSkill reports whether an on-disk skill is byte-identical to the
+// embedded package copy at the same relative path. A path the package does not
+// ship — an adopter's own skill living alongside the installed set — is not a
+// parity copy and stays subject to the ordinary report.
+func matchesPackagedSkill(rel string, data []byte) bool {
+	packaged, err := shippableSkillsFS.ReadFile(path.Join(shippableSkillsRoot, filepath.ToSlash(rel)))
+	if err != nil {
+		return false
+	}
+	return bytes.Equal(packaged, data)
 }

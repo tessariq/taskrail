@@ -18,9 +18,10 @@ const skillSkewRemedy = "taskrail init --with-skills --force"
 // advisory: callers print it to stderr and never let it gate, because a stale
 // skill is a missed improvement rather than invalid state.
 //
-// It stays cheap enough for ordinary commands by reading only the recorded marker
-// (see InstalledSkillVersions); skill contents are never diffed. A repository with
-// no materialized skills, or one whose skills all match, reports nothing.
+// It stays cheap enough for ordinary commands because it inspects nothing beyond
+// what InstalledSkillVersions already read. A repository with no materialized
+// skills, one whose skills all match, or one whose skills are marker-free parity
+// copies of the package, reports nothing.
 func (s *Service) SkillSkewWarnings(runningVersion string) ([]Warning, error) {
 	installed, err := s.InstalledSkillVersions()
 	if err != nil {
@@ -31,7 +32,10 @@ func (s *Service) SkillSkewWarnings(runningVersion string) ([]Warning, error) {
 	// all of them, so group by recorded version and name each skill once.
 	skills := map[string][]string{}
 	for _, sk := range installed {
-		if sk.Version == runningVersion || slices.Contains(skills[sk.Version], sk.Skill) {
+		if sk.Version == runningVersion || isPackageParityCopy(sk) {
+			continue
+		}
+		if slices.Contains(skills[sk.Version], sk.Skill) {
 			continue
 		}
 		skills[sk.Version] = append(skills[sk.Version], sk.Skill)
@@ -50,14 +54,29 @@ func (s *Service) SkillSkewWarnings(runningVersion string) ([]Warning, error) {
 	return warnings, nil
 }
 
+// isPackageParityCopy reports the one case where a missing marker is not unknown:
+// a skill byte-identical to the copy this binary embeds was not installed by an
+// older binary, it was copied from the package this binary carries, so there is no
+// version to be skewed against. Repositories that regenerate their skills from the
+// package source rather than through `init --with-skills` — this one included, to
+// keep `task check:skills` byte-exact — would otherwise carry a standing
+// unknown-version line nobody can clear (specs/v0.4.0.md#version-skew-detection).
+//
+// The recorded version is still required to be absent. Parity implies it today,
+// since stamping changes the bytes, but should the package itself ever ship a
+// marker, a real skew must not be silently exempted.
+func isPackageParityCopy(sk InstalledSkill) bool {
+	return sk.Version == "" && sk.MatchesPackage
+}
+
 // skewWarning renders one recorded-version group. Skills installed before the
 // marker existed record nothing, so they are reported as unknown rather than as a
 // version mismatch, and without a remedy: an unmarked skill may be current, older,
 // or newer, so prescribing a --force reinstall would be exactly the false upgrade
-// prompt the unknown case exists to avoid. It also matters concretely — this
-// repository's committed copies are deliberately unmarked parity copies of the
-// package (docs/workflow/skills-productization.md), and reinstalling them breaks
-// `task check:skills`. The remedy returns as soon as a real version is readable.
+// prompt the unknown case exists to avoid. The one unmarked shape that *is*
+// decidable — a byte-identical copy of the embedded package — never reaches here
+// (see isPackageParityCopy), so what remains is an unmarked copy that also diverged
+// from the package. The remedy returns as soon as a real version is readable.
 func skewWarning(recorded, running string, skills []string) Warning {
 	names := strings.Join(skills, ", ")
 	if recorded == "" {

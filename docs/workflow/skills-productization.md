@@ -56,14 +56,21 @@ byte-exact against a version the ldflags-injected binary would otherwise vary.
 Do not regenerate the committed copies with `init --with-skills`; the stamped
 output would fail parity.
 
-A consequence for this repository: because the committed copies carry no marker,
-every command run here reports them once on stderr as unknown-version (T-120).
-That is expected and correct — nothing recorded a version, so no skew can be
-determined. The warning deliberately prescribes no remedy in that case; do not
-"resolve" it with `taskrail init --with-skills --force`, which would stamp the
-committed copies and break `task check:skills`. Adopters, whose copies are
-installed rather than parity-checked, see the remedy only when a real version
-mismatch is readable.
+Because the committed copies carry no marker, they were once reported on every
+command as unknown-version (T-120) — a standing stderr line no contributor could
+clear. Since T-124 the skew check exempts them: a marker-free skill that is
+byte-identical to the package embedded in the running binary was copied from that
+package, not installed by an older binary, so there is no version to be skewed
+against and the check stays silent. Regenerating with `task skills:regen` keeps
+that property.
+
+The exemption is parity-only, so it cannot hide a real problem. Edit a committed
+copy without regenerating and it diverges from the package: it reports as
+unknown-version again — and `task check:skills` fails, which is the real signal.
+Do not "resolve" an unknown-version line with `taskrail init --with-skills
+--force`; that stamps the committed copies and breaks parity. Adopters, whose
+copies are installed rather than parity-checked, see the `--force` remedy only
+when a real version mismatch is readable.
 
 ## Decision 3: Relationship To Task-Creation Ergonomics
 

@@ -1,12 +1,12 @@
 ---
 id: T-124-parity-copy-skew-exemption
 title: Exempt marker-free parity copies from the unknown-version skew report
-status: todo
+status: completed
 priority: medium
 spec_ref: specs/v0.4.0.md#version-skew-detection
 dependencies:
     - T-120-stale-skill-warning
-updated_at: "2026-07-27T14:44:03Z"
+updated_at: "2026-07-28T12:07:44Z"
 ---
 
 # T-124-parity-copy-skew-exemption Exempt marker-free parity copies from the unknown-version skew report
@@ -49,3 +49,7 @@ Follow-up derived from T-120-stale-skill-warning's verification or discovery.
 - TODO: record verification evidence paths.
 
 ## Implementation Notes
+
+## Implementation Notes
+
+- 2026-07-28T12:07:39Z: verification pass

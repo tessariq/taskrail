@@ -29,6 +29,35 @@ func stageSkillSkew(t *testing.T, root string) {
 	}
 }
 
+// stripSkillMarkers removes the install-time version marker from every
+// materialized skill, restoring the embedded package bytes.
+func stripSkillMarkers(t *testing.T, root string) {
+	t.Helper()
+	marker := "taskrail_version: \"" + version + "\"\n"
+	for _, target := range []string{".agents", ".claude"} {
+		paths, err := filepath.Glob(filepath.Join(root, target, "skills", "*", "SKILL.md"))
+		if err != nil {
+			t.Fatalf("glob installed skills: %v", err)
+		}
+		if len(paths) == 0 {
+			t.Fatalf("no installed skills under %s to strip", target)
+		}
+		for _, path := range paths {
+			data, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatalf("read installed skill: %v", err)
+			}
+			stripped := strings.Replace(string(data), marker, "", 1)
+			if stripped == string(data) {
+				t.Fatalf("%s carries no %q marker to strip", path, marker)
+			}
+			if err := os.WriteFile(path, []byte(stripped), 0o644); err != nil {
+				t.Fatalf("write stripped skill: %v", err)
+			}
+		}
+	}
+}
+
 // The skew warning is advisory: it lands on stderr, names both versions and the
 // resolving command, and leaves --json stdout parseable by an agent.
 func TestSkillSkewWarningGoesToStderrAndKeepsJSONParseable(t *testing.T) {
@@ -100,6 +129,25 @@ func TestNoSkillSkewWarningWhenVersionsMatch(t *testing.T) {
 	}
 	if strings.TrimSpace(stderr) != "" {
 		t.Errorf("matching skills produced stderr output: %q", stderr)
+	}
+}
+
+// A repository whose skills are marker-free copies of the embedded package — the
+// shape `task skills:regen` produces here, and the one T-124 exempts — is silent
+// end to end, not just at the service layer.
+func TestNoSkillSkewWarningForUnmarkedParityCopies(t *testing.T) {
+	root := setupRepo(t)
+	if out, err := runRoot(t, "init", "--with-skills"); err != nil {
+		t.Fatalf("init --with-skills: %v (output %q)", err, out)
+	}
+	stripSkillMarkers(t, root)
+
+	_, stderr, err := runRootSplit(t, "status")
+	if err != nil {
+		t.Fatalf("status: %v (stderr %q)", err, stderr)
+	}
+	if strings.TrimSpace(stderr) != "" {
+		t.Errorf("parity copies produced stderr output: %q", stderr)
 	}
 }
 

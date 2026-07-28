@@ -33,6 +33,22 @@ func restampSkill(t *testing.T, repo, target, skill, version string) {
 	}
 }
 
+// divergeSkill leaves a skill unmarked *and* no longer byte-identical to the
+// embedded package — a genuinely unknown install, as opposed to the marker-free
+// parity copy the exemption covers.
+func divergeSkill(t *testing.T, repo, target, skill string) {
+	t.Helper()
+	restampSkill(t, repo, target, skill, "")
+	path := filepath.Join(repo, filepath.FromSlash(target), skill, "SKILL.md")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read installed skill: %v", err)
+	}
+	if err := os.WriteFile(path, append(data, []byte("\nlocal edit\n")...), 0o644); err != nil {
+		t.Fatalf("diverge skill: %v", err)
+	}
+}
+
 // Skills written by the running binary are not skew, so the check stays silent.
 func TestSkillSkewWarningsSilentWhenVersionsMatch(t *testing.T) {
 	t.Parallel()
@@ -112,15 +128,44 @@ func TestSkillSkewWarningsReportsBothDirections(t *testing.T) {
 	}
 }
 
-// Skills installed before the marker existed are unknown, not stale: they report
-// under their own code and must not claim a version they never recorded.
-func TestSkillSkewWarningsReportsUnmarkedSkillsOnceAsUnknown(t *testing.T) {
+// A marker-free copy that is byte-identical to the embedded package is provably
+// not a stale install: nothing was recorded because nothing installed it — it was
+// copied from the package the running binary carries. Reporting it as unknown is a
+// standing line no contributor can clear, so the check exempts it
+// (specs/v0.4.0.md#version-skew-detection, T-124). The running version is
+// irrelevant to that judgement: parity is with the binary's own copy.
+func TestSkillSkewWarningsSilentForUnmarkedParityCopies(t *testing.T) {
 	t.Parallel()
 
 	repo, svc := installedSkillsRepo(t, "v0.4.0")
 	for _, target := range shippableSkillTargets {
 		for _, skill := range shippableSkills {
 			restampSkill(t, repo, target, skill, "")
+		}
+	}
+
+	for _, running := range []string{"v0.4.0", "v9.9.9"} {
+		warnings, err := svc.SkillSkewWarnings(running)
+		if err != nil {
+			t.Fatalf("skill skew warnings: %v", err)
+		}
+		if len(warnings) != 0 {
+			t.Errorf("running %s: parity copies warned: %+v", running, warnings)
+		}
+	}
+}
+
+// Skills installed before the marker existed are unknown, not stale: they report
+// under their own code and must not claim a version they never recorded. Content
+// that diverges from the embedded package is what separates this from the parity
+// copy above — the exemption must not swallow a genuinely unknown install.
+func TestSkillSkewWarningsReportsUnmarkedSkillsOnceAsUnknown(t *testing.T) {
+	t.Parallel()
+
+	repo, svc := installedSkillsRepo(t, "v0.4.0")
+	for _, target := range shippableSkillTargets {
+		for _, skill := range shippableSkills {
+			divergeSkill(t, repo, target, skill)
 		}
 	}
 
@@ -179,7 +224,7 @@ func TestSkillSkewWarningsGroupsByRecordedVersionDeterministically(t *testing.T)
 	for _, target := range shippableSkillTargets {
 		restampSkill(t, repo, target, shippableSkills[0], "v0.1.0")
 		restampSkill(t, repo, target, shippableSkills[1], "v0.2.0")
-		restampSkill(t, repo, target, shippableSkills[2], "")
+		divergeSkill(t, repo, target, shippableSkills[2])
 	}
 
 	var first []string
