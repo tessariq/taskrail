@@ -195,11 +195,14 @@ func TestInitRejectsNewerLayoutVersion(t *testing.T) {
 	t.Parallel()
 
 	repo := seedFixtureRepo(t)
+	// The service is built before the marker is bumped, so this exercises Init's
+	// own marker read rather than the discovery-time guard covered in
+	// layout_version_test.go.
+	svc := newTestService(t, repo, time.Date(2026, 3, 31, 12, 0, 0, 0, time.UTC))
 	writeFile(t, markerFile(repo), "layout_version: 999\nspecs_dir: specs\nplanning_dir: planning\n")
 
-	svc := newTestService(t, repo, time.Date(2026, 3, 31, 12, 0, 0, 0, time.UTC))
-	if _, err := svc.Init(false); err == nil {
-		t.Fatal("expected error for newer-than-supported layout_version")
+	if _, err := svc.Init(false); err == nil || !strings.Contains(err.Error(), "upgrade taskrail") {
+		t.Fatalf("Init error = %v, want upgrade-taskrail refusal", err)
 	}
 }
 

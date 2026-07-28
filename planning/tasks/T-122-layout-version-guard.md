@@ -1,11 +1,11 @@
 ---
 id: T-122-layout-version-guard
 title: Enforce layout_version compatibility in every command, not only init
-status: todo
+status: completed
 priority: medium
 spec_ref: specs/v0.4.0.md#layout-compatibility-beyond-init
 dependencies: []
-updated_at: "2026-07-27T13:49:41Z"
+updated_at: "2026-07-28T11:16:49Z"
 ---
 
 # T-122-layout-version-guard Enforce layout_version compatibility in every command, not only init
@@ -48,3 +48,6 @@ version-1 binary.
 - TODO: record verification evidence paths.
 
 ## Implementation Notes
+
+- 2026-07-28T11:16:40Z: verification pass
+- 2026-07-28T11:16:49Z: Shared ensureSupportedLayoutVersion guard in loadLayoutConfig and readMarker; init duplicate removed. Tests: internal/taskrail/layout_version_test.go, cmd/taskrail/layout_version_smoke_test.go

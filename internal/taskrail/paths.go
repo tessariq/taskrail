@@ -60,6 +60,9 @@ func loadLayoutConfig(root string) (LayoutConfig, error) {
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return LayoutConfig{}, fmt.Errorf("parse layout config %s: %w", path, err)
 	}
+	if err := ensureSupportedLayoutVersion(cfg); err != nil {
+		return LayoutConfig{}, err
+	}
 	if cfg.SpecsDir == "" {
 		cfg.SpecsDir = defaultSpecsDir
 	}
@@ -95,7 +98,24 @@ func readMarker(root string) (LayoutConfig, bool, error) {
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return LayoutConfig{}, false, fmt.Errorf("parse layout marker %s: %w", markerPath(root), err)
 	}
+	if err := ensureSupportedLayoutVersion(cfg); err != nil {
+		return LayoutConfig{}, false, err
+	}
 	return cfg, true, nil
+}
+
+// ensureSupportedLayoutVersion refuses a marker recording a layout newer than
+// this binary models. It guards both marker reads, so every command reaches it
+// through the normal layout load — before any read-modify-write, and for
+// read-only reporters too, since a plausible-looking report against a layout the
+// binary cannot model is worse than a refusal
+// (specs/v0.4.0.md#layout-compatibility-beyond-init).
+func ensureSupportedLayoutVersion(cfg LayoutConfig) error {
+	if cfg.LayoutVersion <= currentLayoutVersion {
+		return nil
+	}
+	return fmt.Errorf("repository layout_version %d is newer than supported %d; upgrade taskrail",
+		cfg.LayoutVersion, currentLayoutVersion)
 }
 
 // writeMarker persists the layout marker, creating `.taskrail/` if needed.

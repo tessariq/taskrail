@@ -61,27 +61,21 @@ func (s *Service) initWithoutMarker(apply bool) (InitResult, error) {
 }
 
 // initWithMarker dispatches on the recorded layout version: current is an
-// idempotent no-op, older triggers migration, and newer is refused so an older
-// CLI never mangles a layout it does not understand.
+// idempotent no-op and older triggers migration. A newer version never reaches
+// here — readMarker already refused it through the shared layout-version guard.
 func (s *Service) initWithMarker(cfg LayoutConfig, apply bool) (InitResult, error) {
-	switch {
-	case cfg.LayoutVersion == currentLayoutVersion:
-		if err := s.ensureLayout(); err != nil {
-			return InitResult{}, err
-		}
-		return InitResult{
-			Outcome:     InitCurrent,
-			FromVersion: cfg.LayoutVersion,
-			ToVersion:   currentLayoutVersion,
-			Applied:     true,
-		}, nil
-	case cfg.LayoutVersion > currentLayoutVersion:
-		return InitResult{}, fmt.Errorf(
-			"repository layout_version %d is newer than supported %d; upgrade taskrail",
-			cfg.LayoutVersion, currentLayoutVersion)
-	default:
+	if cfg.LayoutVersion != currentLayoutVersion {
 		return s.migrate(cfg, apply)
 	}
+	if err := s.ensureLayout(); err != nil {
+		return InitResult{}, err
+	}
+	return InitResult{
+		Outcome:     InitCurrent,
+		FromVersion: cfg.LayoutVersion,
+		ToVersion:   currentLayoutVersion,
+		Applied:     true,
+	}, nil
 }
 
 // migrate upgrades an older-version repository to the current layout. It defaults

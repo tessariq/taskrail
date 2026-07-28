@@ -82,6 +82,9 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ### Fixed
 
+- Every command now refuses a repository recording a `layout_version` newer than
+  the binary supports ("upgrade taskrail"), before reading or writing state —
+  previously only `init` checked.
 - `taskrail complete`, `block`, and `unblock` now reject a `--note`/`--reason`
   that embeds a gitignored `planning/artifacts/` file path before writing,
   pointing you at a path-free summary — previously the transition wrote committed
