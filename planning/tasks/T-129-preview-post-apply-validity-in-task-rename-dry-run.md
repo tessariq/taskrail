@@ -1,11 +1,11 @@
 ---
 id: T-129-preview-post-apply-validity-in-task-rename-dry-run
 title: Preview post-apply validity in task rename --dry-run
-status: todo
+status: completed
 priority: low
 spec_ref: specs/v0.4.0.md#task-rename-and-re-slug
 dependencies: []
-updated_at: "2026-07-28T08:53:02Z"
+updated_at: "2026-07-28T21:46:12Z"
 ---
 
 # T-129-preview-post-apply-validity-in-task-rename-dry-run Preview post-apply validity in task rename --dry-run
@@ -57,3 +57,5 @@ regression.
 - TODO: record verification evidence paths.
 
 ## Implementation Notes
+
+- 2026-07-28T21:46:01Z: verification pass

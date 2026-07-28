@@ -50,8 +50,9 @@ All notable user-visible changes to Taskrail will be documented in this file.
 - `taskrail task rename <id>` — atomically re-slug a task: rewrite its `id`,
   rename the file (`git mv` when tracked), and fix every inbound `dependencies:`
   reference. `--slug` sets the slug verbatim; `--title` derives it, length-capped
-  as on `task new`. `--dry-run` previews the change set; `--json` emits it.
-  Preserves the `T-<n>` prefix; never advances status. A selector that normalizes
+  as on `task new`. `--dry-run` previews the change set and the validity it would
+  produce (healing a `filename must be <id>.md` drift previews valid), writing
+  nothing; `--json` emits it. Preserves the `T-<n>` prefix; never advances status. A selector that normalizes
   to no slug de-slugs the task back to the bare `T-<n>` id and warns on stderr.
   Also repoints the body's `# <id> <title>` heading, reported as a `body_heading`
   change.

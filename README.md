@@ -296,6 +296,12 @@ retitling its human-readable title are distinct operations, and there is no
 derives a new slug and leaves the title unchanged, by design. To change the
 visible title, edit the task's `title:` field directly.
 
+`--dry-run` writes nothing, and its reported validation previews the state the
+rename *would* leave behind, not the one it would replace — so re-slugging to heal
+a `filename must be <id>.md` drift answers "would this fix it?". The preview covers
+the whole change set (id, filename, inbound dependency refs, and the `current_task`
+pointer when it names the task); violations the rename does not touch still show up.
+
 ### Re-pointing a task onto another spec area
 
 After `spec activate`, open tasks still pointing at the previous spec are off-spec:

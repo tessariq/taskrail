@@ -37,8 +37,9 @@ type RenameChange struct {
 }
 
 // RenameTaskResult reports the re-slug the command planned (dry run) or applied.
-// Validation reflects the current state on a dry run and the post-apply state
-// otherwise, so a reviewer always sees the resulting validity.
+// Validation reflects the state the rename would produce — a dry run previews the
+// full change set in memory, an apply re-validates what landed — so a reviewer
+// always sees the resulting validity.
 type RenameTaskResult struct {
 	OldID      string            `json:"old_id"`
 	NewID      string            `json:"new_id"`
@@ -106,15 +107,22 @@ func (s *Service) RenameTask(input RenameTaskInput) (RenameTaskResult, error) {
 	inbound := inboundDependents(tasks, oldID)
 	changes := renameChanges(s.paths.RepoRoot, oldID, newID, oldPath, newPath, target.Body, inbound)
 
-	if !input.DryRun {
+	// Both branches report the state the rename *would* leave behind: an apply
+	// re-validates what actually landed, while a dry run previews the same rules
+	// against the whole change set held in memory. An operator re-slugging to heal
+	// a `filename must be <id>.md` drift is asking "would this fix it?", so
+	// answering with the validity of the state being replaced would invert it.
+	var validation ValidationResult
+	if input.DryRun {
+		validation = s.validateInMemory(renamePreview(state, tasks, target, inbound, oldID, newID, newPath))
+	} else {
 		if err := s.applyRename(state, tasks, target, inbound, oldID, newID, oldPath, newPath); err != nil {
 			return RenameTaskResult{}, err
 		}
-	}
-	// Validation reflects current state on a dry run and post-apply state otherwise.
-	validation, err := s.Validate()
-	if err != nil {
-		return RenameTaskResult{}, err
+		validation, err = s.Validate()
+		if err != nil {
+			return RenameTaskResult{}, err
+		}
 	}
 	var warnings []Warning
 	if slug == "" {
@@ -209,6 +217,43 @@ func renameChanges(root, oldID, newID, oldPath, newPath, body string, inbound []
 		changes = append(changes, RenameChange{Kind: "dependency_ref", TaskID: task.Frontmatter.ID, From: oldID, To: newID})
 	}
 	return changes
+}
+
+// renamePreview returns copies of state and the task set with the rename applied
+// in memory, so a dry run can validate the state the rename would produce while
+// writing nothing. It mirrors the coupled edits applyRename makes — the target's
+// id/filename/body heading, each inbound dependency edge, and the current_task
+// pointer when it names the task — but on copies: the caller still reports the old
+// id, and validateInMemory must see the pending change set, not a mutation of the
+// loaded tasks it previews.
+func renamePreview(state *State, tasks []*Task, target *Task, inbound []*Task, oldID, newID, newPath string) (*State, []*Task) {
+	preview := make([]*Task, len(tasks))
+	for i, task := range tasks {
+		switch {
+		case task == target:
+			edited := *task
+			edited.Frontmatter.ID = newID
+			edited.Filename = newPath
+			edited.Body, _ = renameBodyHeading(task.Body, oldID, newID)
+			preview[i] = &edited
+		case slices.Contains(inbound, task):
+			edited := *task
+			edited.Frontmatter.Dependencies = slices.Clone(task.Frontmatter.Dependencies)
+			for j, dep := range edited.Frontmatter.Dependencies {
+				if dep == oldID {
+					edited.Frontmatter.Dependencies[j] = newID
+				}
+			}
+			preview[i] = &edited
+		default:
+			preview[i] = task
+		}
+	}
+	previewState := *state
+	if previewState.Frontmatter.CurrentTask == oldID {
+		previewState.Frontmatter.CurrentTask = newID
+	}
+	return &previewState, preview
 }
 
 // applyRename performs the coupled writes as one outcome: a failure partway

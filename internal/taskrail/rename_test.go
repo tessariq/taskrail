@@ -229,6 +229,121 @@ func TestRenameTaskDryRunWritesNothing(t *testing.T) {
 	}
 }
 
+// driftedTask writes a task whose filename disagrees with its frontmatter id,
+// the `filename must be <id>.md` violation an operator re-slugs to heal. It
+// returns the frontmatter id so the caller renames by the id RenameTask resolves.
+func driftedTask(t *testing.T, repo, id, driftedBase string) string {
+	t.Helper()
+	writeTask(t, repo, id, "Drifted", "todo", "high", "specs/v0.1.0.md#summary", nil)
+	src := filepath.Join(repo, "planning", "tasks", id+".md")
+	dst := filepath.Join(repo, "planning", "tasks", driftedBase+".md")
+	if err := os.Rename(src, dst); err != nil {
+		t.Fatalf("drift file: %v", err)
+	}
+	return id
+}
+
+func TestRenameTaskDryRunValidationPreviewsPostApplyState(t *testing.T) {
+	t.Parallel()
+
+	// The reason to re-slug is often that the file/id are out of sync — here the
+	// file is named for a slug the frontmatter id no longer carries, so the repo
+	// is invalid now. A dry run must answer "would this heal it?", so its
+	// validation reflects the state the rename would produce, not the one it
+	// replaces.
+	repo := seedFixtureRepo(t)
+	id := driftedTask(t, repo, "T-042-old", "T-042-drifted")
+	svc := newTestService(t, repo, time.Date(2026, 7, 16, 12, 0, 0, 0, time.UTC))
+
+	current, err := svc.Validate()
+	if err != nil {
+		t.Fatalf("validate: %v", err)
+	}
+	if current.Valid {
+		t.Fatal("expected the pre-rename repo to be invalid")
+	}
+
+	drifted := filepath.Join(repo, "planning", "tasks", "T-042-drifted.md")
+	before := readBytes(t, drifted)
+	result, err := svc.RenameTask(RenameTaskInput{OldID: id, Slug: "healed", DryRun: true})
+	if err != nil {
+		t.Fatalf("dry-run rename: %v", err)
+	}
+	if result.Validation == nil || !result.Validation.Valid {
+		t.Fatalf("expected dry run to preview a valid post-apply state, got %+v", result.Validation)
+	}
+	// Previewing must stay side-effect-free.
+	if got := readBytes(t, drifted); got != before {
+		t.Fatal("expected task file untouched on dry run")
+	}
+
+	// The preview is honest: applying really does yield that result.
+	applied, err := svc.RenameTask(RenameTaskInput{OldID: id, Slug: "healed"})
+	if err != nil {
+		t.Fatalf("apply rename: %v", err)
+	}
+	if applied.Validation == nil || !applied.Validation.Valid {
+		t.Fatalf("expected valid state after apply, got %+v", applied.Validation)
+	}
+}
+
+func TestRenameTaskDryRunPreviewKeepsUnrelatedViolations(t *testing.T) {
+	t.Parallel()
+
+	// The preview applies only the rename change set: a violation the rename does
+	// not touch must still surface, so a dry run never reads as a clean bill of
+	// health for the whole repo.
+	repo := seedFixtureRepo(t)
+	id := driftedTask(t, repo, "T-042-old", "T-042-drifted")
+	writeTask(t, repo, "T-003", "Broken sibling", "todo", "medium", "specs/v0.9.9.md#gone", nil)
+	svc := newTestService(t, repo, time.Date(2026, 7, 16, 12, 0, 0, 0, time.UTC))
+
+	result, err := svc.RenameTask(RenameTaskInput{OldID: id, Slug: "healed", DryRun: true})
+	if err != nil {
+		t.Fatalf("dry-run rename: %v", err)
+	}
+	if result.Validation == nil || result.Validation.Valid {
+		t.Fatalf("expected the unrelated violation to survive the preview, got %+v", result.Validation)
+	}
+	found := false
+	for _, v := range result.Validation.Violations {
+		if strings.Contains(v, "T-003") {
+			found = true
+		}
+		if strings.Contains(v, "T-042") {
+			t.Fatalf("expected no violation for the re-slugged task, got %q", v)
+		}
+	}
+	if !found {
+		t.Fatalf("expected a T-003 violation, got %+v", result.Validation.Violations)
+	}
+}
+
+// TestRenameTaskDryRunPreviewsCurrentTaskPointer pins that the preview repoints
+// the current_task pointer for the active task it renames. Without it, the
+// pending id and the still-old current_task disagree and the preview would report
+// invalid (state current_task does not match in_progress task) — the inverse of
+// what the operator asked.
+func TestRenameTaskDryRunPreviewsCurrentTaskPointer(t *testing.T) {
+	t.Parallel()
+	repo := seedFixtureRepo(t)
+	writeTask(t, repo, "T-003-active", "Active", "in_progress", "high", "specs/v0.1.0.md#summary", nil)
+	writeFixtureState(t, repo, "v0.1.0", "T-003-active", "Active", "in_progress")
+	svc := newTestService(t, repo, time.Date(2026, 7, 16, 12, 0, 0, 0, time.UTC))
+
+	before := readBytes(t, filepath.Join(repo, "planning", "STATE.md"))
+	result, err := svc.RenameTask(RenameTaskInput{OldID: "T-003-active", Slug: "running", DryRun: true})
+	if err != nil {
+		t.Fatalf("dry-run rename: %v", err)
+	}
+	if result.Validation == nil || !result.Validation.Valid {
+		t.Fatalf("expected the current_task pointer to be previewed valid, got %+v", result.Validation)
+	}
+	if got := readBytes(t, filepath.Join(repo, "planning", "STATE.md")); got != before {
+		t.Fatal("dry run wrote STATE.md")
+	}
+}
+
 func TestRenameTaskRequiresExactlyOneSelector(t *testing.T) {
 	t.Parallel()
 	svc, _ := renameFixture(t)
