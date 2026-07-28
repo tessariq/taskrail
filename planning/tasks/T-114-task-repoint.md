@@ -1,11 +1,11 @@
 ---
 id: T-114-task-repoint
 title: 'task repoint: re-point an open task spec_ref onto the active spec'
-status: todo
+status: completed
 priority: medium
 spec_ref: specs/v0.4.0.md#task-spec-ref-re-pointing
 dependencies: []
-updated_at: "2026-07-17T12:04:24Z"
+updated_at: "2026-07-28T08:38:15Z"
 ---
 
 # T-114-task-repoint task repoint: re-point an open task spec_ref onto the active spec
@@ -54,3 +54,5 @@ dependencies, and never other task files. Not a status mutator, not a bulk migra
 
 - Mirrors the `task new --area` anchor-resolution path; reuse it rather than
   re-implementing anchor matching.
+- 2026-07-28T08:38:09Z: verification pass
+- 2026-07-28T08:38:15Z: task repoint <id> with --area/--spec-ref, --dry-run, --json; docs updated

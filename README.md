@@ -121,14 +121,16 @@ active spec is still returned so you can continue or resolve it, with a
 `selected_non_active_spec` warning. Recover older work explicitly with
 `start <id>`, or run `next --include-off-spec` for a one-shot pick that ranks
 `todo` tasks across all specs and flags an off-spec selection (`off_spec` /
-`selected_off_spec`).
+`selected_off_spec`). To move an off-spec task *onto* the active spec instead of
+running it where it is, use
+[`task repoint`](#re-pointing-a-task-onto-another-spec-area).
 
 **Beyond the core loop**
 
 - **Adopt an existing repo** — `init` and `retrofit` scaffold `specs/` + `planning/` non-destructively; `import` turns rough notes into spec/task drafts without an LLM; `repair` reconciles mechanical `STATE.md` drift.
 - **See where work stands** — `status`, `stats`, and `coverage` report a live snapshot, aggregate metrics, and advisory spec-linkage, all read-only. `status` also breaks down open work (`todo`/`in_progress`/`blocked`) by how much targets the active spec versus points away from it, listing the away tasks and their `spec_ref`; the away set matches the active-spec filter `next` uses for idle selection.
 - **Author and steer specs** — the `spec` family (`list`, `show`, `add`, `activate`) inspects and evolves versioned specs.
-- **Handle the messy parts** — `block`/`unblock` park and resume work, `task new` scaffolds a task with the next free id, and `task rename` atomically re-slugs a task's id, filename, and inbound dependency references.
+- **Handle the messy parts** — `block`/`unblock` park and resume work, `task new` scaffolds a task with the next free id, `task rename` atomically re-slugs a task's id, filename, and inbound dependency references, and `task repoint` moves an open task's `spec_ref` onto another area.
 
 Run `taskrail --help`, or `taskrail <command> --help`, for the full command list and every flag.
 
@@ -171,10 +173,10 @@ taskrail completion fish | source   # fish
 Run `taskrail completion --help` for per-shell install steps. Completion is
 read-only: it never writes `STATE.md` or task files. Beyond every command and
 flag, it completes spec versions for `spec show`/`spec activate`, real
-`<path>#<anchor>` values for `task new --spec-ref`, and the active spec's bare
-anchors for `task new --area` (the anchors it offers are exactly the ones
-`validate` accepts, so a completed reference authors a task that passes
-`validate`).
+`<path>#<anchor>` values for `task new --spec-ref` and `task repoint --spec-ref`,
+and the active spec's bare anchors for their `--area` flags (the anchors it offers
+are exactly the ones `validate` accepts, so a completed reference authors or
+re-points a task that passes `validate`).
 
 ## Quickstart
 
@@ -291,6 +293,35 @@ retitling its human-readable title are distinct operations, and there is no
 `task retitle` command in this version — so `task rename --title "New Title"`
 derives a new slug and leaves the title unchanged, by design. To change the
 visible title, edit the task's `title:` field directly.
+
+### Re-pointing a task onto another spec area
+
+After `spec activate`, open tasks still pointing at the previous spec are off-spec:
+`next` skips them, `status` lists them under the active-spec drift breakdown, and
+`next --include-off-spec` recovers one to run where it is. To move an open task
+*onto* the active spec instead, `task repoint` rewrites its `spec_ref` — the one
+edit that would otherwise mean hand-editing frontmatter.
+
+```sh
+taskrail task repoint T-<n> --area status-active-spec-drift-breakdown  # active-spec anchor
+taskrail task repoint T-<n> --spec-ref specs/v0.2.0.md#some-area       # explicit, cross-spec
+taskrail task repoint T-<n> --area some-area --dry-run                 # preview, writes nothing
+```
+
+`--area` resolves the anchor against `STATE.md`'s active spec exactly as `task new
+--area` does, so an unknown anchor fails before any write and points at `spec show
+<active-version> --anchors`. `--area` and `--spec-ref` are mutually exclusive.
+
+`--dry-run` writes nothing, and its reported validation previews the state the
+repoint *would* leave behind, not the one it would replace — so previewing a fix
+for a broken `spec_ref` answers "would this make the repo valid?". Violations the
+repoint does not touch still show up.
+
+Repoint re-encodes one reference field: it never touches the id, slug, filename,
+title, status, or dependencies, and never rewrites another task file. It is not a
+status mutator and not a bulk migrator. Completed and cancelled tasks are delivered
+history and are rejected. Because it re-projects `planning/STATE.md`, run `git
+status` afterwards and stage the regenerated file with the change.
 
 Bootstrap drafts from rough notes without any LLM — preview first, then apply:
 

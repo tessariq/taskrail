@@ -51,3 +51,15 @@ bulk backlog authoring), the rendered counts go stale; run `taskrail repair`
 files. Repair only ever rewrites `STATE.md` — never a task file — so it cannot
 advance a status or fabricate work. There is deliberately no separate "refresh"
 command: `repair` already owns re-projecting `STATE.md`.
+
+### Moving an open task onto another spec area
+
+After `spec activate`, an open task whose `spec_ref` still points at the previous
+spec is off-spec: `next` skips it and `status` lists it. Use `taskrail task
+repoint <id> --area <anchor>` to move it onto the active spec (or `--spec-ref
+<path>#<anchor>` for the cross-spec case) rather than hand-editing the
+frontmatter. It rewrites only `spec_ref`, re-projects `STATE.md`, and re-runs
+`validate`; `--dry-run` previews the change. It never touches the id, filename,
+title, status, or dependencies, and completed and cancelled tasks are rejected as
+delivered history. Because it writes `STATE.md`, run `git status` afterwards and
+stage the regenerated file with the change.

@@ -33,6 +33,17 @@ its remedy (`task taskrail:install`) builds to `./bin` — a directory that may 
 on `PATH`. In that state the guard reports a condition its own advice cannot
 resolve.
 
+The guard misreports in a second way, on the same "the advice does not resolve what
+was detected" theme (investigated 2026-07-27, `docs/binary-resolution-findings.md`
+Finding 2). `internal/toolchain/cmd/freshcheck` byte-compares the binary, so the
+*builder* changes the verdict, not just the source: `mise.toml` pins `go = "1.26"`,
+which floats to 1.26.5, while a system `/usr/local/go` may be 1.26.0. Identical
+source built under each produces different bytes, so any shell where the system Go
+precedes mise's reports "stale" for a clean tree — and rerunning the advised `task
+taskrail:install` in that same shell never converges. Both findings are the guard
+sending a contributor somewhere that cannot fix what it detected, so they are
+tracked here rather than split.
+
 ## Acceptance
 
 - `task taskrail:install` fails loudly when its output directory is not reachable as
@@ -41,6 +52,12 @@ resolve.
   exporting `TASKRAIL`).
 - The freshness guard's message distinguishes "the binary is stale" from "the binary
   you would run is not the one you just built", because the remedies differ.
+- The guard no longer reports a clean tree as stale when `taskrail:install` and
+  `taskrail:check` ran under different Go toolchains. Either pin `go` exactly in
+  `mise.toml`, or have `freshcheck` recognize a toolchain difference (for example
+  via `go version -m` build info) before falling back to the byte comparison —
+  whichever it does, the message must name the toolchain as the variable so the
+  remedy it prescribes is the one that resolves what it detected.
 - The staleness window is closed for tracked-work commands in this repository: a
   state-writing command run against a binary older than the working tree is caught
   rather than trusted. A pre-command check, a documented wrapper, or hook wiring are

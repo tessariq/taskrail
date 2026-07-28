@@ -56,6 +56,13 @@ All notable user-visible changes to Taskrail will be documented in this file.
 - `taskrail task new --area <anchor>` — active-spec shorthand for `--spec-ref
   <active-spec-path>#<anchor>`. Mutually exclusive with `--spec-ref`; an unknown
   anchor fails before writing and points at `spec show <active-version> --anchors`.
+- `taskrail task repoint <id>` — re-point an open task's `spec_ref` onto a new
+  area without hand-editing frontmatter. `--area <anchor>` resolves it against the
+  active spec, `--spec-ref <path#anchor>` sets it explicitly (mutually exclusive);
+  an unknown anchor fails before writing. Rewrites only `spec_ref`, then
+  re-projects `STATE.md` — check `git status` afterwards. Completed and cancelled
+  tasks are rejected. `--dry-run` previews the change and the validity it would
+  produce, writing nothing; `--json` emits the change.
 
 ### Changed
 

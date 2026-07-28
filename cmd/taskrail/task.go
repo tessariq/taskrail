@@ -16,6 +16,7 @@ func newTaskCmd() *cobra.Command {
 	}
 	cmd.AddCommand(newTaskNewCmd())
 	cmd.AddCommand(newTaskRenameCmd())
+	cmd.AddCommand(newTaskRepointCmd())
 	return cmd
 }
 
@@ -152,6 +153,71 @@ func renameSummary(result taskrail.RenameTaskResult) string {
 			continue
 		}
 		fmt.Fprintf(&b, "- %s: %q -> %q\n", ch.Kind, ch.From, ch.To)
+	}
+	fmt.Fprintf(&b, "validation: %s", validationLabel(result.Validation))
+	return b.String()
+}
+
+func newTaskRepointCmd() *cobra.Command {
+	var (
+		area    string
+		specRef string
+		dryRun  bool
+		opt     jsonOption
+	)
+
+	cmd := &cobra.Command{
+		Use:   "repoint <id>",
+		Short: "Re-point an open task's spec_ref onto a new area",
+		Long: "Rewrite one open task's spec_ref frontmatter field, re-project " +
+			"planning/STATE.md, and re-run validation.\n\n" +
+			"Exactly one of --area or --spec-ref selects the new reference: --area " +
+			"<anchor> resolves it against STATE.md's active spec using the same " +
+			"anchor resolution as `task new --area` (an unknown anchor fails before " +
+			"any write and points at `spec show <active-version> --anchors`), while " +
+			"--spec-ref <path#anchor> sets an explicit reference for the cross-spec " +
+			"case. Only spec_ref changes: the id, slug, filename, title, status, and " +
+			"dependencies are untouched, and no other task file is modified. " +
+			"Completed and cancelled tasks are delivered history and are rejected. " +
+			"--dry-run reports the change without writing.",
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			svc, err := serviceFromCmd(cmd)
+			if err != nil {
+				return err
+			}
+			result, err := svc.RepointTask(taskrail.RepointTaskInput{
+				TaskID:  args[0],
+				Area:    area,
+				SpecRef: specRef,
+				DryRun:  dryRun,
+			})
+			if err != nil {
+				return err
+			}
+			return printResult(cmd, opt.json, result, repointSummary(result))
+		},
+	}
+
+	cmd.Flags().StringVar(&area, "area", "", "active-spec anchor shorthand; resolves spec_ref to the active spec path plus this anchor (see `spec show <active-version> --anchors`)")
+	cmd.Flags().StringVar(&specRef, "spec-ref", "", "explicit spec reference as path#anchor, for the cross-spec case")
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "report the planned change without writing")
+	cmd.Flags().BoolVar(&opt.json, "json", false, "print machine-readable output")
+	// --area is the active-spec shorthand for --spec-ref; a task has one resolved ref.
+	cmd.MarkFlagsMutuallyExclusive("spec-ref", "area")
+	_ = cmd.RegisterFlagCompletionFunc("spec-ref", completeSpecRef)
+	_ = cmd.RegisterFlagCompletionFunc("area", completeArea)
+	return cmd
+}
+
+// repointSummary renders the human-readable re-point outcome: the planned or
+// applied reference change and the resulting validation status.
+func repointSummary(result taskrail.RepointTaskResult) string {
+	var b strings.Builder
+	if result.Applied {
+		fmt.Fprintf(&b, "repointed %s: %q -> %q\n", result.TaskID, result.OldSpecRef, result.NewSpecRef)
+	} else {
+		fmt.Fprintf(&b, "repoint dry run: %s: %q -> %q (re-run without --dry-run to write)\n", result.TaskID, result.OldSpecRef, result.NewSpecRef)
 	}
 	fmt.Fprintf(&b, "validation: %s", validationLabel(result.Validation))
 	return b.String()

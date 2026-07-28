@@ -41,8 +41,8 @@ func specVersionCompletions(cmd *cobra.Command) ([]string, cobra.ShellCompDirect
 	return versions, cobra.ShellCompDirectiveNoFileComp
 }
 
-// completeSpecRef completes `task new --spec-ref` to real `<path>#<anchor>`
-// values. In the path phase (no '#' typed yet) it suppresses the trailing space
+// completeSpecRef completes the `--spec-ref` flag of `task new` and `task
+// repoint` to real `<path>#<anchor>` values. In the path phase (no '#' typed yet) it suppresses the trailing space
 // so the shell stays on the word for the anchor phase; once an anchor is being
 // typed the completed `<path>#<anchor>` is a whole value and the space returns.
 func completeSpecRef(cmd *cobra.Command, _ []string, toComplete string) ([]string, cobra.ShellCompDirective) {
@@ -61,8 +61,9 @@ func completeSpecRef(cmd *cobra.Command, _ []string, toComplete string) ([]strin
 	return refs, directive
 }
 
-// completeArea completes `task new --area` to the active spec's bare anchors —
-// the same set validation accepts — so the shorthand only offers real areas.
+// completeArea completes the `--area` flag of `task new` and `task repoint` to
+// the active spec's bare anchors — the same set validation accepts — so the
+// shorthand only offers real areas.
 func completeArea(cmd *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
 	svc, err := serviceFromCmd(cmd)
 	if err != nil {

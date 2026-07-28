@@ -962,6 +962,117 @@ func TestTaskNewAreaConflictsWithSpecRef(t *testing.T) {
 	}
 }
 
+// addSpecArea appends a second heading to the starter spec so a repoint has a
+// real target anchor distinct from the writeTask default (#summary).
+func addSpecArea(t *testing.T, root, heading string) {
+	t.Helper()
+	path := filepath.Join(root, "specs", "v0.1.0.md")
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read starter spec: %v", err)
+	}
+	if err := os.WriteFile(path, append(body, []byte("\n## "+heading+"\n\nArea body.\n")...), 0o644); err != nil {
+		t.Fatalf("append spec heading: %v", err)
+	}
+}
+
+func readTaskFile(t *testing.T, root, id string) string {
+	t.Helper()
+	body, err := os.ReadFile(filepath.Join(root, "planning", "tasks", id+".md"))
+	if err != nil {
+		t.Fatalf("read task %s: %v", id, err)
+	}
+	return string(body)
+}
+
+func TestTaskRepointRewritesSpecRefAndValidates(t *testing.T) {
+	root := setupRepo(t)
+	addSpecArea(t, root, "Goals")
+	writeTask(t, root, "T-001", "todo", "")
+
+	out, err := runRoot(t, "task", "repoint", "T-001", "--area", "goals")
+	if err != nil {
+		t.Fatalf("task repoint: %v (output %q)", err, out)
+	}
+	if !strings.Contains(out, "repointed T-001: \"specs/v0.1.0.md#summary\" -> \"specs/v0.1.0.md#goals\"") {
+		t.Fatalf("expected human repoint summary, got %q", out)
+	}
+	if !strings.Contains(out, "validation: valid") {
+		t.Fatalf("expected validation line, got %q", out)
+	}
+	if body := readTaskFile(t, root, "T-001"); !strings.Contains(body, "spec_ref: specs/v0.1.0.md#goals") {
+		t.Fatalf("expected rewritten spec_ref, got:\n%s", body)
+	}
+	if out, err := runRoot(t, "validate"); err != nil {
+		t.Fatalf("validate after repoint: %v (output %q)", err, out)
+	}
+}
+
+func TestTaskRepointJSONReportsChange(t *testing.T) {
+	root := setupRepo(t)
+	addSpecArea(t, root, "Goals")
+	writeTask(t, root, "T-001", "todo", "")
+
+	out, err := runRoot(t, "task", "repoint", "T-001", "--spec-ref", "specs/v0.1.0.md#goals", "--json")
+	if err != nil {
+		t.Fatalf("task repoint --json: %v (output %q)", err, out)
+	}
+	if !strings.Contains(out, `"old_spec_ref": "specs/v0.1.0.md#summary"`) {
+		t.Fatalf("expected old_spec_ref in output, got %q", out)
+	}
+	if !strings.Contains(out, `"new_spec_ref": "specs/v0.1.0.md#goals"`) {
+		t.Fatalf("expected new_spec_ref in output, got %q", out)
+	}
+	if !strings.Contains(out, `"applied": true`) {
+		t.Fatalf("expected applied repoint, got %q", out)
+	}
+}
+
+func TestTaskRepointDryRunWritesNothing(t *testing.T) {
+	root := setupRepo(t)
+	addSpecArea(t, root, "Goals")
+	writeTask(t, root, "T-001", "todo", "")
+	before := readTaskFile(t, root, "T-001")
+
+	out, err := runRoot(t, "task", "repoint", "T-001", "--area", "goals", "--dry-run")
+	if err != nil {
+		t.Fatalf("task repoint dry run: %v (output %q)", err, out)
+	}
+	if !strings.Contains(out, "repoint dry run") {
+		t.Fatalf("expected dry-run summary, got %q", out)
+	}
+	if after := readTaskFile(t, root, "T-001"); after != before {
+		t.Fatalf("dry run must not rewrite the task file, got:\n%s", after)
+	}
+}
+
+func TestTaskRepointConflictingSelectorsRejected(t *testing.T) {
+	root := setupRepo(t)
+	addSpecArea(t, root, "Goals")
+	writeTask(t, root, "T-001", "todo", "")
+
+	if _, err := runRoot(t, "task", "repoint", "T-001", "--area", "goals", "--spec-ref", "specs/v0.1.0.md#goals"); err == nil {
+		t.Fatal("expected error when --area and --spec-ref are both set")
+	}
+	if body := readTaskFile(t, root, "T-001"); !strings.Contains(body, "spec_ref: specs/v0.1.0.md#summary") {
+		t.Fatalf("expected untouched spec_ref on rejection, got:\n%s", body)
+	}
+}
+
+func TestTaskRepointRejectsCompletedTask(t *testing.T) {
+	root := setupRepo(t)
+	addSpecArea(t, root, "Goals")
+	writeTask(t, root, "T-001", "completed", "")
+
+	out, err := runRoot(t, "task", "repoint", "T-001", "--area", "goals")
+	if err == nil {
+		t.Fatalf("expected rejection for a completed task, output %q", out)
+	}
+	if body := readTaskFile(t, root, "T-001"); !strings.Contains(body, "spec_ref: specs/v0.1.0.md#summary") {
+		t.Fatalf("expected untouched spec_ref on rejection, got:\n%s", body)
+	}
+}
+
 func TestTaskRenameReslugsAndRewritesInboundDeps(t *testing.T) {
 	root := setupRepo(t)
 	writeTask(t, root, "T-001", "completed", "")

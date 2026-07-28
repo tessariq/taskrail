@@ -11,19 +11,7 @@ import (
 )
 
 func (s *Service) Validate() (ValidationResult, error) {
-	violations := make([]string, 0)
-	// Artifacts (ArtifactsDir/VerifyDir) are gitignored output and empty on a
-	// clean checkout, so they are not required; verify creates them on demand.
-	for _, requiredDir := range []string{s.paths.SpecsDir, s.paths.PlanningDir, s.paths.TasksDir} {
-		if !dirExists(requiredDir) {
-			violations = append(violations, fmt.Sprintf("missing required directory %s", relPath(s.paths.RepoRoot, requiredDir)))
-		}
-	}
-	for _, requiredFile := range []string{filepath.Join(s.paths.SpecsDir, "README.md"), s.paths.StateFile} {
-		if !fileExists(requiredFile) {
-			violations = append(violations, fmt.Sprintf("missing required file %s", relPath(s.paths.RepoRoot, requiredFile)))
-		}
-	}
+	violations := s.layoutViolations()
 
 	state, stateErr := s.loadState()
 	if stateErr != nil {
@@ -41,6 +29,39 @@ func (s *Service) Validate() (ValidationResult, error) {
 	violations = append(violations, s.validateTasks(state, tasks)...)
 
 	return ValidationResult{Valid: len(violations) == 0, Violations: violations}, nil
+}
+
+// layoutViolations reports the on-disk structural checks, split out of Validate
+// so a caller holding state and tasks in memory can run the same full rule set
+// without re-reading them (validateInMemory).
+func (s *Service) layoutViolations() []string {
+	violations := make([]string, 0)
+	// Artifacts (ArtifactsDir/VerifyDir) are gitignored output and empty on a
+	// clean checkout, so they are not required; verify creates them on demand.
+	for _, requiredDir := range []string{s.paths.SpecsDir, s.paths.PlanningDir, s.paths.TasksDir} {
+		if !dirExists(requiredDir) {
+			violations = append(violations, fmt.Sprintf("missing required directory %s", relPath(s.paths.RepoRoot, requiredDir)))
+		}
+	}
+	for _, requiredFile := range []string{filepath.Join(s.paths.SpecsDir, "README.md"), s.paths.StateFile} {
+		if !fileExists(requiredFile) {
+			violations = append(violations, fmt.Sprintf("missing required file %s", relPath(s.paths.RepoRoot, requiredFile)))
+		}
+	}
+	return violations
+}
+
+// validateInMemory applies the rules Validate applies, but against the state and
+// tasks the caller supplies instead of what is on disk. It exists so a dry run
+// can answer "would this change leave the repo valid?" — the question an
+// operator previewing a fix is actually asking — while writing nothing. Rules
+// that read other files (spec anchors, artifact paths) still hit the real disk,
+// so only the caller's pending edit is hypothetical.
+func (s *Service) validateInMemory(state *State, tasks []*Task) ValidationResult {
+	violations := s.layoutViolations()
+	violations = append(violations, s.validateState(state)...)
+	violations = append(violations, s.validateTasks(state, tasks)...)
+	return ValidationResult{Valid: len(violations) == 0, Violations: violations}
 }
 
 func (s *Service) validateState(state *State) []string {
