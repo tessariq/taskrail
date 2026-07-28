@@ -187,6 +187,44 @@ func TestApplyImportDraftLeavesRepoUnchangedOnLiveCheckFailure(t *testing.T) {
 	}
 }
 
+// A draft title embedding a concrete gitignored artifact path fails CreateTask's
+// portability guard, so pre-flight must mirror that check: otherwise an earlier,
+// clean task in the same draft is already written when the later one fails,
+// breaking the no-partial-tasks invariant.
+func TestApplyImportDraftLeavesRepoUnchangedOnUnportableTitle(t *testing.T) {
+	t.Parallel()
+	svc := applyFixture(t)
+
+	draft := ImportDraft{
+		SchemaVersion: importDraftSchemaVersion,
+		Target:        "tasks",
+		Source:        "notes.md",
+		Tasks: []TaskDraft{
+			{Key: "clean", Title: "Clean task", SpecRef: "specs/v0.1.0.md#summary"},
+			{Key: "unportable", Title: "See " + gitignoredNotePath, SpecRef: "specs/v0.1.0.md#summary"},
+		},
+	}
+	rel := writeDraftFile(t, svc.paths.RepoRoot, "planning/imports/unportable.json", draft)
+
+	result, err := svc.ApplyImportDraft(ApplyDraftInput{DraftPath: rel})
+	if err == nil {
+		t.Fatal("expected error when a draft title embeds a gitignored artifact path")
+	}
+	if !strings.Contains(err.Error(), gitignoredNotePath) {
+		t.Fatalf("error should name the offending path, got %v", err)
+	}
+	if len(result.Tasks) != 0 {
+		t.Fatalf("failed apply must report no written artifacts, got %+v", result)
+	}
+	_, tasks, err := svc.loadStateAndTasks()
+	if err != nil {
+		t.Fatalf("load tasks: %v", err)
+	}
+	if len(tasks) != 0 {
+		t.Fatalf("no tasks must be created on a failed apply, got %d", len(tasks))
+	}
+}
+
 // The legitimate planning case: a task's spec_ref points at a heading in the
 // spec the same apply is about to write. Pre-flight must resolve that anchor
 // against the draft's pending spec sections (not only the on-disk file, which

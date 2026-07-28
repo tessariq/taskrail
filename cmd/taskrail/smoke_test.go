@@ -851,6 +851,32 @@ func TestTaskNewWithoutSlugSourceIsSilent(t *testing.T) {
 	}
 }
 
+// TestTaskNewRejectsGitignoredArtifactTitle exercises the portability guard at the
+// CLI boundary: a --title naming a concrete gitignored artifact file fails before
+// any write, so the repo is never left in a state the next validate rejects.
+func TestTaskNewRejectsGitignoredArtifactTitle(t *testing.T) {
+	root := setupRepo(t)
+
+	artifactPath := "planning/artifacts/verify/T-001/20260101T000000Z/report.md"
+	out, err := runRoot(t, "task", "new", "--title", "Fix regression from "+artifactPath, "--spec-ref", "specs/v0.1.0.md#summary")
+	if err == nil {
+		t.Fatalf("expected task new to reject a gitignored artifact title, got %q", out)
+	}
+	if !strings.Contains(err.Error(), artifactPath) {
+		t.Fatalf("expected the offending path named, got err %v output %q", err, out)
+	}
+	entries, err := os.ReadDir(filepath.Join(root, "planning", "tasks"))
+	if err != nil {
+		t.Fatalf("read tasks dir: %v", err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("rejected task new must not write a task file, got %d entries", len(entries))
+	}
+	if out, err := runRoot(t, "validate"); err != nil {
+		t.Fatalf("validate after rejected scaffold: %v (output %q)", err, out)
+	}
+}
+
 // TestTaskRenameDeSlugsWithWarningToStderr covers the rename counterpart: an
 // empty-normalizing selector strips the slug back to the bare id and says so on
 // stderr, leaving stdout parseable.

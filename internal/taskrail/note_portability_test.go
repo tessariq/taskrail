@@ -145,6 +145,65 @@ func TestVerifyFollowupRejectsGitignoredSummaryTitle(t *testing.T) {
 	assertCleanValidState(t, svc)
 }
 
+// TestCreateTaskRejectsGitignoredArtifactTitle: `task new --title` lands verbatim
+// in the committed frontmatter title and scaffolded heading, both of which
+// validate scans, so a concrete gitignored path must be rejected before anything
+// is written.
+func TestCreateTaskRejectsGitignoredArtifactTitle(t *testing.T) {
+	repo := seedFixtureRepo(t)
+	svc := newTestService(t, repo, time.Date(2026, 3, 31, 12, 0, 0, 0, time.UTC))
+	stateBefore, err := os.ReadFile(filepath.Join(repo, "planning", "STATE.md"))
+	if err != nil {
+		t.Fatalf("read state: %v", err)
+	}
+
+	_, err = svc.CreateTask(CreateTaskInput{
+		Title:   "Fix regression found in " + gitignoredNotePath,
+		SpecRef: "specs/v0.1.0.md#summary",
+	})
+	if err == nil {
+		t.Fatal("expected task new to reject a title embedding a gitignored artifact path")
+	}
+	if !strings.Contains(err.Error(), gitignoredNotePath) {
+		t.Fatalf("error should name the offending path, got %v", err)
+	}
+
+	entries, err := os.ReadDir(filepath.Join(repo, "planning", "tasks"))
+	if err != nil {
+		t.Fatalf("read tasks dir: %v", err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("rejected task new must not write a task file, got %d entries", len(entries))
+	}
+	stateAfter, err := os.ReadFile(filepath.Join(repo, "planning", "STATE.md"))
+	if err != nil {
+		t.Fatalf("read state: %v", err)
+	}
+	if string(stateAfter) != string(stateBefore) {
+		t.Fatal("rejected task new must leave STATE.md unchanged")
+	}
+	assertCleanValidState(t, svc)
+}
+
+// TestCreateTaskAcceptsPortableTitle: the guard rejects only concrete gitignored
+// files, so a directory-prefix reference validate allows still scaffolds.
+func TestCreateTaskAcceptsPortableTitle(t *testing.T) {
+	repo := seedFixtureRepo(t)
+	svc := newTestService(t, repo, time.Date(2026, 3, 31, 12, 0, 0, 0, time.UTC))
+
+	result, err := svc.CreateTask(CreateTaskInput{
+		Title:   "Record evidence under planning/artifacts/manual-test/ for each run",
+		SpecRef: "specs/v0.1.0.md#summary",
+	})
+	if err != nil {
+		t.Fatalf("portable title must be accepted, got %v", err)
+	}
+	if _, statErr := os.Stat(filepath.Join(repo, "planning", "tasks", result.TaskID+".md")); statErr != nil {
+		t.Fatalf("expected scaffolded task file: %v", statErr)
+	}
+	assertCleanValidState(t, svc)
+}
+
 // TestCompleteAcceptsPortableNote: the guard rejects only concrete gitignored
 // files. A path-free summary and a bare directory-prefix reference (the forms
 // validate deliberately allows) still complete cleanly.

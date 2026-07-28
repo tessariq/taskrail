@@ -1,11 +1,11 @@
 ---
 id: T-128-task-new-title-portability
 title: Guard task new title against gitignored artifact paths
-status: todo
+status: completed
 priority: medium
 spec_ref: specs/v0.2.0.md#portable-committed-state
 dependencies: []
-updated_at: "2026-07-27T23:36:45Z"
+updated_at: "2026-07-28T12:29:56Z"
 ---
 
 # T-128-task-new-title-portability Guard task new title against gitignored artifact paths
@@ -39,3 +39,6 @@ to `CreateTask`'s effective title before it writes the task file.
 - TODO: record verification evidence paths.
 
 ## Implementation Notes
+
+- 2026-07-28T12:29:49Z: verification pass
+- 2026-07-28T12:29:56Z: Guarded task new title via shared ensurePortableNote and mirrored the check in import pre-flight; follow-up T-132 filed for partial-apply reporting

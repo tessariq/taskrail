@@ -122,6 +122,12 @@ func (s *Service) preflightImportDraft(draft ImportDraft) error {
 		if _, err := s.validateTaskCreatable(tasks, task.SpecRef, task.Priority, task.Dependencies, opts); err != nil {
 			return fmt.Errorf("%s: %w", taskDraftLabel(task, i), err)
 		}
+		// Mirror CreateTask's title-portability guard here too: without it a draft
+		// whose later task carries an unportable title would only fail mid-loop,
+		// after the earlier tasks were already written.
+		if err := ensurePortableNote("title", strings.TrimSpace(task.Title)); err != nil {
+			return fmt.Errorf("%s: %w", taskDraftLabel(task, i), err)
+		}
 	}
 	// Ordering detects a dependency cycle among draft keys; run it before any
 	// write so a cyclic draft with spec sections cannot leave an orphan spec.

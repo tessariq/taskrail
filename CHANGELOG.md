@@ -90,7 +90,8 @@ All notable user-visible changes to Taskrail will be documented in this file.
   that embeds a gitignored `planning/artifacts/` file path before writing,
   pointing you at a path-free summary — previously the transition wrote committed
   state that `validate` then failed. `verify --create-followup` applies the same
-  guard to the follow-up task's title/description (`--summary`/`--details`).
+  guard to the follow-up task's title/description (`--summary`/`--details`), and
+  `task new --title` and `import --apply` reject such a path before writing.
 - `taskrail verify` and `taskrail block` no longer append a second
   `## Implementation Notes` heading when writing the first note to a task.
 

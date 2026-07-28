@@ -1,6 +1,6 @@
 ---
 schema_version: 1
-updated_at: "2026-07-28T12:07:44Z"
+updated_at: "2026-07-28T12:29:56Z"
 active_spec_version: v0.4.0
 active_spec_path: specs/v0.4.0.md
 current_task: ""
@@ -8,7 +8,7 @@ current_task_title: ""
 status_summary: idle
 blockers: []
 next_action: Select the next eligible task
-last_verification_result: pass for T-124-parity-copy-skew-exemption at 2026-07-28T12:07:39Z
+last_verification_result: pass for T-128-task-new-title-portability at 2026-07-28T12:29:49Z
 relevant_artifacts: []
 continuation_notes:
     - This repository is temporarily dogfooding bootstrap workflow tooling until Taskrail v0.1.0 exists.
@@ -34,7 +34,7 @@ continuation_notes:
 
 ## Last Verification
 
-- pass for T-124-parity-copy-skew-exemption at 2026-07-28T12:07:39Z
+- pass for T-128-task-new-title-portability at 2026-07-28T12:29:49Z
 
 ## Next Action
 
@@ -52,6 +52,6 @@ continuation_notes:
 
 - todo: 6
 - in_progress: 0
-- completed: 124
+- completed: 125
 - blocked: 0
 - cancelled: 0

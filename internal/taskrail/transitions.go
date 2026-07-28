@@ -497,6 +497,15 @@ func (s *Service) CreateTask(input CreateTaskInput) (CreateTaskResult, error) {
 	// bare `T-<n>` task, matching the id form validate already accepts.
 	title := strings.TrimSpace(input.Title)
 
+	// The title lands verbatim in the committed frontmatter and scaffolded heading,
+	// both of which validate scans (taskArtifactRefs), so a gitignored path here
+	// would make the very next validate fail. It is also the only free-text operator
+	// input that reaches the file: the slug is normalized to [a-z0-9-] and the
+	// description/provenance lines are generated.
+	if err := ensurePortableNote("title", title); err != nil {
+		return CreateTaskResult{}, err
+	}
+
 	// A task has exactly one resolved spec reference: --area is the active-spec
 	// shorthand for --spec-ref, so the two cannot both be given. Reject before any
 	// load or write so a conflicting request lands nothing on disk.
