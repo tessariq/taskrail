@@ -115,12 +115,21 @@ func TestGoVersionRejectsNonGoFile(t *testing.T) {
 // run is not the one just built, and name the two fixes that actually resolve it
 // (mise run setup, or a TASKRAIL override) rather than a rebuild.
 func TestShadowedErrorNamesWorkingFixes(t *testing.T) {
-	err := binpath.ShadowedError("bin/taskrail", "/usr/local/bin/taskrail")
+	// The message renders the build path absolute in OS-native form, so the
+	// expectation is derived the same way rather than written as a literal — a
+	// literal POSIX path is not what the message contains on Windows. `resolved`
+	// deliberately shares no suffix with `built`, so neither can satisfy the
+	// other's assertion by accident.
+	built := filepath.Join("bin", "taskrail")
+	wantBuilt := absPath(t, built)
+	resolved := filepath.Join(string(filepath.Separator)+"opt", "release", "shipped-cli")
+
+	err := binpath.ShadowedError(built, resolved)
 	if err == nil {
 		t.Fatal("ShadowedError must return an error")
 	}
 	msg := err.Error()
-	for _, want := range []string{"bin/taskrail", "/usr/local/bin/taskrail", "mise run setup", "TASKRAIL"} {
+	for _, want := range []string{wantBuilt, resolved, "mise run setup", "TASKRAIL=" + wantBuilt} {
 		if !strings.Contains(msg, want) {
 			t.Errorf("ShadowedError message %q must mention %q", msg, want)
 		}
@@ -130,16 +139,31 @@ func TestShadowedErrorNamesWorkingFixes(t *testing.T) {
 	}
 }
 
+// absPath resolves path the way the guards' messages do, so an expectation stays
+// correct on a platform whose absolute form is not a POSIX path.
+func absPath(t *testing.T, path string) string {
+	t.Helper()
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		t.Fatalf("abs %s: %v", path, err)
+	}
+	return abs
+}
+
 // A misdirected override is the wrong binary for a different reason than a PATH
 // shadow, and repointing TASKRAIL is what fixes it — naming PATH there would send
 // the contributor somewhere that cannot resolve it.
 func TestOverrideErrorPointsAtTheOverride(t *testing.T) {
-	err := binpath.OverrideError("/repo/bin/taskrail", "/opt/old/taskrail")
+	built := filepath.Join("bin", "taskrail")
+	wantBuilt := absPath(t, built)
+	target := filepath.Join(string(filepath.Separator)+"opt", "old", "shipped-cli")
+
+	err := binpath.OverrideError(built, target)
 	if err == nil {
 		t.Fatal("OverrideError must return an error")
 	}
 	msg := err.Error()
-	for _, want := range []string{"TASKRAIL", "/opt/old/taskrail", "/repo/bin/taskrail", "repoint"} {
+	for _, want := range []string{"TASKRAIL", target, wantBuilt, "repoint"} {
 		if !strings.Contains(msg, want) {
 			t.Errorf("OverrideError message %q must mention %q", msg, want)
 		}
@@ -159,7 +183,7 @@ func TestShadowedErrorReportsAnAbsoluteOverride(t *testing.T) {
 	built := seed(t, dir, "taskrail", "working-tree build")
 	t.Chdir(dir)
 
-	msg := binpath.ShadowedError("taskrail", "/usr/local/bin/taskrail").Error()
+	msg := binpath.ShadowedError("taskrail", filepath.Join(string(filepath.Separator)+"opt", "release", "shipped-cli")).Error()
 	if !strings.Contains(msg, "TASKRAIL="+built) {
 		t.Errorf("message %q must suggest the absolute override TASKRAIL=%s", msg, built)
 	}

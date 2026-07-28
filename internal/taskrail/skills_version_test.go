@@ -2,6 +2,7 @@ package taskrail
 
 import (
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -143,6 +144,13 @@ func TestInstalledSkillVersionsRoundTrip(t *testing.T) {
 		if filepath.IsAbs(s.Path) {
 			t.Errorf("path %q is absolute; want repo-relative", s.Path)
 		}
+		// Reported paths are slash-separated on every OS (relPath normalizes), so
+		// callers and tests may key on them without OS-conditional joining. A
+		// backslash here would only show up on Windows, and did: a test keying on
+		// filepath.Join reds the Windows CI leg alone (T-124).
+		if strings.ContainsRune(s.Path, '\\') {
+			t.Errorf("path %q is not slash-separated; reported paths must be portable", s.Path)
+		}
 	}
 }
 
@@ -199,24 +207,27 @@ func TestInstalledSkillVersionsFlagsPackageParity(t *testing.T) {
 		t.Fatalf("installed skill versions: %v", err)
 	}
 
+	// Keyed with path.Join, not filepath.Join: InstalledSkill.Path is
+	// slash-separated on every OS, so an OS-dependent joiner would build keys that
+	// match nothing on Windows.
 	want := map[string]bool{
-		filepath.Join(".claude", "skills", parity, "SKILL.md"):   true,
-		filepath.Join(".claude", "skills", diverged, "SKILL.md"): false,
+		path.Join(".claude", "skills", parity, "SKILL.md"):   true,
+		path.Join(".claude", "skills", diverged, "SKILL.md"): false,
 		// A stamped skill differs from the package by its own marker line.
-		filepath.Join(".claude", "skills", shippableSkills[2], "SKILL.md"): false,
+		path.Join(".claude", "skills", shippableSkills[2], "SKILL.md"): false,
 	}
 	got := map[string]bool{}
 	for _, s := range installed {
 		got[s.Path] = s.MatchesPackage
 	}
-	for path, expected := range want {
-		matches, reported := got[path]
+	for rel, expected := range want {
+		matches, reported := got[rel]
 		if !reported {
-			t.Errorf("%s missing from the report", path)
+			t.Errorf("%s missing from the report", rel)
 			continue
 		}
 		if matches != expected {
-			t.Errorf("%s: MatchesPackage = %v, want %v", path, matches, expected)
+			t.Errorf("%s: MatchesPackage = %v, want %v", rel, matches, expected)
 		}
 	}
 }
