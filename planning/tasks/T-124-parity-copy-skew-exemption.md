@@ -50,6 +50,4 @@ Follow-up derived from T-120-stale-skill-warning's verification or discovery.
 
 ## Implementation Notes
 
-## Implementation Notes
-
 - 2026-07-28T12:07:39Z: verification pass
