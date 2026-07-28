@@ -215,7 +215,9 @@ func (s *Service) createDraftTasks(tasks []TaskDraft) ([]CreatedTaskRef, error) 
 			Dependencies: translateDeps(draft.Dependencies, keyToID),
 		})
 		if err != nil {
-			return nil, fmt.Errorf("create %s: %w", taskDraftLabel(draft, idx), err)
+			// Return what is already on disk alongside the error: the caller's
+			// partial-apply wrapper can only name the written tasks if it sees them.
+			return created, fmt.Errorf("create %s: %w", taskDraftLabel(draft, idx), err)
 		}
 		if draft.Key != "" {
 			keyToID[draft.Key] = res.TaskID

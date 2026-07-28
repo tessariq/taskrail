@@ -94,6 +94,9 @@ All notable user-visible changes to Taskrail will be documented in this file.
   `task new --title` and `import --apply` reject such a path before writing.
 - `taskrail verify` and `taskrail block` no longer append a second
   `## Implementation Notes` heading when writing the first note to a task.
+- `taskrail import --apply` now names the tasks it already wrote when a task file
+  write fails mid-apply ("partial apply already wrote ... — review before
+  retrying"), instead of reporting only the failing task.
 
 ## v0.3.0 - 2026-07-14
 

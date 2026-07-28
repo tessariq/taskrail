@@ -225,6 +225,56 @@ func TestApplyImportDraftLeavesRepoUnchangedOnUnportableTitle(t *testing.T) {
 	}
 }
 
+// Pre-flight cannot cover a mid-write I/O failure, so that residual path must
+// still report what it landed: the tasks written before the failure have to reach
+// result.Tasks and the partial-apply wrapper, or an operator retries against a
+// repository that already moved.
+func TestApplyImportDraftReportsPartiallyCreatedTasksOnMidWriteFailure(t *testing.T) {
+	t.Parallel()
+	svc := applyFixture(t)
+
+	// Block the second task's file path with a directory: its write fails while
+	// the first task is already on disk. loadTasks skips directories, so id
+	// allocation still hands the second draft task T-002.
+	if err := os.MkdirAll(filepath.Join(svc.paths.TasksDir, "T-002.md"), 0o755); err != nil {
+		t.Fatalf("seed blocking directory: %v", err)
+	}
+
+	draft := ImportDraft{
+		SchemaVersion: importDraftSchemaVersion,
+		Target:        "planning",
+		Source:        "notes.md",
+		SpecSections:  []SpecSectionDraft{{Heading: "Overview", Body: "x"}},
+		Tasks: []TaskDraft{
+			{Key: "alpha", Title: "Alpha task", SpecRef: "specs/v0.1.0.md#summary"},
+			{Key: "beta", Title: "Beta task", SpecRef: "specs/v0.1.0.md#summary"},
+		},
+	}
+	rel := writeDraftFile(t, svc.paths.RepoRoot, "planning/imports/midwrite.json", draft)
+
+	result, err := svc.ApplyImportDraft(ApplyDraftInput{DraftPath: rel})
+	if err == nil {
+		t.Fatal("expected error when a task file write fails mid-loop")
+	}
+	if len(result.Tasks) != 1 || result.Tasks[0].TaskID != "T-001" {
+		t.Fatalf("partial apply must report the task it already wrote, got %+v", result.Tasks)
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "partial apply already wrote") {
+		t.Fatalf("error must carry the partial-apply wrapper, got %v", err)
+	}
+	if !strings.Contains(msg, "T-001") || !strings.Contains(msg, result.SpecPath) {
+		t.Fatalf("wrapper must name the written task ids and spec path, got %v", err)
+	}
+	_, tasks, err := svc.loadStateAndTasks()
+	if err != nil {
+		t.Fatalf("load tasks: %v", err)
+	}
+	if len(tasks) != 1 {
+		t.Fatalf("expected exactly the one task written before the failure, got %d", len(tasks))
+	}
+}
+
 // The legitimate planning case: a task's spec_ref points at a heading in the
 // spec the same apply is about to write. Pre-flight must resolve that anchor
 // against the draft's pending spec sections (not only the on-disk file, which

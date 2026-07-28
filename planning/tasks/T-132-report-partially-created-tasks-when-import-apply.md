@@ -1,12 +1,12 @@
 ---
 id: T-132-report-partially-created-tasks-when-import-apply
 title: Report partially created tasks when import apply fails mid-write
-status: todo
+status: completed
 priority: medium
 spec_ref: specs/v0.2.0.md#taskrail-import
 dependencies:
     - T-128-task-new-title-portability
-updated_at: "2026-07-28T12:28:52Z"
+updated_at: "2026-07-28T12:43:05Z"
 ---
 
 # T-132-report-partially-created-tasks-when-import-apply Report partially created tasks when import apply fails mid-write
@@ -45,3 +45,6 @@ Follow-up derived from T-128-task-new-title-portability's verification or discov
 - TODO: record verification evidence paths.
 
 ## Implementation Notes
+
+- 2026-07-28T12:41:48Z: verification pass
+- 2026-07-28T12:43:05Z: Partial created slice now returned from createDraftTasks; unit test forces a blocked task-file write and sandbox manual test confirms the wrapper names the written spec and task ids.
