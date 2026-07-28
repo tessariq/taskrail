@@ -1,12 +1,12 @@
 ---
 id: T-126-rename-slug-length-cap
 title: Cap title-derived slug on task rename
-status: todo
+status: completed
 priority: low
 spec_ref: specs/v0.4.0.md#task-rename-and-re-slug
 dependencies:
     - T-112-slug-length-cap
-updated_at: "2026-07-27T22:57:28Z"
+updated_at: "2026-07-28T13:58:53Z"
 ---
 
 # T-126-rename-slug-length-cap Cap title-derived slug on task rename
@@ -44,3 +44,6 @@ slug verbatim).
 - TODO: record verification evidence paths.
 
 ## Implementation Notes
+
+- 2026-07-28T13:58:39Z: verification pass
+- 2026-07-28T13:58:53Z: Capped the title-derived slug on task rename by reusing T-112's capSlug; explicit --slug stays verbatim. Full suite, vet, gofmt clean; go-reviewer approved with no high/medium findings; sandbox manual test passed all seven acceptance checks. Docs updated in README, CHANGELOG, and the rename --help text.

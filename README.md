@@ -285,7 +285,9 @@ taskrail task rename T-<n> --slug add-slug     # or --title "Add slug"; --dry-ru
 
 Rename is symmetric with creation: a selector that normalizes to no slug strips
 the slug instead of failing, renaming `T-<n>-<slug>.md` back to `T-<n>.md` (with
-the same stderr warning), so a bad slug can be undone.
+the same stderr warning), so a bad slug can be undone. The length cap is
+symmetric too — a `--title`-derived slug is capped the same way `task new`
+caps it, while an explicit `--slug` is written verbatim however long.
 
 `task rename` re-encodes the identifier only: it changes the id/slug and filename
 but never rewrites the `title:` frontmatter field. Re-slugging a task and

@@ -105,9 +105,10 @@ func newTaskRenameCmd() *cobra.Command {
 			"one, re-project planning/STATE.md, and re-run validation — all as one " +
 			"outcome.\n\n" +
 			"Exactly one of --slug or --title selects the new slug (--title derives it " +
-			"via the same slugify as `task new` and never rewrites the frontmatter " +
-			"title). The numeric T-<n> prefix is preserved; only the slug segment " +
-			"changes. A selector that normalizes to no slug de-slugs the task back to " +
+			"via the same slugify and length cap as `task new` and never rewrites the " +
+			"frontmatter title; --slug is written verbatim, uncapped). The numeric " +
+			"T-<n> prefix is preserved; only the slug segment changes. A selector " +
+			"that normalizes to no slug de-slugs the task back to " +
 			"the bare T-<n> id and warns on stderr. A target id that collides with an " +
 			"existing task fails before any write. --dry-run reports the change set " +
 			"without writing. Rename never advances a task's status.",

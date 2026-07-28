@@ -110,6 +110,66 @@ func TestRenameTaskTitleDerivesSlug(t *testing.T) {
 	}
 }
 
+// TestRenameTaskCapsTitleDerivedSlugOnly pins the v0.4.0 cap on the rename path
+// too (T-126): a `--title`-derived slug is bounded near slugMaxLen on a hyphen
+// boundary exactly as `task new --title` bounds it, so one title yields one
+// length whichever command wrote it. An explicit `--slug` stays the operator's
+// verbatim curation. The capped id is the id everywhere the rename writes one:
+// frontmatter, filename, and every inbound dependency edge.
+func TestRenameTaskCapsTitleDerivedSlugOnly(t *testing.T) {
+	t.Parallel()
+
+	longTitle := "Cap the title derived slug length at roughly fifty characters boundary aware"
+	longSlug := "an-intentionally-long-but-curated-slug-the-operator-owns-verbatim"
+
+	cases := []struct {
+		name   string
+		input  RenameTaskInput
+		wantID string
+	}{
+		{
+			name:   "title-derived slug is capped on a hyphen boundary",
+			input:  RenameTaskInput{OldID: "T-001", Title: longTitle},
+			wantID: "T-001-cap-the-title-derived-slug-length-at-roughly",
+		},
+		{
+			name:   "explicit slug is not capped",
+			input:  RenameTaskInput{OldID: "T-001", Slug: longSlug},
+			wantID: "T-001-" + longSlug,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			svc, repo := renameFixture(t)
+
+			res, err := svc.RenameTask(tc.input)
+			if err != nil {
+				t.Fatalf("rename: %v", err)
+			}
+			if res.NewID != tc.wantID {
+				t.Fatalf("new id = %q, want %q", res.NewID, tc.wantID)
+			}
+			if len(res.Warnings) != 0 {
+				t.Fatalf("unexpected warnings: %+v", res.Warnings)
+			}
+			// The id and filename are two encodings of one identifier.
+			if !fileExists(filepath.Join(repo, "planning", "tasks", tc.wantID+".md")) {
+				t.Fatalf("renamed task file %s.md missing", tc.wantID)
+			}
+			if fileExists(filepath.Join(repo, "planning", "tasks", "T-001.md")) {
+				t.Fatal("old task file still present")
+			}
+			if deps := taskDeps(t, svc, "T-002"); !slices.Equal(deps, []string{tc.wantID}) {
+				t.Fatalf("inbound dependency = %v, want [%s]", deps, tc.wantID)
+			}
+			if v, err := svc.Validate(); err != nil || !v.Valid {
+				t.Fatalf("validate after rename: valid=%v violations=%v err=%v", v.Valid, v.Violations, err)
+			}
+		})
+	}
+}
+
 func TestRenameTaskPreservesNumericPrefix(t *testing.T) {
 	t.Parallel()
 	repo := seedFixtureRepo(t)

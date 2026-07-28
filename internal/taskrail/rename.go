@@ -131,21 +131,22 @@ func (s *Service) RenameTask(input RenameTaskInput) (RenameTaskResult, error) {
 }
 
 // renameSlug resolves the new slug from exactly one selector, sharing slugify
-// with task creation (T-095) so slugs are normalized identically on both paths.
-// It returns the normalized slug alongside the raw source: a source that
-// normalizes to "" de-slugs the task to its bare id (symmetric with creation's
-// bare-id fallback), and the caller warns using the source the operator supplied.
+// and capSlug with task creation (T-095, T-126) so one source yields one slug
+// whichever command wrote it. It returns the normalized slug alongside the raw
+// source: a source that normalizes to "" de-slugs the task to its bare id
+// (symmetric with creation's bare-id fallback), and the caller warns using the
+// source the operator supplied. Only the derived `--title` is capped; an
+// explicit `--slug` is the operator's curation and is written verbatim.
 func renameSlug(input RenameTaskInput) (slug, source string, err error) {
 	hasSlug := strings.TrimSpace(input.Slug) != ""
 	hasTitle := strings.TrimSpace(input.Title) != ""
 	if hasSlug == hasTitle {
 		return "", "", errors.New("exactly one of --slug or --title is required")
 	}
-	source = input.Title
 	if hasSlug {
-		source = input.Slug
+		return slugify(input.Slug), input.Slug, nil
 	}
-	return slugify(source), source, nil
+	return capSlug(slugify(input.Title)), input.Title, nil
 }
 
 // inboundDependents returns the tasks (other than id itself) whose dependencies

@@ -49,11 +49,12 @@ All notable user-visible changes to Taskrail will be documented in this file.
   / `import --apply` (advisory-only; no new command).
 - `taskrail task rename <id>` — atomically re-slug a task: rewrite its `id`,
   rename the file (`git mv` when tracked), and fix every inbound `dependencies:`
-  reference. `--slug` sets the slug; `--title` derives it. `--dry-run` previews
-  the change set; `--json` emits it. Preserves the `T-<n>` prefix; never advances
-  status. A selector that normalizes to no slug de-slugs the task back to the bare
-  `T-<n>` id and warns on stderr. Also repoints the body's `# <id> <title>`
-  heading, reported as a `body_heading` change.
+  reference. `--slug` sets the slug verbatim; `--title` derives it, length-capped
+  as on `task new`. `--dry-run` previews the change set; `--json` emits it.
+  Preserves the `T-<n>` prefix; never advances status. A selector that normalizes
+  to no slug de-slugs the task back to the bare `T-<n>` id and warns on stderr.
+  Also repoints the body's `# <id> <title>` heading, reported as a `body_heading`
+  change.
 - `taskrail task new --area <anchor>` — active-spec shorthand for `--spec-ref
   <active-spec-path>#<anchor>`. Mutually exclusive with `--spec-ref`; an unknown
   anchor fails before writing and points at `spec show <active-version> --anchors`.
