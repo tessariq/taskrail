@@ -1,12 +1,12 @@
 ---
 id: T-139-heading-match-crlf-fences
 title: Make task-body heading matching robust to CRLF and fenced code blocks
-status: todo
+status: completed
 priority: low
 spec_ref: specs/v0.2.0.md#no-local-paths-in-task-notes
 dependencies:
     - T-135-duplicate-heading-guard-all-sections
-updated_at: "2026-07-29T10:37:20Z"
+updated_at: "2026-07-29T11:24:34Z"
 ---
 
 # T-139-heading-match-crlf-fences Make task-body heading matching robust to CRLF and fenced code blocks
@@ -42,3 +42,5 @@ Follow-up derived from T-135-duplicate-heading-guard-all-sections's verification
 - TODO: record verification evidence paths.
 
 ## Implementation Notes
+
+- 2026-07-29T11:24:16Z: verification pass

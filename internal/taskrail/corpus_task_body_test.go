@@ -93,6 +93,16 @@ func TestDuplicateScaffoldSectionsFlagsRepeatedHeadings(t *testing.T) {
 			want: []duplicateSection{{heading: "## Acceptance", count: 2}},
 		},
 		{
+			name: "headings inside fenced code blocks are ignored",
+			body: "## Acceptance\n\n```markdown\n## Acceptance\n## Description\n```\n\n## Acceptance\n",
+			want: []duplicateSection{{heading: "## Acceptance", count: 2}},
+		},
+		{
+			name: "backtick in info string is not a fence",
+			body: "## Acceptance\n\n```markdown`bad\n## Acceptance\n```\n",
+			want: []duplicateSection{{heading: "## Acceptance", count: 2}},
+		},
+		{
 			name: "prose mention is not a heading",
 			body: "## Acceptance\n\n- The `## Acceptance` section stays single.\n- See ## Acceptance above.\n",
 		},
@@ -150,7 +160,19 @@ type duplicateSection struct {
 // detector may be stricter than the writer, never laxer.
 func duplicateScaffoldSections(body string) []duplicateSection {
 	counts := make(map[string]int)
+	var openFence string
 	for _, line := range strings.Split(body, "\n") {
+		fence, rest := markdownFence(line)
+		if openFence != "" {
+			if fence != "" && fence[0] == openFence[0] && len(fence) >= len(openFence) && strings.TrimSpace(rest) == "" {
+				openFence = ""
+			}
+			continue
+		}
+		if fence != "" {
+			openFence = fence
+			continue
+		}
 		counts[strings.TrimRight(line, " \t\r")]++
 	}
 
@@ -161,4 +183,29 @@ func duplicateScaffoldSections(body string) []duplicateSection {
 		}
 	}
 	return dups
+}
+
+func markdownFence(line string) (fence, rest string) {
+	line = strings.TrimSuffix(line, "\r")
+	indent := len(line) - len(strings.TrimLeft(line, " "))
+	if indent > 3 || indent == len(line) {
+		return "", ""
+	}
+	line = line[indent:]
+	marker := line[0]
+	if marker != '`' && marker != '~' {
+		return "", ""
+	}
+	length := 0
+	for length < len(line) && line[length] == marker {
+		length++
+	}
+	if length < 3 {
+		return "", ""
+	}
+	rest = line[length:]
+	if marker == '`' && strings.Contains(rest, "`") {
+		return "", ""
+	}
+	return line[:length], rest
 }

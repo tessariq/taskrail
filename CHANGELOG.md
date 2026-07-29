@@ -94,8 +94,9 @@ All notable user-visible changes to Taskrail will be documented in this file.
   state that `validate` then failed. `verify --create-followup` applies the same
   guard to the follow-up task's title/description (`--summary`/`--details`), and
   `task new --title` and `import --apply` reject such a path before writing.
-- `taskrail verify` and `taskrail block` no longer append a second
-  `## Implementation Notes` heading when writing the first note to a task.
+- `taskrail verify` and `taskrail block` now reuse `## Implementation Notes` in
+  CRLF-authored tasks; `task check:task-bodies` ignores scaffold examples inside
+  fenced code blocks.
 - `taskrail import --apply` now reports what a write failure wrote or may have
   touched, including failed spec-write paths and created tasks; `--json` emits the
   envelope marked `"partial": true`. Exit stays non-zero; clean applies unchanged.

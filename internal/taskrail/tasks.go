@@ -112,7 +112,7 @@ const implementationNotesHeading = "## Implementation Notes"
 // words nor a mention inside prose counts as the section.
 func hasImplementationNotesHeading(body string) bool {
 	for _, line := range strings.Split(body, "\n") {
-		if strings.TrimRight(line, " \t") == implementationNotesHeading {
+		if strings.TrimRight(line, " \t\r") == implementationNotesHeading {
 			return true
 		}
 	}

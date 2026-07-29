@@ -27,6 +27,12 @@ func TestAppendTaskNoteReusesExistingSection(t *testing.T) {
 			wantContains: []string{"## Implementation Notes\n\n" + note},
 		},
 		{
+			name:         "CRLF body ending at the heading",
+			body:         "# T-001 Task\r\n\r\n## Implementation Notes\r\n",
+			wantHeadings: 1,
+			wantContains: []string{note},
+		},
+		{
 			name:         "section with an existing note appends at the end",
 			body:         "# T-001 Task\n\n## Implementation Notes\n\n- earlier note\n",
 			wantHeadings: 1,
@@ -52,7 +58,8 @@ func TestAppendTaskNoteReusesExistingSection(t *testing.T) {
 			task := &Task{Body: tc.body}
 			appendTaskNote(task, note)
 
-			if got := strings.Count(task.Body, "## Implementation Notes\n"); got != tc.wantHeadings {
+			normalizedBody := strings.ReplaceAll(task.Body, "\r\n", "\n")
+			if got := strings.Count(normalizedBody, "## Implementation Notes\n"); got != tc.wantHeadings {
 				t.Fatalf("got %d %q headings, want %d:\n%s", got, "## Implementation Notes", tc.wantHeadings, task.Body)
 			}
 			for _, want := range tc.wantContains {
