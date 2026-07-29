@@ -107,6 +107,9 @@ All notable user-visible changes to Taskrail will be documented in this file.
 - An unparsable layout marker is now reported repo-relative (`parse layout config
   .taskrail/config.yml: ...`) instead of with your absolute repository path,
   matching how the read-error branch and the rest of Taskrail name a file.
+- `taskrail init --with-skills --force` now reports a failed backup-candidate stat
+  repo-relative and once (`stat backup .claude/skills/...: permission denied`),
+  instead of with your absolute repository path repeated twice.
 
 ## v0.3.0 - 2026-07-14
 

@@ -1,12 +1,12 @@
 ---
 id: T-137-skills-backup-stat-error-path
 title: Report skills backupPath stat errors repo-relative
-status: todo
+status: completed
 priority: low
 spec_ref: specs/v0.4.0.md#version-skew-detection
 dependencies:
     - T-136-layout-marker-error-path-form
-updated_at: "2026-07-29T09:50:03Z"
+updated_at: "2026-07-29T10:07:00Z"
 ---
 
 # T-137-skills-backup-stat-error-path Report skills backupPath stat errors repo-relative
@@ -46,3 +46,5 @@ directory), so it is rare but adopter-facing.
 - TODO: record verification evidence paths.
 
 ## Implementation Notes
+
+- 2026-07-29T10:06:55Z: verification pass

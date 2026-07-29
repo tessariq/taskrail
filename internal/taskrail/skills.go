@@ -131,7 +131,7 @@ func (s *Service) backupPath(dest string) (string, error) {
 			return candidate, nil
 		}
 		if err != nil {
-			return "", fmt.Errorf("stat backup %s: %w", candidate, err)
+			return "", fmt.Errorf("stat backup %s: %w", relPath(s.paths.RepoRoot, candidate), fsCause(err))
 		}
 		candidate = fmt.Sprintf("%s-%d", base, i)
 	}

@@ -44,6 +44,35 @@ func TestInstallSkillFileReadErrorOmitsAbsolutePath(t *testing.T) {
 	}
 }
 
+// TestBackupPathStatErrorOmitsAbsolutePath locks the portable-error contract on
+// backupPath's non-ErrNotExist stat branch, the last error site in the package
+// that named a file absolutely (T-137).
+func TestBackupPathStatErrorOmitsAbsolutePath(t *testing.T) {
+	t.Parallel()
+
+	repo := initGitRepo(t)
+	svc := newTestService(t, repo, time.Date(2026, 3, 31, 12, 0, 0, 0, time.UTC))
+
+	// A NUL byte in the name makes os.Stat fail with EINVAL on every supported
+	// GOOS, hitting the branch that ErrNotExist skips. The obvious alternative —
+	// statting through a regular file, for ENOTDIR — is not portable: Windows
+	// aliases ENOTDIR to ERROR_PATH_NOT_FOUND, which errors.Is reports as
+	// ErrNotExist, so backupPath would return no error at all there.
+	_, err := svc.backupPath(filepath.Join(repo, ".claude", "skills", "pro\x00be.md"))
+	if err == nil {
+		t.Fatal("expected a stat error for an unstattable backup candidate")
+	}
+	const wantPath = ".claude/skills/pro\x00be.md.bak.20260331T120000Z"
+	if !strings.Contains(err.Error(), wantPath) {
+		t.Fatalf("error = %q, want it to name %q", err.Error(), wantPath)
+	}
+	// An absolute path ends in wantPath too, so the check above passes either
+	// way; the repo root's absence is what pins the form.
+	if strings.Contains(err.Error(), repo) {
+		t.Fatalf("error = %q, want no absolute repo path %q", err.Error(), repo)
+	}
+}
+
 // Default init must never provision agent-tool skill directories; writing them
 // is opt-in via --with-skills (skills-productization.md Decision 2).
 func TestInitDefaultWritesNoSkillDirs(t *testing.T) {
