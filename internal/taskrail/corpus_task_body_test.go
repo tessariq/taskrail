@@ -160,19 +160,7 @@ type duplicateSection struct {
 // detector may be stricter than the writer, never laxer.
 func duplicateScaffoldSections(body string) []duplicateSection {
 	counts := make(map[string]int)
-	var openFence string
-	for _, line := range strings.Split(body, "\n") {
-		fence, rest := markdownFence(line)
-		if openFence != "" {
-			if fence != "" && fence[0] == openFence[0] && len(fence) >= len(openFence) && strings.TrimSpace(rest) == "" {
-				openFence = ""
-			}
-			continue
-		}
-		if fence != "" {
-			openFence = fence
-			continue
-		}
+	for _, line := range markdownLinesWithoutFencedContent(body) {
 		counts[strings.TrimRight(line, " \t\r")]++
 	}
 
@@ -183,29 +171,4 @@ func duplicateScaffoldSections(body string) []duplicateSection {
 		}
 	}
 	return dups
-}
-
-func markdownFence(line string) (fence, rest string) {
-	line = strings.TrimSuffix(line, "\r")
-	indent := len(line) - len(strings.TrimLeft(line, " "))
-	if indent > 3 || indent == len(line) {
-		return "", ""
-	}
-	line = line[indent:]
-	marker := line[0]
-	if marker != '`' && marker != '~' {
-		return "", ""
-	}
-	length := 0
-	for length < len(line) && line[length] == marker {
-		length++
-	}
-	if length < 3 {
-		return "", ""
-	}
-	rest = line[length:]
-	if marker == '`' && strings.Contains(rest, "`") {
-		return "", ""
-	}
-	return line[:length], rest
 }

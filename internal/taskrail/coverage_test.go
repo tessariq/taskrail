@@ -781,6 +781,42 @@ func TestAreaRejectionSubAreaOfDeferredParentIsUnknown(t *testing.T) {
 	}
 }
 
+func TestParseSpecAreasIgnoresFencedHeadings(t *testing.T) {
+	md := "## Potential Features\n\n" +
+		"### Before\n\n" +
+		"```markdown\n### Hidden\n#### Hidden Subarea\n```\n\n" +
+		"### After\n"
+
+	areas, deferred := parseSpecAreas(md)
+	if len(deferred) != 0 {
+		t.Fatalf("unexpected deferred anchors: %v", deferred)
+	}
+	if len(areas) != 2 || areas[0].anchor != "before" || areas[1].anchor != "after" {
+		t.Fatalf("parseSpecAreas() = %+v, want before and after only", areas)
+	}
+	if len(areas[0].subAnchors) != 0 {
+		t.Fatalf("fenced sub-area leaked into before: %+v", areas[0].subAnchors)
+	}
+}
+
+func TestParseSpecAreasFencesRemainStructuralBoundaries(t *testing.T) {
+	t.Run("deferred marker", func(t *testing.T) {
+		md := "## Potential Features\n\n### Alpha\n\n```text\nexample\n```\n\n> Deferred to v9\n"
+		areas, deferred := parseSpecAreas(md)
+		if len(areas) != 1 || areas[0].anchor != "alpha" || len(deferred) != 0 {
+			t.Fatalf("fence bridged heading to deferred marker: areas=%+v deferred=%v", areas, deferred)
+		}
+	})
+
+	t.Run("requirements", func(t *testing.T) {
+		md := "## Potential Features\n\n### Alpha\n\nRequirements:\n\n- before\n```text\nexample\n```\n- after\n"
+		areas, _ := parseSpecAreas(md)
+		if len(areas) != 1 || areas[0].requirements != 1 {
+			t.Fatalf("fence failed to end requirements: %+v", areas)
+		}
+	})
+}
+
 func TestCoverageForAreaDropsSpecWideOrphans(t *testing.T) {
 	repo := seedCoverageRepo(t)
 	// A live task pointing at a non-active spec is a spec-wide orphan; it belongs

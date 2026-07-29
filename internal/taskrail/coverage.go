@@ -374,7 +374,7 @@ func parseCoverableAreas(markdown string) []parsedArea {
 // be classified from this one parse. Sub-areas of an excluded area are not
 // recorded — that area contributes no coverable anchor at all.
 func parseSpecAreas(markdown string) (areas []parsedArea, deferredAnchors []string) {
-	lines := strings.Split(markdown, "\n")
+	lines := markdownLinesWithoutFencedContent(markdown)
 	areas = make([]parsedArea, 0)
 	inSection := false
 	current := -1

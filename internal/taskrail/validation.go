@@ -438,7 +438,7 @@ func collectHeadingAnchors(markdown string) map[string]struct{} {
 func collectHeadingAnchorList(markdown string) []SpecAnchor {
 	var list []SpecAnchor
 	seen := make(map[string]struct{})
-	for _, line := range strings.Split(markdown, "\n") {
+	for _, line := range markdownLinesWithoutFencedContent(markdown) {
 		trimmed := strings.TrimSpace(line)
 		if !strings.HasPrefix(trimmed, "#") {
 			continue

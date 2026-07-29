@@ -1,13 +1,13 @@
 ---
 id: T-148-ignore-fenced-headings-in-spec-anchor-parsing
 title: Ignore fenced headings in spec anchor parsing
-status: todo
+status: completed
 priority: medium
 spec_ref: specs/v0.4.0.md#spec-version-diff
 dependencies:
     - T-113-spec-diff
     - T-139-heading-match-crlf-fences
-updated_at: "2026-07-29T13:05:08Z"
+updated_at: "2026-07-29T17:45:25Z"
 ---
 
 # T-148-ignore-fenced-headings-in-spec-anchor-parsing Ignore fenced headings in spec anchor parsing
@@ -37,3 +37,4 @@ heading.
 ## Implementation Notes
 
 - Reuse the task-body fence matching semantics hardened in T-139 where practical.
+- 2026-07-29T17:45:11Z: verification pass

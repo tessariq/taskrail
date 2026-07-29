@@ -2,6 +2,7 @@ package taskrail
 
 import (
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -93,6 +94,32 @@ func TestSpecShowAnchorsMatchValidation(t *testing.T) {
 			t.Fatalf("anchor %q listed more than once", a.Anchor)
 		}
 		seen[a.Anchor] = struct{}{}
+	}
+}
+
+func TestCollectHeadingAnchorListIgnoresFencedHeadings(t *testing.T) {
+	md := "# Before\r\n" +
+		"  ````markdown\r\n" +
+		"## Hidden Backtick\r\n" +
+		"```\r\n" +
+		"### Still Hidden\r\n" +
+		"````\r\n" +
+		"## Between\r\n" +
+		"~~~go\r\n" +
+		"### Hidden Tilde\r\n" +
+		"~~~~\r\n" +
+		"### After\r\n" +
+		"```text\r\n" +
+		"## Hidden Unclosed\r\n"
+
+	got := collectHeadingAnchorList(md)
+	want := []SpecAnchor{
+		{Anchor: "before", Heading: "Before", Level: 1},
+		{Anchor: "between", Heading: "Between", Level: 2},
+		{Anchor: "after", Heading: "After", Level: 3},
+	}
+	if !slices.Equal(got, want) {
+		t.Fatalf("collectHeadingAnchorList() = %+v, want %+v", got, want)
 	}
 }
 
