@@ -65,13 +65,16 @@ func (s *Service) RepointTask(input RepointTaskInput) (RepointTaskResult, error)
 		if err != nil {
 			return RepointTaskResult{}, err
 		}
-	} else if err := s.validateSpecRef(specRef); err != nil {
+	} else if specRef, err = s.validateSpecRef(specRef); err != nil {
 		return RepointTaskResult{}, fmt.Errorf("invalid spec_ref: %w", err)
 	}
 
 	oldSpecRef := target.Frontmatter.SpecRef
 	// A no-op re-point would still rewrite STATE.md's updated_at and dirty the
 	// working tree for no change, so reject it as `rename` rejects a no-op re-slug.
+	// specRef is canonical by here, so another spelling of an already-canonical
+	// stored ref is caught as the no-op it is; a legacy stored ref still differs and
+	// is rewritten, which is the sanctioned way to canonicalize one.
 	if specRef == oldSpecRef {
 		return RepointTaskResult{}, fmt.Errorf("task %s already points at %s", taskID, specRef)
 	}

@@ -321,7 +321,7 @@ func (s *Service) validateTasks(state *State, tasks []*Task) []string {
 		}
 		if strings.TrimSpace(task.Frontmatter.SpecRef) == "" {
 			violations = append(violations, fmt.Sprintf("task %s missing spec_ref", task.Frontmatter.ID))
-		} else if err := s.validateSpecRef(task.Frontmatter.SpecRef); err != nil {
+		} else if _, err := s.validateSpecRef(task.Frontmatter.SpecRef); err != nil {
 			violations = append(violations, fmt.Sprintf("task %s invalid spec_ref: %v", task.Frontmatter.ID, err))
 		}
 		violations = append(violations, taskArtifactRefs(task)...)
@@ -379,22 +379,43 @@ func parseSpecRef(specRef string) (string, string, error) {
 	return pathPart, anchor, nil
 }
 
-func (s *Service) validateSpecRef(specRef string) error {
+// normalizeSpecRef returns the canonical stored form of a spec_ref: the path half
+// cleaned and slash-separated, the anchor half verbatim. Writers persist this form
+// so one reference has exactly one spelling on disk, which is what makes `task
+// repoint`'s literal no-op comparison correct. It normalizes through parseSpecRef,
+// so it never widens what is accepted — the traversal and shape guards still run.
+func normalizeSpecRef(specRef string) (string, error) {
+	pathPart, _, err := parseSpecRef(specRef)
+	if err != nil {
+		return "", err
+	}
+	// parseSpecRef trims its anchor for lookup; the stored form keeps the
+	// operator's spelling, so re-take the raw half rather than the trimmed one.
+	_, rawAnchor, _ := strings.Cut(specRef, "#")
+	return filepath.ToSlash(pathPart) + "#" + rawAnchor, nil
+}
+
+// validateSpecRef resolves a spec_ref against the working tree and returns its
+// canonical stored form. Returning the normalized value (rather than only an
+// error) is what keeps writers from persisting a non-canonical spelling: every
+// write path already has to call this, so the canonical form is what it has in
+// hand. Read-only callers discard it.
+func (s *Service) validateSpecRef(specRef string) (string, error) {
 	pathPart, anchor, err := parseSpecRef(specRef)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	fullPath := filepath.Join(s.paths.RepoRoot, pathPart)
 	data, err := os.ReadFile(fullPath)
 	if err != nil {
-		return fmt.Errorf("read spec file %s: %w", pathPart, fsCause(err))
+		return "", fmt.Errorf("read spec file %s: %w", pathPart, fsCause(err))
 	}
 	anchors := collectHeadingAnchors(string(data))
 	if _, ok := anchors[anchor]; !ok {
-		return fmt.Errorf("heading #%s not found in %s", anchor, pathPart)
+		return "", fmt.Errorf("heading #%s not found in %s", anchor, pathPart)
 	}
-	return nil
+	return normalizeSpecRef(specRef)
 }
 
 // collectHeadingAnchors is the set view of a spec's spec_ref anchors, used by

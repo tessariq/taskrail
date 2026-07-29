@@ -1,11 +1,11 @@
 ---
 id: T-130-normalize-spec-ref-path-on-write
 title: Normalize spec_ref path on write
-status: todo
+status: completed
 priority: low
 spec_ref: specs/v0.4.0.md#task-spec-ref-re-pointing
 dependencies: []
-updated_at: "2026-07-28T10:57:50Z"
+updated_at: "2026-07-29T09:11:14Z"
 ---
 
 # T-130-normalize-spec-ref-path-on-write Normalize spec_ref path on write
@@ -75,9 +75,9 @@ explicit `--spec-ref` and the `--area`-resolved forms), `RepointTask`
 
 - Sandbox repro evidence for the current behavior is quoted in the Description;
   re-run it against the fixed binary and record the artifact path here.
-
-## Verification Notes
-
 - TODO: record verification evidence paths.
 
 ## Implementation Notes
+
+- 2026-07-29T09:11:09Z: verification pass
+- 2026-07-29T09:11:14Z: Shared normalizeSpecRef canonicalizes the spec_ref path half on write; validateSpecRef/validateSpecRefWithPending/validateTaskCreatable now return the canonical form so no writer can skip it. Follow-up T-135 filed for the duplicate-heading corpus guard.

@@ -119,7 +119,7 @@ func (s *Service) preflightImportDraft(draft ImportDraft) error {
 	keys, _ := draftTaskKeys(draft.Tasks)
 	opts := taskValidationOpts{pending: pending, draftKeys: keys}
 	for i, task := range draft.Tasks {
-		if _, err := s.validateTaskCreatable(tasks, task.SpecRef, task.Priority, task.Dependencies, opts); err != nil {
+		if _, _, err := s.validateTaskCreatable(tasks, task.SpecRef, task.Priority, task.Dependencies, opts); err != nil {
 			return fmt.Errorf("%s: %w", taskDraftLabel(task, i), err)
 		}
 		// Mirror CreateTask's title-portability guard here too: without it a draft
@@ -141,21 +141,21 @@ func (s *Service) preflightImportDraft(draft ImportDraft) error {
 // extended to resolve a reference to the pending imported spec against that
 // spec's about-to-be-written headings instead of the on-disk file (which may not
 // exist yet, or may be a stale orphan the apply will overwrite).
-func (s *Service) validateSpecRefWithPending(specRef string, pending *pendingSpec) error {
+func (s *Service) validateSpecRefWithPending(specRef string, pending *pendingSpec) (string, error) {
 	if strings.TrimSpace(specRef) == "" {
-		return errors.New("task spec_ref must not be empty")
+		return "", errors.New("task spec_ref must not be empty")
 	}
 	pathPart, anchor, err := parseSpecRef(specRef)
 	if err != nil {
-		return err
+		return "", err
 	}
 	// pending.path is slash-normalized (relPath applies filepath.ToSlash); pathPart
 	// is OS-native from parseSpecRef, so normalize it before comparing on Windows.
 	if pending != nil && filepath.ToSlash(pathPart) == pending.path {
 		if _, ok := pending.anchors[anchor]; !ok {
-			return fmt.Errorf("heading #%s not found in %s (pending import)", anchor, pathPart)
+			return "", fmt.Errorf("heading #%s not found in %s (pending import)", anchor, pathPart)
 		}
-		return nil
+		return normalizeSpecRef(specRef)
 	}
 	return s.validateSpecRef(specRef)
 }

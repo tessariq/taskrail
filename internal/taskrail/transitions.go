@@ -444,36 +444,37 @@ type taskValidationOpts struct {
 
 // validateTaskCreatable runs the spec-and-dependency live-repo checks CreateTask
 // enforces before it writes — non-empty spec_ref with a resolvable heading, a
-// valid priority, and existing dependencies — and returns the normalized
-// priority. Writing nothing, it is the shared pre-write validator import
+// valid priority, and existing dependencies — and returns the normalized spec_ref
+// and priority. Writing nothing, it is the shared pre-write validator import
 // pre-flight (T-041) reuses to reject a whole draft before any file lands, so
 // any check added *here* is enforced on both paths. Title emptiness is
 // deliberately not checked on either path: CreateTask allows a bare, title-less
 // scaffold (T-095), while the import path independently requires a non-empty
 // title via ValidateImportDraft.
-func (s *Service) validateTaskCreatable(tasks []*Task, specRef, priority string, deps []string, opts taskValidationOpts) (string, error) {
-	if err := s.validateSpecRefWithPending(specRef, opts.pending); err != nil {
-		return "", fmt.Errorf("invalid spec_ref: %w", err)
+func (s *Service) validateTaskCreatable(tasks []*Task, specRef, priority string, deps []string, opts taskValidationOpts) (normalizedSpecRef, normalizedPriority string, err error) {
+	specRef, err = s.validateSpecRefWithPending(specRef, opts.pending)
+	if err != nil {
+		return "", "", fmt.Errorf("invalid spec_ref: %w", err)
 	}
 	priority = strings.TrimSpace(priority)
 	if priority == "" {
 		priority = "medium"
 	}
 	if _, ok := validPriorites[priority]; !ok {
-		return "", fmt.Errorf("invalid priority %q", priority)
+		return "", "", fmt.Errorf("invalid priority %q", priority)
 	}
 	for _, dep := range deps {
 		if _, ok := opts.draftKeys[dep]; ok {
 			continue // an in-draft key: a sibling draft task will create it
 		}
 		if _, ok := taskByID(tasks, dep); !ok {
-			return "", fmt.Errorf("dependency %s does not exist", dep)
+			return "", "", fmt.Errorf("dependency %s does not exist", dep)
 		}
 	}
-	return priority, nil
+	return specRef, priority, nil
 }
 
-// resolveAreaSpecRef turns a `--area <anchor>` shorthand into the full
+// resolveAreaSpecRef turns a `--area <anchor>` shorthand into the full, canonical
 // `<active_spec_path>#<anchor>` spec_ref, validating the anchor through the same
 // path as an explicit `--spec-ref` so the set of accepted anchors never diverges.
 // On an unknown anchor it points the operator at the active spec's real anchors.
@@ -482,8 +483,8 @@ func (s *Service) resolveAreaSpecRef(state *State, area string) (string, error) 
 	if activePath == "" {
 		return "", errors.New("--area requires an active spec, but planning/STATE.md has none set")
 	}
-	specRef := activePath + "#" + area
-	if err := s.validateSpecRef(specRef); err != nil {
+	specRef, err := s.validateSpecRef(activePath + "#" + area)
+	if err != nil {
 		return "", fmt.Errorf("unknown active-spec area %q: %w; run `taskrail spec show %s --anchors` to list valid anchors", area, err, state.Frontmatter.ActiveSpecVersion)
 	}
 	return specRef, nil
@@ -546,7 +547,7 @@ func (s *Service) CreateTask(input CreateTaskInput) (CreateTaskResult, error) {
 		}
 	}
 
-	priority, err := s.validateTaskCreatable(tasks, specRef, input.Priority, deps, taskValidationOpts{})
+	specRef, priority, err := s.validateTaskCreatable(tasks, specRef, input.Priority, deps, taskValidationOpts{})
 	if err != nil {
 		return CreateTaskResult{}, err
 	}

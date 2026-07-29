@@ -99,6 +99,11 @@ All notable user-visible changes to Taskrail will be documented in this file.
 - `taskrail import --apply` now names the tasks it already wrote when a task file
   write fails mid-apply ("partial apply already wrote ... — review before
   retrying"), instead of reporting only the failing task.
+- `taskrail task new`, `task repoint`, and `import --apply` now write a canonical
+  `spec_ref` path (`./specs//v0.1.0.md#goals` lands as `specs/v0.1.0.md#goals`);
+  `task repoint` consequently rejects a re-point between two spellings of the same
+  reference instead of rewriting the task file and `STATE.md`. Stored refs are not
+  migrated.
 
 ## v0.3.0 - 2026-07-14
 
