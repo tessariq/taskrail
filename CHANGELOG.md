@@ -4,113 +4,65 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ## Unreleased
 
+Fourth release candidate. Taskrail makes active-spec work safer to author and
+select, adds atomic task rename/repoint operations and mechanical spec/gap review,
+and makes binary, layout, and installed-skill version skew visible before it can
+damage tracked state. The core remains deterministic and provider-independent.
+
 ### Added
 
 - `taskrail spec diff <from> <to>` — read-only, mechanical anchor-set delta between
-  two specs: added areas (need decomposition), removed areas (orphan existing
-  tasks), and best-effort rename candidates. Reuses the `spec show --anchors` slug
-  logic; never writes `STATE.md` or task files and never gates `validate`. Supports
-  `--json`.
-- `taskrail next --include-off-spec` — one-shot recovery that ranks eligible
-  `todo` tasks across all specs and flags an off-spec pick (`off-spec:` marker,
-  `off_spec:true`, and a `selected_off_spec` warning in `--json`). Default `next`
-  stays active-spec-filtered; writes no more state than a normal selection probe.
-
-- `taskrail init --with-skills` — installed skill files now record the Taskrail
-  version that wrote them as a `taskrail_version` frontmatter key, so a skill
-  installed by an older binary is detectable. `--force` restamps; re-running the
-  same version stays a no-op and writes no backups.
-- Every command now warns on stderr when the installed skills were written by a
-  different Taskrail version, naming the affected skills, both versions, and
-  `taskrail init --with-skills --force`. Skills with no marker report once as
-  unknown-version and prescribe no remedy — unless they are byte-identical to the
-  binary's embedded package, which is silent. Advisory only: `--json` stdout stays
-  parseable, `validate` still passes, and no transition is blocked.
+  specs: areas added or removed and best-effort rename candidates. Never writes
+  tracked state or gates validation; supports `--json`.
+- `taskrail task rename <id>` — atomically re-slug a task's id and filename, body
+  heading, inbound dependencies, and current-task pointer. `--slug` is normalized
+  but uncapped; `--title` derives a capped slug. Supports `--dry-run` and `--json`.
+- `taskrail task repoint <id>` — move an open task's `spec_ref` with `--area` or
+  `--spec-ref`, then re-project `STATE.md`. Supports `--dry-run` and `--json`.
+- `taskrail task new --area <anchor>` — resolve a task's `spec_ref` against the
+  active spec without copying its path; mutually exclusive with `--spec-ref`.
+- `taskrail next --include-off-spec` — one-shot recovery that ranks runnable work
+  across all specs and clearly flags an off-spec selection in text and JSON.
 - `taskrail status` — active-spec drift breakdown: counts open work
-  (`todo`/`in_progress`/`blocked`) on the active spec versus away from it, and
-  lists the away tasks with their `spec_ref`. The away set matches the
-  active-spec filter `next` uses for idle selection. Read-only; `--json` mirrors
-  the counts and task/spec-ref pairs.
+  on and away from the active spec, then lists away-task ids and `spec_ref` values.
+  Read-only; supports `--json`.
 - `taskrail coverage --gaps` — advisory read-only structural gap analysis over
-  covered active-spec areas: `missing-verification`, `dependency-anomaly`, and
-  `under-decomposed-area` candidates to promote into tasks. Composes with
-  `--area` to scope the report to one coverable area; the narrowed report names
-  the selected area (even when it has no gaps). Advisory by default;
-  `--fail-on <category>` opts into an exit-code
-  CI gate that reds the build when a signal of a named category is present
-  (repeatable or comma-separated; report unchanged, never affects `validate`).
-  Supports `--json`.
-- `taskrail-decompose` skill — `init --with-skills` now also installs it; drafts
-  spec-anchored tasks for uncovered active-spec areas by composing `coverage
-  --json`, `spec show --anchors`, and `import --apply` (draft-only; no new command).
-- `taskrail-gap` skill — `init --with-skills` now also installs it; pairs
-  `coverage --gaps --json` structural candidates with agent semantic gap review
-  over covered active-spec areas, proposing tasks a human promotes via `task new`
-  / `import --apply` (advisory-only; no new command).
-- `taskrail task rename <id>` — atomically re-slug a task: rewrite its `id`,
-  rename the file (`git mv` when tracked), and fix every inbound `dependencies:`
-  reference. `--slug` sets the slug verbatim; `--title` derives it, length-capped
-  as on `task new`. `--dry-run` previews the change set and the validity it would
-  produce (healing a `filename must be <id>.md` drift previews valid), writing
-  nothing; `--json` emits it. Preserves the `T-<n>` prefix; never advances status. A selector that normalizes
-  to no slug de-slugs the task back to the bare `T-<n>` id and warns on stderr.
-  Also repoints the body's `# <id> <title>` heading, reported as a `body_heading`
-  change.
-- `taskrail task new --area <anchor>` — active-spec shorthand for `--spec-ref
-  <active-spec-path>#<anchor>`. Mutually exclusive with `--spec-ref`; an unknown
-  anchor fails before writing and points at `spec show <active-version> --anchors`.
-- `taskrail task repoint <id>` — re-point an open task's `spec_ref` onto a new
-  area without hand-editing frontmatter. `--area <anchor>` resolves it against the
-  active spec, `--spec-ref <path#anchor>` sets it explicitly (mutually exclusive);
-  an unknown anchor fails before writing. Rewrites only `spec_ref`, then
-  re-projects `STATE.md` — check `git status` afterwards. Completed and cancelled
-  tasks are rejected. `--dry-run` previews the change and the validity it would
-  produce, writing nothing; `--json` emits the change.
+  covered active-spec areas. Scope with `--area`, gate selected categories with
+  `--fail-on`, and consume structured candidates with `--json`.
+- `taskrail-decompose` and `taskrail-gap` skills — draft tasks for uncovered spec
+  areas and add semantic review to mechanical gap signals; proposals remain
+  reviewable and require explicit promotion into tracked state.
+- `taskrail init --with-skills` — stamp installed skills with the writing Taskrail
+  version. Commands warn about stale copies and name `init --with-skills --force`
+  as the explicit remedy without blocking transitions or corrupting JSON output.
 
 ### Changed
 
 - `taskrail next` — anchor idle selection to the active spec: only `todo` tasks
-  whose `spec_ref` points at the active spec are considered, so older-spec work is
-  skipped, not selected. When only older-spec work is runnable, `next` reports no
-  eligible task and lists it under `warnings` (`skipped_non_active_spec`). An
-  already-active task pointing outside the active spec is still returned with a
-  `selected_non_active_spec` warning. `status` mirrors the same read-only selection.
+  on that spec are ranked by default. Older runnable work is reported as skipped;
+  an off-spec active task remains selected with a warning.
 - `taskrail task new` — derive a slugged id and filename from `--title`
-  (`T-<n>-<slug>`); `--slug` overrides the derived slug. With neither flag the id
-  stays the bare `T-<n>`. Accented letters transliterate to ASCII before slugifying
-  (`Über Fußball` → `ueber-fussball`, `Łódź Điện` → `lodz-dien`, in precomposed or
-  decomposed input alike). A title-derived slug is length-capped (~50 chars, on a
-  hyphen boundary); an explicit `--slug` is written verbatim. A `--title`/`--slug`
-  that normalizes to no slug keeps the bare id but warns on stderr.
+  (`T-<n>-<slug>`). Accented Latin text is folded to readable ASCII, title-derived
+  slugs are capped, explicit `--slug` values are normalized but uncapped, and an
+  empty normalized slug falls back to a warned bare id.
 
 ### Fixed
 
 - Every command now refuses a repository recording a `layout_version` newer than
-  the binary supports ("upgrade taskrail"), before reading or writing state —
-  previously only `init` checked.
-- `taskrail complete`, `block`, and `unblock` now reject a `--note`/`--reason`
-  that embeds a gitignored `planning/artifacts/` file path before writing,
-  pointing you at a path-free summary — previously the transition wrote committed
-  state that `validate` then failed. `verify --create-followup` applies the same
-  guard to the follow-up task's title/description (`--summary`/`--details`), and
-  `task new --title` and `import --apply` reject such a path before writing.
+  the binary supports before reading or writing state, not only during `init`.
+- State-writing notes, reasons, task titles, follow-ups, and imported drafts now
+  reject concrete gitignored `planning/artifacts/` paths before writing committed
+  content that a later `validate` would reject.
+- `taskrail import --apply` now reports every file written or possibly touched by
+  a failed apply, including failed spec writes and created tasks; JSON marks the
+  result `"partial": true` while the command exits non-zero.
 - `taskrail verify` and `taskrail block` now reuse `## Implementation Notes` in
-  CRLF-authored tasks; `task check:task-bodies` ignores scaffold examples inside
-  fenced code blocks.
-- `taskrail import --apply` now reports what a write failure wrote or may have
-  touched, including failed spec-write paths and created tasks; `--json` emits the
-  envelope marked `"partial": true`. Exit stays non-zero; clean applies unchanged.
+  CRLF-authored tasks; the task-body guard ignores scaffold headings inside fenced
+  examples and checks every scaffold section for duplicates.
 - `taskrail task new`, `task repoint`, and `import --apply` now write a canonical
-  `spec_ref` path (`./specs//v0.1.0.md#goals` lands as `specs/v0.1.0.md#goals`);
-  `task repoint` consequently rejects a re-point between two spellings of the same
-  reference instead of rewriting the task file and `STATE.md`. Stored refs are not
-  migrated.
-- An unparsable layout marker is now reported repo-relative (`parse layout config
-  .taskrail/config.yml: ...`) instead of with your absolute repository path,
-  matching how the read-error branch and the rest of Taskrail name a file.
-- `taskrail init --with-skills --force` now reports a failed backup-candidate stat
-  repo-relative and once (`stat backup .claude/skills/...: permission denied`),
-  instead of with your absolute repository path repeated twice.
+  `spec_ref` path and reject no-op repoints between equivalent spellings.
+- Layout-marker and skill-backup errors now name repository-relative paths once,
+  avoiding machine-specific absolute paths and duplicated error text.
 
 ## v0.3.0 - 2026-07-14
 

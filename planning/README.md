@@ -4,8 +4,8 @@
 
 ## Current Default Scope
 
-- active spec: `specs/v0.2.0.md`
-- active version focus: `v0.2.0`
+- active spec: `specs/v0.4.0.md`
+- active version focus: `v0.4.0`
 
 ## Rules
 
@@ -13,5 +13,6 @@
 - `planning/tasks/` contains one file per tracked work item.
 - Every task must reference at least one live heading in a spec file.
 - Dependency references must point to existing task IDs.
-- Verification artifacts are written under `planning/artifacts/verify/`.
+- Verification artifacts are written under `planning/artifacts/verify/` on
+  demand; the gitignored artifacts tree and placeholder files are not required.
 - Temporary dogfooding workflow docs live under `docs/workflow/` until Taskrail itself replaces more of the manual scaffolding.

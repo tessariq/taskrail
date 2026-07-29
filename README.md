@@ -88,10 +88,11 @@ Plain `go build`/`go install` produce a development build that reports version
 build time:
 
 ```sh
-go build -ldflags "-X main.version=v0.3.0" -o taskrail ./cmd/taskrail
+VERSION=vX.Y.Z
+go build -ldflags "-X main.version=${VERSION}" -o taskrail ./cmd/taskrail
 # or, via Taskfile:
-VERSION=v0.3.0 task release
-./taskrail version   # -> v0.3.0
+VERSION="${VERSION}" task release
+./taskrail version   # -> vX.Y.Z
 ```
 
 Tagged `v*` releases are built and published automatically with
@@ -129,7 +130,8 @@ running it where it is, use
 
 - **Adopt an existing repo** — `init` and `retrofit` scaffold `specs/` + `planning/` non-destructively; `import` turns rough notes into spec/task drafts without an LLM; `repair` reconciles mechanical `STATE.md` drift.
 - **See where work stands** — `status`, `stats`, and `coverage` report a live snapshot, aggregate metrics, and advisory spec-linkage, all read-only. `status` also breaks down open work (`todo`/`in_progress`/`blocked`) by how much targets the active spec versus points away from it, listing the away tasks and their `spec_ref`; the away set matches the active-spec filter `next` uses for idle selection.
-- **Author and steer specs** — the `spec` family (`list`, `show`, `add`, `activate`) inspects and evolves versioned specs.
+- **Author and steer specs** — the `spec` family (`list`, `show`, `add`, `activate`, `diff`) inspects and evolves versioned specs; `spec diff` previews the mechanical area-set delta before activation.
+- **Draft missing work** — the optional `taskrail-decompose` and `taskrail-gap` skills turn uncovered areas and structural gap signals into reviewable proposals; only an explicit `task new` or `import --apply` writes tracked tasks.
 - **Handle the messy parts** — `block`/`unblock` park and resume work, `task new` scaffolds a task with the next free id, `task rename` atomically re-slugs a task's id, filename, and inbound dependency references, and `task repoint` moves an open task's `spec_ref` onto another area.
 
 Run `taskrail --help`, or `taskrail <command> --help`, for the full command list and every flag.
@@ -287,7 +289,7 @@ Rename is symmetric with creation: a selector that normalizes to no slug strips
 the slug instead of failing, renaming `T-<n>-<slug>.md` back to `T-<n>.md` (with
 the same stderr warning), so a bad slug can be undone. The length cap is
 symmetric too — a `--title`-derived slug is capped the same way `task new`
-caps it, while an explicit `--slug` is written verbatim however long.
+caps it, while an explicit `--slug` is normalized but not length-capped.
 
 `task rename` re-encodes the identifier only: it changes the id/slug and filename
 but never rewrites the `title:` frontmatter field. Re-slugging a task and
@@ -374,7 +376,8 @@ planning/
 These are plain files — no proprietary formats, no database required. The
 `planning/artifacts/` tree is gitignored, reproducible local output: `verify`
 creates it on demand, `taskrail init` never pre-creates it, and neither committed
-state nor `validate` depends on it surviving a Git round-trip.
+state nor `validate` depends on it surviving a Git round-trip. No `.gitkeep`
+placeholder is required or tracked.
 
 ## State Contract
 
@@ -406,9 +409,9 @@ recorded version is not the running one, naming the affected skills and both
 versions. The warning is advisory — it never fails `validate` or blocks a
 transition — and `taskrail init --with-skills --force` resolves it. The committed
 copies in this repository carry no marker, since parity keeps them byte-identical
-to the unstamped package, so commands run here report them once as
-unknown-version and prescribe no remedy; do not "resolve" that with
-`--force`, which would break `task check:skills`.
+to the unstamped package; byte-identical marker-free copies are silent rather than
+reported as unknown-version. Do not run `--force` here, since stamping the
+committed copies would break `task check:skills`.
 
 ## Development
 
@@ -460,6 +463,7 @@ Taskrail is an in-progress open-source project. The current release is `v0.3.0`.
 - `v0.1.0` established the repository contract: deterministic task progression, the authoritative `STATE.md`, and verification as a first-class concept.
 - `v0.2.0` makes adoption in existing repositories easy — guided `retrofit`, LLM-free `import` of rough notes into spec/task drafts, opt-in shippable agent skills, a version-aware non-destructive `init`, and conservative `STATE.md` repair — while keeping the core CLI provider- and tooling-independent.
 - `v0.3.0` adds read-only insight into tracked work — `status`, `stats`, and `coverage` — plus the `spec` command family for inspecting and authoring specs, `unblock` to release blocked tasks, and Windows install via WinGet.
+- `v0.4.0` is the pending release candidate: active-spec task selection and authoring, slugged task creation and atomic rename/repoint operations, mechanical spec/gap review, and version-skew detection. It becomes current only after the pre-release gap/drift gate passes.
 - Later work is tracked under [`specs/README.md`](specs/README.md).
 
 This repository also dogfoods the Taskrail workflow style — using `planning/`, `docs/workflow/`, and the packaged skill set it adopts like any adopter — until the product itself fully replaces that scaffolding.
@@ -470,7 +474,7 @@ Apache-2.0. See [LICENSE](LICENSE).
 
 ## Read Next
 
-- [`specs/v0.3.0.md`](specs/v0.3.0.md) — current release scope
+- [`specs/v0.4.0.md`](specs/v0.4.0.md) — pending release scope
 - [`specs/README.md`](specs/README.md) — spec reading order and versioning
 - [`planning/STATE.md`](planning/STATE.md) — live execution state
 - [`AGENTS.md`](AGENTS.md) — guidance for coding agents
