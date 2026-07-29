@@ -39,6 +39,7 @@ func newVerifyCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			printWarnings(cmd, verifyResult.Warnings)
 			return printResult(cmd, opt.json, verifyResult, verifyResult.ReportPath)
 		},
 	}

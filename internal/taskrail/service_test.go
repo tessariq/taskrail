@@ -513,6 +513,9 @@ func TestVerifyWritesArtifactsAndCreatesFollowup(t *testing.T) {
 	if result.FollowupTaskID == "" {
 		t.Fatalf("expected follow-up task id")
 	}
+	if result.FollowupTaskID != "T-003-handle-missing-edge-case" {
+		t.Fatalf("expected title-derived follow-up id, got %q", result.FollowupTaskID)
+	}
 	if _, err := os.Stat(filepath.Join(repo, result.PlanPath)); err != nil {
 		t.Fatalf("expected plan artifact: %v", err)
 	}
@@ -533,6 +536,44 @@ func TestVerifyWritesArtifactsAndCreatesFollowup(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(repo, "planning", "tasks", result.FollowupTaskID+".md")); err != nil {
 		t.Fatalf("expected follow-up task file: %v", err)
+	}
+	_, tasks, err := svc.loadStateAndTasks()
+	if err != nil {
+		t.Fatalf("load tasks: %v", err)
+	}
+	followup, ok := taskByID(tasks, result.FollowupTaskID)
+	if !ok {
+		t.Fatalf("follow-up %s not persisted", result.FollowupTaskID)
+	}
+	if len(followup.Frontmatter.Dependencies) != 1 || followup.Frontmatter.Dependencies[0] != "T-002" {
+		t.Fatalf("follow-up must depend on verified task, got %v", followup.Frontmatter.Dependencies)
+	}
+}
+
+func TestVerifyFollowupWarnsWhenTitleProducesEmptySlug(t *testing.T) {
+	t.Parallel()
+	repo := seedFixtureRepo(t)
+	writeTask(t, repo, "T-002", "Verified item", "completed", "high", "specs/v0.1.0.md#summary", nil)
+	svc := newTestService(t, repo, time.Date(2026, 3, 31, 12, 0, 0, 0, time.UTC))
+
+	result, err := svc.Verify(VerifyInput{
+		TaskID:         "T-002",
+		Result:         "fail",
+		Summary:        "Need one follow-up",
+		CreateFollowup: true,
+		FollowupTitle:  "!!!",
+	})
+	if err != nil {
+		t.Fatalf("verify: %v", err)
+	}
+	if result.FollowupTaskID != "T-003" {
+		t.Fatalf("expected legitimate bare-id fallback, got %q", result.FollowupTaskID)
+	}
+	if len(result.Warnings) != 1 || !strings.Contains(result.Warnings[0].Message, `"!!!" produced no slug segment`) {
+		t.Fatalf("expected visible empty-slug warning, got %+v", result.Warnings)
+	}
+	if _, err := os.Stat(filepath.Join(repo, "planning", "tasks", "T-003.md")); err != nil {
+		t.Fatalf("expected bare follow-up task file: %v", err)
 	}
 }
 

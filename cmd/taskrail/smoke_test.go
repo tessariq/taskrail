@@ -851,6 +851,31 @@ func TestTaskNewWithoutSlugSourceIsSilent(t *testing.T) {
 	}
 }
 
+func TestVerifyFollowupEmptyTitleSlugWarnsWithoutCorruptingJSON(t *testing.T) {
+	root := setupRepo(t)
+	writeTask(t, root, "T-001", "completed", "")
+
+	stdout, stderr, err := runRootSplit(t, "verify", "T-001", "--result", "fail", "--summary", "needs follow-up", "--create-followup", "--followup-title", "!!!", "--json")
+	if err != nil {
+		t.Fatalf("verify: %v (stdout %q stderr %q)", err, stdout, stderr)
+	}
+	if !strings.Contains(stderr, `"!!!" produced no slug segment`) || !strings.Contains(stderr, "T-002") {
+		t.Fatalf("expected empty-slug warning on stderr, got %q", stderr)
+	}
+	var payload struct {
+		FollowupTaskID string `json:"followup_task_id"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
+		t.Fatalf("stdout is not clean json (%v): %q", err, stdout)
+	}
+	if payload.FollowupTaskID != "T-002" {
+		t.Fatalf("expected bare follow-up id T-002, got %q", payload.FollowupTaskID)
+	}
+	if _, err := os.Stat(filepath.Join(root, "planning", "tasks", "T-002.md")); err != nil {
+		t.Fatalf("expected bare follow-up task file: %v", err)
+	}
+}
+
 // TestTaskNewRejectsGitignoredArtifactTitle exercises the portability guard at the
 // CLI boundary: a --title naming a concrete gitignored artifact file fails before
 // any write, so the repo is never left in a state the next validate rejects.
@@ -1202,7 +1227,7 @@ func TestImportPreviewAndApply(t *testing.T) {
 	if !strings.Contains(applyOut, "created T-") {
 		t.Fatalf("expected created task in output, got %q", applyOut)
 	}
-	if _, err := os.Stat(filepath.Join(root, "planning", "tasks", "T-001.md")); err != nil {
+	if _, err := os.Stat(filepath.Join(root, "planning", "tasks", "T-001-add-search-endpoint.md")); err != nil {
 		t.Fatalf("expected scaffolded task file: %v", err)
 	}
 }

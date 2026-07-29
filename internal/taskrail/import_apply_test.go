@@ -80,8 +80,14 @@ func TestApplyImportDraftCreatesTasksInDependencyOrder(t *testing.T) {
 
 	alphaID := result.Tasks[0].TaskID
 	betaID := result.Tasks[1].TaskID
-	if alphaID == "" || betaID == "" || alphaID == betaID {
-		t.Fatalf("expected two distinct real task ids, got %q and %q", alphaID, betaID)
+	if alphaID != "T-001-alpha-task" || betaID != "T-002-beta-task" {
+		t.Fatalf("expected title-derived task ids, got %q and %q", alphaID, betaID)
+	}
+	for _, created := range result.Tasks {
+		wantPath := "planning/tasks/" + created.TaskID + ".md"
+		if created.Path != wantPath {
+			t.Fatalf("task %s path = %q, want %q", created.TaskID, created.Path, wantPath)
+		}
 	}
 
 	_, tasks, err := svc.loadStateAndTasks()
@@ -97,6 +103,41 @@ func TestApplyImportDraftCreatesTasksInDependencyOrder(t *testing.T) {
 	}
 	if beta.Frontmatter.Priority != "high" {
 		t.Fatalf("beta priority must be preserved, got %q", beta.Frontmatter.Priority)
+	}
+}
+
+func TestApplyImportDraftWarnsWhenTitleProducesEmptySlug(t *testing.T) {
+	t.Parallel()
+	svc := applyFixture(t)
+	draft := ImportDraft{
+		SchemaVersion: importDraftSchemaVersion,
+		Target:        "tasks",
+		Source:        "notes.md",
+		Tasks: []TaskDraft{{
+			Key:      "empty",
+			Title:    "!!!",
+			SpecRef:  "specs/v0.1.0.md#summary",
+			Priority: "medium",
+		}},
+	}
+	rel := writeDraftFile(t, svc.paths.RepoRoot, "planning/imports/empty-slug.json", draft)
+
+	result, err := svc.ApplyImportDraft(ApplyDraftInput{DraftPath: rel})
+	if err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+	if len(result.Tasks) != 1 || result.Tasks[0].TaskID != "T-001" || result.Tasks[0].Path != "planning/tasks/T-001.md" {
+		t.Fatalf("expected legitimate bare-id fallback, got %+v", result.Tasks)
+	}
+	if len(result.Warnings) != 1 || !strings.Contains(result.Warnings[0].Message, `"!!!" produced no slug segment`) {
+		t.Fatalf("expected visible empty-slug warning, got %+v", result.Warnings)
+	}
+	validation, err := svc.Validate()
+	if err != nil {
+		t.Fatalf("validate: %v", err)
+	}
+	if !validation.Valid {
+		t.Fatalf("expected valid repo after bare-id fallback, got %v", validation.Violations)
 	}
 }
 
@@ -296,8 +337,8 @@ func TestApplyImportDraftReportsPartiallyCreatedTasksOnMidWriteFailure(t *testin
 
 	// Block the second task's file path with a directory: its write fails while
 	// the first task is already on disk. loadTasks skips directories, so id
-	// allocation still hands the second draft task T-002.
-	if err := os.MkdirAll(filepath.Join(svc.paths.TasksDir, "T-002.md"), 0o755); err != nil {
+	// allocation still hands the second draft task the T-002 numeric prefix.
+	if err := os.MkdirAll(filepath.Join(svc.paths.TasksDir, "T-002-beta-task.md"), 0o755); err != nil {
 		t.Fatalf("seed blocking directory: %v", err)
 	}
 
@@ -317,7 +358,7 @@ func TestApplyImportDraftReportsPartiallyCreatedTasksOnMidWriteFailure(t *testin
 	if err == nil {
 		t.Fatal("expected error when a task file write fails mid-loop")
 	}
-	if len(result.Tasks) != 1 || result.Tasks[0].TaskID != "T-001" {
+	if len(result.Tasks) != 1 || result.Tasks[0].TaskID != "T-001-alpha-task" {
 		t.Fatalf("partial apply must report the task it already wrote, got %+v", result.Tasks)
 	}
 	// The marker is what lets a caller print this result without a script mistaking
@@ -329,7 +370,7 @@ func TestApplyImportDraftReportsPartiallyCreatedTasksOnMidWriteFailure(t *testin
 	if !strings.Contains(msg, "partial apply already wrote") {
 		t.Fatalf("error must carry the partial-apply wrapper, got %v", err)
 	}
-	if !strings.Contains(msg, "T-001") || !strings.Contains(msg, result.SpecPath) {
+	if !strings.Contains(msg, "T-001-alpha-task") || !strings.Contains(msg, result.SpecPath) {
 		t.Fatalf("wrapper must name the written task ids and spec path, got %v", err)
 	}
 	_, tasks, err := svc.loadStateAndTasks()
@@ -426,9 +467,12 @@ func TestApplyImportDraftPassesThroughExternalTaskDependency(t *testing.T) {
 	t.Parallel()
 	svc := applyFixture(t)
 
-	parent, err := svc.CreateTask(CreateTaskInput{Title: "Parent", SpecRef: "specs/v0.1.0.md#summary"})
+	parent, err := svc.CreateTask(CreateTaskInput{Title: "Parent", Slug: "Parent", SpecRef: "specs/v0.1.0.md#summary"})
 	if err != nil {
 		t.Fatalf("seed parent task: %v", err)
+	}
+	if parent.TaskID != "T-001-parent" {
+		t.Fatalf("expected slugged parent id, got %q", parent.TaskID)
 	}
 
 	draft := ImportDraft{

@@ -48,12 +48,14 @@ func newImportCmd() *cobra.Command {
 					// envelope carries partial:true and the exit stays non-zero, so the
 					// output can never be read as a clean apply.
 					if result.Partial {
+						printWarnings(cmd, result.Warnings)
 						if printErr := printApplyResult(cmd, opt.json, result); printErr != nil {
 							return errors.Join(err, printErr)
 						}
 					}
 					return err
 				}
+				printWarnings(cmd, result.Warnings)
 				return printApplyResult(cmd, opt.json, result)
 			}
 

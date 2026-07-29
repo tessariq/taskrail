@@ -1,12 +1,12 @@
 ---
 id: T-141-slug-titled-tasks-created-by-import-and-verify
 title: Slug titled tasks created by import and verify follow-ups
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.4.0.md#slugged-task-creation
 dependencies:
     - T-095
-updated_at: "2026-07-29T13:03:42Z"
+updated_at: "2026-07-29T13:51:43Z"
 ---
 
 # T-141-slug-titled-tasks-created-by-import-and-verify Slug titled tasks created by import and verify follow-ups
@@ -38,3 +38,5 @@ slug behavior without changing their dependency or provenance semantics.
 
 - Keep one shared title-to-id policy rather than duplicating slug logic in import
   and verification.
+- 2026-07-29T13:51:21Z: verification pass
+- 2026-07-29T13:51:43Z: implemented shared title-derived slug policy for import and verification follow-ups

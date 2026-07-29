@@ -40,7 +40,7 @@ func seedDraftRepo(t *testing.T, draft string) string {
 func seedPartialApplyRepo(t *testing.T) string {
 	t.Helper()
 	root := seedDraftRepo(t, partialApplyDraft)
-	if err := os.MkdirAll(filepath.Join(root, "planning", "tasks", "T-002.md"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(root, "planning", "tasks", "T-002-beta-task.md"), 0o755); err != nil {
 		t.Fatalf("seed blocking directory: %v", err)
 	}
 	return root
@@ -78,7 +78,7 @@ func TestImportApplyPartialFailureEmitsWrittenArtifactsJSON(t *testing.T) {
 	if payload.SpecPath != "specs/notes.md" {
 		t.Fatalf("envelope must name the written spec, got %q", payload.SpecPath)
 	}
-	if len(payload.Tasks) != 1 || payload.Tasks[0].TaskID != "T-001" || payload.Tasks[0].Path != "planning/tasks/T-001.md" {
+	if len(payload.Tasks) != 1 || payload.Tasks[0].TaskID != "T-001-alpha-task" || payload.Tasks[0].Path != "planning/tasks/T-001-alpha-task.md" {
 		t.Fatalf("envelope must name the task written before the failure, got %+v", payload.Tasks)
 	}
 	if _, statErr := os.Stat(filepath.Join(root, payload.Tasks[0].Path)); statErr != nil {
@@ -98,11 +98,43 @@ func TestImportApplyPartialFailureReportsWrittenArtifactsText(t *testing.T) {
 	if !strings.Contains(stdout, "review spec specs/notes.md") {
 		t.Fatalf("text mode must report the written spec, got %q", stdout)
 	}
-	if !strings.Contains(stdout, "created T-001 planning/tasks/T-001.md") {
+	if !strings.Contains(stdout, "created T-001-alpha-task planning/tasks/T-001-alpha-task.md") {
 		t.Fatalf("text mode must report the task written before the failure, got %q", stdout)
 	}
 	if !strings.Contains(err.Error(), "partial apply already wrote") {
 		t.Fatalf("error must carry the partial-apply wrapper, got %v", err)
+	}
+}
+
+func TestImportApplyPartialFailurePrintsEarlierEmptySlugWarning(t *testing.T) {
+	root := seedDraftRepo(t, `{
+  "schema_version": 1,
+  "target": "tasks",
+  "source": "notes.md",
+  "tasks": [
+    {"key": "empty", "title": "!!!", "spec_ref": "specs/v0.1.0.md#summary", "priority": "medium"},
+    {"key": "beta", "title": "Beta task", "spec_ref": "specs/v0.1.0.md#summary", "priority": "medium"}
+  ]
+}`)
+	if err := os.MkdirAll(filepath.Join(root, "planning", "tasks", "T-002-beta-task.md"), 0o755); err != nil {
+		t.Fatalf("seed blocking directory: %v", err)
+	}
+
+	stdout, stderr, err := runRootSplit(t, "import", "--apply", "draft.json", "--json")
+	if err == nil {
+		t.Fatalf("expected partial apply failure, got stdout %q", stdout)
+	}
+	if !strings.Contains(stderr, `"!!!" produced no slug segment`) || !strings.Contains(stderr, "T-001") {
+		t.Fatalf("expected earlier empty-slug warning on stderr, got %q", stderr)
+	}
+	var payload struct {
+		Partial bool `json:"partial"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
+		t.Fatalf("partial stdout is not clean json (%v): %q", err, stdout)
+	}
+	if !payload.Partial {
+		t.Fatalf("expected partial result, got %q", stdout)
 	}
 }
 
@@ -172,5 +204,37 @@ func TestImportApplySuccessEnvelopeCarriesNoPartialMarker(t *testing.T) {
 	}
 	if strings.Contains(stdout, "partial") {
 		t.Fatalf("a clean apply must not carry a partial marker, got %q", stdout)
+	}
+}
+
+func TestImportApplyEmptyTitleSlugWarnsWithoutCorruptingJSON(t *testing.T) {
+	root := seedDraftRepo(t, `{
+  "schema_version": 1,
+  "target": "tasks",
+  "source": "notes.md",
+  "tasks": [{"key": "empty", "title": "!!!", "spec_ref": "specs/v0.1.0.md#summary", "priority": "medium"}]
+}`)
+
+	stdout, stderr, err := runRootSplit(t, "import", "--apply", "draft.json", "--json")
+	if err != nil {
+		t.Fatalf("apply: %v (stdout %q stderr %q)", err, stdout, stderr)
+	}
+	if !strings.Contains(stderr, `"!!!" produced no slug segment`) || !strings.Contains(stderr, "T-001") {
+		t.Fatalf("expected empty-slug warning on stderr, got %q", stderr)
+	}
+	var payload struct {
+		Tasks []struct {
+			TaskID string `json:"task_id"`
+			Path   string `json:"path"`
+		} `json:"tasks"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
+		t.Fatalf("stdout is not clean json (%v): %q", err, stdout)
+	}
+	if len(payload.Tasks) != 1 || payload.Tasks[0].TaskID != "T-001" || payload.Tasks[0].Path != "planning/tasks/T-001.md" {
+		t.Fatalf("unexpected bare-id JSON result: %+v", payload.Tasks)
+	}
+	if _, err := os.Stat(filepath.Join(root, payload.Tasks[0].Path)); err != nil {
+		t.Fatalf("reported task path must exist: %v", err)
 	}
 }

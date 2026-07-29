@@ -45,6 +45,8 @@ damage tracked state. The core remains deterministic and provider-independent.
   (`T-<n>-<slug>`). Accented Latin text is folded to readable ASCII, title-derived
   slugs are capped, explicit `--slug` values are normalized but uncapped, and an
   empty normalized slug falls back to a warned bare id.
+- `taskrail import --apply` and `taskrail verify --create-followup` — derive capped,
+  title-based task ids and filenames; empty slugs keep the warned bare-id fallback.
 
 ### Fixed
 

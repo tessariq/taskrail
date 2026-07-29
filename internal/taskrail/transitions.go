@@ -352,13 +352,15 @@ func (s *Service) Verify(input VerifyInput) (VerifyResult, error) {
 	reportMarkdownPath := filepath.Join(artifactDir, "report.md")
 
 	followupTaskID := ""
+	var warnings []Warning
 	if input.CreateFollowup {
-		newTask, err := s.createFollowupTask(tasks, task, input)
+		newTask, taskWarnings, err := s.createFollowupTask(tasks, task, input)
 		if err != nil {
 			return VerifyResult{}, err
 		}
 		tasks = append(tasks, newTask)
 		followupTaskID = newTask.Frontmatter.ID
+		warnings = taskWarnings
 	}
 
 	relPlan := relPath(s.paths.RepoRoot, planPath)
@@ -430,6 +432,7 @@ func (s *Service) Verify(input VerifyInput) (VerifyResult, error) {
 		ReportPath:     relReport,
 		ReportMarkdown: relReportMarkdown,
 		FollowupTaskID: followupTaskID,
+		Warnings:       warnings,
 	}, nil
 }
 
@@ -555,16 +558,7 @@ func (s *Service) CreateTask(input CreateTaskInput) (CreateTaskResult, error) {
 	// The id and filename are two encodings of one identifier: bake the slug (if
 	// any) into the id so `filename == "<id>.md"` holds. nextTaskID keys on the
 	// numeric prefix, so a slug suffix never affects id allocation or collision.
-	nextID := nextTaskID(tasks)
-	var warnings []Warning
-	if slug := slugify(input.Slug); slug != "" {
-		if !input.SlugExplicit {
-			slug = capSlug(slug)
-		}
-		nextID = nextID + "-" + slug
-	} else {
-		warnings = emptySlugWarnings(input.Slug, nextID)
-	}
+	nextID, warnings := nextTaskIDWithSlug(tasks, input.Slug, input.SlugExplicit)
 	now := timestamp(s.now())
 	var provenance string
 	if followUpOf != "" {
@@ -706,16 +700,15 @@ func (s *Service) finishTask(taskID, status, note string) (TransitionResult, err
 	return TransitionResult{TaskID: taskID, Status: status, UpdatedAt: now}, nil
 }
 
-func (s *Service) createFollowupTask(tasks []*Task, source *Task, input VerifyInput) (*Task, error) {
+func (s *Service) createFollowupTask(tasks []*Task, source *Task, input VerifyInput) (*Task, []Warning, error) {
 	priority := strings.TrimSpace(input.FollowupPriority)
 	if priority == "" {
 		priority = "medium"
 	}
 	if _, ok := validPriorites[priority]; !ok {
-		return nil, fmt.Errorf("invalid follow-up priority %q", priority)
+		return nil, nil, fmt.Errorf("invalid follow-up priority %q", priority)
 	}
 
-	nextID := nextTaskID(tasks)
 	title := strings.TrimSpace(input.FollowupTitle)
 	if title == "" {
 		title = fmt.Sprintf("Follow-up for %s: %s", source.Frontmatter.ID, input.Summary)
@@ -733,11 +726,12 @@ func (s *Service) createFollowupTask(tasks []*Task, source *Task, input VerifyIn
 	// its body to --details, either of which an operator may paste a gitignored
 	// evidence path into. Guard before Verify writes any artifact or task file.
 	if err := ensurePortableNote("follow-up title", title); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if err := ensurePortableNote("follow-up description", description); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
+	nextID, warnings := nextTaskIDWithSlug(tasks, title, false)
 
 	body := renderFollowupTaskBody(nextID, title, description)
 	task := &Task{
@@ -753,5 +747,17 @@ func (s *Service) createFollowupTask(tasks []*Task, source *Task, input VerifyIn
 		Body:     body,
 		Filename: filepath.Join(s.paths.TasksDir, nextID+".md"),
 	}
-	return task, nil
+	return task, warnings, nil
+}
+
+func nextTaskIDWithSlug(tasks []*Task, source string, explicit bool) (string, []Warning) {
+	nextID := nextTaskID(tasks)
+	slug := slugify(source)
+	if slug == "" {
+		return nextID, emptySlugWarnings(source, nextID)
+	}
+	if !explicit {
+		slug = capSlug(slug)
+	}
+	return nextID + "-" + slug, nil
 }

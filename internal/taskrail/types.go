@@ -146,8 +146,8 @@ type CreateTaskInput struct {
 	// Slug is the raw source for the id's human-scannable suffix. When it slugifies
 	// to a non-empty value the id becomes `T-<n>-<slug>` with a matching filename;
 	// when empty (or all non-alphanumeric) the id stays the bare `T-<n>` form. The
-	// `task new` command passes `--slug` if given, else the title, so CLI-authored
-	// tasks are slugged by default while other callers (import) stay bare.
+	// `task new` and import pass the title when no curated slug exists, so titled
+	// CLI-authored tasks are slugged by default.
 	Slug string
 	// SlugExplicit reports that Slug is an operator-curated `--slug`, not the
 	// title fallback. A title-derived slug is length-capped (see capSlug); an
@@ -209,13 +209,14 @@ type VerifyInput struct {
 }
 
 type VerifyResult struct {
-	TaskID         string `json:"task_id"`
-	Result         string `json:"result"`
-	ArtifactDir    string `json:"artifact_dir"`
-	PlanPath       string `json:"plan_path"`
-	ReportPath     string `json:"report_path"`
-	ReportMarkdown string `json:"report_markdown"`
-	FollowupTaskID string `json:"followup_task_id,omitempty"`
+	TaskID         string    `json:"task_id"`
+	Result         string    `json:"result"`
+	ArtifactDir    string    `json:"artifact_dir"`
+	PlanPath       string    `json:"plan_path"`
+	ReportPath     string    `json:"report_path"`
+	ReportMarkdown string    `json:"report_markdown"`
+	FollowupTaskID string    `json:"followup_task_id,omitempty"`
+	Warnings       []Warning `json:"warnings,omitempty"`
 }
 
 type VerificationArtifact struct {

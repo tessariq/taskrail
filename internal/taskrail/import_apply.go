@@ -38,6 +38,7 @@ type ApplyDraftResult struct {
 	SpecPath string           `json:"spec_path,omitempty"`
 	Tasks    []CreatedTaskRef `json:"tasks,omitempty"`
 	Partial  bool             `json:"partial,omitempty"`
+	Warnings []Warning        `json:"warnings,omitempty"`
 }
 
 // ApplyImportDraft validates a draft and writes real spec/task files. Structural
@@ -74,8 +75,9 @@ func (s *Service) ApplyImportDraft(input ApplyDraftInput) (ApplyDraftResult, err
 		result.SpecPath = specPath
 	}
 
-	created, err := s.createDraftTasks(draft.Tasks)
+	created, warnings, err := s.createDraftTasks(draft.Tasks)
 	result.Tasks = created
+	result.Warnings = warnings
 	if err != nil {
 		if written := describeWrittenArtifacts(result); written != "" {
 			result.Partial = true
@@ -205,21 +207,23 @@ func (s *Service) readImportDraft(path string) (ImportDraft, error) {
 // createDraftTasks scaffolds each task draft through CreateTask in dependency
 // order, translating in-draft key dependencies to the real ids CreateTask
 // allocates as it goes.
-func (s *Service) createDraftTasks(tasks []TaskDraft) ([]CreatedTaskRef, error) {
+func (s *Service) createDraftTasks(tasks []TaskDraft) ([]CreatedTaskRef, []Warning, error) {
 	if len(tasks) == 0 {
-		return nil, nil
+		return nil, nil, nil
 	}
 	order, err := orderTaskDraftsByDeps(tasks)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	keyToID := make(map[string]string, len(tasks))
 	created := make([]CreatedTaskRef, 0, len(tasks))
+	var warnings []Warning
 	for _, idx := range order {
 		draft := tasks[idx]
 		res, err := s.CreateTask(CreateTaskInput{
 			Title:        draft.Title,
+			Slug:         draft.Title,
 			SpecRef:      draft.SpecRef,
 			Priority:     draft.Priority,
 			Dependencies: translateDeps(draft.Dependencies, keyToID),
@@ -227,14 +231,15 @@ func (s *Service) createDraftTasks(tasks []TaskDraft) ([]CreatedTaskRef, error) 
 		if err != nil {
 			// Return what is already on disk alongside the error: the caller's
 			// partial-apply wrapper can only name the written tasks if it sees them.
-			return created, fmt.Errorf("create %s: %w", taskDraftLabel(draft, idx), err)
+			return created, warnings, fmt.Errorf("create %s: %w", taskDraftLabel(draft, idx), err)
 		}
 		if draft.Key != "" {
 			keyToID[draft.Key] = res.TaskID
 		}
 		created = append(created, CreatedTaskRef{Key: draft.Key, TaskID: res.TaskID, Path: res.Path})
+		warnings = append(warnings, res.Warnings...)
 	}
-	return created, nil
+	return created, warnings, nil
 }
 
 // translateDeps rewrites in-draft key dependencies to their allocated task ids.

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"regexp"
 	"slices"
 	"strings"
 )
@@ -56,11 +55,6 @@ func parseTarget(raw string) (Target, error) {
 	}
 	return t, nil
 }
-
-// taskIDPattern matches an already-tracked task id (for example `T-027`). A draft
-// dependency may reference such an id; its existence is a deferred apply-time
-// check, not a draft-structural one, since the referenced task lives in the repo.
-var taskIDPattern = regexp.MustCompile(`^T-\d+$`)
 
 // ImportDraft is the versioned envelope an agent emits from source material. It
 // round-trips through `--emit-prompt` / `--apply` (T-034); `--apply` validates it
@@ -192,7 +186,8 @@ func dependencyResolvable(dep string, keys map[string]struct{}) bool {
 	if _, ok := keys[dep]; ok {
 		return true
 	}
-	return taskIDPattern.MatchString(dep)
+	_, ok := taskNumericPrefix(dep)
+	return ok
 }
 
 func taskDraftLabel(task TaskDraft, index int) string {
