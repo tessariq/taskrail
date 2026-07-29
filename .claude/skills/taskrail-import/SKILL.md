@@ -25,11 +25,12 @@ Requires the installed `taskrail` binary on `PATH`.
    `${TASKRAIL:-taskrail} task new`.
 5. Review the created files. Run `${TASKRAIL:-taskrail} validate`.
 
-If apply fails after it already wrote files (`partial apply already wrote ...`,
-non-zero exit), it still reports what landed: the spec and task paths in text
-mode, the same envelope marked `"partial": true` with `--json`. Review those
-files first — re-applying the same draft creates the already-written tasks a
-second time under new ids.
+If apply fails during writing (`partial apply already wrote ...` or `partial
+apply may have written ...`, non-zero exit), it still reports what landed or may
+have been touched: the spec and task paths in text mode, the same envelope marked
+`"partial": true` with `--json`. Review those paths first — a failed spec write
+may leave an empty or truncated file, and re-applying the same draft creates any
+already-written tasks a second time under new ids.
 
 ## Rules
 

@@ -339,10 +339,11 @@ taskrail import notes.md --to tasks --emit-prompt  # print an agent prompt for a
 taskrail import --apply draft.json                 # validate an agent draft and write real files
 ```
 
-An apply that fails after writing exits non-zero and still reports what it landed
-— the spec and task paths in text mode, the same envelope marked `"partial": true`
-with `--json`. Review those files before retrying: re-applying the same draft
-creates the already-written tasks a second time under new ids.
+An apply that fails during writing exits non-zero and still reports what it wrote
+or may have touched — the spec and task paths in text mode, the same envelope
+marked `"partial": true` with `--json`. Review those paths before retrying: a
+failed spec write may leave an empty or truncated file, and re-applying the same
+draft creates any already-written tasks a second time under new ids.
 
 Typical flow:
 

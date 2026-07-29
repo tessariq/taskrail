@@ -95,7 +95,7 @@ func TestImportApplyPartialFailureReportsWrittenArtifactsText(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected a non-zero exit on a partial apply, got output %q", stdout)
 	}
-	if !strings.Contains(stdout, "wrote spec specs/notes.md") {
+	if !strings.Contains(stdout, "review spec specs/notes.md") {
 		t.Fatalf("text mode must report the written spec, got %q", stdout)
 	}
 	if !strings.Contains(stdout, "created T-001 planning/tasks/T-001.md") {
@@ -103,6 +103,35 @@ func TestImportApplyPartialFailureReportsWrittenArtifactsText(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "partial apply already wrote") {
 		t.Fatalf("error must carry the partial-apply wrapper, got %v", err)
+	}
+}
+
+// A failed spec write may have created or truncated its target, but it may also
+// have failed before changing anything. Text output must name the path without
+// claiming the write definitely succeeded.
+func TestImportApplyFailedSpecWriteReportsPathWithoutClaimingSuccess(t *testing.T) {
+	root := seedDraftRepo(t, `{
+  "schema_version": 1,
+  "target": "spec",
+  "source": "failed.md",
+  "spec_sections": [{"heading": "Overview", "body": "Ship it."}]
+}`)
+	if err := os.Mkdir(filepath.Join(root, "specs", "failed.md"), 0o755); err != nil {
+		t.Fatalf("block imported spec write: %v", err)
+	}
+
+	stdout, _, err := runRootSplit(t, "import", "--apply", "draft.json")
+	if err == nil {
+		t.Fatalf("expected a non-zero exit on a failed spec write, got output %q", stdout)
+	}
+	if !strings.Contains(stdout, "review spec specs/failed.md") {
+		t.Fatalf("text mode must name the uncertain spec path for review, got %q", stdout)
+	}
+	if strings.Contains(stdout, "wrote spec") {
+		t.Fatalf("text mode must not claim the failed spec write succeeded, got %q", stdout)
+	}
+	if !strings.Contains(err.Error(), "partial apply may have written specs/failed.md") {
+		t.Fatalf("error must carry the uncertain partial-apply wrapper, got %v", err)
 	}
 }
 

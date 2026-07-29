@@ -96,9 +96,8 @@ All notable user-visible changes to Taskrail will be documented in this file.
   `task new --title` and `import --apply` reject such a path before writing.
 - `taskrail verify` and `taskrail block` no longer append a second
   `## Implementation Notes` heading when writing the first note to a task.
-- `taskrail import --apply` now reports what a mid-apply failure already wrote:
-  the error names the tasks ("partial apply already wrote ... — review before
-  retrying") and the written spec/task paths are printed too — `--json` emits the
+- `taskrail import --apply` now reports what a write failure wrote or may have
+  touched, including failed spec-write paths and created tasks; `--json` emits the
   envelope marked `"partial": true`. Exit stays non-zero; clean applies unchanged.
 - `taskrail task new`, `task repoint`, and `import --apply` now write a canonical
   `spec_ref` path (`./specs//v0.1.0.md#goals` lands as `specs/v0.1.0.md#goals`);

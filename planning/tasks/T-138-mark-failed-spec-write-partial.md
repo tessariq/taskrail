@@ -1,12 +1,12 @@
 ---
 id: T-138-mark-failed-spec-write-partial
 title: Mark a failed imported-spec write as a partial apply
-status: todo
+status: completed
 priority: low
 spec_ref: specs/v0.2.0.md#taskrail-import
 dependencies:
     - T-133-surface-the-partial-apply-result-in-import-apply
-updated_at: "2026-07-29T10:24:44Z"
+updated_at: "2026-07-29T10:57:59Z"
 ---
 
 # T-138-mark-failed-spec-write-partial Mark a failed imported-spec write as a partial apply
@@ -42,3 +42,6 @@ Follow-up derived from T-133-surface-the-partial-apply-result-in-import-apply's 
 - TODO: record verification evidence paths.
 
 ## Implementation Notes
+
+- 2026-07-29T10:57:47Z: verification pass
+- 2026-07-29T10:57:59Z: Report failed imported-spec writes through the partial channel and preserve uncertainty in text output.

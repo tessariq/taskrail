@@ -64,6 +64,11 @@ func (s *Service) ApplyImportDraft(input ApplyDraftInput) (ApplyDraftResult, err
 	if len(draft.SpecSections) > 0 {
 		specPath, err := s.writeImportedSpec(draft)
 		if err != nil {
+			if specPath != "" {
+				result.SpecPath = specPath
+				result.Partial = true
+				return result, fmt.Errorf("%w; partial apply may have written %s — review before retrying", err, specPath)
+			}
 			return ApplyDraftResult{}, err
 		}
 		result.SpecPath = specPath
@@ -315,10 +320,11 @@ func (s *Service) writeImportedSpec(draft ImportDraft) (string, error) {
 	if err := ensureDir(s.paths.RepoRoot, filepath.Dir(specPath)); err != nil {
 		return "", err
 	}
+	relSpecPath := relPath(s.paths.RepoRoot, specPath)
 	if err := os.WriteFile(specPath, []byte(renderImportedSpec(draft)), 0o644); err != nil {
-		return "", fmt.Errorf("write imported spec %s: %w", relPath(s.paths.RepoRoot, specPath), fsCause(err))
+		return relSpecPath, fmt.Errorf("write imported spec %s: %w", relSpecPath, fsCause(err))
 	}
-	return relPath(s.paths.RepoRoot, specPath), nil
+	return relSpecPath, nil
 }
 
 // isImportedSpec reports whether the file at path was written by a prior

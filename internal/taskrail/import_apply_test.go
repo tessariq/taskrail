@@ -132,6 +132,67 @@ func TestApplyImportDraftWritesSpecSections(t *testing.T) {
 	}
 }
 
+// os.WriteFile may fail after touching its destination. The apply result must
+// therefore identify the attempted spec path as partial state instead of hiding
+// possible repository movement behind a zero-value result.
+func TestApplyImportDraftReportsFailedSpecWriteAsPartial(t *testing.T) {
+	t.Parallel()
+	svc := applyFixture(t)
+
+	// A directory at the target path reliably makes os.WriteFile fail after the
+	// collision guard and parent-directory setup have passed.
+	target := filepath.Join(svc.paths.SpecsDir, "failed.md")
+	if err := os.Mkdir(target, 0o755); err != nil {
+		t.Fatalf("block imported spec write: %v", err)
+	}
+	draft := ImportDraft{
+		SchemaVersion: importDraftSchemaVersion,
+		Target:        "spec",
+		Source:        "failed.md",
+		SpecSections:  []SpecSectionDraft{{Heading: "Overview", Body: "x"}},
+	}
+	rel := writeDraftFile(t, svc.paths.RepoRoot, "planning/imports/failed-write.json", draft)
+
+	result, err := svc.ApplyImportDraft(ApplyDraftInput{DraftPath: rel})
+	if err == nil {
+		t.Fatal("expected imported spec write to fail")
+	}
+	if !result.Partial || result.SpecPath != "specs/failed.md" {
+		t.Fatalf("failed spec write must report its path as partial state, got %+v", result)
+	}
+	if !strings.Contains(err.Error(), "partial apply") || !strings.Contains(err.Error(), result.SpecPath) {
+		t.Fatalf("error must direct the operator to the touched path, got %v", err)
+	}
+}
+
+// An empty file can survive a failed os.WriteFile after truncation. A retry may
+// refuse to overwrite it, but the error must name the residual path so the
+// operator knows exactly what to review or remove.
+func TestApplyImportDraftRetryAfterEmptySpecNamesResidualFile(t *testing.T) {
+	t.Parallel()
+	svc := applyFixture(t)
+
+	residual := filepath.Join(svc.paths.SpecsDir, "failed.md")
+	if err := os.WriteFile(residual, nil, 0o644); err != nil {
+		t.Fatalf("seed empty residual spec: %v", err)
+	}
+	draft := ImportDraft{
+		SchemaVersion: importDraftSchemaVersion,
+		Target:        "spec",
+		Source:        "failed.md",
+		SpecSections:  []SpecSectionDraft{{Heading: "Overview", Body: "retry"}},
+	}
+	rel := writeDraftFile(t, svc.paths.RepoRoot, "planning/imports/retry-empty.json", draft)
+
+	_, err := svc.ApplyImportDraft(ApplyDraftInput{DraftPath: rel})
+	if err == nil {
+		t.Fatal("retry must not silently overwrite an unmarked residual spec")
+	}
+	if !strings.Contains(err.Error(), "specs/failed.md") {
+		t.Fatalf("retry error must name the residual spec path, got %v", err)
+	}
+}
+
 func TestApplyImportDraftDoesNotClobberExistingSpec(t *testing.T) {
 	t.Parallel()
 	svc := applyFixture(t)

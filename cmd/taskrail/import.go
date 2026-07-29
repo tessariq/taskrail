@@ -118,7 +118,11 @@ func printApplyResult(cmd *cobra.Command, asJSON bool, result taskrail.ApplyDraf
 	}
 	out := cmd.OutOrStdout()
 	if result.SpecPath != "" {
-		if _, err := fmt.Fprintf(out, "wrote spec %s\n", result.SpecPath); err != nil {
+		verb := "wrote"
+		if result.Partial {
+			verb = "review"
+		}
+		if _, err := fmt.Fprintf(out, "%s spec %s\n", verb, result.SpecPath); err != nil {
 			return err
 		}
 	}
