@@ -1,7 +1,7 @@
 ---
 id: T-140-v0-4-0-gap-drift-pre-release-spec-check
 title: v0.4.0 gap/drift - pre-release spec check
-status: todo
+status: blocked
 priority: medium
 spec_ref: specs/v0.4.0.md#goals
 dependencies:
@@ -50,7 +50,17 @@ dependencies:
     - T-137-skills-backup-stat-error-path
     - T-138-mark-failed-spec-write-partial
     - T-139-heading-match-crlf-fences
-updated_at: "2026-07-29T11:54:51Z"
+    - T-141-slug-titled-tasks-created-by-import-and-verify
+    - T-142-honor-explicit-empty-slug-selectors-and-preserve
+    - T-143-preflight-task-rename-validity-before-applying
+    - T-144-preserve-added-and-removed-anchors-alongside
+    - T-145-reconcile-coverage-gap-gating-with-the-advisory
+    - T-146-restrict-skill-skew-detection-to-packaged
+    - T-147-prevent-stale-working-tree-binaries-from-writing
+    - T-148-ignore-fenced-headings-in-spec-anchor-parsing
+    - T-149-harden-release-version-and-changelog-notes-guards
+    - T-150-refresh-v0-4-workflow-and-packaged-skill-guidance
+updated_at: "2026-07-29T13:11:09Z"
 ---
 
 # T-140-v0-4-0-gap-drift-pre-release-spec-check v0.4.0 gap/drift - pre-release spec check
@@ -119,11 +129,14 @@ truth (`specs/v0.4.0.md`); do not duplicate its commitments here.
 
 ## Implementation Notes
 
-- This gate depends on every task from T-095 through T-139 so it cannot become
-  eligible before all v0.4.0 implementation and follow-up work is completed.
+- This gate depends on every task from T-095 through T-139 and the T-141 through
+  T-150 release-review follow-ups, so it cannot become eligible before all v0.4.0
+  implementation and follow-up work is completed.
 - Cancelling a dependency requires removing it from this list in the same change;
   cancelled dependencies do not resolve and would intentionally keep the release
   gate blocked.
 - Candidate changelog and README copy may be prepared before this task runs, but
   the dated release heading and "current release" claim are finalization steps of
   this gate.
+- 2026-07-29T13:02:40Z: verification fail
+- 2026-07-29T13:11:09Z: v0.4.0 release gate failed; resolve follow-up tasks T-141 through T-150, then rerun the gate

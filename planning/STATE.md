@@ -1,14 +1,15 @@
 ---
 schema_version: 1
-updated_at: "2026-07-29T11:54:51Z"
+updated_at: "2026-07-29T13:11:09Z"
 active_spec_version: v0.4.0
 active_spec_path: specs/v0.4.0.md
 current_task: ""
 current_task_title: ""
-status_summary: idle
-blockers: []
-next_action: Select the next eligible task
-last_verification_result: pass for T-139-heading-match-crlf-fences at 2026-07-29T11:24:16Z
+status_summary: blocked
+blockers:
+    - 'T-140-v0-4-0-gap-drift-pre-release-spec-check: v0.4.0 release gate failed; resolve follow-up tasks T-141 through T-150, then rerun the gate'
+next_action: Resolve blocker on T-140-v0-4-0-gap-drift-pre-release-spec-check
+last_verification_result: fail for T-140-v0-4-0-gap-drift-pre-release-spec-check at 2026-07-29T13:02:40Z
 relevant_artifacts: []
 continuation_notes:
     - This repository is temporarily dogfooding bootstrap workflow tooling until Taskrail v0.1.0 exists.
@@ -26,19 +27,19 @@ continuation_notes:
 
 ## Status
 
-- idle
+- blocked
 
 ## Blockers
 
-- None
+- T-140-v0-4-0-gap-drift-pre-release-spec-check: v0.4.0 release gate failed; resolve follow-up tasks T-141 through T-150, then rerun the gate
 
 ## Last Verification
 
-- pass for T-139-heading-match-crlf-fences at 2026-07-29T11:24:16Z
+- fail for T-140-v0-4-0-gap-drift-pre-release-spec-check at 2026-07-29T13:02:40Z
 
 ## Next Action
 
-- Select the next eligible task
+- Resolve blocker on T-140-v0-4-0-gap-drift-pre-release-spec-check
 
 ## Relevant Artifacts
 
@@ -50,8 +51,8 @@ continuation_notes:
 
 ## Task Counts
 
-- todo: 1
+- todo: 10
 - in_progress: 0
 - completed: 138
-- blocked: 0
+- blocked: 1
 - cancelled: 0
