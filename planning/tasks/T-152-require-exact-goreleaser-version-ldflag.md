@@ -1,12 +1,12 @@
 ---
 id: T-152-require-exact-goreleaser-version-ldflag
 title: Require exact GoReleaser version ldflag
-status: todo
+status: completed
 priority: low
 spec_ref: specs/v0.4.0.md#goals
 dependencies:
     - T-149-harden-release-version-and-changelog-notes-guards
-updated_at: "2026-07-29T17:30:44Z"
+updated_at: "2026-07-29T18:36:25Z"
 ---
 
 # T-152-require-exact-goreleaser-version-ldflag Require exact GoReleaser version ldflag
@@ -35,3 +35,5 @@ Follow-up derived from T-149-harden-release-version-and-changelog-notes-guards's
   `internal/toolchain/release_test.go` as permissive.
 
 ## Implementation Notes
+
+- 2026-07-29T18:36:19Z: verification pass

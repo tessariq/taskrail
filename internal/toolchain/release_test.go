@@ -14,12 +14,47 @@ func TestGoReleaserVersionLdflagRetainsVPrefix(t *testing.T) {
 	if len(cfg.Builds) != 1 {
 		t.Fatalf(".goreleaser.yaml must declare exactly one build; got %d", len(cfg.Builds))
 	}
-	for _, ldflag := range cfg.Builds[0].Ldflags {
-		if strings.Contains(ldflag, "-X main.version=v{{.Version}}") {
-			return
+	if !hasExactVersionLdflag(cfg.Builds[0].Ldflags) {
+		t.Errorf("GoReleaser ldflags = %q, want exactly one main.version assignment set to v{{.Version}}", cfg.Builds[0].Ldflags)
+	}
+}
+
+func TestExactGoReleaserVersionLdflag(t *testing.T) {
+	tests := []struct {
+		name    string
+		ldflags []string
+		want    bool
+	}{
+		{name: "linker optimizations", ldflags: []string{"-s -w", "-X main.version=v{{.Version}}"}, want: true},
+		{name: "suffix", ldflags: []string{"-s -w -X main.version=v{{.Version}}-dirty"}},
+		{name: "prefix", ldflags: []string{"-s -w -X main.version=release-v{{.Version}}"}},
+		{name: "conflicting duplicate", ldflags: []string{"-X main.version=v{{.Version}}", "-X main.version=v{{.Version}}-dirty"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := hasExactVersionLdflag(tt.ldflags); got != tt.want {
+				t.Errorf("hasExactVersionLdflag(%q) = %v, want %v", tt.ldflags, got, tt.want)
+			}
+		})
+	}
+}
+
+func hasExactVersionLdflag(ldflags []string) bool {
+	found := false
+	for _, ldflag := range ldflags {
+		fields := strings.Fields(ldflag)
+		for i := 0; i+1 < len(fields); i++ {
+			if fields[i] != "-X" || !strings.HasPrefix(fields[i+1], "main.version=") {
+				continue
+			}
+			if found || fields[i+1] != "main.version=v{{.Version}}" {
+				return false
+			}
+			found = true
 		}
 	}
-	t.Errorf("GoReleaser ldflags = %q, want main.version injected as v{{.Version}}", cfg.Builds[0].Ldflags)
+	return found
 }
 
 func TestChangelogReleaseGuards(t *testing.T) {
