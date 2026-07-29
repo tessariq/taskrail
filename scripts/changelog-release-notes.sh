@@ -4,8 +4,8 @@
 # Usage: scripts/changelog-release-notes.sh <tag> [changelog-path]
 #
 # Prints the body of the matching `## <tag>` section (heading line excluded,
-# leading/trailing blank lines trimmed) to stdout. If no matching section is
-# found, falls back to printing the tag name so a release always has notes.
+# leading/trailing blank lines trimmed) to stdout. Exits non-zero when the
+# section is missing or empty so a release cannot publish manufactured notes.
 #
 # Matching is exact on the version token: a tag of `v0.1.0` matches a heading
 # `## v0.1.0` or `## v0.1.0 - 2026-06-19`, but not `## v0.1.0-rc1`.
@@ -26,8 +26,8 @@ if [ -f "$changelog" ]; then
       # Section heading: "## <token> ..." — capture when <token> == tag.
       /^## / {
         split($0, parts, " ")
-        if (capture) { capture = 0 }
-        if (parts[2] == tag) { capture = 1; next }
+        capture = (parts[2] == tag)
+        next
       }
       capture { print }
     ' "$changelog"
@@ -37,7 +37,8 @@ if [ -f "$changelog" ]; then
 fi
 
 if [ -z "$notes" ]; then
-  printf '%s\n' "$tag"
-else
-  printf '%s\n' "$notes"
+  echo "guard: no non-empty '## $tag' section found in $changelog" >&2
+  exit 1
 fi
+
+printf '%s\n' "$notes"

@@ -14,7 +14,8 @@ import (
 // left to `goreleaser check`.
 type goReleaserConfig struct {
 	Builds []struct {
-		Goos []string `yaml:"goos"`
+		Goos    []string `yaml:"goos"`
+		Ldflags []string `yaml:"ldflags"`
 	} `yaml:"builds"`
 	Archives []struct {
 		FormatOverrides []struct {

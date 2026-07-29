@@ -53,6 +53,8 @@ damage tracked state. The core remains deterministic and provider-independent.
 
 ### Fixed
 
+- Release builds now consistently report a `v`-prefixed version, and publishing
+  refuses missing or empty versioned changelog sections.
 - Every command now refuses a repository recording a `layout_version` newer than
   the binary supports before reading or writing state, not only during `init`.
 - `taskrail task new` and `task rename` now honor explicitly empty `--slug`

@@ -2,7 +2,7 @@
 #
 # Taskrail is a pure-Go, no-cgo, no-native-deps CLI, so this config is the
 # trimmed cousin of richer release pipelines: no native build job, no automated
-# Homebrew publishing. It builds ./cmd/taskrail for linux/darwin on amd64/arm64
+# Homebrew publishing. It builds ./cmd/taskrail for linux/darwin/windows on amd64/arm64
 # and injects the release version into main.version via -ldflags. The Homebrew
 # tap (tessariq/homebrew-tap) is maintained by hand -- see the note by `release`.
 #
@@ -31,7 +31,7 @@ builds:
       - amd64
       - arm64
     ldflags:
-      - -s -w -X main.version={{.Version}}
+      - -s -w -X main.version=v{{.Version}}
 
 archives:
   - id: taskrail

@@ -1,12 +1,12 @@
 ---
 id: T-149-harden-release-version-and-changelog-notes-guards
 title: Harden release version and changelog notes guards
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.4.0.md#goals
 dependencies:
     - T-015
-updated_at: "2026-07-29T13:05:19Z"
+updated_at: "2026-07-29T17:28:21Z"
 ---
 
 # T-149-harden-release-version-and-changelog-notes-guards Harden release version and changelog notes guards
@@ -40,3 +40,4 @@ notes with no actual changelog content. Fix both release-blocking guard gaps.
 
 - Also correct the stale platform comment in `.goreleaser.yaml` and make the
   Taskfile release-version example version-neutral while touching this surface.
+- 2026-07-29T17:28:02Z: verification pass

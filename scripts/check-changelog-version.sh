@@ -37,4 +37,9 @@ if [ "$found" != "yes" ]; then
   exit 1
 fi
 
-echo "guard: found '## $tag' heading in $changelog"
+if ! "$(dirname "$0")/changelog-release-notes.sh" "$tag" "$changelog" >/dev/null; then
+  echo "guard: '## $tag' has no release notes in $changelog" >&2
+  exit 1
+fi
+
+echo "guard: found non-empty '## $tag' section in $changelog"
