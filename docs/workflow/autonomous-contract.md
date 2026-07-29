@@ -7,9 +7,11 @@ Deterministic tracked-work contract for Taskrail repository planning and impleme
 - `planning/STATE.md` frontmatter is machine-managed run state.
 - `planning/tasks/` contains tracked work item metadata, dependencies, and acceptance criteria.
 - `docs/workflow/` contains the human-readable workflow contract.
-- `skills/` is the canonical skill set.
-- `.agents/skills/` and `.claude/skills/` mirror the canonical skill files.
-- `go run ./cmd/taskrail ...` is the intended transition path once the CLI exists.
+- `internal/taskrail/skills/` is the embedded package source for the canonical
+  skill set.
+- `.agents/skills/` and `.claude/skills/` are committed parity copies of the
+  package source.
+- `${TASKRAIL:-taskrail}` is the transition path used by packaged skills.
 
 ## Lifecycle
 
@@ -46,8 +48,10 @@ selection without writing state.
 ## Verification Contract
 
 - Run verification through `taskrail verify`.
-- Verification writes plan and report artifacts under `planning/artifacts/verify/`.
-- Verification should update `planning/STATE.md` with the last verification result and artifact paths.
+- Verification writes ephemeral, gitignored plan and report artifacts under
+  `planning/artifacts/verify/`; never commit them.
+- Verification updates `planning/STATE.md` with a portable, path-free summary of
+  the last verification result.
 - Follow-up work discovered during verification should become new task files when it deserves backlog treatment.
 
 ## Safety Rules

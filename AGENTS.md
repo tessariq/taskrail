@@ -13,7 +13,7 @@ Guidance for coding agents working in the Taskrail repository.
 
 ## Source-Of-Truth Files
 
-- Product specifications: `specs/v0.1.0.md`, `specs/v0.2.0.md`, `specs/v0.3.0.md`
+- Product specifications: `specs/v0.1.0.md`, `specs/v0.2.0.md`, `specs/v0.3.0.md`, `specs/v0.4.0.md`
 - Spec reading order and versioning: `specs/README.md`
 - Active planning state: `planning/STATE.md`
 - Tracked tasks: `planning/tasks/`

@@ -67,7 +67,8 @@ Cleanup rules:
 
 - Delete `cmd/manual-test-*/` helper directories after the report is written.
 - Delete all `_manual_test.go` files after the report is written.
-- Commit only the artifacts, not the temporary test code.
+- Manual-test and verify artifacts are ephemeral and gitignored; never commit
+  them or the temporary test code.
 
 ## Tracked-Work Commands
 
@@ -91,7 +92,7 @@ Cleanup rules:
 - Docs-only changes: review rendered markdown.
 - Small localized code changes: `gofmt`, targeted tests.
 - Non-trivial logic changes: `gofmt`, `go vet`, targeted tests, then `go test ./...`.
-- User-visible CLI or workflow changes: `gofmt`, `go vet`, `go test ./...`, then manual testing with persisted artifacts.
+- User-visible CLI or workflow changes: `gofmt`, `go vet`, `go test ./...`, then manual testing with ephemeral artifacts.
 - Planning or spec changes: `go run ./cmd/taskrail validate`.
 - Before advancing the active spec: `go run ./cmd/taskrail spec diff <from> <to>` to
   inspect the read-only anchor-set delta (added areas to decompose, removed areas

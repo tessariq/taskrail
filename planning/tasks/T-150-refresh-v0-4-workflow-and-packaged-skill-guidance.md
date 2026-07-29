@@ -1,14 +1,14 @@
 ---
 id: T-150-refresh-v0-4-workflow-and-packaged-skill-guidance
 title: Refresh v0.4 workflow and packaged skill guidance
-status: todo
+status: completed
 priority: medium
 spec_ref: specs/v0.4.0.md#explicitly-excluded
 dependencies:
     - T-104
     - T-113-spec-diff
     - T-114-task-repoint
-updated_at: "2026-07-29T13:05:27Z"
+updated_at: "2026-07-29T18:01:23Z"
 ---
 
 # T-150-refresh-v0-4-workflow-and-packaged-skill-guidance Refresh v0.4 workflow and packaged skill guidance
@@ -46,3 +46,5 @@ implemented `spec diff` deferred.
 
 - Run `task skills:regen` after changing packaged skill source; do not edit parity
   copies independently.
+- 2026-07-29T18:01:16Z: verification pass
+- 2026-07-29T18:01:23Z: Passed go test ./..., go vet ./..., skill parity, task-body hygiene, validate, dedicated simplifier/review, and manual acceptance evidence under planning/artifacts/manual-test/T-150-refresh-v0-4-workflow-and-packaged-skill-guidance/20260729T175958Z/

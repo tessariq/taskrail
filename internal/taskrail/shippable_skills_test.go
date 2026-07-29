@@ -232,19 +232,18 @@ func TestRecoverySkillRoutesThroughRepair(t *testing.T) {
 	}
 }
 
-// The spec skill drives the spec command family (T-064): it discovers spec_ref
-// anchors with `spec show --anchors --json` before authoring tracked work, and
-// documents `spec list`, `spec activate`, and `spec add`. Anchoring on the
-// resolved subcommand tails (not bare flags) keeps the assertion from passing on
-// unrelated prose.
+// The spec skill must cover the packaged spec workflow command surface.
 func TestSpecSkillCoversSpecCommands(t *testing.T) {
 	assertSkillReferences(t, "taskrail-spec",
 		"} spec show",
 		"--anchors",
 		"} spec list",
+		"} spec diff",
 		"} spec activate",
 		"} spec add",
 		"} task new",
+		"} task repoint",
+		"--area",
 	)
 }
 

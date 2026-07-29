@@ -38,7 +38,8 @@ Taskrail's source-only freshness helper and need no such check.
 - Prefer a temporary directory or temporary repository sandbox first.
 - Use ephemeral `manual_test` Go-tag tests only when shell-driven validation is not enough.
 - Delete all temporary manual test code after writing the report.
-- Commit the artifacts, not the temporary test harness.
+- Manual-test and verify artifacts are ephemeral and gitignored; never commit
+  them or the temporary test harness.
 
 ## Recovery
 

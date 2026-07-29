@@ -67,9 +67,9 @@ the version whose spec adopts it.
   mostly a packaging-and-parity-check extension, not new runtime behavior. Grows
   the parity check surface — confirm scope before adding install targets.
 
-- **`taskrail spec migrate` (pairs with the deferred `spec diff`)** — once
-  `spec diff` exists, a guided migration that, on `spec activate`, walks the
+- **`taskrail spec migrate` (builds on shipped migration primitives)** — a guided
+  migration that, on `spec activate`, walks the
   added areas (offer `task new` for each) and the vanished areas (flag orphaned
   tasks for re-point or cancel). Turns the anchor-set delta into actionable
-  tracked-work moves. Depends on the v0.4.0 `spec diff` (T-113) and composes with
-  `task repoint` (T-114) for the re-point step.
+  tracked-work moves. The shipped `spec diff` (T-113) provides the delta, and the
+  shipped `task repoint` (T-114) provides the re-point step.
