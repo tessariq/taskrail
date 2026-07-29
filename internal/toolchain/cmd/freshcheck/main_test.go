@@ -203,6 +203,51 @@ func TestRunReportsAnUnreadableOverride(t *testing.T) {
 	}
 }
 
+// A build that was never produced is not a PATH shadow: the first step is
+// taskrail:install, and reporting a resolution fix skips it.
+func TestRunReportsAMissingWorkingTreeBuild(t *testing.T) {
+	pathDir := t.TempDir()
+	seedTaskrail(t, pathDir, []byte("installed release"))
+	installed := filepath.Join(t.TempDir(), exeName("taskrail")) // taskrail:install never ran
+	fresh := writeFile(t, t.TempDir(), "fresh", []byte("working-tree build"))
+
+	t.Setenv("TASKRAIL", "")
+	t.Setenv("PATH", pathDir)
+	err := run([]string{fresh, installed}, io.Discard)
+	if err == nil {
+		t.Fatal("run must fail when the working-tree build does not exist")
+	}
+	if !strings.Contains(err.Error(), "task taskrail:install") {
+		t.Errorf("an absent working-tree build must name the build remedy; got %q", err)
+	}
+	if strings.Contains(err.Error(), "a bare `taskrail` runs") {
+		t.Errorf("an absent working-tree build is not a PATH shadow; got %q", err)
+	}
+}
+
+// The same holds under an override: repointing TASKRAIL at a build that was
+// never produced is not a remedy, so the absent build outranks that verdict.
+func TestRunReportsAMissingWorkingTreeBuildUnderAnOverride(t *testing.T) {
+	pathDir := t.TempDir()
+	seedTaskrail(t, pathDir, []byte("on-path build"))
+	override := writeFile(t, t.TempDir(), "taskrail-old", []byte("installed release"))
+	installed := filepath.Join(t.TempDir(), exeName("taskrail")) // taskrail:install never ran
+	fresh := writeFile(t, t.TempDir(), "fresh", []byte("working-tree build"))
+
+	t.Setenv("PATH", pathDir)
+	t.Setenv("TASKRAIL", override)
+	err := run([]string{fresh, installed}, io.Discard)
+	if err == nil {
+		t.Fatal("run must fail when the working-tree build does not exist")
+	}
+	if !strings.Contains(err.Error(), "task taskrail:install") {
+		t.Errorf("an absent working-tree build must name the build remedy; got %q", err)
+	}
+	if strings.Contains(err.Error(), "repoint") {
+		t.Errorf("repointing at a build that does not exist is not a remedy; got %q", err)
+	}
+}
+
 // AC-3: identical source built by two Go toolchains differs in bytes without
 // being stale, and rerunning the rebuild in the same shell never converges. The
 // message must name the toolchain as the variable.

@@ -88,6 +88,17 @@ func OverrideError(built, target string) error {
 		"  repoint it: export TASKRAIL=%s (or unset TASKRAIL and run 'mise run setup')", target, abs, abs)
 }
 
+// MissingBuildError reports that the working-tree build itself is absent (or
+// cannot be stat'd). Folding this into the shadowed or override verdicts would
+// prescribe a resolution fix for a binary that was never produced, skipping the
+// step actually missing. The stat cause is wrapped because "never built" and
+// "built but unreadable" want different next moves.
+func MissingBuildError(built string, cause error) error {
+	abs := absolute(built)
+	return fmt.Errorf("the working-tree build %s does not exist: %w;\n"+
+		"  build it first: run 'task taskrail:install' (or 'mise run setup', which also puts ./bin on PATH)", abs, cause)
+}
+
 // absolute resolves path against the working directory, falling back to the
 // input when that is not possible — a message is worth printing either way.
 func absolute(path string) string {

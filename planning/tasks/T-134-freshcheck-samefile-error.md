@@ -1,12 +1,12 @@
 ---
 id: T-134-freshcheck-samefile-error
 title: Name the cause when the freshness guard cannot stat the working-tree build path
-status: todo
+status: completed
 priority: low
 spec_ref: specs/v0.4.0.md#version-skew-detection
 dependencies:
     - T-123-contributor-binary-resolution
-updated_at: "2026-07-28T13:29:52Z"
+updated_at: "2026-07-29T09:38:01Z"
 ---
 
 # T-134-freshcheck-samefile-error Name the cause when the freshness guard cannot stat the working-tree build path
@@ -48,3 +48,5 @@ never says the working-tree build is simply absent.
 - TODO: record verification evidence paths.
 
 ## Implementation Notes
+
+- 2026-07-29T09:37:55Z: verification pass

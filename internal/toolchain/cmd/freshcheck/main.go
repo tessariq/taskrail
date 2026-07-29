@@ -66,10 +66,19 @@ func run(args []string, warn io.Writer) error {
 		return nil
 	}
 
+	// Ordered ahead of the verdicts below: both are stated against the working-tree
+	// build, so an absent one leaves their remedies pointing at a file that does
+	// not exist.
+	if _, err := os.Stat(installed); err != nil {
+		return binpath.MissingBuildError(installed, err)
+	}
+
 	// A byte difference only means "stale" once the binary that would run is the
-	// working-tree build. An unreadable or absent install path counts as pointing
-	// elsewhere too: either way what runs is not the build taskrail:install owns.
-	isWorkingTreeBuild, _ := binpath.SameFile(target, installed)
+	// working-tree build; anything else is pointing elsewhere.
+	isWorkingTreeBuild, err := binpath.SameFile(target, installed)
+	if err != nil {
+		return err
+	}
 	if !isWorkingTreeBuild {
 		if override {
 			return binpath.OverrideError(installed, target)

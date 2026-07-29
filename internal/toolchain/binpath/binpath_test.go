@@ -1,6 +1,7 @@
 package binpath_test
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -172,6 +173,35 @@ func TestOverrideErrorPointsAtTheOverride(t *testing.T) {
 	// would describe a resolution that is not what happens.
 	if strings.Contains(msg, "a bare `taskrail` runs") {
 		t.Errorf("an override problem must not be framed as PATH shadowing; got %q", msg)
+	}
+}
+
+// The shadowed and override verdicts are both stated *against* the working-tree
+// build, so an absent one is a distinct cause with a distinct first step: build
+// it. Naming a resolution fix there points the reader past what is missing.
+func TestMissingBuildErrorNamesTheAbsentBuild(t *testing.T) {
+	built := filepath.Join("bin", "taskrail")
+	wantBuilt := absPath(t, built)
+
+	err := binpath.MissingBuildError(built, os.ErrNotExist)
+	if err == nil {
+		t.Fatal("MissingBuildError must return an error")
+	}
+	msg := err.Error()
+	for _, want := range []string{wantBuilt, "task taskrail:install"} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("MissingBuildError message %q must mention %q", msg, want)
+		}
+	}
+	// The stat failure is the evidence for the verdict; discarding it leaves the
+	// reader unable to tell "never built" from "built but unreadable".
+	if !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("MissingBuildError must wrap the stat cause; got %q", msg)
+	}
+	for _, unwanted := range []string{"stale", "a bare `taskrail` runs"} {
+		if strings.Contains(msg, unwanted) {
+			t.Errorf("an absent build must not be framed as %q; got %q", unwanted, msg)
+		}
 	}
 }
 
