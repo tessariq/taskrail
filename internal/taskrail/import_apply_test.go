@@ -259,6 +259,11 @@ func TestApplyImportDraftReportsPartiallyCreatedTasksOnMidWriteFailure(t *testin
 	if len(result.Tasks) != 1 || result.Tasks[0].TaskID != "T-001" {
 		t.Fatalf("partial apply must report the task it already wrote, got %+v", result.Tasks)
 	}
+	// The marker is what lets a caller print this result without a script mistaking
+	// it for a clean apply.
+	if !result.Partial {
+		t.Fatalf("a result carrying written artifacts must be marked partial, got %+v", result)
+	}
 	msg := err.Error()
 	if !strings.Contains(msg, "partial apply already wrote") {
 		t.Fatalf("error must carry the partial-apply wrapper, got %v", err)

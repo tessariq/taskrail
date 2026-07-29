@@ -25,6 +25,12 @@ Requires the installed `taskrail` binary on `PATH`.
    `${TASKRAIL:-taskrail} task new`.
 5. Review the created files. Run `${TASKRAIL:-taskrail} validate`.
 
+If apply fails after it already wrote files (`partial apply already wrote ...`,
+non-zero exit), it still reports what landed: the spec and task paths in text
+mode, the same envelope marked `"partial": true` with `--json`. Review those
+files first — re-applying the same draft creates the already-written tasks a
+second time under new ids.
+
 ## Rules
 
 - never hand-edit `planning/STATE.md` frontmatter

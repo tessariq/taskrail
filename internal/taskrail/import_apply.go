@@ -29,11 +29,15 @@ type CreatedTaskRef struct {
 }
 
 // ApplyDraftResult reports what apply wrote: an optional spec file and the tasks
-// it created, in dependency order.
+// it created, in dependency order. Partial marks a result that accompanies an
+// error — artifacts landed before the apply failed — so a caller may render it
+// without a script mistaking the envelope for a clean apply. It is absent from a
+// successful result, which keeps the pre-existing shape.
 type ApplyDraftResult struct {
 	Target   string           `json:"target"`
 	SpecPath string           `json:"spec_path,omitempty"`
 	Tasks    []CreatedTaskRef `json:"tasks,omitempty"`
+	Partial  bool             `json:"partial,omitempty"`
 }
 
 // ApplyImportDraft validates a draft and writes real spec/task files. Structural
@@ -69,6 +73,7 @@ func (s *Service) ApplyImportDraft(input ApplyDraftInput) (ApplyDraftResult, err
 	result.Tasks = created
 	if err != nil {
 		if written := describeWrittenArtifacts(result); written != "" {
+			result.Partial = true
 			return result, fmt.Errorf("%w; partial apply already wrote %s — review before retrying", err, written)
 		}
 		return result, err

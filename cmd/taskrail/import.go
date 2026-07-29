@@ -42,6 +42,16 @@ func newImportCmd() *cobra.Command {
 				}
 				result, err := svc.ApplyImportDraft(taskrail.ApplyDraftInput{DraftPath: applyPath})
 				if err != nil {
+					// A partial apply already moved the repository, so report the artifacts
+					// before surfacing the failure: without them --json emits nothing at
+					// all and the operator has no paths to review before retrying. The
+					// envelope carries partial:true and the exit stays non-zero, so the
+					// output can never be read as a clean apply.
+					if result.Partial {
+						if printErr := printApplyResult(cmd, opt.json, result); printErr != nil {
+							return errors.Join(err, printErr)
+						}
+					}
 					return err
 				}
 				return printApplyResult(cmd, opt.json, result)

@@ -1,12 +1,12 @@
 ---
 id: T-133-surface-the-partial-apply-result-in-import-apply
 title: Surface the partial apply result in import --apply CLI output
-status: todo
+status: completed
 priority: medium
 spec_ref: specs/v0.2.0.md#taskrail-import
 dependencies:
     - T-132-report-partially-created-tasks-when-import-apply
-updated_at: "2026-07-28T12:42:40Z"
+updated_at: "2026-07-29T10:25:23Z"
 ---
 
 # T-133-surface-the-partial-apply-result-in-import-apply Surface the partial apply result in import --apply CLI output
@@ -43,3 +43,6 @@ Follow-up derived from T-132-report-partially-created-tasks-when-import-apply's 
 - TODO: record verification evidence paths.
 
 ## Implementation Notes
+
+- 2026-07-29T10:25:18Z: verification pass
+- 2026-07-29T10:25:23Z: Partial apply result now reaches the operator; docs and packaged skill updated; follow-up T-138 opened for the failed spec-write branch

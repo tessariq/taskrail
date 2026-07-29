@@ -1,6 +1,6 @@
 ---
 schema_version: 1
-updated_at: "2026-07-29T10:07:00Z"
+updated_at: "2026-07-29T10:25:23Z"
 active_spec_version: v0.4.0
 active_spec_path: specs/v0.4.0.md
 current_task: ""
@@ -8,7 +8,7 @@ current_task_title: ""
 status_summary: idle
 blockers: []
 next_action: Select the next eligible task
-last_verification_result: pass for T-137-skills-backup-stat-error-path at 2026-07-29T10:06:55Z
+last_verification_result: pass for T-133-surface-the-partial-apply-result-in-import-apply at 2026-07-29T10:25:18Z
 relevant_artifacts: []
 continuation_notes:
     - This repository is temporarily dogfooding bootstrap workflow tooling until Taskrail v0.1.0 exists.
@@ -34,7 +34,7 @@ continuation_notes:
 
 ## Last Verification
 
-- pass for T-137-skills-backup-stat-error-path at 2026-07-29T10:06:55Z
+- pass for T-133-surface-the-partial-apply-result-in-import-apply at 2026-07-29T10:25:18Z
 
 ## Next Action
 
@@ -52,6 +52,6 @@ continuation_notes:
 
 - todo: 2
 - in_progress: 0
-- completed: 134
+- completed: 135
 - blocked: 0
 - cancelled: 0
