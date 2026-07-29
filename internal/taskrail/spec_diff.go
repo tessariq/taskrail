@@ -39,15 +39,16 @@ func (s *Service) SpecDiff(from, to string) (SpecDiffResult, error) {
 		return SpecDiffResult{}, err
 	}
 
-	result := SpecDiffResult{
+	added, removed := anchorSetDelta(fromSpec.Anchors, toSpec.Anchors)
+	return SpecDiffResult{
 		FromVersion: fromSpec.Version,
 		ToVersion:   toSpec.Version,
 		FromPath:    fromSpec.Path,
 		ToPath:      toSpec.Path,
-	}
-	added, removed := anchorSetDelta(fromSpec.Anchors, toSpec.Anchors)
-	result.Renamed, result.Added, result.Removed = pairRenameCandidates(added, removed)
-	return result, nil
+		Added:       added,
+		Removed:     removed,
+		Renamed:     renameCandidates(added, removed),
+	}, nil
 }
 
 // anchorSetDelta returns the anchors added in `to` (not in `from`) and removed
@@ -77,41 +78,29 @@ func anchorSetDelta(from, to []SpecAnchor) (added, removed []SpecAnchor) {
 	return added, removed
 }
 
-// pairRenameCandidates greedily matches each removed anchor to the first unused
-// added anchor sharing a normalized stem, in document order. Matched anchors are
-// lifted out of the plain added/removed lists into rename candidates; the rest
-// pass through unchanged. The pairing is mechanical (shared stem only) and never
-// asserted as a real rename.
-func pairRenameCandidates(added, removed []SpecAnchor) (renamed []SpecRenameCandidate, restAdded, restRemoved []SpecAnchor) {
-	renamed = make([]SpecRenameCandidate, 0, len(removed))
-	restAdded = make([]SpecAnchor, 0, len(added))
-	restRemoved = make([]SpecAnchor, 0, len(removed))
+// renameCandidates greedily matches each removed anchor to the first unused added
+// anchor sharing a normalized stem, in document order. The pairing is mechanical
+// (shared stem only), supplemental to the definitive delta, and never asserted as
+// a real rename.
+func renameCandidates(added, removed []SpecAnchor) []SpecRenameCandidate {
+	renamed := make([]SpecRenameCandidate, 0, len(removed))
 	usedAdded := make([]bool, len(added))
 
 	for _, r := range removed {
-		matched := false
-		if stem := anchorStem(r.Anchor); stem != "" {
-			for i, a := range added {
-				if usedAdded[i] || anchorStem(a.Anchor) != stem {
-					continue
-				}
-				usedAdded[i] = true
-				renamed = append(renamed, SpecRenameCandidate{From: r, To: a})
-				matched = true
-				break
+		stem := anchorStem(r.Anchor)
+		if stem == "" {
+			continue
+		}
+		for i, a := range added {
+			if usedAdded[i] || anchorStem(a.Anchor) != stem {
+				continue
 			}
-		}
-		if !matched {
-			restRemoved = append(restRemoved, r)
-		}
-	}
-
-	for i, a := range added {
-		if !usedAdded[i] {
-			restAdded = append(restAdded, a)
+			usedAdded[i] = true
+			renamed = append(renamed, SpecRenameCandidate{From: r, To: a})
+			break
 		}
 	}
-	return renamed, restAdded, restRemoved
+	return renamed
 }
 
 // anchorStem drops an anchor's final hyphen token, yielding the shared prefix a

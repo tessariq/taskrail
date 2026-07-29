@@ -12,8 +12,8 @@ damage tracked state. The core remains deterministic and provider-independent.
 ### Added
 
 - `taskrail spec diff <from> <to>` — read-only, mechanical anchor-set delta between
-  specs: areas added or removed and best-effort rename candidates. Never writes
-  tracked state or gates validation; supports `--json`.
+  specs: definitive added/removed areas plus supplemental best-effort rename
+  candidates. Never writes tracked state or gates validation; supports `--json`.
 - `taskrail task rename <id>` — atomically re-slug a task's id and filename, body
   heading, inbound dependencies, and current-task pointer. `--slug` is normalized
   but uncapped; `--title` derives a capped slug. Supports `--dry-run` and `--json`.

@@ -1,12 +1,12 @@
 ---
 id: T-144-preserve-added-and-removed-anchors-alongside
 title: Preserve added and removed anchors alongside rename candidates
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.4.0.md#spec-version-diff
 dependencies:
     - T-113-spec-diff
-updated_at: "2026-07-29T13:04:20Z"
+updated_at: "2026-07-29T15:46:46Z"
 ---
 
 # T-144-preserve-added-and-removed-anchors-alongside Preserve added and removed anchors alongside rename candidates
@@ -37,3 +37,4 @@ decomposition/orphan worklist the command promises.
 
 - Keep `anchorSetDelta` authoritative; candidate detection should not consume its
   outputs.
+- 2026-07-29T15:46:30Z: verification pass

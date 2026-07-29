@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"maps"
 	"os"
 	"path/filepath"
 	"strings"
@@ -17,35 +18,31 @@ func writeSpecFile(t *testing.T, root, version, body string) {
 }
 
 // TestSpecDiffHumanOutput exercises the human path end to end and asserts the
-// command is read-only (STATE.md unchanged).
+// command leaves the entire repository byte-identical.
 func TestSpecDiffHumanOutput(t *testing.T) {
 	root := setupRepo(t)
-	writeSpecFile(t, root, "v0.2.0", "# Taskrail\n\n## Alpha Area\n\n## Old Area\n")
-	writeSpecFile(t, root, "v0.3.0", "# Taskrail\n\n## Alpha Area\n\n## Brand New Area\n")
+	writeSpecFile(t, root, "v0.2.0", "# Taskrail\n\n## Alpha Area\n\n## Spec Coverage Report\n\n## Old Area\n")
+	writeSpecFile(t, root, "v0.3.0", "# Taskrail\n\n## Alpha Area\n\n## Spec Coverage Summary\n\n## Brand New Area\n")
 
-	statePath := filepath.Join(root, "planning", "STATE.md")
-	before, err := os.ReadFile(statePath)
-	if err != nil {
-		t.Fatalf("read STATE.md: %v", err)
-	}
+	before := snapshotTree(t, root)
 
 	out, err := runRoot(t, "spec", "diff", "v0.2.0", "v0.3.0")
 	if err != nil {
 		t.Fatalf("spec diff: %v (output %q)", err, out)
 	}
-	if !strings.Contains(out, "brand-new-area") {
-		t.Fatalf("expected added anchor in output, got %q", out)
+	addedCandidate := strings.Index(out, "#spec-coverage-summary Spec Coverage Summary")
+	addedUnrelated := strings.Index(out, "#brand-new-area Brand New Area")
+	if addedCandidate < 0 || addedUnrelated < addedCandidate {
+		t.Fatalf("expected added anchors in document order, got %q", out)
 	}
-	if !strings.Contains(out, "old-area") {
-		t.Fatalf("expected removed anchor in output, got %q", out)
+	removedCandidate := strings.Index(out, "#spec-coverage-report Spec Coverage Report")
+	removedUnrelated := strings.Index(out, "#old-area Old Area")
+	if removedCandidate < 0 || removedUnrelated < removedCandidate {
+		t.Fatalf("expected removed anchors in document order, got %q", out)
 	}
 
-	after, err := os.ReadFile(statePath)
-	if err != nil {
-		t.Fatalf("re-read STATE.md: %v", err)
-	}
-	if string(before) != string(after) {
-		t.Fatal("spec diff must be read-only but STATE.md changed")
+	if after := snapshotTree(t, root); !maps.Equal(before, after) {
+		t.Fatal("spec diff must leave the repository byte-identical")
 	}
 }
 
@@ -84,14 +81,14 @@ func TestSpecDiffJSONOutput(t *testing.T) {
 	if payload.FromVersion != "v0.2.0" || payload.ToVersion != "v0.3.0" {
 		t.Fatalf("version fields wrong: %+v", payload)
 	}
-	if len(payload.Added) != 1 || payload.Added[0].Anchor != "fresh-area" {
-		t.Fatalf("expected fresh-area added, got %+v", payload.Added)
+	if len(payload.Added) != 2 || payload.Added[0].Anchor != "spec-coverage-summary" || payload.Added[1].Anchor != "fresh-area" {
+		t.Fatalf("expected candidate target and fresh-area added in document order, got %+v", payload.Added)
 	}
 	if len(payload.Renamed) != 1 || payload.Renamed[0].From.Anchor != "spec-coverage-report" || payload.Renamed[0].To.Anchor != "spec-coverage-summary" {
 		t.Fatalf("expected the coverage rename candidate, got %+v", payload.Renamed)
 	}
-	if len(payload.Removed) != 0 {
-		t.Fatalf("rename source must not also be a plain removal, got %+v", payload.Removed)
+	if len(payload.Removed) != 1 || payload.Removed[0].Anchor != "spec-coverage-report" {
+		t.Fatalf("expected candidate source retained as removed, got %+v", payload.Removed)
 	}
 }
 

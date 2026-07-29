@@ -121,12 +121,12 @@ func TestSpecDiffSameVersion(t *testing.T) {
 }
 
 // TestSpecDiffRenameCandidate: an added and a removed anchor sharing a normalized
-// stem (same leading tokens, differing final token) surface as a candidate
-// rename rather than a bare add+remove pair.
+// stem (same leading tokens, differing final token) surface as a supplemental
+// candidate without being removed from the definitive delta.
 func TestSpecDiffRenameCandidate(t *testing.T) {
 	svc := seedTwoSpecs(t,
-		"# Taskrail\n\n## Spec Coverage Report\n",
-		"# Taskrail\n\n## Spec Coverage Summary\n",
+		"# Taskrail\n\n## Spec Coverage Report\n\n## Old Area\n",
+		"# Taskrail\n\n## Spec Coverage Summary\n\n## Fresh Area\n",
 	)
 	result, err := svc.SpecDiff("v0.2.0", "v0.3.0")
 	if err != nil {
@@ -139,12 +139,11 @@ func TestSpecDiffRenameCandidate(t *testing.T) {
 	if rc.From.Anchor != "spec-coverage-report" || rc.To.Anchor != "spec-coverage-summary" {
 		t.Fatalf("rename candidate endpoints wrong: %+v", rc)
 	}
-	// A candidate rename is neither a plain add nor a plain remove.
-	if _, ok := specDiffAnchorSet(result.Added)["spec-coverage-summary"]; ok {
-		t.Fatalf("rename target must not also appear in added: %+v", result.Added)
+	if len(result.Added) != 2 || result.Added[0].Anchor != "spec-coverage-summary" || result.Added[1].Anchor != "fresh-area" {
+		t.Fatalf("added must retain document order and candidate target, got %+v", result.Added)
 	}
-	if _, ok := specDiffAnchorSet(result.Removed)["spec-coverage-report"]; ok {
-		t.Fatalf("rename source must not also appear in removed: %+v", result.Removed)
+	if len(result.Removed) != 2 || result.Removed[0].Anchor != "spec-coverage-report" || result.Removed[1].Anchor != "old-area" {
+		t.Fatalf("removed must retain document order and candidate source, got %+v", result.Removed)
 	}
 }
 
