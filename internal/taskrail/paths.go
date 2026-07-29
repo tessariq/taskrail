@@ -47,22 +47,14 @@ func defaultLayoutConfig() LayoutConfig {
 // default layout when it is absent so discovery stays purely additive. Fields
 // omitted from an existing marker default to the v0.1.0 locations.
 func loadLayoutConfig(root string) (LayoutConfig, error) {
-	path := filepath.Join(root, taskrailConfigDir, taskrailConfigFile)
-	data, err := os.ReadFile(path)
+	cfg, found, err := readLayoutFile(root, "layout config")
 	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return defaultLayoutConfig(), nil
-		}
-		return LayoutConfig{}, fmt.Errorf("read layout config %s: %w", relPath(root, path), fsCause(err))
-	}
-
-	cfg := defaultLayoutConfig()
-	if err := yaml.Unmarshal(data, &cfg); err != nil {
-		return LayoutConfig{}, fmt.Errorf("parse layout config %s: %w", path, err)
-	}
-	if err := ensureSupportedLayoutVersion(cfg); err != nil {
 		return LayoutConfig{}, err
 	}
+	if !found {
+		return defaultLayoutConfig(), nil
+	}
+
 	if cfg.SpecsDir == "" {
 		cfg.SpecsDir = defaultSpecsDir
 	}
@@ -87,16 +79,26 @@ func markerPath(root string) string {
 // marker is absent, so callers can distinguish an unmarked repository (needing
 // fresh init or legacy adoption) from a marked one.
 func readMarker(root string) (LayoutConfig, bool, error) {
-	data, err := os.ReadFile(markerPath(root))
+	return readLayoutFile(root, "layout marker")
+}
+
+// readLayoutFile is the one read/unmarshal/version-guard sequence behind both
+// marker readers, so a future marker-level rule has a single place to land. The
+// label carries each caller's adopter-facing wording for the same file, which
+// differs on purpose and is contract (T-131).
+func readLayoutFile(root, label string) (LayoutConfig, bool, error) {
+	path := markerPath(root)
+	data, err := os.ReadFile(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return LayoutConfig{}, false, nil
 		}
-		return LayoutConfig{}, false, fmt.Errorf("read layout marker %s: %w", relPath(root, markerPath(root)), fsCause(err))
+		return LayoutConfig{}, false, fmt.Errorf("read %s %s: %w", label, relPath(root, path), fsCause(err))
 	}
+
 	cfg := defaultLayoutConfig()
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
-		return LayoutConfig{}, false, fmt.Errorf("parse layout marker %s: %w", markerPath(root), err)
+		return LayoutConfig{}, false, fmt.Errorf("parse %s %s: %w", label, path, err)
 	}
 	if err := ensureSupportedLayoutVersion(cfg); err != nil {
 		return LayoutConfig{}, false, err

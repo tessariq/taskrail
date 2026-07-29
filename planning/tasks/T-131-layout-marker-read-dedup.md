@@ -1,12 +1,12 @@
 ---
 id: T-131-layout-marker-read-dedup
 title: Deduplicate the layout marker read path
-status: todo
+status: completed
 priority: low
 spec_ref: specs/v0.4.0.md#layout-compatibility-beyond-init
 dependencies:
     - T-122-layout-version-guard
-updated_at: "2026-07-28T11:37:50Z"
+updated_at: "2026-07-29T09:23:59Z"
 ---
 
 # T-131-layout-marker-read-dedup Deduplicate the layout marker read path
@@ -51,3 +51,5 @@ duplication it removes.
 - TODO: record verification evidence paths.
 
 ## Implementation Notes
+
+- 2026-07-29T09:23:55Z: verification pass
