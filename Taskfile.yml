@@ -119,9 +119,9 @@ tasks:
       - go test ./internal/taskrail -run '^TestCommittedSkillsMatchPackage$'
 
   check:task-bodies:
-    desc: Verify no task file carries a duplicate Implementation Notes heading
+    desc: Verify no task file repeats a scaffold section heading
     cmds:
-      - go test ./internal/taskrail -run '^TestCorpusTasksHaveOneImplementationNotesSection$'
+      - go test ./internal/taskrail -run '^TestCorpusTasksHaveOneOfEachScaffoldSection$|^TestDuplicateScaffoldSectionsFlagsRepeatedHeadings$|^TestScaffoldSectionHeadingsMatchScaffoldOutput$'
 
   skills:regen:
     desc: Regenerate committed .agents/.claude skill copies from the embedded package, then verify parity

@@ -108,7 +108,7 @@ Guidance for coding agents working in the Taskrail repository.
 - Validate Taskrail structure: `go run ./cmd/taskrail validate`
 - Select next task: `go run ./cmd/taskrail next --json`
 - Check skill package parity: `task check:skills` (asserts committed `.agents/`/`.claude/` skills equal the embedded `--with-skills` package)
-- Check task-body hygiene: `task check:task-bodies` (asserts no task file carries a duplicate `## Implementation Notes` heading; runs in the planning fast lane, since a planning-only change never reaches the full CI matrix)
+- Check task-body hygiene: `task check:task-bodies` (asserts no task file repeats a scaffold section heading — `## Description`, `## Acceptance`, `## Verification Notes`, `## Implementation Notes`; runs in the planning fast lane, since a planning-only change never reaches the full CI matrix)
 
 ### Git Hooks (Optional)
 

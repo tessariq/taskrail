@@ -1,11 +1,11 @@
 ---
 id: T-135-duplicate-heading-guard-all-sections
 title: Extend the duplicate-heading corpus guard beyond Implementation Notes
-status: todo
+status: completed
 priority: low
 spec_ref: specs/v0.2.0.md#no-local-paths-in-task-notes
 dependencies: []
-updated_at: "2026-07-29T09:10:47Z"
+updated_at: "2026-07-29T10:37:46Z"
 ---
 
 # T-135-duplicate-heading-guard-all-sections Extend the duplicate-heading corpus guard beyond Implementation Notes
@@ -50,3 +50,5 @@ body has.
 - TODO: record verification evidence paths.
 
 ## Implementation Notes
+
+- 2026-07-29T10:37:42Z: verification pass
