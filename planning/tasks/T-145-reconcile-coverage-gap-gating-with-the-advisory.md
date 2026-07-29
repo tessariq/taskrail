@@ -1,12 +1,12 @@
 ---
 id: T-145-reconcile-coverage-gap-gating-with-the-advisory
 title: Reconcile coverage gap gating with the advisory spec contract
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.4.0.md#gap-analysis
 dependencies:
     - T-100
-updated_at: "2026-07-29T13:04:29Z"
+updated_at: "2026-07-29T16:24:31Z"
 ---
 
 # T-145-reconcile-coverage-gap-gating-with-the-advisory Reconcile coverage gap gating with the advisory spec contract
@@ -36,3 +36,4 @@ explicitly rather than shipping behavior that silently outgrows the spec.
 ## Implementation Notes
 
 - This task requires maintainer approval before changing the spec contract.
+- 2026-07-29T16:24:07Z: verification pass

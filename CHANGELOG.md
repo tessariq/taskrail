@@ -27,8 +27,8 @@ damage tracked state. The core remains deterministic and provider-independent.
   on and away from the active spec, then lists away-task ids and `spec_ref` values.
   Read-only; supports `--json`.
 - `taskrail coverage --gaps` — advisory read-only structural gap analysis over
-  covered active-spec areas. Scope with `--area`, gate selected categories with
-  `--fail-on`, and consume structured candidates with `--json`.
+  covered active-spec areas. Scope with `--area`; opt into an exit-code policy with
+  `--fail-on`; consume structured candidates with `--json`.
 - `taskrail-decompose` and `taskrail-gap` skills — draft tasks for uncovered spec
   areas and add semantic review to mechanical gap signals; proposals remain
   reviewable and require explicit promotion into tracked state.

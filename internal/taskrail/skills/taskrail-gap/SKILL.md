@@ -25,8 +25,10 @@ repository's root.
   cases matter, what cleanup or rollout the spec implies, whether a structural signal
   is a real gap — is your job, done in this skill between deterministic binary steps.
 
-Both halves stay advisory: they surface candidate tasks for a human to promote, never
-auto-created state.
+Both halves are advisory by default: they surface candidate tasks for a human to
+promote, never auto-created state. A repository may deliberately pass
+`--fail-on <category>` to apply its own CI policy to the command exit code; this does
+not change the report or write state. Gap findings never make `validate` fail.
 
 ## When to use this vs the sibling skills
 
@@ -45,8 +47,9 @@ auto-created state.
    human-readable `detail`. `coverage` is read-only and writes nothing. To focus a
    single area, compose with area scoping:
    `${TASKRAIL:-taskrail} coverage --gaps --area <anchor> --json` — it uses the same
-   area resolution and rejection rules as normal coverage scoping. Do not pass `--min`;
-   gap analysis does not gate.
+   area resolution and rejection rules as normal coverage scoping. Do not pass `--min`.
+   Use `--fail-on <category>` only when the repository explicitly wants matching
+   structural candidates to produce a non-zero exit code.
 2. **Review semantically.** For each structural signal, decide whether it is a real
    gap and why. Then go beyond the mechanical signals: read the active spec area and
    its linked tasks and name the gaps the binary cannot detect — missing edge-case
@@ -66,9 +69,10 @@ auto-created state.
 ## Rules
 
 - never hand-edit `planning/STATE.md` frontmatter or task status fields
-- `coverage --gaps` is read-only and advisory; it never writes state or gates `validate`
+- `coverage --gaps` is read-only and advisory by default; `--fail-on` changes only its
+  exit code and never writes state or gates `validate`
 - proposals are candidates for human review, never auto-created tasks; promote only
   through `${TASKRAIL:-taskrail} task new` or `import --apply`, never by hand-authoring
   task markdown
-- do not pass `--min` with `--gaps`; gap analysis does not gate and rejects the combo
+- `--min` applies only to normal coverage and is rejected with `--gaps`
 - deep semantic gap inference stays out of the binary by design; it lives here

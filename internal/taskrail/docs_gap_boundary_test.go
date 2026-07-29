@@ -46,6 +46,32 @@ func TestReadmeDocumentsGapBoundary(t *testing.T) {
 	}
 }
 
+func TestGapGatingContractIsDocumentedAtSources(t *testing.T) {
+	for _, tc := range []struct {
+		path    string
+		heading string
+	}{
+		{filepath.Join("..", "..", "specs", "v0.4.0.md"), "### Gap Analysis"},
+		{filepath.Join("skills", "taskrail-gap", "SKILL.md"), "## The mechanical-vs-semantic split"},
+		{filepath.Join("..", "..", "AGENTS.md"), "## Notes On Repository Behavior"},
+	} {
+		data, err := os.ReadFile(tc.path)
+		if err != nil {
+			t.Fatalf("read %s: %v", tc.path, err)
+		}
+		section := readmeSection(string(data), tc.heading)
+		if section == "" {
+			t.Fatalf("%s missing %q section", tc.path, tc.heading)
+		}
+		section = strings.Join(strings.Fields(section), " ")
+		for _, phrase := range []string{"advisory by default", "--fail-on", "exit code", "never make `validate` fail"} {
+			if !strings.Contains(section, phrase) {
+				t.Errorf("%s section %q missing %q", tc.path, tc.heading, phrase)
+			}
+		}
+	}
+}
+
 // markdownBullet returns the body of the top-level list bullet that begins with
 // marker (e.g. a "- `taskrail-gap`" entry), up to the next top-level bullet or the
 // blank line that ends the list. Empty if the marker is absent. Scoping the assertion
