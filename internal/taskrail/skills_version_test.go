@@ -154,6 +154,43 @@ func TestInstalledSkillVersionsRoundTrip(t *testing.T) {
 	}
 }
 
+// Adopter-owned skills can live beside or below Taskrail's installed skills, but
+// they have no Taskrail writing version. Only paths represented by the embedded
+// package belong in the inventory used for skew detection.
+func TestInstalledSkillVersionsIgnoreAdopterOwnedSkills(t *testing.T) {
+	t.Parallel()
+
+	repo, svc := installedSkillsRepo(t, "v0.4.0")
+	custom := []string{
+		filepath.Join(".agents", "skills", "custom", "SKILL.md"),
+		filepath.Join(".claude", "skills", "vendor", "custom", "SKILL.md"),
+	}
+	for _, rel := range custom {
+		full := filepath.Join(repo, rel)
+		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+			t.Fatalf("create custom skill directory: %v", err)
+		}
+		if err := os.WriteFile(full, []byte("---\nname: custom\ndescription: adopter owned\n---\n"), 0o644); err != nil {
+			t.Fatalf("write custom skill: %v", err)
+		}
+	}
+
+	installed, err := svc.InstalledSkillVersions()
+	if err != nil {
+		t.Fatalf("installed skill versions: %v", err)
+	}
+	if len(installed) != len(shippableSkills)*len(shippableSkillTargets) {
+		t.Fatalf("got %d installed skills, want %d packaged skills", len(installed), len(shippableSkills)*len(shippableSkillTargets))
+	}
+	for _, skill := range installed {
+		for _, rel := range custom {
+			if skill.Path == filepath.ToSlash(rel) {
+				t.Errorf("adopter-owned skill included in version inventory: %+v", skill)
+			}
+		}
+	}
+}
+
 // A skill installed before the marker existed reports as unknown rather than
 // failing the read.
 func TestInstalledSkillVersionsReportsUnmarkedAsUnknown(t *testing.T) {

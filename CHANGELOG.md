@@ -69,6 +69,8 @@ damage tracked state. The core remains deterministic and provider-independent.
   `spec_ref` path and reject no-op repoints between equivalent spellings.
 - Layout-marker and skill-backup errors now name repository-relative paths once,
   avoiding machine-specific absolute paths and duplicated error text.
+- Installed-skill skew warnings now ignore adopter-owned skills outside Taskrail's
+  embedded package, including nested skills under supported install targets.
 
 ## v0.3.0 - 2026-07-14
 

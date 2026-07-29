@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
-	"path"
 	"path/filepath"
 	"strings"
 )
@@ -73,41 +72,44 @@ func stampSkillVersion(data []byte, version string) []byte {
 
 // InstalledSkillVersions reports which version wrote each materialized skill in
 // this repository, in deterministic path order. It is read-only, and stays cheap
-// enough for ordinary commands: one read per skill file, from which it takes both
-// the recorded marker and an equality check against the copy embedded in this
-// binary. It never compares one install against another and never inspects a
+// enough for ordinary commands: it derives the expected paths from the embedded
+// package and reads only those paths in each install target. From each installed
+// file it takes both the recorded marker and an equality check against the embedded
+// copy. It never compares one install against another and never inspects a
 // difference beyond "identical or not". A repository with no materialized skills
 // reports nothing.
 func (s *Service) InstalledSkillVersions() ([]InstalledSkill, error) {
 	var installed []InstalledSkill
 	for _, target := range shippableSkillTargets {
-		root := filepath.Join(s.paths.RepoRoot, target)
-		err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		err := fs.WalkDir(shippableSkillsFS, shippableSkillsRoot, func(packagePath string, d fs.DirEntry, err error) error {
 			if err != nil {
-				// Report the repo-relative path like every other Taskrail
-				// filesystem error; the missing-directory case is classified by
-				// the caller below and stays silent.
-				return fmt.Errorf("read %s: %w", relPath(s.paths.RepoRoot, path), fsCause(err))
+				return err
 			}
 			if d.IsDir() || d.Name() != skillFileName {
 				return nil
 			}
-			data, err := os.ReadFile(path)
+			packaged, err := shippableSkillsFS.ReadFile(packagePath)
 			if err != nil {
-				return fmt.Errorf("read %s: %w", relPath(s.paths.RepoRoot, path), fsCause(err))
+				return fmt.Errorf("read embedded skill %s: %w", packagePath, err)
 			}
-			// WalkDir only yields paths under root, so the target-relative path —
-			// which is also the path inside the embedded package — is a plain trim.
-			rel := strings.TrimPrefix(path, root+string(filepath.Separator))
+			rel := strings.TrimPrefix(packagePath, shippableSkillsRoot+"/")
+			diskPath := filepath.Join(s.paths.RepoRoot, target, filepath.FromSlash(rel))
+			data, err := os.ReadFile(diskPath)
+			if errors.Is(err, os.ErrNotExist) {
+				return nil
+			}
+			if err != nil {
+				return fmt.Errorf("read %s: %w", relPath(s.paths.RepoRoot, diskPath), fsCause(err))
+			}
 			installed = append(installed, InstalledSkill{
-				Path:           relPath(s.paths.RepoRoot, path),
-				Skill:          filepath.Base(filepath.Dir(path)),
+				Path:           relPath(s.paths.RepoRoot, diskPath),
+				Skill:          filepath.Base(filepath.Dir(diskPath)),
 				Version:        skillVersionOf(data),
-				MatchesPackage: matchesPackagedSkill(rel, data),
+				MatchesPackage: bytes.Equal(packaged, data),
 			})
 			return nil
 		})
-		if err != nil && !errors.Is(err, os.ErrNotExist) {
+		if err != nil {
 			return nil, err
 		}
 	}
@@ -123,16 +125,4 @@ func skillVersionOf(data []byte) string {
 		return ""
 	}
 	return marker.Version
-}
-
-// matchesPackagedSkill reports whether an on-disk skill is byte-identical to the
-// embedded package copy at the same relative path. A path the package does not
-// ship — an adopter's own skill living alongside the installed set — is not a
-// parity copy and stays subject to the ordinary report.
-func matchesPackagedSkill(rel string, data []byte) bool {
-	packaged, err := shippableSkillsFS.ReadFile(path.Join(shippableSkillsRoot, filepath.ToSlash(rel)))
-	if err != nil {
-		return false
-	}
-	return bytes.Equal(packaged, data)
 }

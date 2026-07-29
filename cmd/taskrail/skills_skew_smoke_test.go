@@ -132,6 +132,39 @@ func TestNoSkillSkewWarningWhenVersionsMatch(t *testing.T) {
 	}
 }
 
+// Adopter-owned skills are outside Taskrail's embedded package and therefore
+// cannot be stale Taskrail workflow instructions, even when nested under a target.
+func TestNoSkillSkewWarningForAdopterOwnedSkills(t *testing.T) {
+	root := setupRepo(t)
+	if out, err := runRoot(t, "init", "--with-skills"); err != nil {
+		t.Fatalf("init --with-skills: %v (output %q)", err, out)
+	}
+	for _, rel := range []string{
+		filepath.Join(".agents", "skills", "custom", "SKILL.md"),
+		filepath.Join(".claude", "skills", "vendor", "custom", "SKILL.md"),
+	} {
+		full := filepath.Join(root, rel)
+		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+			t.Fatalf("create custom skill directory: %v", err)
+		}
+		if err := os.WriteFile(full, []byte("---\nname: custom\ndescription: adopter owned\n---\n"), 0o644); err != nil {
+			t.Fatalf("write custom skill: %v", err)
+		}
+	}
+
+	stdout, stderr, err := runRootSplit(t, "status", "--json")
+	if err != nil {
+		t.Fatalf("status --json: %v (stderr %q)", err, stderr)
+	}
+	var parsed map[string]any
+	if jsonErr := json.Unmarshal([]byte(stdout), &parsed); jsonErr != nil {
+		t.Fatalf("stdout is not parseable json: %v\n%s", jsonErr, stdout)
+	}
+	if strings.TrimSpace(stderr) != "" {
+		t.Errorf("adopter-owned skills produced stderr output: %q", stderr)
+	}
+}
+
 // A repository whose skills are marker-free copies of the embedded package — the
 // shape `task skills:regen` produces here, and the one T-124 exempts — is silent
 // end to end, not just at the service layer.

@@ -1,12 +1,12 @@
 ---
 id: T-146-restrict-skill-skew-detection-to-packaged
 title: Restrict skill skew detection to packaged Taskrail skills
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.4.0.md#version-skew-detection
 dependencies:
     - T-120-stale-skill-warning
-updated_at: "2026-07-29T13:04:41Z"
+updated_at: "2026-07-29T16:58:04Z"
 ---
 
 # T-146-restrict-skill-skew-detection-to-packaged Restrict skill skew detection to packaged Taskrail skills
@@ -38,3 +38,5 @@ permanent warning source contrary to the no-noise requirement.
 
 - Derive the expected relative paths from the embedded package; do not hardcode a
   second skill-name list.
+- 2026-07-29T16:57:19Z: verification pass
+- 2026-07-29T16:58:04Z: Restricted skew inventory to embedded package paths; automated, review, and sandbox manual verification passed.
