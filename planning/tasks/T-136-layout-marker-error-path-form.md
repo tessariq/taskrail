@@ -1,12 +1,12 @@
 ---
 id: T-136-layout-marker-error-path-form
 title: Make layout marker error paths consistently repo-relative
-status: todo
+status: completed
 priority: low
 spec_ref: specs/v0.4.0.md#layout-compatibility-beyond-init
 dependencies:
     - T-131-layout-marker-read-dedup
-updated_at: "2026-07-29T09:23:32Z"
+updated_at: "2026-07-29T09:50:26Z"
 ---
 
 # T-136-layout-marker-error-path-form Make layout marker error paths consistently repo-relative
@@ -43,3 +43,6 @@ confirm before changing: an adopter may be matching on it.
 - TODO: record verification evidence paths.
 
 ## Implementation Notes
+
+- 2026-07-29T09:50:21Z: verification pass
+- 2026-07-29T09:50:26Z: Parse branch now uses relPath; evidence under planning/artifacts/verify/T-136-layout-marker-error-path-form/20260729T095021Z/ and planning/artifacts/manual-test/T-136-layout-marker-error-path-form/20260729T094925Z/. Follow-up T-137 covers the last absolute-path error site (skills.go backupPath).

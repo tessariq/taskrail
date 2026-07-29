@@ -104,6 +104,9 @@ All notable user-visible changes to Taskrail will be documented in this file.
   `task repoint` consequently rejects a re-point between two spellings of the same
   reference instead of rewriting the task file and `STATE.md`. Stored refs are not
   migrated.
+- An unparsable layout marker is now reported repo-relative (`parse layout config
+  .taskrail/config.yml: ...`) instead of with your absolute repository path,
+  matching how the read-error branch and the rest of Taskrail name a file.
 
 ## v0.3.0 - 2026-07-14
 

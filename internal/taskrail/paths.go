@@ -98,7 +98,7 @@ func readLayoutFile(root, label string) (LayoutConfig, bool, error) {
 
 	cfg := defaultLayoutConfig()
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
-		return LayoutConfig{}, false, fmt.Errorf("parse %s %s: %w", label, path, err)
+		return LayoutConfig{}, false, fmt.Errorf("parse %s %s: %w", label, relPath(root, path), err)
 	}
 	if err := ensureSupportedLayoutVersion(cfg); err != nil {
 		return LayoutConfig{}, false, err

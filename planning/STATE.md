@@ -1,6 +1,6 @@
 ---
 schema_version: 1
-updated_at: "2026-07-29T09:38:01Z"
+updated_at: "2026-07-29T09:50:26Z"
 active_spec_version: v0.4.0
 active_spec_path: specs/v0.4.0.md
 current_task: ""
@@ -8,7 +8,7 @@ current_task_title: ""
 status_summary: idle
 blockers: []
 next_action: Select the next eligible task
-last_verification_result: pass for T-134-freshcheck-samefile-error at 2026-07-29T09:37:55Z
+last_verification_result: pass for T-136-layout-marker-error-path-form at 2026-07-29T09:50:21Z
 relevant_artifacts: []
 continuation_notes:
     - This repository is temporarily dogfooding bootstrap workflow tooling until Taskrail v0.1.0 exists.
@@ -34,7 +34,7 @@ continuation_notes:
 
 ## Last Verification
 
-- pass for T-134-freshcheck-samefile-error at 2026-07-29T09:37:55Z
+- pass for T-136-layout-marker-error-path-form at 2026-07-29T09:50:21Z
 
 ## Next Action
 
@@ -52,6 +52,6 @@ continuation_notes:
 
 - todo: 3
 - in_progress: 0
-- completed: 132
+- completed: 133
 - blocked: 0
 - cancelled: 0
