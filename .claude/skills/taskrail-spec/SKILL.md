@@ -15,6 +15,16 @@ Requires the installed `taskrail` binary on `PATH`. Run it from the managed
 repository's root. `spec list` and `spec show` are read-only; `spec activate` and
 `spec add` write `STATE.md` and `specs/`, so check `git status` after them.
 
+## Source Checkout Guard
+
+Before every command that can write tracked state, check whether the repository
+is the Taskrail source checkout (it contains both `Taskfile.yml` and
+`internal/toolchain/cmd/freshcheck`). If so, run `task taskrail:check`
+immediately before the writer. This checks the exact `${TASKRAIL:-taskrail}`
+binary the workflow will invoke. If it fails, stop, apply the remedy it names,
+and rerun the guard; do not run the writer first. Installed adopter repositories
+do not contain the source helper and skip this source-only guard.
+
 ## Flow
 
 1. **Inspect the specs.** Run `${TASKRAIL:-taskrail} spec list` to see the

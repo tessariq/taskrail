@@ -1,6 +1,7 @@
 package toolchain_test
 
 import (
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -201,6 +202,54 @@ func TestLefthookGuardsBinaryFreshnessBeforeCommit(t *testing.T) {
 	stage, _, _ = strings.Cut(stage, "\ncommit-msg:")
 	if !strings.Contains(stage, "task taskrail:check") {
 		t.Errorf("lefthook pre-commit must run `task taskrail:check` so a stale binary cannot write committed state; got:\n%s", stage)
+	}
+}
+
+// Skills that can write tracked state must stop a stale source-checkout binary
+// before the write, rather than relying on the later pre-commit check. Adopter
+// repositories do not carry Taskrail's source-only freshness tooling, so the
+// guidance must scope the guard to source checkouts.
+func TestStateWritingSkillsGuardSourceCheckoutBinaryFreshness(t *testing.T) {
+	root := repoRoot(t)
+	writers := []string{
+		"autonomous-backlog",
+		"autonomous-recovery",
+		"autonomous-task",
+		"autonomous-verify",
+		"taskrail-decompose",
+		"taskrail-gap",
+		"taskrail-import",
+		"taskrail-repair",
+		"taskrail-retrofit",
+		"taskrail-spec",
+	}
+	for _, name := range writers {
+		t.Run(name, func(t *testing.T) {
+			skill := readFile(t, root, filepath.Join("internal", "taskrail", "skills", name, "SKILL.md"))
+			for _, want := range []string{
+				"## Source Checkout Guard",
+				"internal/toolchain/cmd/freshcheck",
+				"task taskrail:check",
+				"${TASKRAIL:-taskrail}",
+				"Installed adopter repositories",
+			} {
+				if !strings.Contains(skill, want) {
+					t.Errorf("state-writing skill must contain %q before-write guidance", want)
+				}
+			}
+		})
+	}
+}
+
+// Contributor guidance is a normal human state-writing path in this source
+// checkout, so it must require the same freshness check before bare taskrail
+// transitions that the agent skills require.
+func TestContributorWorkflowGuardsStateWriters(t *testing.T) {
+	guidance := readFile(t, repoRoot(t), "CONTRIBUTING.md")
+	for _, want := range []string{"task taskrail:check", "immediately before", "taskrail start|complete|block|verify"} {
+		if !strings.Contains(guidance, want) {
+			t.Errorf("CONTRIBUTING.md must contain %q in its source-checkout transition guidance", want)
+		}
 	}
 }
 

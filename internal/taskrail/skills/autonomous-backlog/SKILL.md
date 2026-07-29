@@ -9,6 +9,16 @@ Execute one deterministic autonomous backlog cycle for Taskrail tracked work.
 
 Requires the installed `taskrail` binary on `PATH`.
 
+## Source Checkout Guard
+
+Before every command that can write tracked state, check whether the repository
+is the Taskrail source checkout (it contains both `Taskfile.yml` and
+`internal/toolchain/cmd/freshcheck`). If so, run `task taskrail:check`
+immediately before the writer. This checks the exact `${TASKRAIL:-taskrail}`
+binary the workflow will invoke. If it fails, stop, apply the remedy it names,
+and rerun the guard; do not run the writer first. Installed adopter repositories
+do not contain the source helper and skip this source-only guard.
+
 ## Required Flow
 
 1. Run `${TASKRAIL:-taskrail} validate`.

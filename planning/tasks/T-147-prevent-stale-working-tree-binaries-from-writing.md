@@ -1,12 +1,12 @@
 ---
 id: T-147-prevent-stale-working-tree-binaries-from-writing
 title: Prevent stale working-tree binaries from writing tracked state
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.4.0.md#version-skew-detection
 dependencies:
     - T-123-contributor-binary-resolution
-updated_at: "2026-07-29T13:04:53Z"
+updated_at: "2026-07-29T17:14:44Z"
 ---
 
 # T-147-prevent-stale-working-tree-binaries-from-writing Prevent stale working-tree binaries from writing tracked state
@@ -38,3 +38,4 @@ the spec's before-write guarantee for repositories that build Taskrail themselve
 
 - Keep the core binary provider/tooling independent; this is source-repository
   workflow protection, not a general runtime build manager.
+- 2026-07-29T17:14:35Z: verification pass

@@ -120,6 +120,11 @@ Guidance for coding agents working in the Taskrail repository.
 
 - `planning/STATE.md` is the authoritative execution state.
 - Tasks under `planning/tasks/` must declare spec references and dependencies.
+- In this source checkout, run `task taskrail:check` immediately before every
+  `${TASKRAIL:-taskrail}` state writer (`next`, `start`, `verify`, `complete`,
+  `block`, and other commands that write tracked files). Stop on failure and
+  apply its named remedy before writing; `go run ./cmd/taskrail ...` builds the
+  current source directly and does not need this guard.
 - Use `taskrail start`, `complete`, `block`, and `verify` for tracked status transitions once the CLI exists.
 - Do not hand-edit task statuses or machine-managed state fields unless the task is explicitly about Taskrail bootstrapping before the CLI is available.
 - Verification artifacts belong under `planning/artifacts/verify/`.

@@ -38,6 +38,9 @@ damage tracked state. The core remains deterministic and provider-independent.
 
 ### Changed
 
+- Packaged state-writing skills now run the source checkout's
+  `task taskrail:check` before tracked bytes change, refusing stale or wrongly
+  resolved working-tree binaries without affecting installed adopter workflows.
 - `taskrail next` — anchor idle selection to the active spec: only `todo` tasks
   on that spec are ranked by default. Older runnable work is reported as skipped;
   an off-spec active task remains selected with a warning.

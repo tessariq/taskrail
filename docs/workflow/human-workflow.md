@@ -23,6 +23,16 @@ How a human developer should work when Taskrail tracked-work state exists.
 
 Taskrail adds deterministic state handling. It does not replace engineering judgment.
 
+## Taskrail Source Checkout
+
+The `go run ./cmd/taskrail ...` commands above always build the current source.
+Before using `${TASKRAIL:-taskrail}` instead for `next`, `start`, `verify`,
+`complete`, `block`, or any other state writer in Taskrail's own source checkout,
+run `task taskrail:check`. It checks the exact binary the command will invoke and
+must pass before any tracked bytes change. If it fails, stop and apply the named
+build or resolution remedy first. Installed adopter repositories do not carry
+Taskrail's source-only freshness helper and need no such check.
+
 ## Manual Testing Notes
 
 - Prefer a temporary directory or temporary repository sandbox first.
