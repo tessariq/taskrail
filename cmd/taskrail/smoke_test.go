@@ -732,7 +732,7 @@ func TestTaskNewCapsTitleDerivedSlugButNotExplicit(t *testing.T) {
 	if err != nil {
 		t.Fatalf("task new: %v (output %q)", err, out)
 	}
-	if !strings.Contains(out, `"task_id": "T-001-cap-the-title-derived-slug-length-at-roughly"`) {
+	if !strings.Contains(out, `"task_id": "T-001-cap-the-title-derived-slug-length-at-roughly-fifty"`) {
 		t.Fatalf("expected capped title-derived id, got %q", out)
 	}
 
@@ -837,6 +837,51 @@ func TestTaskNewWarnsOnEmptyDerivedSlugToStderr(t *testing.T) {
 	}
 }
 
+func TestTaskNewExplicitEmptySlugOverridesTitle(t *testing.T) {
+	root := setupRepo(t)
+
+	stdout, stderr, err := runRootSplit(t, "task", "new", "--title", "Visible Title", "--slug", "", "--spec-ref", "specs/v0.1.0.md#summary", "--json")
+	if err != nil {
+		t.Fatalf("task new: %v (stdout %q stderr %q)", err, stdout, stderr)
+	}
+	if !strings.Contains(stderr, `"" produced no slug segment`) || !strings.Contains(stderr, "T-001") {
+		t.Fatalf("expected explicit-empty-slug warning on stderr, got %q", stderr)
+	}
+	var decoded struct {
+		TaskID string `json:"task_id"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &decoded); err != nil {
+		t.Fatalf("stdout is not clean json (%v): %q", err, stdout)
+	}
+	if decoded.TaskID != "T-001" {
+		t.Fatalf("expected explicit empty slug to override title with bare id T-001, got %q", decoded.TaskID)
+	}
+	if _, err := os.Stat(filepath.Join(root, "planning", "tasks", "T-001.md")); err != nil {
+		t.Fatalf("expected bare task file: %v", err)
+	}
+}
+
+func TestTaskNewExplicitEmptyTitleWarns(t *testing.T) {
+	setupRepo(t)
+
+	stdout, stderr, err := runRootSplit(t, "task", "new", "--title", "", "--spec-ref", "specs/v0.1.0.md#summary", "--json")
+	if err != nil {
+		t.Fatalf("task new: %v (stdout %q stderr %q)", err, stdout, stderr)
+	}
+	if !strings.Contains(stderr, `"" produced no slug segment`) {
+		t.Fatalf("expected explicit-empty-title warning on stderr, got %q", stderr)
+	}
+	var decoded struct {
+		TaskID string `json:"task_id"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &decoded); err != nil {
+		t.Fatalf("stdout is not clean json (%v): %q", err, stdout)
+	}
+	if decoded.TaskID != "T-001" {
+		t.Fatalf("expected bare id T-001, got %q", decoded.TaskID)
+	}
+}
+
 // TestTaskNewWithoutSlugSourceIsSilent guards the other side of the signal: the
 // intentional bare-id case must not warn, or the warning stops meaning anything.
 func TestTaskNewWithoutSlugSourceIsSilent(t *testing.T) {
@@ -930,6 +975,28 @@ func TestTaskRenameDeSlugsWithWarningToStderr(t *testing.T) {
 	}
 	if out, err := runRoot(t, "validate"); err != nil {
 		t.Fatalf("validate after de-slug: %v (output %q)", err, out)
+	}
+}
+
+func TestTaskRenameExplicitEmptySlugDeSlugs(t *testing.T) {
+	root := setupRepo(t)
+	writeTask(t, root, "T-001-base-widget", "todo", "")
+
+	stdout, stderr, err := runRootSplit(t, "task", "rename", "T-001-base-widget", "--slug", "", "--json")
+	if err != nil {
+		t.Fatalf("task rename: %v (stdout %q stderr %q)", err, stdout, stderr)
+	}
+	if !strings.Contains(stderr, `"" produced no slug segment`) || !strings.Contains(stderr, "T-001") {
+		t.Fatalf("expected explicit-empty-slug warning on stderr, got %q", stderr)
+	}
+	var decoded struct {
+		NewID string `json:"new_id"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &decoded); err != nil {
+		t.Fatalf("stdout is not clean json (%v): %q", err, stdout)
+	}
+	if decoded.NewID != "T-001" {
+		t.Fatalf("expected de-slug to T-001, got %q", decoded.NewID)
 	}
 }
 

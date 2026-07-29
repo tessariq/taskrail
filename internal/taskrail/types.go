@@ -152,9 +152,12 @@ type CreateTaskInput struct {
 	// SlugExplicit reports that Slug is an operator-curated `--slug`, not the
 	// title fallback. A title-derived slug is length-capped (see capSlug); an
 	// explicit one is written verbatim after normalization, since the operator
-	// owns that choice. The CLI collapses `--slug`/title into Slug, so this flag
-	// carries the distinction the cap needs.
+	// owns that choice. It also preserves an explicitly empty --slug so it can
+	// override a title-derived slug and trigger the warned bare-id fallback.
 	SlugExplicit bool
+	// SlugSourceSupplied distinguishes an explicitly empty title or slug source
+	// from the intentional no-selector case, without changing title-derived capping.
+	SlugSourceSupplied bool
 	// SpecRef is the explicit `path#anchor` spec reference. Area is its active-spec
 	// shorthand: when set, CreateTask resolves SpecRef to
 	// `<active_spec_path>#<Area>` from STATE.md. The two are mutually exclusive — a

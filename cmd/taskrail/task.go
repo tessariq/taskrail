@@ -51,19 +51,20 @@ func newTaskNewCmd() *cobra.Command {
 			// plain `task new --title "X"` still yields a slugged, scannable id. The
 			// explicit slug is written verbatim; the title fallback is length-capped.
 			slugSource := slug
-			slugExplicit := strings.TrimSpace(slug) != ""
+			slugExplicit := cmd.Flags().Changed("slug")
 			if !slugExplicit {
 				slugSource = title
 			}
 			result, err := svc.CreateTask(taskrail.CreateTaskInput{
-				Title:        title,
-				Slug:         slugSource,
-				SlugExplicit: slugExplicit,
-				SpecRef:      specRef,
-				Area:         area,
-				Priority:     priority,
-				Dependencies: deps,
-				FollowUpOf:   followUp,
+				Title:              title,
+				Slug:               slugSource,
+				SlugExplicit:       slugExplicit,
+				SlugSourceSupplied: cmd.Flags().Changed("slug") || cmd.Flags().Changed("title"),
+				SpecRef:            specRef,
+				Area:               area,
+				Priority:           priority,
+				Dependencies:       deps,
+				FollowUpOf:         followUp,
 			})
 			if err != nil {
 				return err
@@ -119,10 +120,12 @@ func newTaskRenameCmd() *cobra.Command {
 				return err
 			}
 			result, err := svc.RenameTask(taskrail.RenameTaskInput{
-				OldID:  args[0],
-				Slug:   slug,
-				Title:  title,
-				DryRun: dryRun,
+				OldID:         args[0],
+				Slug:          slug,
+				SlugExplicit:  cmd.Flags().Changed("slug"),
+				Title:         title,
+				TitleExplicit: cmd.Flags().Changed("title"),
+				DryRun:        dryRun,
 			})
 			if err != nil {
 				return err

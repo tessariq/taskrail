@@ -16,10 +16,12 @@ import (
 // rewrites the frontmatter title). The numeric `T-<n>` prefix is preserved; only
 // the slug segment changes. DryRun reports the planned change set without writing.
 type RenameTaskInput struct {
-	OldID  string
-	Slug   string
-	Title  string
-	DryRun bool
+	OldID         string
+	Slug          string
+	SlugExplicit  bool
+	Title         string
+	TitleExplicit bool
+	DryRun        bool
 }
 
 // RenameChange records one coupled edit a rename performs (or would perform on a
@@ -146,8 +148,8 @@ func (s *Service) RenameTask(input RenameTaskInput) (RenameTaskResult, error) {
 // source the operator supplied. Only the derived `--title` is capped; an
 // explicit `--slug` is the operator's curation and is written verbatim.
 func renameSlug(input RenameTaskInput) (slug, source string, err error) {
-	hasSlug := strings.TrimSpace(input.Slug) != ""
-	hasTitle := strings.TrimSpace(input.Title) != ""
+	hasSlug := input.SlugExplicit || strings.TrimSpace(input.Slug) != ""
+	hasTitle := input.TitleExplicit || strings.TrimSpace(input.Title) != ""
 	if hasSlug == hasTitle {
 		return "", "", errors.New("exactly one of --slug or --title is required")
 	}

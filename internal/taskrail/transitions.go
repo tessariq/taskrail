@@ -558,7 +558,7 @@ func (s *Service) CreateTask(input CreateTaskInput) (CreateTaskResult, error) {
 	// The id and filename are two encodings of one identifier: bake the slug (if
 	// any) into the id so `filename == "<id>.md"` holds. nextTaskID keys on the
 	// numeric prefix, so a slug suffix never affects id allocation or collision.
-	nextID, warnings := nextTaskIDWithSlug(tasks, input.Slug, input.SlugExplicit)
+	nextID, warnings := nextTaskIDWithSlug(tasks, input.Slug, input.SlugExplicit, input.SlugSourceSupplied)
 	now := timestamp(s.now())
 	var provenance string
 	if followUpOf != "" {
@@ -731,7 +731,7 @@ func (s *Service) createFollowupTask(tasks []*Task, source *Task, input VerifyIn
 	if err := ensurePortableNote("follow-up description", description); err != nil {
 		return nil, nil, err
 	}
-	nextID, warnings := nextTaskIDWithSlug(tasks, title, false)
+	nextID, warnings := nextTaskIDWithSlug(tasks, title, false, true)
 
 	body := renderFollowupTaskBody(nextID, title, description)
 	task := &Task{
@@ -750,14 +750,20 @@ func (s *Service) createFollowupTask(tasks []*Task, source *Task, input VerifyIn
 	return task, warnings, nil
 }
 
-func nextTaskIDWithSlug(tasks []*Task, source string, explicit bool) (string, []Warning) {
+func nextTaskIDWithSlug(tasks []*Task, source string, explicit, supplied bool) (string, []Warning) {
 	nextID := nextTaskID(tasks)
 	slug := slugify(source)
 	if slug == "" {
+		if !supplied && !explicit && strings.TrimSpace(source) == "" {
+			return nextID, nil
+		}
 		return nextID, emptySlugWarnings(source, nextID)
 	}
 	if !explicit {
 		slug = capSlug(slug)
+		if slug == "" {
+			return nextID, emptySlugWarnings(source, nextID)
+		}
 	}
 	return nextID + "-" + slug, nil
 }

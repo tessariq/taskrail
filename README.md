@@ -269,7 +269,10 @@ slug source, and passing neither keeps the bare `T-<n>` / `T-<n>.md` form. Every
 case passes `validate` with no follow-up edit. Accented letters transliterate to
 ASCII first, so `--title "Über Fußball"` yields `T-<n>-ueber-fussball` and
 `--title "Łódź Điện"` yields `T-<n>-lodz-dien` rather than a mangled slug — however
-your keyboard encoded the accent. If the value you pass normalizes to no slug at all (`--slug "!!!"`,
+your keyboard encoded the accent. Title-derived slugs keep only complete tokens up
+to the roughly 50-character cap; if the first token alone exceeds the cap, the
+bounded bare-id fallback is used instead of cutting that token. If the value you
+pass normalizes to no slug at all (`--slug ""`, `--slug "!!!"`,
 a fully non-Latin title), the bare `T-<n>` id is written and a warning naming the
 source goes to stderr — `--json` on stdout stays clean.
 
@@ -285,7 +288,8 @@ to the task, re-projects `STATE.md`, and re-runs `validate`.
 taskrail task rename T-<n> --slug add-slug     # or --title "Add slug"; --dry-run previews
 ```
 
-Rename is symmetric with creation: a selector that normalizes to no slug strips
+Rename is symmetric with creation: an explicitly empty selector, or one that
+normalizes to no slug, strips
 the slug instead of failing, renaming `T-<n>-<slug>.md` back to `T-<n>.md` (with
 the same stderr warning), so a bad slug can be undone. The length cap is
 symmetric too — a `--title`-derived slug is capped the same way `task new`

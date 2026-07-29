@@ -190,12 +190,17 @@ func TestCapSlug(t *testing.T) {
 		{
 			name: "long slug trimmed on hyphen boundary",
 			in:   "cap-the-title-derived-slug-length-at-roughly-fifty-characters-boundary-aware",
-			want: "cap-the-title-derived-slug-length-at-roughly",
+			want: "cap-the-title-derived-slug-length-at-roughly-fifty",
 		},
 		{
-			name: "single mega-token hard-capped without a hyphen",
+			name: "single mega-token falls back rather than splitting the token",
 			in:   "supercalifragilisticexpialidocioussupercalifragilisticexpialidocious",
-			want: "supercalifragilisticexpialidocioussupercalifragili",
+			want: "",
+		},
+		{
+			name: "token ending exactly at cap is retained",
+			in:   strings.Repeat("a", slugMaxLen) + "-next",
+			want: strings.Repeat("a", slugMaxLen),
 		},
 	}
 	for _, tc := range cases {

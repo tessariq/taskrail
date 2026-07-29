@@ -1,13 +1,13 @@
 ---
 id: T-142-honor-explicit-empty-slug-selectors-and-preserve
 title: Honor explicit empty slug selectors and preserve token boundaries
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.4.0.md#slugged-task-creation
 dependencies:
     - T-112-slug-length-cap
     - T-126-rename-slug-length-cap
-updated_at: "2026-07-29T13:03:58Z"
+updated_at: "2026-07-29T14:51:47Z"
 ---
 
 # T-142-honor-explicit-empty-slug-selectors-and-preserve Honor explicit empty slug selectors and preserve token boundaries
@@ -40,3 +40,5 @@ and token-boundary cap.
 
 - Cobra's `Flag.Changed` (or an equivalent explicit-presence field at the command
   boundary) is needed; a string value alone cannot distinguish absent from empty.
+- 2026-07-29T14:51:34Z: verification pass
+- 2026-07-29T14:51:47Z: Implemented explicit selector presence and token-boundary slug capping; full, race, vet, validation, review, and sandbox checks pass

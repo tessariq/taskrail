@@ -827,7 +827,7 @@ func TestCreateTaskCapsTitleDerivedSlugOnly(t *testing.T) {
 		{
 			name:   "title-derived slug is capped on a hyphen boundary",
 			slug:   longTitle,
-			wantID: "T-002-cap-the-title-derived-slug-length-at-roughly",
+			wantID: "T-002-cap-the-title-derived-slug-length-at-roughly-fifty",
 		},
 		{
 			name:         "explicit slug is not capped",

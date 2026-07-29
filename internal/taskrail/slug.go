@@ -13,17 +13,12 @@ import (
 // they collapse to a single hyphen after lowercasing.
 var slugNonAlnum = regexp.MustCompile(`[^a-z0-9]+`)
 
-// emptySlugWarnings reports the bare-id fallback for a slug source that was
-// supplied but normalized away. The bare id is legitimate, so this is a warning
-// rather than an error — but an operator who asked for a slug and silently got
-// none has no other signal. An unsupplied source is the intentional bare-id case
-// and stays silent. Both `task new` and `task rename` share it so the two paths
-// signal identically.
+// emptySlugWarnings reports the bare-id fallback for a supplied slug source that
+// normalized away. The bare id is legitimate, so this is a warning rather than an
+// error, but an operator who asked for a slug otherwise has no signal. Both `task
+// new` and `task rename` share it so the two paths signal identically.
 func emptySlugWarnings(source, taskID string) []Warning {
 	source = strings.TrimSpace(source)
-	if source == "" {
-		return nil
-	}
 	return []Warning{{
 		Code:    "empty_derived_slug",
 		Message: fmt.Sprintf("warning: %q produced no slug segment; using bare id %s", source, taskID),
@@ -75,18 +70,21 @@ const slugMaxLen = 50
 // It runs on an already-slugified value (pure ASCII `[a-z0-9-]`, transliteration
 // and the non-alphanumeric collapse already applied), so byte length equals
 // character count and a multibyte source can never blow the budget. A single
-// token longer than the cap has no boundary to trim to and is hard-truncated —
-// still bounded, just not on a word edge. Only the title-derived path caps; an
-// explicit `--slug` the operator curated is written verbatim.
+// token longer than the cap has no safe boundary, so it falls back to no slug;
+// callers then keep the bounded bare id and warn. Only the title-derived path
+// caps; an explicit `--slug` the operator curated is written verbatim.
 func capSlug(slug string) string {
 	if len(slug) <= slugMaxLen {
 		return slug
 	}
 	truncated := slug[:slugMaxLen]
-	if idx := strings.LastIndexByte(truncated, '-'); idx > 0 {
-		truncated = truncated[:idx]
+	if slug[slugMaxLen] == '-' {
+		return truncated
 	}
-	return strings.Trim(truncated, "-")
+	if idx := strings.LastIndexByte(truncated, '-'); idx > 0 {
+		return truncated[:idx]
+	}
+	return ""
 }
 
 // slugify normalizes an arbitrary string into a slug: lowercased, accented letters

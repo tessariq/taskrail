@@ -130,7 +130,7 @@ func TestRenameTaskCapsTitleDerivedSlugOnly(t *testing.T) {
 		{
 			name:   "title-derived slug is capped on a hyphen boundary",
 			input:  RenameTaskInput{OldID: "T-001", Title: longTitle},
-			wantID: "T-001-cap-the-title-derived-slug-length-at-roughly",
+			wantID: "T-001-cap-the-title-derived-slug-length-at-roughly-fifty",
 		},
 		{
 			name:   "explicit slug is not capped",
