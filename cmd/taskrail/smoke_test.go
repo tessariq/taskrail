@@ -1237,6 +1237,50 @@ func TestTaskRenameDryRunWritesNothing(t *testing.T) {
 	}
 }
 
+func TestTaskRenameRejectsInvalidPreviewWithoutWrites(t *testing.T) {
+	root := setupRepo(t)
+	writeTask(t, root, "T-001", "completed", "")
+	writeTask(t, root, "T-002", "todo", "T-001")
+	writeTask(t, root, "T-003", "todo", "")
+
+	brokenPath := filepath.Join(root, "planning", "tasks", "T-003.md")
+	broken := strings.Replace(readTaskFile(t, root, "T-003"), "specs/v0.1.0.md#summary", "specs/v9.9.9.md#missing", 1)
+	if err := os.WriteFile(brokenPath, []byte(broken), 0o644); err != nil {
+		t.Fatalf("break sibling spec_ref: %v", err)
+	}
+	targetBefore := readTaskFile(t, root, "T-001")
+	inboundBefore := readTaskFile(t, root, "T-002")
+	statePath := filepath.Join(root, "planning", "STATE.md")
+	stateBefore, err := os.ReadFile(statePath)
+	if err != nil {
+		t.Fatalf("read STATE.md: %v", err)
+	}
+
+	out, err := runRoot(t, "task", "rename", "T-001", "--slug", "renamed")
+	if err == nil {
+		t.Fatalf("expected invalid preview rejection, output %q", out)
+	}
+	if !strings.Contains(err.Error(), "T-003") {
+		t.Fatalf("expected sibling violation in error, got %v", err)
+	}
+	if got := readTaskFile(t, root, "T-001"); got != targetBefore {
+		t.Fatalf("target changed after rejection:\n%s", got)
+	}
+	if got := readTaskFile(t, root, "T-002"); got != inboundBefore {
+		t.Fatalf("inbound dependent changed after rejection:\n%s", got)
+	}
+	stateAfter, err := os.ReadFile(statePath)
+	if err != nil {
+		t.Fatalf("read STATE.md after rejection: %v", err)
+	}
+	if string(stateAfter) != string(stateBefore) {
+		t.Fatalf("STATE.md changed after rejection:\n%s", stateAfter)
+	}
+	if _, err := os.Stat(filepath.Join(root, "planning", "tasks", "T-001-renamed.md")); !os.IsNotExist(err) {
+		t.Fatalf("rejected rename created destination, stat err=%v", err)
+	}
+}
+
 func TestImportPreviewAndApply(t *testing.T) {
 	root := setupRepo(t)
 	notes := strings.Join([]string{

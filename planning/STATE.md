@@ -1,6 +1,6 @@
 ---
 schema_version: 1
-updated_at: "2026-07-29T14:51:47Z"
+updated_at: "2026-07-29T15:22:23Z"
 active_spec_version: v0.4.0
 active_spec_path: specs/v0.4.0.md
 current_task: ""
@@ -9,7 +9,7 @@ status_summary: blocked
 blockers:
     - 'T-140-v0-4-0-gap-drift-pre-release-spec-check: v0.4.0 release gate failed; resolve follow-up tasks T-141 through T-150, then rerun the gate'
 next_action: Resolve blocker on T-140-v0-4-0-gap-drift-pre-release-spec-check
-last_verification_result: pass for T-142-honor-explicit-empty-slug-selectors-and-preserve at 2026-07-29T14:51:34Z
+last_verification_result: pass for T-143-preflight-task-rename-validity-before-applying at 2026-07-29T15:21:35Z
 relevant_artifacts: []
 continuation_notes:
     - This repository is temporarily dogfooding bootstrap workflow tooling until Taskrail v0.1.0 exists.
@@ -35,7 +35,7 @@ continuation_notes:
 
 ## Last Verification
 
-- pass for T-142-honor-explicit-empty-slug-selectors-and-preserve at 2026-07-29T14:51:34Z
+- pass for T-143-preflight-task-rename-validity-before-applying at 2026-07-29T15:21:35Z
 
 ## Next Action
 
@@ -51,8 +51,8 @@ continuation_notes:
 
 ## Task Counts
 
-- todo: 8
+- todo: 7
 - in_progress: 0
-- completed: 140
+- completed: 141
 - blocked: 1
 - cancelled: 0

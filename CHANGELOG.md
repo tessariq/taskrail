@@ -54,6 +54,8 @@ damage tracked state. The core remains deterministic and provider-independent.
   the binary supports before reading or writing state, not only during `init`.
 - `taskrail task new` and `task rename` now honor explicitly empty `--slug`
   selectors; title-derived slug caps preserve whole tokens and fall back to a bare id.
+- `taskrail task rename` now refuses an invalid post-rename preview before writing
+  the task, inbound dependencies, or `STATE.md`.
 - State-writing notes, reasons, task titles, follow-ups, and imported drafts now
   reject concrete gitignored `planning/artifacts/` paths before writing committed
   content that a later `validate` would reject.

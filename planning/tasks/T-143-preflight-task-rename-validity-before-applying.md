@@ -1,12 +1,12 @@
 ---
 id: T-143-preflight-task-rename-validity-before-applying
 title: Preflight task rename validity before applying writes
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.4.0.md#task-rename-and-re-slug
 dependencies:
     - T-129-preview-post-apply-validity-in-task-rename-dry-run
-updated_at: "2026-07-29T13:04:09Z"
+updated_at: "2026-07-29T15:22:23Z"
 ---
 
 # T-143-preflight-task-rename-validity-before-applying Preflight task rename validity before applying writes
@@ -38,3 +38,5 @@ state before writes and refuse invalid outcomes.
 ## Implementation Notes
 
 - Reuse `renamePreview`; do not add a second model of the coupled change set.
+- 2026-07-29T15:21:35Z: verification pass
+- 2026-07-29T15:22:23Z: Implemented post-rename preflight gating and same-destination drift healing; full, vet, review, and sandbox checks pass

@@ -287,6 +287,27 @@ func TestRenameTaskDryRunValidationPreviewsPostApplyState(t *testing.T) {
 	}
 }
 
+func TestRenameTaskHealsDriftWhenFilenameIsRequestedDestination(t *testing.T) {
+	t.Parallel()
+	repo := seedFixtureRepo(t)
+	id := driftedTask(t, repo, "T-042-old", "T-042-readable")
+	svc := newTestService(t, repo, time.Date(2026, 7, 16, 12, 0, 0, 0, time.UTC))
+
+	result, err := svc.RenameTask(RenameTaskInput{OldID: id, Slug: "readable"})
+	if err != nil {
+		t.Fatalf("heal drift at requested destination: %v", err)
+	}
+	if result.NewID != "T-042-readable" {
+		t.Fatalf("new id = %q, want T-042-readable", result.NewID)
+	}
+	if !fileExists(filepath.Join(repo, "planning", "tasks", "T-042-readable.md")) {
+		t.Fatal("healed task file missing")
+	}
+	if validation, err := svc.Validate(); err != nil || !validation.Valid {
+		t.Fatalf("validate after healing drift: valid=%v violations=%v err=%v", validation.Valid, validation.Violations, err)
+	}
+}
+
 func TestRenameTaskDryRunPreviewKeepsUnrelatedViolations(t *testing.T) {
 	t.Parallel()
 
@@ -316,6 +337,38 @@ func TestRenameTaskDryRunPreviewKeepsUnrelatedViolations(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("expected a T-003 violation, got %+v", result.Validation.Violations)
+	}
+}
+
+func TestRenameTaskApplyRefusesInvalidPreviewWithoutWrites(t *testing.T) {
+	t.Parallel()
+	svc, repo := renameFixture(t)
+	writeTask(t, repo, "T-003", "Broken sibling", "todo", "medium", "specs/v0.9.9.md#gone", nil)
+
+	tasksDir := filepath.Join(repo, "planning", "tasks")
+	source := filepath.Join(tasksDir, "T-001.md")
+	inbound := filepath.Join(tasksDir, "T-002.md")
+	stateFile := filepath.Join(repo, "planning", "STATE.md")
+	sourceBefore, inboundBefore, stateBefore := readBytes(t, source), readBytes(t, inbound), readBytes(t, stateFile)
+
+	_, err := svc.RenameTask(RenameTaskInput{OldID: "T-001", Slug: "base-widget"})
+	if err == nil {
+		t.Fatal("expected rename to reject an invalid post-apply preview")
+	}
+	if !strings.Contains(err.Error(), "T-003") {
+		t.Fatalf("expected error to report the surviving violation, got %v", err)
+	}
+	if got := readBytes(t, source); got != sourceBefore {
+		t.Fatalf("source task changed after rejected rename:\n%s", got)
+	}
+	if got := readBytes(t, inbound); got != inboundBefore {
+		t.Fatalf("inbound task changed after rejected rename:\n%s", got)
+	}
+	if got := readBytes(t, stateFile); got != stateBefore {
+		t.Fatalf("STATE.md changed after rejected rename:\n%s", got)
+	}
+	if fileExists(filepath.Join(tasksDir, "T-001-base-widget.md")) {
+		t.Fatal("rejected rename created the target file")
 	}
 }
 

@@ -103,21 +103,22 @@ func (s *Service) RenameTask(input RenameTaskInput) (RenameTaskResult, error) {
 	// file whose id disagrees with its name (a filename!=id drift repair heals)
 	// escapes the taskByID check, and the plain-rename fallback would silently
 	// clobber it. Refuse before any write, so the tree is never partially renamed.
-	if fileExists(newPath) {
+	if filepath.Clean(oldPath) != filepath.Clean(newPath) && fileExists(newPath) {
 		return RenameTaskResult{}, fmt.Errorf("target file %s already exists", relPath(s.paths.RepoRoot, newPath))
 	}
 	inbound := inboundDependents(tasks, oldID)
 	changes := renameChanges(s.paths.RepoRoot, oldID, newID, oldPath, newPath, target.Body, inbound)
 
-	// Both branches report the state the rename *would* leave behind: an apply
-	// re-validates what actually landed, while a dry run previews the same rules
-	// against the whole change set held in memory. An operator re-slugging to heal
-	// a `filename must be <id>.md` drift is asking "would this fix it?", so
-	// answering with the validity of the state being replaced would invert it.
-	var validation ValidationResult
-	if input.DryRun {
-		validation = s.validateInMemory(renamePreview(state, tasks, target, inbound, oldID, newID, newPath))
-	} else {
+	// Both branches report the state the rename *would* leave behind. Apply mode
+	// also uses this preview as its write gate, so a validation failure cannot
+	// leave the coupled rename applied. An operator re-slugging to heal a
+	// `filename must be <id>.md` drift is asking "would this fix it?", so validate
+	// the preview rather than the state being replaced.
+	validation := s.validateInMemory(renamePreview(state, tasks, target, inbound, oldID, newID, newPath))
+	if !input.DryRun {
+		if !validation.Valid {
+			return RenameTaskResult{}, fmt.Errorf("rename would leave repository invalid: %s", strings.Join(validation.Violations, "; "))
+		}
 		if err := s.applyRename(state, tasks, target, inbound, oldID, newID, oldPath, newPath); err != nil {
 			return RenameTaskResult{}, err
 		}
