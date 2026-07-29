@@ -33,7 +33,10 @@ if [ -f "$changelog" ]; then
     ' "$changelog"
   )"
   # Trim leading and trailing blank lines.
-  notes="$(printf '%s\n' "$notes" | sed -e '/./,$!d' | sed -e ':a' -e '/^\s*$/{$d;N;ba}')"
+  notes="$(
+    printf '%s\n' "$notes" |
+      sed -e '/[^[:space:]]/,$!d' -e ':a' -e '/^[[:space:]]*$/{' -e '$d' -e 'N' -e 'ba' -e '}'
+  )"
 fi
 
 if [ -z "$notes" ]; then

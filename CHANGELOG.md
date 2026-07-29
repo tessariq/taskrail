@@ -56,7 +56,7 @@ damage tracked state. The core remains deterministic and provider-independent.
 - Spec anchor parsing now ignores ATX-looking lines inside backtick and tilde
   fences across validation, inspection, coverage, gap analysis, and spec diff.
 - Release builds now consistently report a `v`-prefixed version, and publishing
-  refuses missing or empty versioned changelog sections.
+  portably refuses missing or whitespace-only versioned changelog sections.
 - Every command now refuses a repository recording a `layout_version` newer than
   the binary supports before reading or writing state, not only during `init`.
 - `taskrail task new` and `task rename` now honor explicitly empty `--slug`

@@ -44,11 +44,16 @@ func TestChangelogReleaseGuards(t *testing.T) {
 				"## v0.4.0 - 2026-07-29\n\n\n## v0.3.0 - 2026-07-14\n\nOlder notes.\n",
 		},
 		{
+			name: "whitespace-only section",
+			changelog: "# Changelog\n\n" +
+				"## v0.4.0 - 2026-07-29\n \t\n\t\n## v0.3.0 - 2026-07-14\n\nOlder notes.\n",
+		},
+		{
 			name: "populated dated section",
 			changelog: "# Changelog\n\n" +
-				"## v0.4.0 - 2026-07-29\n\nRelease summary.\n\n- Fixed publishing.\n\n" +
+				"## v0.4.0 - 2026-07-29\n \t\nRelease summary.\n \t\n- Fixed publishing.\n\t \n" +
 				"## v0.3.0 - 2026-07-14\n\nOlder notes.\n",
-			wantNotes: "Release summary.\n\n- Fixed publishing.\n",
+			wantNotes: "Release summary.\n \t\n- Fixed publishing.\n",
 			wantOK:    true,
 		},
 	}
@@ -76,5 +81,16 @@ func TestChangelogReleaseGuards(t *testing.T) {
 				t.Errorf("release notes:\n%q\nwant:\n%q", got, tt.wantNotes)
 			}
 		})
+	}
+}
+
+func TestChangelogWhitespaceTrimmingIsPortable(t *testing.T) {
+	root := repoRoot(t)
+	script, err := os.ReadFile(filepath.Join(root, "scripts/changelog-release-notes.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(script), `\s`) {
+		t.Fatal(`changelog trimming must use POSIX character classes, not the non-portable \s escape`)
 	}
 }

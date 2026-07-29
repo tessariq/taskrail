@@ -1,12 +1,12 @@
 ---
 id: T-151-make-changelog-whitespace-trimming-portable
 title: Make changelog whitespace trimming portable
-status: todo
+status: completed
 priority: low
 spec_ref: specs/v0.4.0.md#goals
 dependencies:
     - T-149-harden-release-version-and-changelog-notes-guards
-updated_at: "2026-07-29T17:30:33Z"
+updated_at: "2026-07-29T18:25:16Z"
 ---
 
 # T-151-make-changelog-whitespace-trimming-portable Make changelog whitespace trimming portable
@@ -37,3 +37,5 @@ Follow-up derived from T-149-harden-release-version-and-changelog-notes-guards's
   `\s` expression as GNU-specific.
 
 ## Implementation Notes
+
+- 2026-07-29T18:25:08Z: verification pass
