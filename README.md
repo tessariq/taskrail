@@ -465,12 +465,12 @@ contribution policy, and tracked-work rules.
 
 ## Status
 
-Taskrail is an in-progress open-source project. The current release is `v0.3.0`.
+Taskrail is an in-progress open-source project. The current release is `v0.4.0`.
 
 - `v0.1.0` established the repository contract: deterministic task progression, the authoritative `STATE.md`, and verification as a first-class concept.
 - `v0.2.0` makes adoption in existing repositories easy — guided `retrofit`, LLM-free `import` of rough notes into spec/task drafts, opt-in shippable agent skills, a version-aware non-destructive `init`, and conservative `STATE.md` repair — while keeping the core CLI provider- and tooling-independent.
 - `v0.3.0` adds read-only insight into tracked work — `status`, `stats`, and `coverage` — plus the `spec` command family for inspecting and authoring specs, `unblock` to release blocked tasks, and Windows install via WinGet.
-- `v0.4.0` is the pending release candidate: active-spec task selection and authoring, slugged task creation and atomic rename/repoint operations, mechanical spec/gap review, and version-skew detection. It becomes current only after the pre-release gap/drift gate passes.
+- `v0.4.0` adds active-spec task selection and authoring, slugged task creation and atomic rename/repoint operations, mechanical spec/gap review, and version-skew detection across the binary, repository layout, and installed skills.
 - Later work is tracked under [`specs/README.md`](specs/README.md).
 
 This repository also dogfoods the Taskrail workflow style — using `planning/`, `docs/workflow/`, and the packaged skill set it adopts like any adopter — until the product itself fully replaces that scaffolding.
@@ -481,7 +481,7 @@ Apache-2.0. See [LICENSE](LICENSE).
 
 ## Read Next
 
-- [`specs/v0.4.0.md`](specs/v0.4.0.md) — pending release scope
+- [`specs/v0.4.0.md`](specs/v0.4.0.md) — current release scope
 - [`specs/README.md`](specs/README.md) — spec reading order and versioning
 - [`planning/STATE.md`](planning/STATE.md) — live execution state
 - [`AGENTS.md`](AGENTS.md) — guidance for coding agents

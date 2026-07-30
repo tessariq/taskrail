@@ -1,7 +1,7 @@
 ---
 id: T-140-v0-4-0-gap-drift-pre-release-spec-check
 title: v0.4.0 gap/drift - pre-release spec check
-status: blocked
+status: completed
 priority: medium
 spec_ref: specs/v0.4.0.md#goals
 dependencies:
@@ -60,7 +60,7 @@ dependencies:
     - T-148-ignore-fenced-headings-in-spec-anchor-parsing
     - T-149-harden-release-version-and-changelog-notes-guards
     - T-150-refresh-v0-4-workflow-and-packaged-skill-guidance
-updated_at: "2026-07-29T13:11:09Z"
+updated_at: "2026-07-30T07:17:55Z"
 ---
 
 # T-140-v0-4-0-gap-drift-pre-release-spec-check v0.4.0 gap/drift - pre-release spec check
@@ -140,3 +140,5 @@ truth (`specs/v0.4.0.md`); do not duplicate its commitments here.
   this gate.
 - 2026-07-29T13:02:40Z: verification fail
 - 2026-07-29T13:11:09Z: v0.4.0 release gate failed; resolve follow-up tasks T-141 through T-150, then rerun the gate
+- 2026-07-30T07:17:27Z: follow-ups T-141 through T-152 completed; rerunning the v0.4.0 release gate
+- 2026-07-30T07:17:48Z: verification pass

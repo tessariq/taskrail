@@ -2,9 +2,9 @@
 
 All notable user-visible changes to Taskrail will be documented in this file.
 
-## Unreleased
+## v0.4.0 - 2026-07-30
 
-Fourth release candidate. Taskrail makes active-spec work safer to author and
+Fourth release. Taskrail makes active-spec work safer to author and
 select, adds atomic task rename/repoint operations and mechanical spec/gap review,
 and makes binary, layout, and installed-skill version skew visible before it can
 damage tracked state. The core remains deterministic and provider-independent.
