@@ -2,6 +2,9 @@ package toolchain_test
 
 import (
 	"fmt"
+	"os"
+	"path"
+	"path/filepath"
 	"regexp"
 	"slices"
 	"strconv"
@@ -100,14 +103,14 @@ var miseVersionFloor = miseVersion{4, 2, 1}
 // Compiled once rather than per step, since both are consulted inside the
 // per-`uses:` loop below.
 var (
-	miseCommitSHA   = regexp.MustCompile(`^[0-9a-f]{40}$`)
-	miseVersionNote = regexp.MustCompile(`^#\s*v(\d+)\.(\d+)\.(\d+)$`)
+	actionCommitSHA = regexp.MustCompile(`^[0-9a-f]{40}$`)
+	versionNote     = regexp.MustCompile(`^#\s*v(\d+)\.(\d+)\.(\d+)$`)
 )
 
-// misePinVersion reads the `# vX.Y.Z` annotation Dependabot maintains beside a
+// pinVersion reads the `# vX.Y.Z` annotation Dependabot maintains beside a
 // SHA pin, reporting false when the comment is absent or not a release version.
-func misePinVersion(comment string) (miseVersion, bool) {
-	m := miseVersionNote.FindStringSubmatch(comment)
+func pinVersion(comment string) (miseVersion, bool) {
+	m := versionNote.FindStringSubmatch(comment)
 	if m == nil {
 		return miseVersion{}, false
 	}
@@ -122,44 +125,105 @@ func misePinVersion(comment string) (miseVersion, bool) {
 	return version, true
 }
 
-// misePinProblems reports how one mise-action step fails the properties the pin
-// buys: an immutable revision, annotated with the release it resolves to, at or
-// above the reviewed floor.
-func misePinProblems(workflow string, use actionUse) []string {
-	revision := strings.TrimPrefix(use.ref, miseActionPrefix)
+// workflowFiles reads every workflow in the repository. Enumerating the
+// directory keeps a newly added workflow covered by the guards below without
+// anyone remembering to extend a list here.
+func workflowFiles(t *testing.T) []workflowFile {
+	t.Helper()
+	root := repoRoot(t)
+	const dir = ".github/workflows"
+	entries, err := os.ReadDir(filepath.Join(root, dir))
+	if err != nil {
+		t.Fatalf("read %s: %v", dir, err)
+	}
+	var files []workflowFile
+	for _, entry := range entries {
+		// GitHub accepts both spellings; skipping .yaml would leave a workflow
+		// added under that name unguarded, which is the hole this helper exists
+		// to close.
+		ext := filepath.Ext(entry.Name())
+		if entry.IsDir() || (ext != ".yml" && ext != ".yaml") {
+			continue
+		}
+		rel := path.Join(dir, entry.Name())
+		files = append(files, workflowFile{name: rel, content: readFile(t, root, rel)})
+	}
+	return files
+}
+
+// actionPinProblems reports how one `uses:` step fails the pin contract: an
+// immutable commit SHA, annotated with the release it resolves to. A mutable
+// reference (`@v7`, `@main`) lets whoever controls that tag change what CI and
+// the release pipeline execute with no diff in this repository, and the
+// annotation is what keeps the opaque SHA reviewable and Dependabot-updatable.
+// Not every `uses:` form takes a commit SHA, so each non-repository shape is
+// held to whatever immutability it can actually offer rather than exempted
+// outright: a local action ships with the checkout, and a container image pins
+// through its own digest syntax.
+func actionPinProblems(workflow string, use actionUse) []string {
+	if strings.HasPrefix(use.ref, "./") {
+		return nil
+	}
+	if image, ok := strings.CutPrefix(use.ref, "docker://"); ok {
+		if strings.Contains(image, "@sha256:") {
+			return nil
+		}
+		return []string{fmt.Sprintf(
+			"%s runs container %q; want an immutable @sha256: digest", workflow, image)}
+	}
+
+	action, revision, ok := strings.Cut(use.ref, "@")
+	if !ok {
+		return []string{fmt.Sprintf("%s uses %q without a pinned revision", workflow, use.ref)}
+	}
 
 	var problems []string
-	if !miseCommitSHA.MatchString(revision) {
+	if !actionCommitSHA.MatchString(revision) {
 		problems = append(problems, fmt.Sprintf(
-			"%s pins mise-action at %q; want an immutable 40-character commit SHA", workflow, revision))
+			"%s pins %s at %q; want an immutable 40-character commit SHA", workflow, action, revision))
 	}
-	version, ok := misePinVersion(use.comment)
-	switch {
-	case !ok:
+	if _, ok := pinVersion(use.comment); !ok {
 		problems = append(problems, fmt.Sprintf(
-			"%s pins mise-action at %s; annotate it with exactly `# vX.Y.Z`, got %q",
-			workflow, revision, use.comment))
-	case slices.Compare(version[:], miseVersionFloor[:]) < 0:
-		problems = append(problems, fmt.Sprintf(
-			"%s annotates mise-action %s as %s, below the reviewed %s floor",
-			workflow, revision, version, miseVersionFloor))
+			"%s pins %s at %s; annotate it with exactly `# vX.Y.Z`, got %q",
+			workflow, action, revision, use.comment))
 	}
 	return problems
 }
 
-// misePinViolations reports every way the workflows' mise-action pins fail the
-// contract, and nil when they hold. It asserts properties rather than a literal
-// SHA because Dependabot rewrites the YAML `uses:` lines and cannot touch this
-// file: a literal here would turn every routine bump into a guaranteed CI
-// failure. Pins must also agree across workflows, so bumping one and forgetting
-// another is itself a violation.
+// misePinProblems reports only mise-action's extra rule — the annotated release
+// must not fall below the reviewed floor. The shared contract (SHA shape,
+// annotation) belongs to actionPinProblems alone, so a broken mise pin surfaces
+// as one finding rather than the same string from two unrelated-looking tests.
+// A missing or malformed annotation is therefore that guard's finding, not this
+// one's, and yields nothing here.
+func misePinProblems(workflow string, use actionUse) []string {
+	version, ok := pinVersion(use.comment)
+	if !ok || slices.Compare(version[:], miseVersionFloor[:]) >= 0 {
+		return nil
+	}
+	return []string{fmt.Sprintf(
+		"%s annotates mise-action %s as %s, below the reviewed %s floor",
+		workflow, strings.TrimPrefix(use.ref, miseActionPrefix), version, miseVersionFloor)}
+}
+
+// misePinViolations reports the mise-action rules that go beyond the shared pin
+// contract: the version floor, one revision across every workflow, and a mise
+// step present in each workflow named by mustProvision. Presence is a parameter
+// because release.yml deliberately provisions Go through setup-go, so requiring
+// it everywhere would be wrong. The floor and consistency rules still run over
+// every file passed in, so a mise step added to release.yml is covered the day
+// it appears.
+//
+// It asserts properties rather than a literal SHA because Dependabot rewrites
+// the YAML `uses:` lines and cannot touch this file: a literal here would turn
+// every routine bump into a guaranteed CI failure.
 //
 // Accepted trade-off: the annotation is taken at its word — nothing here proves
 // the SHA is the commit that release tagged, so a hand-edit repointing the pin at
 // an unrelated commit under a plausible comment passes. The old literal caught
 // that only by failing on every bump, Dependabot's included. Reviewing the pin
 // change itself is the remaining control.
-func misePinViolations(files []workflowFile) []string {
+func misePinViolations(files []workflowFile, mustProvision []string) []string {
 	var problems []string
 	var canonical string
 	for _, file := range files {
@@ -177,7 +241,7 @@ func misePinViolations(files []workflowFile) []string {
 					"%s uses %q; every workflow must pin the same revision %q", file.name, use.ref, canonical))
 			}
 		}
-		if !found {
+		if !found && slices.Contains(mustProvision, file.name) {
 			problems = append(problems, fmt.Sprintf("%s must provision the toolchain via mise-action", file.name))
 		}
 	}
@@ -195,19 +259,22 @@ func TestCIActionUsesAnnotatedCapturesVersionComment(t *testing.T) {
 	}
 }
 
-// misePinViolations is the whole contract, so exercise it against synthetic
-// workflows: a Dependabot-shaped bump (every `uses:` line rewritten to one new
-// SHA and version comment) must stay silent, while each way the pin can decay
-// must be reported.
+// Exercise the mise-only rules against synthetic workflows: a Dependabot-shaped
+// bump (every `uses:` line rewritten to one new SHA and version comment) must
+// stay silent, while a downgrade, a half-finished bump, and a workflow that
+// stopped provisioning through mise must each be reported. Pin shape belongs to
+// TestActionPinProblems and is deliberately not re-asserted here.
 func TestMisePinViolations(t *testing.T) {
 	step := func(revision, annotation string) string {
 		return "      - name: Set up toolchain\n        uses: " + miseActionPrefix + revision + annotation + "\n"
 	}
 	oldSHA, newSHA := strings.Repeat("a", 40), strings.Repeat("b", 40)
+	required := []string{"ci.yml", "planning.yml"}
 
 	for _, tc := range []struct {
 		name          string
 		files         []workflowFile
+		mustProvision []string
 		wantViolation bool
 	}{
 		{
@@ -216,33 +283,21 @@ func TestMisePinViolations(t *testing.T) {
 				{"ci.yml", step(newSHA, " # v4.2.3")},
 				{"planning.yml", step(newSHA, " # v4.2.3")},
 			},
-		},
-		{
-			name:          "floating tag instead of a commit SHA",
-			files:         []workflowFile{{"ci.yml", step("v4", "")}},
-			wantViolation: true,
-		},
-		{
-			name:          "truncated SHA",
-			files:         []workflowFile{{"ci.yml", step(newSHA[:12], " # v4.2.3")}},
-			wantViolation: true,
-		},
-		{
-			name:          "pin without a version annotation",
-			files:         []workflowFile{{"ci.yml", step(newSHA, "")}},
-			wantViolation: true,
+			mustProvision: required,
 		},
 		{
 			name:          "annotation below the reviewed floor",
 			files:         []workflowFile{{"ci.yml", step(newSHA, " # v4.1.9")}},
+			mustProvision: required,
 			wantViolation: true,
 		},
 		{
 			// The floor is inclusive, and the real workflows will not always sit
 			// on it — without this case, flipping the comparison to reject the
 			// reviewed release itself would go unnoticed after the next bump.
-			name:  "annotation exactly at the reviewed floor",
-			files: []workflowFile{{"ci.yml", step(newSHA, " # "+miseVersionFloor.String())}},
+			name:          "annotation exactly at the reviewed floor",
+			files:         []workflowFile{{"ci.yml", step(newSHA, " # "+miseVersionFloor.String())}},
+			mustProvision: required,
 		},
 		{
 			name: "one workflow left behind on the old SHA",
@@ -250,16 +305,25 @@ func TestMisePinViolations(t *testing.T) {
 				{"ci.yml", step(newSHA, " # v4.2.3")},
 				{"planning.yml", step(oldSHA, " # v4.2.1")},
 			},
+			mustProvision: required,
 			wantViolation: true,
 		},
 		{
-			name:          "workflow with no mise-action step at all",
+			name:          "workflow that must provision through mise but does not",
 			files:         []workflowFile{{"ci.yml", "      - name: Checkout\n        uses: actions/checkout@v7\n"}},
+			mustProvision: required,
 			wantViolation: true,
+		},
+		{
+			// release.yml provisions Go through setup-go on purpose, so absence
+			// there is correct — not every workflow owes a mise step.
+			name:          "workflow outside mustProvision without a mise step",
+			files:         []workflowFile{{"release.yml", "      - name: Checkout\n        uses: actions/checkout@v7\n"}},
+			mustProvision: required,
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			got := misePinViolations(tc.files)
+			got := misePinViolations(tc.files, tc.mustProvision)
 			if (len(got) > 0) != tc.wantViolation {
 				t.Errorf("misePinViolations: got %v, want violation = %v", got, tc.wantViolation)
 			}
@@ -267,16 +331,73 @@ func TestMisePinViolations(t *testing.T) {
 	}
 }
 
-// Holds the real workflows to the contract misePinViolations documents.
-// Deliberately no literal SHA here: only Dependabot's YAML rewrite can move the
-// pin, so a copy in this file would fail CI on every routine bump.
-func TestWorkflowsPinMiseAction(t *testing.T) {
-	root := repoRoot(t)
-	var files []workflowFile
-	for _, rel := range []string{".github/workflows/ci.yml", ".github/workflows/planning.yml"} {
-		files = append(files, workflowFile{name: rel, content: readFile(t, root, rel)})
+// actionPinProblems is the contract every action must meet, so exercise the ways
+// a pin can decay independently of any one action's extra rules — including the
+// `uses:` forms that take no commit SHA, which must be judged on the
+// immutability they can offer rather than waved through or wrongly flagged.
+func TestActionPinProblems(t *testing.T) {
+	sha := strings.Repeat("c", 40)
+	digest := "sha256:" + strings.Repeat("d", 64)
+	for _, tc := range []struct {
+		name          string
+		use           actionUse
+		wantViolation bool
+	}{
+		{name: "annotated commit SHA", use: actionUse{ref: "actions/checkout@" + sha, comment: "# v7.0.1"}},
+		{name: "action in a repository subdirectory", use: actionUse{ref: "owner/repo/sub@" + sha, comment: "# v1.2.3"}},
+		{name: "local action shipped with the checkout", use: actionUse{ref: "./.github/actions/build"}},
+		{name: "container pinned by digest", use: actionUse{ref: "docker://alpine@" + digest}},
+		{name: "floating major tag", use: actionUse{ref: "actions/checkout@v7"}, wantViolation: true},
+		{name: "branch reference", use: actionUse{ref: "actions/checkout@main"}, wantViolation: true},
+		{name: "no revision at all", use: actionUse{ref: "actions/checkout"}, wantViolation: true},
+		{name: "container on a mutable tag", use: actionUse{ref: "docker://alpine:3"}, wantViolation: true},
+		{
+			name:          "commit SHA without an annotation",
+			use:           actionUse{ref: "actions/checkout@" + sha},
+			wantViolation: true,
+		},
+		{
+			name:          "uppercase hex is not a canonical SHA",
+			use:           actionUse{ref: "actions/checkout@" + strings.ToUpper(sha), comment: "# v7.0.1"},
+			wantViolation: true,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := actionPinProblems("ci.yml", tc.use)
+			if (len(got) > 0) != tc.wantViolation {
+				t.Errorf("actionPinProblems: got %v, want violation = %v", got, tc.wantViolation)
+			}
+		})
 	}
-	for _, problem := range misePinViolations(files) {
+}
+
+// A mutable tag lets whoever controls it change what CI and the release pipeline
+// execute with no diff in this repository. Enumerate the workflow directory
+// rather than a fixed list so a newly added workflow is covered without editing
+// this test — the case a hardcoded list would silently miss.
+func TestWorkflowsPinActionsToCommitSHAs(t *testing.T) {
+	files := workflowFiles(t)
+	if len(files) == 0 {
+		t.Fatal("no workflows found under .github/workflows")
+	}
+	for _, file := range files {
+		for _, use := range ciActionUsesAnnotated(file.content) {
+			for _, problem := range actionPinProblems(file.name, use) {
+				t.Error(problem)
+			}
+		}
+	}
+}
+
+// Holds the real workflows to the contract misePinViolations documents. The
+// floor and consistency rules run over every workflow, while only the two that
+// build with the repository toolchain are required to provision through mise —
+// release.yml uses setup-go by design. Deliberately no literal SHA here: only
+// Dependabot's YAML rewrite can move the pin, so a copy in this file would fail
+// CI on every routine bump.
+func TestWorkflowsPinMiseAction(t *testing.T) {
+	mustProvision := []string{".github/workflows/ci.yml", ".github/workflows/planning.yml"}
+	for _, problem := range misePinViolations(workflowFiles(t), mustProvision) {
 		t.Error(problem)
 	}
 }
