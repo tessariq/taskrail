@@ -1,6 +1,6 @@
 ---
 schema_version: 1
-updated_at: "2026-07-30T07:17:55Z"
+updated_at: "2026-08-01T08:13:03Z"
 active_spec_version: v0.4.0
 active_spec_path: specs/v0.4.0.md
 current_task: ""
@@ -8,7 +8,7 @@ current_task_title: ""
 status_summary: idle
 blockers: []
 next_action: Select the next eligible task
-last_verification_result: pass for T-140-v0-4-0-gap-drift-pre-release-spec-check at 2026-07-30T07:17:48Z
+last_verification_result: pass for T-153-dependabot-compatible-mise-action-pin-guard at 2026-08-01T08:12:55Z
 relevant_artifacts: []
 continuation_notes:
     - This repository is temporarily dogfooding bootstrap workflow tooling until Taskrail v0.1.0 exists.
@@ -34,7 +34,7 @@ continuation_notes:
 
 ## Last Verification
 
-- pass for T-140-v0-4-0-gap-drift-pre-release-spec-check at 2026-07-30T07:17:48Z
+- pass for T-153-dependabot-compatible-mise-action-pin-guard at 2026-08-01T08:12:55Z
 
 ## Next Action
 
@@ -52,6 +52,6 @@ continuation_notes:
 
 - todo: 0
 - in_progress: 0
-- completed: 151
+- completed: 152
 - blocked: 0
 - cancelled: 0
