@@ -8,6 +8,7 @@
 2. `specs/v0.2.0.md`
 3. `specs/v0.3.0.md`
 4. `specs/v0.4.0.md`
+5. `specs/v0.5.0.md`
 
 ## Rules
 
@@ -22,3 +23,4 @@
 - `v0.2.0` adds retrofit and import ergonomics.
 - `v0.3.0` explores spec-task coverage and drift detection.
 - `v0.4.0` adds slugged task authoring and re-slug/rename ergonomics, and carries the deferred spec-to-task decomposition and gap-analysis threads.
+- `v0.5.0` settles one canonical transition order, makes the packaged skills lifecycle-complete against it, and enforces the skill contract mechanically.
