@@ -9,6 +9,7 @@
 3. `specs/v0.3.0.md`
 4. `specs/v0.4.0.md`
 5. `specs/v0.5.0.md`
+6. `specs/v0.6.0.md`
 
 ## Rules
 
@@ -24,3 +25,4 @@
 - `v0.3.0` explores spec-task coverage and drift detection.
 - `v0.4.0` adds slugged task authoring and re-slug/rename ergonomics, and carries the deferred spec-to-task decomposition and gap-analysis threads.
 - `v0.5.0` adds autonomous workflow integrity and reviewable planning: lifecycle-complete skills and prompts, outcome-focused task authoring, a bounded provider-independent loop, optional unattended policy, post-spec and workflow-adversarial review, and adversarial task decomposition.
+- `v0.6.0` adds durable arbitrary-width and opaque task references, first-class cancellation provenance, and explicit immutable task archival over one live-plus-archive ledger.

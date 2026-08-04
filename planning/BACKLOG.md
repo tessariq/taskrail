@@ -17,18 +17,6 @@ to a task (`taskrail task new`) against the version whose spec adopts it.
   **T-122** (layout guard in every command), and **T-123** (the contributor-side
   binary resolution trap that surfaced it).
 
-## Deferred Design
-
-- **Physical task archival (`taskrail task archive`)** — deferred from `v0.5.0`
-  because archived files must remain one logical ledger with live tasks: IDs and
-  numeric prefixes cannot be reused, completed dependencies must still resolve,
-  and coverage, verification, state counts, stats, imports, rename/repoint,
-  autonomy policy, and loop postflight must retain delivered history. Prefer an
-  explicit post-verification archive over moving a file during `complete`. A
-  future spec should define storage class, dry-run and Git-move atomicity,
-  read/report scope, migration, and recovery together behind a new layout version;
-  an older binary must never silently ignore archived tasks.
-
 ## Ideas
 
 Unversioned extension ideas from a competitive scan against OpenSpec
