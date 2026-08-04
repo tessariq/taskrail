@@ -1,0 +1,46 @@
+---
+id: T-170-add-deterministic-autonomous-loop-preflight-and
+title: Add deterministic autonomous loop preflight and dry-run
+status: todo
+priority: high
+spec_ref: specs/v0.5.0.md#cross-platform-autonomous-loop
+dependencies:
+    - T-157-upgrade-repositories-transactionally-to-layout-2
+    - T-159-add-a-versioned-workflow-prompt-catalog
+    - T-169-select-autonomous-work-through-policy-barriers
+updated_at: "2026-08-04T21:32:13Z"
+---
+
+# T-170-add-deterministic-autonomous-loop-preflight-and Add deterministic autonomous loop preflight and dry-run
+
+## Description
+
+Implement the loop CLI contract, read-only selection, preflight, override
+authorization, and exact dry-run reporting before child execution. Exclude the
+Taskrail source checkout explicitly while supporting installed adopters.
+
+## Acceptance
+
+- Parsing requires a child for execution, forbids one for dry-run, defaults max
+  iterations to one, accepts only positive bounds, rejects execution JSON,
+  timeout/retry/background options, and ambiguous delimiter/flag forms.
+- Preflight requires a valid clean non-bare attached worktree, equal root,
+  attached non-unborn HEAD, no in-progress task, layout 2, and available shared
+  lock.
+- Selection matches read-only active ranking or the exact policy runtime table;
+  hold/no-work launch nothing and return their specified clean result.
+- Dry-run emits the exact action/task/policy/violations/warnings/prompt/Git/lock/
+  delivery schema and never mutates state.
+- Overrides execute only with frozen exact SHA authorization; source-checkout
+  execution is rejected clearly while installed-repository diagnostics remain
+  supported.
+
+## Verification Notes
+
+- Map criteria to CLI table tests including no-timeout, exact dry-run goldens,
+  no-launch helper evidence, dirty/detached/unborn/bare/root/task/lock/policy
+  cases, and override/source boundaries.
+- Snapshot all tracked bytes before and after every dry-run and refused execution
+  branch.
+
+## Implementation Notes

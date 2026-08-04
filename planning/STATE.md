@@ -1,6 +1,6 @@
 ---
 schema_version: 1
-updated_at: "2026-08-01T08:24:20Z"
+updated_at: "2026-08-04T21:32:13Z"
 active_spec_version: v0.4.0
 active_spec_path: specs/v0.4.0.md
 current_task: ""
@@ -50,7 +50,7 @@ continuation_notes:
 
 ## Task Counts
 
-- todo: 0
+- todo: 20
 - in_progress: 0
 - completed: 153
 - blocked: 0
