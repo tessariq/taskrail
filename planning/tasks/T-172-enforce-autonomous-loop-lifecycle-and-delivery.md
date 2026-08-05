@@ -8,6 +8,7 @@ dependencies:
     - T-158-bind-completion-and-verification-with-stable
     - T-160-ship-the-lifecycle-complete-task-implementation
     - T-171-contain-and-pin-autonomous-loop-child-processes
+    - T-217-release-interrupted-active-work-safely
 updated_at: "2026-08-04T21:32:13Z"
 ---
 
@@ -40,6 +41,12 @@ evidence. Continue only after a fully delivered fresh completed pass.
   before/after values, validation, Git/ref/HEAD, task-local policy source and
   values, prompt/executable hashes, mutation/process violations, local commits,
   remote, and next action.
+- Optional `--result-file` atomically publishes the same final diagnostics in one
+  common-envelope JSON document without mixing them with streamed child output;
+  requested result publication failure is a non-zero loop outcome.
+- Result destinations resolve from the caller's original cwd, must be absent
+  canonical regular-file paths outside managed task/spec/state/prompt/review
+  inputs, traverse no symlink/reparse point, and publish no-clobber.
 
 ## Verification Notes
 

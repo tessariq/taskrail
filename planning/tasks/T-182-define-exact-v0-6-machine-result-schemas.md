@@ -13,16 +13,16 @@ updated_at: "2026-08-04T23:06:23Z"
 
 ## Description
 
-Define reusable strict types/encoders/decoders and code registries for v0.6
-cancel, inventory, storage, migration warnings, and recovery before command
-implementations consume them.
+Extend the v0.5 common machine envelope with reusable strict result/detail types
+and code registries for v0.6 cancel, dependency, inventory, storage, migration
+warnings, and recovery before command implementations consume them.
 
 ## Acceptance
 
-- Schema-v1 envelopes enforce command/result/error exclusivity, nullable fields,
+- The inherited schema-v1 envelope retains command/result/error exclusivity, nullable fields,
   string identities/generations, non-null arrays, warning objects, and
   unknown/missing rejection.
-- Cancel, inventory, transition, eligibility/recovery, path blocker, unsupported
+- Cancel preview/apply, dependency add/remove, inventory, transition, eligibility/recovery, path blocker, unsupported
   path, snapshot, transaction, validation, and refusal-details objects expose
   exact named fields/enums.
 - Stable warning/error registries include debt, scan, recovery_pending, partial,

@@ -4,12 +4,14 @@
 
 ## Current Default Scope
 
-- active spec: `specs/v0.4.0.md`
-- active version focus: `v0.4.0`
+- active spec: `specs/v0.5.0.md`
+- active version focus: `v0.5.0`
 
 ## Rules
 
-- `planning/STATE.md` is the authoritative current state.
+- `planning/STATE.md` is the authoritative current execution projection.
+- `planning/NOTES.md` is optional human-owned repository context; agents edit it
+  only on explicit human instruction.
 - `planning/tasks/` contains one file per tracked work item.
 - Every task must reference at least one live heading in a spec file.
 - Dependency references must point to existing task IDs.

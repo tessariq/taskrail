@@ -7,6 +7,7 @@ spec_ref: specs/v0.5.0.md#workflow-adversarial-review-memory
 dependencies:
     - T-157-upgrade-repositories-transactionally-to-layout-2
     - T-165-maintain-bounded-workflow-adversarial-review
+    - T-215-add-the-generic-review-artifact-publisher
 updated_at: "2026-08-04T21:32:13Z"
 ---
 
@@ -14,13 +15,13 @@ updated_at: "2026-08-04T21:32:13Z"
 
 ## Description
 
-Add the workflow-review publisher that turns reviewed index/report proposals into
-one race-safe no-clobber publication without losing another reviewer's findings.
+Integrate workflow-review index/report proposals with the generic review publisher
+as one race-safe no-clobber publication without losing another reviewer's findings.
 
 ## Acceptance
 
-- The command requires layout 2, joins the shared writer discipline, then acquires
-  repository and review locks in one documented global order.
+- The workflow type requires layout 2, joins the shared writer discipline, then
+  acquires repository and review locks in one documented global order.
 - Its capability and write set cover only the review index and report destination;
   task fields, including `loop_policy` and `loop_reason`, are explicitly excluded.
 - It rechecks expected HEAD, spec/product/index digests, path boundaries, strict

@@ -39,8 +39,8 @@ the task ledger.
 - Text and JSON expose the selected candidate and exact task-row fields
   `task_ref`, `status`, `active_spec`, `source`, `effective_policy`, `reason`,
   `eligible`, `held_dependencies`, and `disposition`, plus action, violations,
-  warnings, and the top-level reason in stable order. JSON includes
-  `schema_version:1` and non-null `violations` and `warnings`; repeated selection
+  and the result reason in stable order. JSON uses the common envelope with
+  non-null top-level warnings and non-null result violations; repeated selection
   over unchanged bytes is identical and no additional public ranking-input field
   is introduced.
 

@@ -7,6 +7,7 @@ spec_ref: specs/v0.5.0.md#layout-compatibility-and-upgrade
 dependencies:
     - T-156-protect-existing-semantic-writers-with-snapshot
     - T-201-make-packaged-skills-agent-skills-compliant
+    - T-214-bootstrap-and-migrate-human-owned-repository-notes
 updated_at: "2026-08-04T21:32:13Z"
 ---
 
@@ -37,11 +38,15 @@ silently discarding authored text.
   retain valid Agent Skills frontmatter.
 - Fresh layout-2 state uses schema 2 without `continuation_notes` or a rendered
   `## Notes` section. Upgrade preview explicitly decodes schema 1, reports every
-  legacy note and a machine-readable drop-acknowledgement requirement, and apply
-  requires `--drop-continuation-notes` exactly when the legacy list is non-empty.
+  legacy note and machine-readable preservation choices, and apply requires
+  either explicit no-clobber extraction or `--drop-continuation-notes` exactly
+  when the legacy list is non-empty.
 - State-schema migration, body re-render, marker publication, and installed-skill
   refresh share the transaction and rollback boundary. Schema-2 decoding rejects
   a reintroduced `continuation_notes` key instead of silently dropping it.
+- Preview offers explicit no-clobber extraction of non-empty legacy notes into an
+  absent human-owned NOTES sidecar; extraction, state/schema publication, skills,
+  and marker share one rollback boundary. Existing notes stop for manual merge.
 - The migration-only acknowledgement remains available for every supported
   direct or multi-hop schema-1 upgrade and is retired only with schema-1
   migration support; it is reported as unnecessary when no note needs removal.
@@ -64,7 +69,8 @@ silently discarding authored text.
   interruption, rollback, old-binary refusal, skill parity, and
   task-local-policy preservation boundaries.
 - Exercise absent, empty, single, multiple, multiline, and YAML-quoted legacy
-  notes; acknowledgement refusal; explicit drop; strict schema-2 rejection;
+  notes; acknowledgement refusal; explicit extraction/drop, existing NOTES
+  refusal; strict schema-2 rejection;
   fresh-init output; rollback; and direct/multi-hop compatibility.
 - Exercise absent and paired task-local loop fields, preservation across body and
   lifecycle re-renders, no-authority migration, nested skill metadata, and exact

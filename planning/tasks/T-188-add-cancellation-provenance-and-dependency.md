@@ -28,18 +28,21 @@ has provenance without stranding open dependents.
   reason/time, clears exact completion/verification fields, appends note, and
   reconciles state/blockers without disturbing another active task; it preserves
   `loop_policy` and `loop_reason` unchanged, including implicit hold when absent.
+- Cancel dry-run performs the complete dependent/transition/candidate validation
+  without writing and reports fields to clear, pointer/blocker reconciliation,
+  provenance, applied false, and the same refusal codes as apply.
 - Open dependents refuse with sorted diagnostics; new cancelled edges fail while
   migration debt remains warning/remediable.
 - Dependency remove dry-run writes nothing; apply removes exactly one resolved
   edge from live open work, preserves remaining order, reprojects STATE,
   revalidates, preserves task-local loop fields, and refuses
   additions/replacements/aliases/archive/absent edges.
-- Exact schemas, YAML metacharacters, recovery, archive refusal, and no
+- Exact common-envelope schemas, YAML metacharacters, recovery, archive refusal, and no
   uncancel/reopen match spec.
 
 ## Verification Notes
 
-- Map criteria to pre-read races, statuses/adoption/reasons/state/dependents,
+- Map criteria to pre-read races, preview/apply parity, statuses/adoption/reasons/state/dependents,
   loop-field preservation, dry-run/order/projection, aliases/archive, and
   transaction faults.
 - Manually prove dependent refusal/remediation and exact provenance.

@@ -34,8 +34,8 @@ two-pass bound, and hand an approved manifest to the v2 writer.
 - Material changes require pass 2; material changes after pass 2 start a new
   session instead of applying unreviewed bytes.
 - Human approval binds all final files; apply is followed by validate and the
-  relevant coverage report, and final tracked session directories land with
-  tasks while abandoned sessions are removed.
+  relevant coverage report. Final session artifacts publish through the generic
+  review command before import; abandoned sessions are removed.
 
 ## Verification Notes
 

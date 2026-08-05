@@ -15,6 +15,7 @@ dependencies:
     - T-184-recover-retained-semantic-transactions-explicitly
     - T-182-define-exact-v0-6-machine-result-schemas
     - T-157-upgrade-repositories-transactionally-to-layout-2
+    - T-219-prepare-inherited-writers-for-layout-3
 updated_at: "2026-08-04T23:06:23Z"
 ---
 
@@ -36,10 +37,16 @@ validation, archive adoption, and deterministic root discovery.
   stage current bytes, and roll back marker/skills transactionally.
 - Multi-hop 1-to-2-to-3 removes schema-1 `continuation_notes` and the rendered
   `## Notes` section at the schema-2 hop. Preview exposes existing notes; apply
-  requires `--drop-continuation-notes` when any are non-empty and reports the
-  flag as unnecessary otherwise. The flag remains supported while schema-1
+  requires explicit no-clobber extraction or `--drop-continuation-notes` when any
+  are non-empty and reports either option as unnecessary otherwise. The flag remains supported while schema-1
   multi-hop migration is supported; state schema/body, skills, and marker
   publish or roll back together. Direct 2-to-3 rejects the inapplicable flag.
+- Multi-hop preview also offers explicit no-clobber extraction into an absent
+  human NOTES sidecar; selected extraction publishes or rolls back with state,
+  skills, and the final marker, while an existing sidecar stops for manual merge.
+- Migration cannot publish layout 3 until inherited semantic writers already use
+  combined-ledger resolution/allocation, live-only write sets, and archived-target
+  refusal behind the layout guard.
 - Preview reports identity/portability/lifecycle/archive debt with exact
   warnings, zero-exit valid-with-warnings, non-null JSON, and zero writes.
 - Existing archive follows absent/empty/adoptable/debt/blocker matrix and
@@ -54,7 +61,8 @@ validation, archive adoption, and deterministic root discovery.
   downgrade/recovery, and previews.
 - Persist clean, debt-heavy, adopted-archive, non-Git, and multi-hop reports.
 - Include multi-hop state with absent, empty, and non-empty continuation notes,
-  unnecessary/refused/accepted acknowledgement, schema/body removal, and
+  unnecessary/refused/accepted acknowledgement, extraction/drop and existing
+  NOTES refusal, schema/body removal, and
   rollback after state publication; prove no loop-policy sidecar migration.
 
 ## Implementation Notes

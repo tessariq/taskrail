@@ -8,6 +8,7 @@ dependencies:
     - T-157-upgrade-repositories-transactionally-to-layout-2
     - T-161-apply-reviewed-task-bodies-with-compare-and-swap
     - T-162-productize-digest-bound-post-spec-review-lenses
+    - T-215-add-the-generic-review-artifact-publisher
 updated_at: "2026-08-04T21:32:13Z"
 ---
 
@@ -30,14 +31,15 @@ exact imported bytes. Preserve v1 behavior explicitly.
 - Task, spec, and state candidates all stage and validate as one repository
   before atomic publication; every snapshot is rechecked and
   failure/interruption rolls back without overwriting concurrent bytes.
-- Exact non-empty reviewed body bytes reach tasks; final session files publish
-  no-follow/no-alias/no-clobber with tasks, while abandoned proposals are
-  excluded.
+- Exact non-empty reviewed body bytes reach tasks; previously published final
+  session files are immutable validated inputs to apply, while abandoned
+  proposals are excluded and never copied or rewritten by import.
 - Imported tasks contain no separate loop-policy output or authorization. Their
   `loop_policy` and `loop_reason` fields are absent and therefore implicitly held,
   and v2 rejects drafts that attempt to set them.
-- V1 retains documented partial/scaffold behavior and cannot consume v2 fields
-  or silently discard a draft presented as v2.
+- V1 retains documented partial/scaffold behavior for v0.5 and cannot consume v2
+  fields or silently discard a draft presented as v2; v0.6 explicitly upgrades
+  publication durability without changing body interpretation.
 
 ## Verification Notes
 

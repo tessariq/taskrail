@@ -49,6 +49,11 @@ binary that wrote them (T-121), because a non-destructive install means upgradin
 the binary never refreshes an existing on-disk copy. Agent tools read
 `name`/`description`, so the extra key is inert where the skill is used.
 
+The active v0.5 migration moves this marker to standard
+`metadata.taskrail_version`, retains compatible reads of the legacy top-level
+field, and normalizes installed copies only during an explicit successful refresh.
+Until that task ships, released v0.4 binaries continue writing the legacy form.
+
 This repository's committed `.agents/`/`.claude/` copies are regenerated from the
 embedded package by `task skills:regen`, which copies the package source and
 therefore carries no marker — that is what keeps `task check:skills` parity
@@ -98,6 +103,11 @@ Taskrail distributes skills as static, provider-agnostic text. It does **not**:
 Running a skill remains the agent's responsibility, consistent with the LLM and
 runtime exclusions in the spec. There is no skill-execution, skill-scheduling,
 or skill-orchestration runtime in Taskrail.
+
+Maintainer behavioral evals are likewise not part of the embedded package. They
+may execute skills through caller-owned agents during release review, but Taskrail
+does not choose a provider, carry credentials, judge a model run inside the
+binary, or apply an eval-generated skill patch automatically.
 
 ## The Packaged Skill Set
 

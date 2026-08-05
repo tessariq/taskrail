@@ -8,6 +8,7 @@ dependencies:
     - T-157-upgrade-repositories-transactionally-to-layout-2
     - T-159-add-a-versioned-workflow-prompt-catalog
     - T-169-select-autonomous-work-through-policy-barriers
+    - T-213-define-the-uniform-agent-machine-api
 updated_at: "2026-08-04T21:32:13Z"
 ---
 
@@ -31,9 +32,9 @@ adopters.
 - Selection matches read-only active ranking plus the exact task-local loop-policy
   semantics; held tasks are transparent unless they block an allowed candidate,
   and no candidate launches nothing with a clean `none` result.
-- Dry-run emits the exact `schema_version:1`, `action`, top-level `reason`,
-  nullable `selected_task`, non-null `tasks`, `violations`, and `warnings`,
-  nullable `prompt`, `git`, `lock`, and `delivery` schema. Selected/task rows use
+- Dry-run emits the common envelope with exact result `action`, `reason`, nullable
+  `selected_task`, non-null `tasks` and `violations`, nullable `prompt`, `git`,
+  `lock`, and `delivery`; warnings remain the envelope's non-null top-level array. Selected/task rows use
   only `task_ref`, `status`, `active_spec`, `source`, `effective_policy`, `reason`,
   `eligible`, `held_dependencies`, and `disposition`; dry-run never mutates task
   or state bytes.

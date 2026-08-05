@@ -9,6 +9,8 @@ Prompt guidance for deterministic tracked-work execution in Taskrail.
 - Treat `planning/STATE.md` as current state, never as a task/session log. Put
   durable context in task implementation notes, blocker reasons, portable
   verification summaries/reports, or follow-up tasks.
+- Treat optional `planning/NOTES.md` as human-owned repository context. Read it
+  when relevant; edit it only on explicit human instruction.
 - Do not hand-edit task status fields once the CLI exists.
 - Follow TDD for code changes.
 - Keep tests focused and deterministic.
@@ -23,9 +25,9 @@ Prompt guidance for deterministic tracked-work execution in Taskrail.
 4. Implement it in a TDD loop.
 5. Run the appropriate test tiers.
 6. Run manual testing when the task changes user-visible Taskrail behavior.
-7. Run task-scoped verification.
-8. Create a follow-up task for unresolved backlog-worthy findings.
-9. Finish as `blocked` if the task cannot safely complete, otherwise `completed`.
+7. Create a follow-up task for unresolved backlog-worthy findings.
+8. On success, run `complete` and then `verify --result pass`.
+9. If the task cannot safely proceed, run `block --reason` and then `verify --result fail`; deliberate rework may verify fail while remaining `in_progress`.
 
 ## Directed Task
 
@@ -34,7 +36,7 @@ Prompt guidance for deterministic tracked-work execution in Taskrail.
 3. Start that task only.
 4. Implement only the requested scope.
 5. Run manual testing when the task changes visible Taskrail behavior.
-6. Verify it and finish it through the Taskrail CLI.
+6. Finish the lifecycle branch first, then verify it through the Taskrail CLI.
 
 ## Verification Runs
 

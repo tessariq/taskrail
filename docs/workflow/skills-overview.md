@@ -17,6 +17,7 @@ split: this repository adopts the packaged skills like any adopter (T-055).
   in CI and lefthook. Regenerate committed copies with `task skills:regen` after
   editing the package.
 - Productization decisions live in `docs/workflow/skills-productization.md`.
+- Maintainer evaluation boundaries live in `docs/workflow/skill-evaluation.md`.
 
 ## Packaged Skills
 
@@ -63,3 +64,17 @@ correct by building the working-tree binary onto the mise PATH — run
 - implementation skills must keep changes scoped to one selected task
 - verification skills must point to concrete artifact paths
 - committed copies must stay byte-identical to the embedded package (parity check)
+
+## Active v0.5 Additions
+
+The active v0.5 roadmap adds `taskrail-spec-review`, `taskrail-task-review`,
+`taskrail-workflow-adversarial`, and `taskrail-sdd-handoff`, and upgrades existing
+implementation/decomposition skills to the common machine-result and safe review
+publication contracts. Once T-213 ships, skills use `--json` whenever they consume
+command identities, paths, warnings, previews, lifecycle outcomes, or failure
+details. These remain planned until their tracked tasks complete.
+
+Behavioral eval definitions for the packaged set are maintainer-only test assets.
+They are deliberately outside `internal/taskrail/skills/`, so neither
+`init --with-skills` nor the committed parity copies contain eval cases, runners,
+credentials, transcripts, or benchmark output.

@@ -51,9 +51,9 @@ destinations are rechecked under the repository mutation lock.
   Retry after complete rollback repeats duplicate detection and allocation;
   tasks, state, and receipt can never be reported successful independently.
 - Text and JSON modes have identical ordering, warnings, exit classification,
-  and semantics. JSON uses the exact schema-version-1 command envelopes and
-  inspect/import result fields; errors use only the specified stable codes,
-  sorted paths, ordered violations, non-null arrays, and one uncontaminated
+  and semantics. JSON uses the inherited common envelope and exact inspect/import
+  result fields; error details use only the specified stable codes, sorted paths,
+  ordered violations, non-null arrays, and one uncontaminated
   stdout document with no unknown fields.
 - Help and argument validation expose exactly the specified command forms and
   reject unknown profiles, invalid path/input combinations, unsupported draft

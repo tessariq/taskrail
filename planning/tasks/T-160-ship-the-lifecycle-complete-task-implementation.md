@@ -8,6 +8,7 @@ dependencies:
     - T-158-bind-completion-and-verification-with-stable
     - T-159-add-a-versioned-workflow-prompt-catalog
     - T-168-parse-and-validate-an-optional-autonomous-run
+    - T-217-release-interrupted-active-work-safely
 updated_at: "2026-08-04T21:32:13Z"
 ---
 
@@ -33,6 +34,9 @@ provider.
   creates one complete local commit containing implementation and generated
   task/state bytes; completed-unverified/audit recovery reruns only the
   safe step before commit.
+- Every consumed command uses the common JSON result, and interrupted/manual
+  rework guidance names direct-operator `task release` without allowing a
+  delegated child to relinquish its selected task.
 - Headless ambiguity, credentials, destructive scope, and barriers stop for a
   human; at most two real follow-ups are created without `loop_policy` or
   `loop_reason` and remain implicitly held.
@@ -42,6 +46,9 @@ provider.
 - Full-task skills use equivalent blocks, keep `autonomous-verify` as the separate
   post-transition workflow, and leave provider command, credentials, remote push,
   and sandboxing to callers.
+- Prompt guidance inventories existing repository primitives, stops on material
+  ambiguity, and traces requirements to observable executable evidence before
+  implementation.
 
 ## Verification Notes
 

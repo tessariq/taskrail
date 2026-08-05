@@ -11,9 +11,9 @@
 
 # Taskrail
 
-**Turn goals into tracked work, kept aligned to one authoritative state file.**
+**Turn goals into tracked work, kept aligned through inspectable repository state.**
 
-Taskrail is a deterministic execution harness for humans and AI agents. It turns goals into structured tasks, keeps every transition aligned to a single authoritative state file, and advances work through validation, verification, and explicit follow-up.
+Taskrail is a deterministic execution harness for humans and AI agents. It turns goals into structured tasks, keeps lifecycle transitions aligned across task files and a generated current-state projection, and advances work through validation, verification, and explicit follow-up.
 
 It is built on durable primitives — Git for history and review, plain Markdown with YAML frontmatter for specs, tasks, and state. No database. No hidden automation. No opaque dashboards. Your repo stays inspectable, and the same `taskrail` commands work whether a person or an agent is at the keyboard.
 
@@ -43,18 +43,18 @@ From there, the daily loop is `next → start → complete → verify` (see [Com
 ## Why Taskrail
 
 - **Deterministic:** the workflow is `validate → next → start → complete → verify`, and next-task selection follows status, dependencies, priority, and stable tie-breaking — same repo, same answer, every time.
-- **State-first:** one authoritative `planning/STATE.md` is the continuity and control surface for all work.
+- **State-first:** task files are the durable work ledger and `planning/STATE.md` is the generated continuity and control projection for the current run.
 - **Repo-native:** work is tracked as Markdown task files with an explicit, machine-checkable schema — specs under `specs/`, tracked work under `planning/`. No database, no hidden automation.
 - **Verification is first-class:** completing implementation and verifying it are distinct steps; verification records pass/fail outcomes, writes inspectable artifacts, and opens follow-up tasks as needed.
 - **Retrofit-friendly:** `taskrail init` (or `retrofit`) drops the contract into an existing repository with no rewrite.
-- **Agent-ready:** every command has a `--json` path where it matters, so coding agents drive the same workflow humans do.
+- **Agent-ready:** reporting and most agent handoffs have structured output today; the active v0.5 spec completes lifecycle JSON parity and standardizes one machine-result envelope.
 
 ## What It Is Not
 
 - Not a built-in LLM provider integration — Taskrail is provider-agnostic and manual-first. (`import` structures notes; it never calls a model.)
 - Not a sandbox, container, or worktree orchestrator.
 - Not a background daemon, distributed worker pool, or multi-lane scheduler.
-- Not a *semantic* spec-to-task generator or drift detector — `import` produces structural drafts only; LLM-assisted generation is deferred.
+- Not a built-in *semantic* spec-to-task generator or reviewer — the binary provides mechanical reports and reviewed write boundaries, while optional skills let an external agent supply judgement.
 
 ## Install
 
@@ -112,7 +112,9 @@ taskrail complete T-001 --note "implemented"         # mark implementation done
 taskrail verify T-001 --result pass --summary "acceptance met"
 ```
 
-Every command takes `--json` where it matters, so agents drive the same loop.
+`next` and `verify` expose structured results today; `start`, `complete`, and
+`block` remain human-text lifecycle writers in v0.4. The active v0.5 roadmap adds
+their JSON forms and moves every agent-consumed result to one versioned envelope.
 Idle `next` selection is anchored to the active spec: it considers only `todo`
 tasks whose `spec_ref` points at the active spec, so higher-priority older-spec
 work is skipped rather than selected. When only older-spec work is runnable,
@@ -135,6 +137,23 @@ running it where it is, use
 - **Handle the messy parts** — `block`/`unblock` park and resume work, `task new` scaffolds a task with the next free id, `task rename` atomically re-slugs a task's id, filename, and inbound dependency references, and `task repoint` moves an open task's `spec_ref` onto another area.
 
 Run `taskrail --help`, or `taskrail <command> --help`, for the full command list and every flag.
+
+### Command effects
+
+Taskrail commands intentionally use different write conventions based on risk:
+
+| Class | Current examples | Effect |
+|---|---|---|
+| Read-only | `validate`, `status`, `stats`, `coverage`, `spec list/show/diff` | Inspect only; never rewrite tracked planning state. |
+| Mode-dependent initialization | `init` | Fresh, unmarked-standard, and current-layout adoption/repair paths may write immediately; detected migration or retrofit paths preview unless `--apply` is supplied. In v0.4, `--with-skills` may also install skills after any successful init result. |
+| Preview by default | `retrofit`, `repair` | Report a candidate; `--apply` is the write opt-in. |
+| Apply with preview option | `task rename`, `task repoint` | Write by default; `--dry-run` validates the candidate first. |
+| Lifecycle/state writers | `next`, `start`, `complete`, `block`, `unblock`, `verify`, `spec activate`, `task new` | Rewrite `STATE.md` and sometimes task files; inspect `git status` afterward. |
+| Reviewed import writer | `import --apply <draft>` | Validates an external draft and writes its bounded task/spec/state set. |
+
+`next` is not a read-only selection probe: it persists `next_action` and
+`updated_at`. Use `status` when you need the same next-task computation without a
+tracked write.
 
 ### Coverage vs gap analysis
 
@@ -161,6 +180,22 @@ repo broke. For the semantic half — "is this area *actually* missing work?" �
 the `taskrail-gap` skill, which layers agent judgement on top of these structural
 candidates.
 
+### Review stages
+
+Taskrail keeps mechanically testable state separate from agent or human semantic
+review. Current `coverage`/`coverage --gaps` report structure; `validate` checks
+repository invariants; `verify` records evidence against one task. The active
+v0.5 roadmap adds distinct advisory stages rather than one overloaded "review":
+
+- post-spec consistency, gap, addition, and adversarial lenses before decomposition;
+- one existing-task review for alignment, dependencies, acceptance, and evidence;
+- adversarial review of an unpublished decomposed task set;
+- separate implementation review before completion and passing verification; and
+- post-implementation workflow-adversarial probes with bounded review memory.
+
+Semantic findings never become `validate` violations automatically. Humans adopt
+accepted changes through the bounded task/spec/import commands.
+
 ### Shell completion
 
 Taskrail ships shell completion via Cobra. Load it for your shell (or add the
@@ -185,7 +220,7 @@ re-points a task that passes `validate`).
 Initialize Taskrail inside an existing repository, then confirm it is sane:
 
 ```sh
-taskrail init
+taskrail init --apply
 taskrail validate
 ```
 
@@ -195,10 +230,11 @@ Tasks live under `planning/tasks/` as Markdown with YAML frontmatter:
 ---
 id: T-001
 title: Bootstrap repository structure
-status: pending
+status: todo
 priority: high
 spec_ref: specs/v0.1.0.md#summary
 dependencies: []
+updated_at: "2026-08-05T00:00:00Z"
 ---
 
 # T-001 Bootstrap repository structure
@@ -211,6 +247,12 @@ Create the initial Taskrail structure, specs, and planning area.
 
 - `planning/STATE.md` exists.
 - `taskrail validate` passes.
+
+## Verification Notes
+
+- Run `taskrail validate` and record the successful observation.
+
+## Implementation Notes
 ```
 
 Let Taskrail pick the next eligible task, start it, and advance it:
@@ -237,8 +279,8 @@ Author a task against the active spec without copying the spec path by hand —
 `--area <anchor>` is shorthand for `--spec-ref <active-spec-path>#<anchor>`:
 
 ```sh
-taskrail task new --title "Add drift breakdown" --area status-active-spec-drift-breakdown
-taskrail spec show v0.4.0 --anchors   # list the active spec's valid anchors
+taskrail task new --title "Add machine envelope" --area uniform-agent-machine-results
+taskrail spec show v0.5.0 --anchors   # list the active spec's valid anchors
 ```
 
 `--area` and `--spec-ref` are mutually exclusive; an unknown anchor fails before
@@ -365,7 +407,8 @@ Every verification writes repo-local evidence under `planning/artifacts/verify/<
 
 ```text
 planning/
-  STATE.md                         # single authoritative state surface
+  STATE.md                         # generated current execution projection
+  NOTES.md                         # optional human-owned repository context
   tasks/
     T-001.md                       # task with frontmatter schema
   artifacts/
@@ -385,7 +428,7 @@ placeholder is required or tracked.
 
 ## State Contract
 
-`planning/STATE.md` is the authoritative current execution state. It carries the active spec, current task, status summary, blockers, the next action, and the last verification result, plus pointers to relevant artifacts. It is not a per-task or per-session log: keep durable task context in task `## Implementation Notes`, blocker reasons, portable verification summaries/reports, or follow-up tasks. Do not hand-edit machine-managed state fields or append continuation prose; let the `taskrail` transitions update the file.
+`planning/STATE.md` is the authoritative current execution projection. It carries the active spec, current task, status summary, blockers, the next action, and the last verification result, plus pointers to relevant artifacts. It is not a per-task or per-session log: keep durable task context in task `## Implementation Notes`, blocker reasons, portable verification summaries/reports, or follow-up tasks. Optional repository-wide human context may live in `planning/NOTES.md`; agents may read it but edit it only when explicitly asked. Do not hand-edit machine-managed state fields or append continuation prose; let the `taskrail` transitions update the file.
 
 ## Repository Layout
 
@@ -398,7 +441,7 @@ placeholder is required or tracked.
 ├── internal/          # core packages
 ├── lefthook.yml       # opt-in local git hooks (mirror CI)
 ├── mise.toml          # optional pinned developer toolchain (mise)
-├── planning/          # authoritative tracked work and STATE.md
+├── planning/          # task ledger, generated STATE.md, optional human NOTES.md
 ├── scripts/
 └── specs/             # versioned, normative product specs
 ```
@@ -416,6 +459,11 @@ copies in this repository carry no marker, since parity keeps them byte-identica
 to the unstamped package; byte-identical marker-free copies are silent rather than
 reported as unknown-version. Do not run `--force` here, since stamping the
 committed copies would break `task check:skills`.
+
+The active v0.5 migration moves installed version metadata to standard
+`metadata.taskrail_version`; released v0.4 binaries still use the legacy top-level
+key. Maintainer skill eval cases remain outside the embedded package and are not
+installed into adopter repositories.
 
 ## Development
 
@@ -465,12 +513,16 @@ contribution policy, and tracked-work rules.
 
 ## Status
 
-Taskrail is an in-progress open-source project. The current release is `v0.4.0`.
+Taskrail is an in-progress open-source project. The current release is `v0.4.0`;
+the active development specification is `v0.5.0`.
 
 - `v0.1.0` established the repository contract: deterministic task progression, the authoritative `STATE.md`, and verification as a first-class concept.
 - `v0.2.0` makes adoption in existing repositories easy — guided `retrofit`, LLM-free `import` of rough notes into spec/task drafts, opt-in shippable agent skills, a version-aware non-destructive `init`, and conservative `STATE.md` repair — while keeping the core CLI provider- and tooling-independent.
 - `v0.3.0` adds read-only insight into tracked work — `status`, `stats`, and `coverage` — plus the `spec` command family for inspecting and authoring specs, `unblock` to release blocked tasks, and Windows install via WinGet.
 - `v0.4.0` adds active-spec task selection and authoring, slugged task creation and atomic rename/repoint operations, mechanical spec/gap review, and version-skew detection across the binary, repository layout, and installed skills.
+- `v0.5.0` is active development: uniform agent results, lifecycle-complete skills, human-owned repository notes, prompt/task/spec review, safe review publication, a bounded external-process loop, and maintainer-run skill evaluations.
+- `v0.6.0` plans durable task identity, cancellation preview, dependency editing, all-or-none legacy imports, and immutable archival over one ledger.
+- `v0.7.0` plans reviewed OpenSpec/Spec Kit handoff, immutable planning-source receipts, and profile/receipt inventory.
 - Later work is tracked under [`specs/README.md`](specs/README.md).
 
 This repository also dogfoods the Taskrail workflow style — using `planning/`, `docs/workflow/`, and the packaged skill set it adopts like any adopter — until the product itself fully replaces that scaffolding.

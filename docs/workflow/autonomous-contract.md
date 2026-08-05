@@ -8,6 +8,9 @@ Deterministic tracked-work contract for Taskrail repository planning and impleme
 - `planning/STATE.md` is a bounded current snapshot, not a task/session log;
   durable context belongs with the task, blocker, verification report, or
   follow-up work.
+- Optional `planning/NOTES.md` is human-owned repository context, outside
+  machine-managed state. Agents read it when relevant and edit it only on an
+  explicit human request.
 - `planning/tasks/` contains tracked work item metadata, dependencies, and acceptance criteria.
 - `docs/workflow/` contains the human-readable workflow contract.
 - `internal/taskrail/skills/` is the embedded package source for the canonical
@@ -22,7 +25,7 @@ Recommended task status lifecycle:
 
 - `todo`
 - `in_progress`
-- terminal: `completed`, `blocked`, `cancelled`
+- run-ending: `completed`, `blocked`, `cancelled`
 
 Rules:
 
@@ -30,6 +33,9 @@ Rules:
 - `planning/STATE.md` must point at the same active task.
 - Human or agent users should not hand-edit machine-managed state or task statuses once Taskrail commands are available.
 - Human or agent users should never append continuation narratives to `STATE.md`.
+- Success transitions to `completed` before recording a passing verification.
+- Cannot-proceed transitions to `blocked` with a reason before recording a failing verification. Blocked work remains reversible through `unblock`.
+- Deliberate rework may record a failing verification while remaining `in_progress`.
 
 ## Deterministic Selection
 

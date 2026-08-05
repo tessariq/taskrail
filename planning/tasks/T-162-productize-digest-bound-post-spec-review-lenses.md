@@ -7,6 +7,7 @@ spec_ref: specs/v0.5.0.md#post-spec-review-lenses
 dependencies:
     - T-159-add-a-versioned-workflow-prompt-catalog
     - T-201-make-packaged-skills-agent-skills-compliant
+    - T-215-add-the-generic-review-artifact-publisher
 updated_at: "2026-08-04T21:32:13Z"
 ---
 
@@ -32,9 +33,10 @@ disposition manifest.
   forbid decomposition.
 - Any spec byte edit stales all four lens reports and requires all four rerun
   against the final digest; additions cannot silently expand scope.
-- Caller outputs use canonical no-follow, no-alias, absent-destination,
-  same-directory atomic no-clobber publication; lenses remain advisory and cannot
-  invoke semantic writers or gate validate.
+- Final outputs publish through the generic review command with canonical
+  no-follow, no-alias, absent-destination, same-directory atomic no-clobber
+  behavior; lenses remain advisory and cannot invoke semantic writers or gate
+  validate.
 - The packaged review skill retains Agent Skills-compliant frontmatter; installed
   copies use nested `metadata.taskrail_version`, while marker-free committed
   copies remain byte-identical to the embedded package.

@@ -24,8 +24,9 @@ to task notes, verification summaries, blockers, and follow-up tasks instead.
   notes remain byte-preserved until an ordinary writer re-renders them.
 - The v0.5 layout-upgrade contract removes `continuation_notes` and the rendered
   `## Notes` section in state schema v2. Migration preview exposes existing
-  notes, and apply requires `--drop-continuation-notes` when any are non-empty;
-  no migration silently discards authored text.
+  notes; later v0.5 planning may preserve them through explicit no-clobber
+  human-sidecar extraction or require `--drop-continuation-notes` when discarding
+  them. No migration silently discards authored text.
 - The migration-only flag remains supported while any direct or multi-hop
   upgrade from state schema v1 is supported, is reported as unnecessary when no
   notes need removal, and is removed only when v1 migration support is dropped.

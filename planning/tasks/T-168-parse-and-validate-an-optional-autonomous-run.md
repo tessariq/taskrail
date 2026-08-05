@@ -6,6 +6,7 @@ priority: high
 spec_ref: specs/v0.5.0.md#task-local-loop-policy
 dependencies:
     - T-157-upgrade-repositories-transactionally-to-layout-2
+    - T-213-define-the-uniform-agent-machine-api
 updated_at: "2026-08-04T21:32:13Z"
 ---
 
@@ -36,6 +37,8 @@ delegated agents, body authors, or imports to grant themselves authority.
 - Loop-policy mutation is direct-operator-only. A process joined through delegated
   lock ownership refuses these commands regardless of its other capabilities or
   task-field write set.
+- Every mutator supports dry-run and common JSON, reports old/effective/candidate
+  policy and validation, and classifies preview/apply refusals identically.
 - Validation rejects malformed or half-present fields. Existing lifecycle, body,
   rename, repoint, import, and review writers preserve the pair exactly and cannot
   use their write sets to change it; `STATE.md` never duplicates the pair.

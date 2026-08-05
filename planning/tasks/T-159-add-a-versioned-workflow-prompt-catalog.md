@@ -4,7 +4,8 @@ title: Add a versioned workflow prompt catalog
 status: todo
 priority: high
 spec_ref: specs/v0.5.0.md#workflow-prompt-catalog-and-overrides
-dependencies: []
+dependencies:
+    - T-213-define-the-uniform-agent-machine-api
 updated_at: "2026-08-04T21:32:13Z"
 ---
 
@@ -22,6 +23,8 @@ replacements without adding provider integration or hidden execution.
   explicit contract-version selection, required path-valued subject flags,
   declared token grammar, one-pass substitution, and no embedded task/spec file
   contents.
+- The registry includes `task-review`; all JSON representations use the common
+  envelope while preserving exact prompt result payloads and clean text output.
 - The task-implementation declaration contains only `TASK_ID`, `TASK_PATH`,
   `ACTIVE_SPEC_VERSION`, and `ACTIVE_SPEC_PATH`; no policy path or policy-file
   render input exists.
@@ -30,9 +33,8 @@ replacements without adding provider integration or hidden execution.
   explicit source/path/hash reporting.
 - Neither default nor skill-installing init materializes built-ins, placeholders,
   or `.taskrail/prompts/`; local overrides are created only by users.
-- Render validates caller output against input alias, symlink/reparse, traversal,
-  and no-clobber boundaries before any optional write; feature-specific review
-  publishers own durable external-agent output transactions.
+- Render remains strictly read-only and validates only context/path/token inputs;
+  the generic review publisher owns durable external-agent output transactions.
 - Unknown prompts, versions, tokens, files, contexts, providers, and write
   conflicts fail without output mutation.
 

@@ -1,8 +1,8 @@
 ---
 schema_version: 1
-updated_at: "2026-08-05T19:30:53Z"
-active_spec_version: v0.4.0
-active_spec_path: specs/v0.4.0.md
+updated_at: "2026-08-05T20:31:51Z"
+active_spec_version: v0.5.0
+active_spec_path: specs/v0.5.0.md
 current_task: ""
 current_task_title: ""
 status_summary: idle
@@ -18,7 +18,7 @@ continuation_notes:
 
 ## Active Spec
 
-- `specs/v0.4.0.md`
+- `specs/v0.5.0.md`
 
 ## Current Focus
 
@@ -50,7 +50,7 @@ continuation_notes:
 
 ## Task Counts
 
-- todo: 57
+- todo: 66
 - in_progress: 0
 - completed: 154
 - blocked: 0

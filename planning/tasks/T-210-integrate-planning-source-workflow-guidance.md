@@ -6,6 +6,7 @@ priority: medium
 spec_ref: specs/v0.7.0.md#source-inspect-and-import-commands
 dependencies:
     - T-209-wire-reviewed-planning-source-import
+    - T-221-add-source-profile-and-receipt-inventories
 updated_at: "2026-08-05T19:18:20Z"
 ---
 
@@ -22,7 +23,8 @@ authors the final mapping and `ImportDraft` v3.
 ## Acceptance
 
 - README and command/workflow documentation show the complete
-  inspect -> review -> draft/mapping -> preview -> apply -> receipt flow, with
+  profile inventory -> inspect/existing receipt -> review -> draft/mapping ->
+  preview -> apply -> receipt inventory flow, with
   exact command forms, preview as the default, `--apply` as the only write
   opt-in, local-spec anchor requirements, duplicate-snapshot behavior, and
   changed-snapshot append-only semantics.
@@ -31,12 +33,15 @@ authors the final mapping and `ImportDraft` v3.
   treats final mapping and draft files as untrusted reviewed inputs, and states
   that digests, coverage, review assertions, and successful publication do not
   prove semantic completeness or authenticate the reviewer.
-- The packaged import/decomposition skills and relevant prompts guide agents to
+- The packaged import/decomposition/SDD-handoff/retrofit skills and relevant prompts guide agents to
   inspect the descriptor and exact source bytes, select real anchors in the
   chosen local Taskrail spec, produce exactly mapping v1 and `ImportDraft` v3,
   review every source and draft key, inspect preview against the existing
   ledger, and avoid embedding source paths or provenance in task bodies or
   frontmatter.
+- Guidance makes retrofit establish the managed local spec first, then use source
+  inspect/import; standalone retrofit remains non-skill-installing and ends with
+  the explicit optional `init --with-skills` step.
 - OpenSpec and Spec Kit guidance describes only the exact built-in v1 profile
   shapes and actionable `unknown_layout` refusal. It explicitly disclaims
   universal compatibility with upstream releases, forks, extensions, archives,

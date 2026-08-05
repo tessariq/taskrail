@@ -27,6 +27,9 @@ write sets, and archive immutability across inherited semantic writers.
 - Ordinary writers acquire ownership before resolver/allocator/candidate reads,
   require layout 3, persist named live changes, and reject archive mutation;
   init migration retains its exception.
+- Legacy ImportDraft v1 joins durable all-or-none staging/publication/recovery in
+  v0.6 while retaining its existing scaffold/body interpretation; intentional
+  partial success is no longer an ordinary-writer exception.
 - Every generated entry point uses one locked allocator against
   archived/index-only claims; every target resolves before status/storage and
   new relationships use stable refs without aliases.
@@ -47,6 +50,8 @@ write sets, and archive immutability across inherited semantic writers.
   allocator/resolver/representation/write-set matrices, index-only maxima,
   exhaustion/concurrency, loop-field preservation, implicit-hold creation,
   follow-up parent classes, and sentinels.
+- Failure-inject legacy v1 before/after every candidate task/spec/state boundary
+  and prove complete rollback or retained recoverable evidence without duplicates.
 - Mutation-test sink registration and race each inherited writer.
 
 ## Implementation Notes

@@ -10,9 +10,9 @@ How a human developer should work when Taskrail tracked-work state exists.
 4. Run the appropriate tests.
 5. Run manual testing against the task's acceptance criteria when the change alters Taskrail's visible behavior.
 6. Write `plan.md` and `report.md` under `planning/artifacts/manual-test/<task-id>/<timestamp>/`.
-7. Run `go run ./cmd/taskrail verify <task-id> --result pass|fail --summary "..."`.
-8. Create a follow-up task if verification finds additional needed work.
-9. Finish with `complete` or `block`.
+7. Create any known follow-up task before finishing the lifecycle transition.
+8. On success, run `go run ./cmd/taskrail complete <task-id> --note "..."`, then `go run ./cmd/taskrail verify <task-id> --result pass --summary "..."`.
+9. If work cannot proceed, run `block --reason` before `verify --result fail`; deliberate rework may record fail while remaining `in_progress`.
 
 ## What Does Not Change
 
@@ -22,6 +22,11 @@ How a human developer should work when Taskrail tracked-work state exists.
 - implementation ownership and design judgment
 
 Taskrail adds deterministic state handling. It does not replace engineering judgment.
+
+Repository-wide human context may live in `planning/NOTES.md`. It is human-owned,
+not generated state: agents may read it, but edit it only when a human explicitly
+asks. Task-specific evidence and history still belong with the task, blocker,
+verification report, or follow-up.
 
 ## Taskrail Source Checkout
 

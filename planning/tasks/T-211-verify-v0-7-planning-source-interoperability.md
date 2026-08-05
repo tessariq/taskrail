@@ -10,6 +10,7 @@ dependencies:
     - T-208-publish-strict-planning-provenance-sidecars
     - T-209-wire-reviewed-planning-source-import
     - T-210-integrate-planning-source-workflow-guidance
+    - T-221-add-source-profile-and-receipt-inventories
 updated_at: "2026-08-05T19:18:27Z"
 ---
 
@@ -48,6 +49,9 @@ not only command registration or isolated happy paths.
   same-snapshot duplicate refusal, changed-snapshot fresh import, collisions,
   canonical receipts, malformed receipt refusal, and proof that no path updates
   an old task or receipt.
+- Profile and receipt list/show plus inspect matching-receipt coverage proves
+  deterministic filters/order, malformed-sidecar fail-closed behavior, historical
+  summaries, exact common envelopes, and zero writes.
 - Failure injection covers every task/state/directory/receipt publication,
   backup, fsync, post-validation, compare-and-swap rollback, retained-recovery,
   and retry boundary, proving all-or-none recovery and no writes to source,

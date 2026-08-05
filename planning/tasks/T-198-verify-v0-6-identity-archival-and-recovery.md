@@ -12,6 +12,7 @@ dependencies:
     - T-195-report-unified-ledger-storage-without-semantic
     - T-196-integrate-stable-references-with-rename-prompts
     - T-197-extend-loop-postflight-for-storage-and
+    - T-220-add-validated-dependency-creation
 updated_at: "2026-08-04T23:06:23Z"
 ---
 
@@ -29,13 +30,13 @@ one workflow.
   debt, allocator entry points, explicit write sets, task-local loop fields, and
   stable-read contracts without duplicating feature tests.
 - One end-to-end sandbox upgrades layout, creates generated/opaque tasks,
-  resolves a dependency, completes/verifies or cancels/remediates, archives,
+  adds and removes a dependency, previews then applies cancellation, completes/verifies or cancels/remediates, archives,
   shows/lists/reports invariantly, restores, and proves restore-before-edit.
 - Native Windows/macOS/Linux evidence is required for handle-bound Git
   moves/inverse restore; native Windows additionally covers opaque filenames,
   while broader scenarios use reproducible packaged sandboxes.
 - Docs consistently describe stable refs, roots, restore-before-edit,
-  cancellation, path remediation, recovery, downgrade limits, and task-local
+  cancellation preview, dependency editing, durable legacy import, path remediation, recovery, downgrade limits, and task-local
   `loop_policy`/`loop_reason` with absent fields as implicit hold. Documentation
   and behavior tests reject stale `AUTONOMY.tsv` and separate policy
   storage/publication assumptions as well as stale lifecycle/live-only paths,
