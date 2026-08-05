@@ -26,8 +26,9 @@ lifecycle, and aggregate state while enforcing eligibility/recovery.
   dry-run performs stable preflight with no writes.
 - Delegated loop ownership refuses before move/stage with exact
   filesystem/index preservation.
-- Moves preserve bytes/mode/frontmatter/status/IDs/timestamps/dependencies and
-  never rewrite STATE/policy/artifacts/specs/unrelated storage.
+- Moves preserve bytes/mode/frontmatter/status/IDs/timestamps/dependencies,
+  including `loop_policy` and `loop_reason`, and never rewrite
+  STATE/artifacts/specs/unrelated storage.
 - Restore keeps terminal status and permits only narrow storage-derived-invalid
   recovery that fully validates live; edits require restore first.
 - Destination/storage/eligibility/path/scan/Git/conflict/partial/rollback
@@ -37,7 +38,7 @@ lifecycle, and aggregate state while enforcing eligibility/recovery.
 
 - Map criteria to pre-read/delegated races, every
   status/evidence/storage/dry-run/destination/path/Git/recovery branch, and
-  unchanged refusal state.
+  unchanged refusal state, with explicit task-local loop-field comparisons.
 - Manually archive/restore completed, cancelled, legacy-safe, adopted-debt, and
   inverse-uncommitted tasks comparing bytes/index/state.
 

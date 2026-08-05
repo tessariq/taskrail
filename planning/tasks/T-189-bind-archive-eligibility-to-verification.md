@@ -29,13 +29,16 @@ pure metadata/eligibility matrix while preserving v0.5 IDs.
   never initializes missing completion metadata.
 - Every valid v0.5 debt shape follows specified pass/fail/complete repair;
   unlisted partials fail through shared validation.
-- Artifact/follow-up/policy/state/task publication uses final eligibility
-  marker/recovery and failed/partial execution never qualifies archive.
+- Artifact/follow-up/state/task publication uses final eligibility
+  marker/recovery; verification follow-ups remain live, omit `loop_policy` and
+  `loop_reason` for implicit hold, and publish no separate policy data. Failed or
+  partial execution never qualifies archive.
 
 ## Verification Notes
 
 - Map criteria to pre-read races, full state matrix, huge generations,
-  repeat/audit/recovery/stale preview and every publication fault.
+  repeat/audit/recovery/stale preview, implicit-hold follow-ups, and every
+  publication fault.
 - Persist manual adoption/eligibility evidence.
 
 ## Implementation Notes

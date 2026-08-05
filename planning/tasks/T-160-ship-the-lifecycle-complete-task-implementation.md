@@ -7,6 +7,7 @@ spec_ref: specs/v0.5.0.md#task-implementation-prompt
 dependencies:
     - T-158-bind-completion-and-verification-with-stable
     - T-159-add-a-versioned-workflow-prompt-catalog
+    - T-168-parse-and-validate-an-optional-autonomous-run
 updated_at: "2026-08-04T21:32:13Z"
 ---
 
@@ -30,11 +31,14 @@ provider.
 - Success completes then passes; cannot-proceed blocks then fails; deliberate
   rework may remain in progress with fail. Each branch checks writer exits, then
   creates one complete local commit containing implementation and generated
-  task/state/policy bytes; completed-unverified/audit recovery reruns only the
+  task/state bytes; completed-unverified/audit recovery reruns only the
   safe step before commit.
 - Headless ambiguity, credentials, destructive scope, and barriers stop for a
-  human; at most two follow-ups are created and, when policy exists,
-  deliberately inserted as run or hold.
+  human; at most two real follow-ups are created without `loop_policy` or
+  `loop_reason` and remain implicitly held.
+- Delegated task implementation may use only its granted lifecycle and follow-up
+  write sets. It cannot allow, hold, clear, or otherwise mutate task-local loop
+  policy, and authoring a follow-up body cannot grant unattended authorization.
 - Full-task skills use equivalent blocks, keep `autonomous-verify` as the separate
   post-transition workflow, and leave provider command, credentials, remote push,
   and sandboxing to callers.
@@ -43,7 +47,8 @@ provider.
 
 - Map each branch to golden/mutation fixtures proving lifecycle-before-commit,
   generated-byte inclusion, source guard, simplification, fresh review,
-  perturbation, barriers, policy follow-ups, exits, and recovery.
+  perturbation, barriers, implicitly held follow-ups, delegated policy refusal,
+  exits, and recovery.
 - Manually render path-valued context and exercise success, blocked, rework, and
   partial-completion instructions without provider invocation by Taskrail.
 

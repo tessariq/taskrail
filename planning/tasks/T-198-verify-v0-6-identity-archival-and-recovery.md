@@ -26,8 +26,8 @@ one workflow.
 ## Acceptance
 
 - Registry/drift checks cover selectors, schemas, storage, warnings, recovery,
-  debt, allocator entry points, explicit write sets, and stable-read contracts
-  without duplicating feature tests.
+  debt, allocator entry points, explicit write sets, task-local loop fields, and
+  stable-read contracts without duplicating feature tests.
 - One end-to-end sandbox upgrades layout, creates generated/opaque tasks,
   resolves a dependency, completes/verifies or cancels/remediates, archives,
   shows/lists/reports invariantly, restores, and proves restore-before-edit.
@@ -35,9 +35,11 @@ one workflow.
   moves/inverse restore; native Windows additionally covers opaque filenames,
   while broader scenarios use reproducible packaged sandboxes.
 - Docs consistently describe stable refs, roots, restore-before-edit,
-  cancellation, path remediation, recovery, and downgrade limits; behavior
-  tests reject stale lifecycle/live-only paths and preserve provider
-  independence.
+  cancellation, path remediation, recovery, downgrade limits, and task-local
+  `loop_policy`/`loop_reason` with absent fields as implicit hold. Documentation
+  and behavior tests reject stale `AUTONOMY.tsv` and separate policy
+  storage/publication assumptions as well as stale lifecycle/live-only paths,
+  while preserving provider independence.
 - Tag release gates run exact CI/checklist acceptance before any publisher and
   tests prove a failed gate skips GoReleaser/all publication jobs.
 
@@ -45,7 +47,7 @@ one workflow.
 
 - Map criteria to cross-contract tests, integrated workflow report,
   platform/toolchain/binary-digest evidence, docs assertions, provider scans,
-  and release-job dependency tests.
+  stale-policy scans, and release-job dependency tests.
 - Mutation-test selector/schema/lifecycle docs so unrelated prose cannot satisfy
   them.
 

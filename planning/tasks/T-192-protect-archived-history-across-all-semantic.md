@@ -33,17 +33,20 @@ write sets, and archive immutability across inherited semantic writers.
 - A representation-sink registry proves every
   YAML/JSON/TSV/text/artifact/DOT/Mermaid writer uses safe helpers for
   scalar-looking opaque and control-bearing legacy identities.
-- New/imported/follow-up tasks remain live; follow-up to archived completed
-  parent succeeds without parent mutation, while live/archived cancelled parents
-  refuse.
-- Archived sentinels remain byte/mode/mtime/path exact under every inherited
-  writer.
+- Existing live-task writers preserve `loop_policy` and `loop_reason` unchanged
+  and never create separate policy state.
+- New/imported/follow-up tasks remain live and omit task-local loop fields for
+  implicit hold; follow-up to archived completed parent succeeds without parent
+  mutation, while live/archived cancelled parents refuse.
+- Archived sentinels remain byte/mode/mtime/path exact, including task-local loop
+  fields, under every inherited writer.
 
 ## Verification Notes
 
 - Map writer registry to pre-read lock,
   allocator/resolver/representation/write-set matrices, index-only maxima,
-  exhaustion/concurrency, follow-up parent classes, and sentinels.
+  exhaustion/concurrency, loop-field preservation, implicit-hold creation,
+  follow-up parent classes, and sentinels.
 - Mutation-test sink registration and race each inherited writer.
 
 ## Implementation Notes

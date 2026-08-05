@@ -13,7 +13,7 @@ updated_at: "2026-08-04T21:32:13Z"
 ## Description
 
 Introduce one Git-common-directory mutation-lock protocol shared by linked
-worktrees, with explicit ownership, refusal, stale recovery, and future
+worktrees, with explicit ownership, refusal, stale recovery, and scoped
 delegated-join primitives. Writer-family retrofit is a separate dependent task.
 
 ## Acceptance
@@ -25,7 +25,10 @@ delegated-join primitives. Writer-family retrofit is a separate dependent task.
 - Abruptly abandoned locks are never auto-cleared; diagnostics provide
   inspect-and-remove recovery without claiming a distributed lease.
 - Delegation tokens are unguessable, metadata exposes only their digest, and
-  joining requires matching repository, executable identity, and token.
+  joining requires matching repository, executable identity, token, delegated
+  writer capability, and task-field write set.
+- Delegated ownership cannot widen its declared capabilities or task-field write
+  set, and unsupported or unrelated delegated writes refuse before mutation.
 - Read-only callers need no lock and the protocol is portable across supported
   operating systems.
 

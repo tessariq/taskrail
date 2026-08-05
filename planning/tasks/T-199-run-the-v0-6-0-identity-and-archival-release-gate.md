@@ -23,6 +23,9 @@ review from fresh candidate bytes after all implementation/remediation.
 - Coverage is complete, every structural/semantic/adversarial signal is
   disposed, and no identity reuse, data-loss, false-clean, portability,
   migration, or downgrade blocker remains.
+- Final drift review proves `loop_policy` and `loop_reason` remain task-local and
+  preserved, all creation/import/follow-up paths use implicit hold, and no
+  `AUTONOMY.tsv` or separate policy storage/publication assumption remains.
 - Full CI/race/native packaged/migration/map/crash recovery/Git
   move/parity/body/release/checklist/remote/clean-tree evidence passes and binds
   candidate commit SHA, binary digest, platform/toolchain, commands, and
@@ -36,7 +39,8 @@ review from fresh candidate bytes after all implementation/remediation.
 ## Verification Notes
 
 - Map criteria to digest-bound semantic matrix, command/native/manual reports,
-  remote URLs, dependency graph, and fresh final verification.
+  remote URLs, dependency graph, stale-policy scans, and fresh final
+  verification.
 - Sandbox one synthetic blocker to prove non-cyclic insertion, evidence
   invalidation, and review restart before the real gate.
 

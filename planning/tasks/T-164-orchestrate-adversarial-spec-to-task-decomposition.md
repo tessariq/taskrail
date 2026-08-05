@@ -26,6 +26,8 @@ two-pass bound, and hand an approved manifest to the v2 writer.
 - Every normative requirement has one quote-or-lines trace source and task/no-task
   disposition; every trace/draft key is bidirectionally valid and every task body
   follows the shared authoring contract.
+- Decomposition and review artifacts cannot authorize unattended execution;
+  proposed tasks omit `loop_policy` and `loop_reason` and arrive implicitly held.
 - Reviews record fresh-process/context or explicitly accepted same-context mode
   and exact spec/draft/trace digests; high/medium cannot defer and final bytes
   receive review.
@@ -38,8 +40,9 @@ two-pass bound, and hand an approved manifest to the v2 writer.
 ## Verification Notes
 
 - Map criteria to active/inactive fixture sessions, requirement coverage oracles,
-  duplicate-task detection, context metadata, digest mutations, pass-limit
-  restarts, post-apply validation, coverage, and tracked handoff diffs.
+  duplicate-task detection, loop-policy escalation rejection, context metadata,
+  digest mutations, pass-limit restarts, post-apply validation, coverage, and
+  tracked handoff diffs.
 - Run one first-pass-clean and one materially revised two-pass sandbox
   decomposition end to end.
 

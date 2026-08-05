@@ -16,8 +16,8 @@ updated_at: "2026-08-04T21:32:13Z"
 ## Description
 
 Classify every child termination against frozen lifecycle, verification, Git
-delivery, policy, mutation, prompt/executable, lock, and process evidence.
-Continue only after a fully delivered fresh completed pass.
+delivery, task-local loop policy, mutation, prompt/executable, lock, and process
+evidence. Continue only after a fully delivered fresh completed pass.
 
 ## Acceptance
 
@@ -29,22 +29,26 @@ Continue only after a fully delivered fresh completed pass.
   no-progress/child failure stop with exact safe recovery.
 - Delivered recognized outcomes require clean tree, same full attached ref,
   descendant HEAD with a local commit, unchanged frozen spec/config/layout/
-  prompt/executable/policy presence and bytes, valid policy, and no contained
-  process; remote is not_checked.
+  prompt/executable bytes, unchanged pre-existing `loop_policy` and `loop_reason`
+  fields, valid task policy, and no contained process; remote is not_checked.
 - Pre-existing non-selected task bytes and selected immutable content are
   protected; only canonical lifecycle fields/notes and at most two real
-  follow-ups with exact authorized policy insertion may change.
+  follow-ups may change. Every new follow-up omits `loop_policy` and `loop_reason`
+  and remains implicitly held; any child policy-field mutation is an integrity
+  failure.
 - Final diagnostics always report outcome, child exit/signal, all identity
-  before/after values, validation, Git/ref/HEAD, policy, prompt/executable hashes,
-  mutation/process violations, local commits, remote, and next action.
+  before/after values, validation, Git/ref/HEAD, task-local policy source and
+  values, prompt/executable hashes, mutation/process violations, local commits,
+  remote, and next action.
 
 ## Verification Notes
 
 - Map every outcome to setup/action/public diagnostic/filesystem+Git evidence;
   cover stale/mismatched IDs, every ref/ancestry/dirty/control/task mutation,
-  bounded follow-ups, policy insertion, iteration caps, and recovery-only verify.
+  bounded implicitly held follow-ups, frozen policy fields, iteration caps, and
+  recovery-only verify.
 - Persist manual success, hold, blocked, rework, partial-complete, audit-fail,
-  external-writer, policy-presence mutation, stale evidence,
+  external-writer, task-policy mutation, stale evidence,
   executable/prompt mutation, and containment-failure reports.
 
 ## Implementation Notes

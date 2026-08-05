@@ -32,14 +32,15 @@ repositories upgrade without unsafe manual identity edits.
 - Old exact-full-ID semantics precede frontmatter/filename/H1/known-machine
   rewrites; prose/history never rewrites, and old paths/post-map failures refuse.
 - Human/JSON preview/apply reports every old/new ID/path and rewritten machine
-  field; map/marker/skills/tasks/state/policy publish recoverably and no
-  alias/key reuse remains.
+  field; map/marker/skills/tasks/state publish recoverably, task rewrites
+  preserve `loop_policy` and `loop_reason`, no separate loop policy is
+  rewritten or published, and no alias/key reuse remains.
 
 ## Verification Notes
 
 - Map criteria to lock races, decoder/preview, collision groups, source
   semantics, archived claimants, path blockers, complete output, partial maps,
-  death, and post-layout refusal.
+  loop-field preservation, death, and post-layout refusal.
 - Persist one collision-heavy report proving every rewrite and numeric
   retention.
 

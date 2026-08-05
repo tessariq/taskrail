@@ -35,6 +35,9 @@ report, notes, and artifact names.
 - Task, state, command JSON, canonical summary, task note, complete artifact
   path/report, and report fields agree after fresh/stale pass, completed audit
   fail, repeated complete, and recovery-only verify.
+- Follow-ups created by verification carry no unattended authorization and
+  therefore omit `loop_policy` and `loop_reason` and remain on implicit hold until
+  a direct operator action allows them.
 
 ## Verification Notes
 
@@ -43,5 +46,7 @@ report, notes, and artifact names.
   lifecycle matrix.
 - Use fault injection and frozen clocks to prove atomic legacy adoption and
   ID/set-based freshness rather than timestamp freshness.
+- Confirm verification-created follow-ups remain implicitly held without changing
+  any existing task's `loop_policy` or `loop_reason`.
 
 ## Implementation Notes

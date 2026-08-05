@@ -20,12 +20,14 @@ and remediation task is complete. Do not tag or claim current until it passes.
 ## Acceptance
 
 - Every goal, feature, caution, recommendation, and exclusion is classified
-  against implementation, tests, packaged skills, docs, and release notes.
+  in one release matrix against implementation, tests, packaged Agent Skills,
+  lightweight SDD handoff, task-local loop policy, docs, and release notes.
 - Coverage is 100 percent, every structural signal has a disposition, and
   independent semantic/adversarial review leaves no blocker.
 - Full formatting, vet, tests, race, cross-build, parity, bodies, freshness,
   validation, release build/snapshot, checklist, clean tree, CI, Planning,
-  CodeQL, migration, and native Linux/macOS/Windows packaged evidence passes.
+  CodeQL, migration, Agent Skills conformance, SDD/loop-policy drift, unsupported
+  legacy-input refusal, and native Linux/macOS/Windows packaged evidence passes.
 - Every current-version blocker becomes a standalone remediation task and direct
   gate dependency, explicitly not a follow-up-of the gate; the gate stops and
   later restarts the review on fresh bytes. Cancelled dependencies never satisfy
@@ -36,8 +38,8 @@ and remediation task is complete. Do not tag or claim current until it passes.
 ## Verification Notes
 
 - Map each criterion to the semantic matrix, command logs, remote URLs,
-  native/manual reports, Git/task dependency observations, and final fresh
-  verification.
+  Agent Skills/SDD/loop-policy evidence, native/manual reports, Git/task
+  dependency observations, and final fresh verification.
 - In a sandbox create a standalone blocker, add only the gate-to-remediation
   dependency, prove no cycle and gate ineligibility, complete it, then restart
   review.

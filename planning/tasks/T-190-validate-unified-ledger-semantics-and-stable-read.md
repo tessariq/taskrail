@@ -24,13 +24,15 @@ drift, stable readers, and repair behavior over the raw combined loader.
 ## Acceptance
 
 - Layout-3 validate rejects archived open or provenance-invalid content except
-  exact adopted debt and enforces completed/cancelled dependency semantics.
+  exact adopted debt, enforces completed/cancelled dependency semantics, and
+  rejects stale `AUTONOMY.tsv`; loop policy validates only from task-local
+  `loop_policy` and `loop_reason` fields.
 - Former-live/archive path scanning and non-Git incomplete-scope warnings
   integrate with validation using exact warning/violation exit behavior.
 - Every read-only surface refuses active/recovery publication,
-  snapshots/rechecks its complete consumed
-  task/spec/state/config/policy/prompt/index/attribute/scanned set, and outputs
-  only stable bytes.
+  snapshots/rechecks its complete consumed task bytes, including task-local loop
+  fields, plus spec/state/config/prompt/index/attribute/scanned inputs, and
+  outputs only stable bytes.
 - Repair reprojects both roots but never moves tasks, chooses duplicate
   locations, clears recovery, or rewrites unchanged/archived bytes.
 - Warning/remediation and reader behavior are deterministic across Git, non-Git,
@@ -39,7 +41,8 @@ drift, stable readers, and repair behavior over the raw combined loader.
 ## Verification Notes
 
 - Map semantic archive/debt/dependency/path matrices, non-Git warnings, complete
-  read-set registries, repair refusals, and archived sentinels.
+  task-byte read-set registries, stale sidecar refusal, repair refusals, and
+  archived sentinels.
 - Race every reader with migration and each multi-file writer and prove no
   midpoint output.
 

@@ -27,12 +27,15 @@ exact imported bytes. Preserve v1 behavior explicitly.
 - Apply verifies layout 2, lock participation, spec-review manifest, spec, draft,
   trace, every review, and decomposition-manifest path/digest/session identity
   before any write.
-- Task, spec, policy, and state candidates all stage and validate as one
-  repository before atomic publication; every snapshot is rechecked and
+- Task, spec, and state candidates all stage and validate as one repository
+  before atomic publication; every snapshot is rechecked and
   failure/interruption rolls back without overwriting concurrent bytes.
 - Exact non-empty reviewed body bytes reach tasks; final session files publish
   no-follow/no-alias/no-clobber with tasks, while abandoned proposals are
   excluded.
+- Imported tasks contain no separate loop-policy output or authorization. Their
+  `loop_policy` and `loop_reason` fields are absent and therefore implicitly held,
+  and v2 rejects drafts that attempt to set them.
 - V1 retains documented partial/scaffold behavior and cannot consume v2 fields
   or silently discard a draft presented as v2.
 
@@ -40,7 +43,7 @@ exact imported bytes. Preserve v1 behavior explicitly.
 
 - Map criteria to strict decoder fixtures, exact body snapshots, digest/session
   races, trace/cycle faults, path publication races, and fault injection at every
-  task/spec/policy/state boundary.
+  task/spec/state boundary.
 - Compare v1 compatibility and v2 all-or-none observations after interruption and
   concurrent edits.
 

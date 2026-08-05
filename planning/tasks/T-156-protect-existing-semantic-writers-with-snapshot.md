@@ -15,7 +15,8 @@ updated_at: "2026-08-04T21:32:13Z"
 
 Retrofit every existing task, lifecycle, state, spec, import, repair, and init
 semantic writer to hold the shared mutation lock across candidate reads,
-validation, publication, rollback, and post-validation.
+validation, publication, rollback, and post-validation. Give each writer an
+explicit capability and, where it writes tasks, an exact task-field write set.
 
 ## Acceptance
 
@@ -30,11 +31,14 @@ validation, publication, rollback, and post-validation.
   compatible aside from lock-contention diagnostics.
 - A process that cannot prove lock ownership cannot enter any existing semantic
   write path.
+- Direct writers acquire only their declared capability; delegated writers also
+  prove the matching task and field write set, and refuse any broader mutation.
 
 ## Verification Notes
 
 - Map each writer family to setup/concurrent action/public result/file snapshot
-  evidence, including linked worktrees and unrelated processes.
+  evidence, including linked worktrees, unrelated processes, and refused
+  delegated capability or field-set escalation.
 - Fault-inject candidate reads, publication, post-validation, and rollback per
   transaction shape without duplicating every command's semantic tests.
 

@@ -25,6 +25,10 @@ them.
 - Cancellation fields validate exact pairing, canonical timestamp, reason
   grammar, cleared completion/verification set, and legacy no-provenance debt
   without writing.
+- Inherited `loop_policy` and `loop_reason` validate as a paired task-local
+  value, joint absence means implicit hold, and
+  completion/cancellation/verification candidate transitions preserve the pair
+  unchanged.
 - Completion/verification validation covers every strict v0.6 pass/fail
   generation shape, completed-fail hybrid debt, and every valid generation-less
   v0.5 shape without confusing fresh open tasks.
@@ -39,8 +43,8 @@ them.
 ## Verification Notes
 
 - Map criteria to exhaustive status/field/debt/transition tables, malformed
-  timestamps/reasons, generations beyond 64 bits, open dependents, and adopted
-  archive cases.
+  timestamps/reasons/loop fields, implicit hold, generations beyond 64 bits,
+  open dependents, and adopted archive cases.
 - Property-test that only specified transitions remove warnings and no
   failing/partial state becomes eligible.
 

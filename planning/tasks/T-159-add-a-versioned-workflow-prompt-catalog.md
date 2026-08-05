@@ -22,6 +22,9 @@ replacements without adding provider integration or hidden execution.
   explicit contract-version selection, required path-valued subject flags,
   declared token grammar, one-pass substitution, and no embedded task/spec file
   contents.
+- The task-implementation declaration contains only `TASK_ID`, `TASK_PATH`,
+  `ACTIVE_SPEC_VERSION`, and `ACTIVE_SPEC_PATH`; no policy path or policy-file
+  render input exists.
 - Resolution order is repository override then built-in, with canonical
   in-repository regular-file and ancestor checks, UTF-8 and size limits, and
   explicit source/path/hash reporting.

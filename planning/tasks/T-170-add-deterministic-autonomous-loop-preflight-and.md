@@ -15,9 +15,10 @@ updated_at: "2026-08-04T21:32:13Z"
 
 ## Description
 
-Implement the loop CLI contract, read-only selection, preflight, override
-authorization, and exact dry-run reporting before child execution. Exclude the
-Taskrail source checkout explicitly while supporting installed adopters.
+Implement the loop CLI contract, read-only task-local-policy selection, preflight,
+override authorization, and exact dry-run reporting before child execution.
+Exclude the Taskrail source checkout explicitly while supporting installed
+adopters.
 
 ## Acceptance
 
@@ -27,10 +28,15 @@ Taskrail source checkout explicitly while supporting installed adopters.
 - Preflight requires a valid clean non-bare attached worktree, equal root,
   attached non-unborn HEAD, no in-progress task, layout 2, and available shared
   lock.
-- Selection matches read-only active ranking or the exact policy runtime table;
-  hold/no-work launch nothing and return their specified clean result.
-- Dry-run emits the exact action/task/policy/violations/warnings/prompt/Git/lock/
-  delivery schema and never mutates state.
+- Selection matches read-only active ranking plus the exact task-local loop-policy
+  semantics; held tasks are transparent unless they block an allowed candidate,
+  and no candidate launches nothing with a clean `none` result.
+- Dry-run emits the exact `schema_version:1`, `action`, top-level `reason`,
+  nullable `selected_task`, non-null `tasks`, `violations`, and `warnings`,
+  nullable `prompt`, `git`, `lock`, and `delivery` schema. Selected/task rows use
+  only `task_ref`, `status`, `active_spec`, `source`, `effective_policy`, `reason`,
+  `eligible`, `held_dependencies`, and `disposition`; dry-run never mutates task
+  or state bytes.
 - Overrides execute only with frozen exact SHA authorization; source-checkout
   execution is rejected clearly while installed-repository diagnostics remain
   supported.
@@ -38,7 +44,7 @@ Taskrail source checkout explicitly while supporting installed adopters.
 ## Verification Notes
 
 - Map criteria to CLI table tests including no-timeout, exact dry-run goldens,
-  no-launch helper evidence, dirty/detached/unborn/bare/root/task/lock/policy
+  no-launch helper evidence, dirty/detached/unborn/bare/root/task/lock/task-policy
   cases, and override/source boundaries.
 - Snapshot all tracked bytes before and after every dry-run and refused execution
   branch.

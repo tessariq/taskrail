@@ -21,6 +21,8 @@ one race-safe no-clobber publication without losing another reviewer's findings.
 
 - The command requires layout 2, joins the shared writer discipline, then acquires
   repository and review locks in one documented global order.
+- Its capability and write set cover only the review index and report destination;
+  task fields, including `loop_policy` and `loop_reason`, are explicitly excluded.
 - It rechecks expected HEAD, spec/product/index digests, path boundaries, strict
   schemas, caps, and absent report destination immediately before publication.
 - The report publishes no-clobber and the index CAS-replaces atomically as one

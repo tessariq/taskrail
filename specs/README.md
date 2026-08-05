@@ -10,6 +10,7 @@
 4. `specs/v0.4.0.md`
 5. `specs/v0.5.0.md`
 6. `specs/v0.6.0.md`
+7. `specs/v0.7.0.md`
 
 ## Rules
 
@@ -24,5 +25,6 @@
 - `v0.2.0` adds retrofit and import ergonomics.
 - `v0.3.0` explores spec-task coverage and drift detection.
 - `v0.4.0` adds slugged task authoring and re-slug/rename ergonomics, and carries the deferred spec-to-task decomposition and gap-analysis threads.
-- `v0.5.0` adds autonomous workflow integrity and reviewable planning: lifecycle-complete skills and prompts, outcome-focused task authoring, a bounded provider-independent loop, optional unattended policy, post-spec and workflow-adversarial review, and adversarial task decomposition.
+- `v0.5.0` adds autonomous workflow integrity and reviewable planning: Agent Skills-compliant lifecycle-complete skills and prompts, outcome-focused task authoring, a bounded provider-independent loop with task-local policy, lightweight spec-driven-development handoffs, post-spec and workflow-adversarial review, and adversarial task decomposition.
 - `v0.6.0` adds durable arbitrary-width and opaque task references, first-class cancellation provenance, and explicit immutable task archival over one live-plus-archive ledger.
+- `v0.7.0` adds digest-bound planning-source interoperability through strict built-in OpenSpec and Spec Kit profiles, reviewed local-spec mapping with ImportDraft v3, and immutable provenance receipts.

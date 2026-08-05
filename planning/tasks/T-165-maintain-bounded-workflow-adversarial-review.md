@@ -6,6 +6,7 @@ priority: medium
 spec_ref: specs/v0.5.0.md#workflow-adversarial-review-memory
 dependencies:
     - T-159-add-a-versioned-workflow-prompt-catalog
+    - T-201-make-packaged-skills-agent-skills-compliant
 updated_at: "2026-08-04T21:32:13Z"
 ---
 
@@ -34,6 +35,9 @@ and unevidenced closure cannot masquerade as current assurance.
   visibility of unchecked findings.
 - Version rollover retains applicable unresolved IDs/origin, marks prior surfaces
   stale, and keeps findings advisory.
+- The packaged workflow-review skill retains Agent Skills-compliant frontmatter;
+  installed copies use nested `metadata.taskrail_version`, with marker-free
+  embedded and committed copies remaining byte-identical.
 
 ## Verification Notes
 
@@ -42,5 +46,7 @@ and unevidenced closure cannot masquerade as current assurance.
   output-only source diffs, and rollover.
 - Produce a two-run report where clean becomes stale, a finding cannot close
   without reproduction, and a dirty source can never claim clean.
+- Run Agent Skills conformance and package-parity checks for the workflow-review
+  skill in addition to its behavioral fixtures.
 
 ## Implementation Notes

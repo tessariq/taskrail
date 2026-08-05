@@ -31,11 +31,15 @@ transactional ImportDraft v3 without changing generated defaults.
   mixed generated demand fails before every write.
 - Opaque writes remain live, byte-exact, allocation-neutral, and unavailable on
   source layouts.
+- Command-created and imported tasks omit `loop_policy` and `loop_reason`, use
+  inherited implicit hold, and cannot add loop policy through command or draft
+  inputs.
 
 ## Verification Notes
 
 - Map criteria to command/import/rename/layout, archive/index collisions,
-  exhaustion, concurrency, and mixed drafts.
+  exhaustion, concurrency, mixed drafts, rejected loop inputs, and implicit
+  hold.
 - Manually create/resolve OPS, JIRA, and T-jira IDs on native Windows and smoke
   macOS/Linux.
 

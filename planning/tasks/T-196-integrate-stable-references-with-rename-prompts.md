@@ -1,6 +1,6 @@
 ---
 id: T-196-integrate-stable-references-with-rename-prompts
-title: Integrate stable references with rename prompts skills and policy
+title: Integrate stable references with rename prompts and skills
 status: todo
 priority: high
 spec_ref: specs/v0.6.0.md#unified-workflow-and-loop-integration
@@ -12,12 +12,12 @@ dependencies:
 updated_at: "2026-08-04T23:06:23Z"
 ---
 
-# T-196-integrate-stable-references-with-rename-prompts Integrate stable references with rename prompts skills and policy
+# T-196-integrate-stable-references-with-rename-prompts Integrate stable references with rename prompts and skills
 
 ## Description
 
-Make import, rename, prompts, packaged skills, and autonomy policy use stable
-references and actual storage paths without mutating archived history.
+Make import, rename, prompts, and packaged skills use stable references and
+actual storage paths without mutating archived history.
 
 ## Acceptance
 
@@ -29,14 +29,15 @@ references and actual storage paths without mutating archived history.
   rejects archived authoring/implementation targets.
 - Packaged skills use task show/resolved paths rather than live-directory
   assumptions and remain byte-parity clean.
-- Policy resolves stable/full aliases across roots, retires archived terminal
-  rows, and rejects open archive targets or semantic duplicate rows.
+- Task-local `loop_policy` and `loop_reason` remain attached to resolved task
+  bytes and survive live slug rename unchanged; archived tasks remain immutable
+  and no separate loop-policy identity or publication exists.
 
 ## Verification Notes
 
-- Map criteria to import/rename/scanner/prompt/skill/policy identity-storage
-  matrices and archive sentinels.
-- Run skill parity plus manual prompt, rename refusal, and policy alias
-  sandboxes.
+- Map criteria to import/rename/scanner/prompt/skill identity-storage matrices,
+  task-local loop-field preservation, and archive sentinels.
+- Run skill parity plus manual prompt, rename refusal, and loop-field
+  preservation sandboxes.
 
 ## Implementation Notes

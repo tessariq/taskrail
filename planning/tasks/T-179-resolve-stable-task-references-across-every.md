@@ -27,6 +27,9 @@ identity. Exhaustive command adoption belongs to later integration tasks.
   path and lists every claimant on ambiguity.
 - Core relationship validation rejects semantic self/duplicate aliases after
   resolution and exposes stable-reference normalization for writers.
+- Stable-reference normalization applies to task and relationship references;
+  task-local `loop_policy` and `loop_reason` remain part of task bytes and are
+  never resolved as independently keyed policy data.
 - YAML/JSON/TSV/text/artifact and graph-key helpers implement exact quoting,
   control escaping, safe artifact component, and injective node identity
   behavior.
@@ -36,8 +39,8 @@ identity. Exhaustive command adoption belongs to later integration tasks.
 ## Verification Notes
 
 - Map criteria to selector/alias matrices spanning all identity/storage
-  classes, duplicate claimants, source-layout mapping semantics, scalar strings,
-  controls, and graph punctuation.
+  classes, duplicate claimants, source-layout mapping semantics, task-local
+  loop-field preservation, scalar strings, controls, and graph punctuation.
 - Prove resolver output is independent of loader root order and never mutates
   task bytes.
 

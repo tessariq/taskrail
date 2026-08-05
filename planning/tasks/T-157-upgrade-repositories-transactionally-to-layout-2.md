@@ -6,6 +6,7 @@ priority: high
 spec_ref: specs/v0.5.0.md#layout-compatibility-and-upgrade
 dependencies:
     - T-156-protect-existing-semantic-writers-with-snapshot
+    - T-201-make-packaged-skills-agent-skills-compliant
 updated_at: "2026-08-04T21:32:13Z"
 ---
 
@@ -31,7 +32,9 @@ silently discarding authored text.
   concurrent bytes, and provide an exact recovery path; an already-running old
   writer makes migration unsafe and is covered explicitly.
 - Installed packaged skills require the combined forced refresh; repositories
-  without installed skills do not create them.
+  without installed skills do not create them. Refreshed installed skills write
+  nested `metadata.taskrail_version`, normalize compatible legacy markers, and
+  retain valid Agent Skills frontmatter.
 - Fresh layout-2 state uses schema 2 without `continuation_notes` or a rendered
   `## Notes` section. Upgrade preview explicitly decodes schema 1, reports every
   legacy note and a machine-readable drop-acknowledgement requirement, and apply
@@ -42,18 +45,29 @@ silently discarding authored text.
 - The migration-only acknowledgement remains available for every supported
   direct or multi-hop schema-1 upgrade and is retired only with schema-1
   migration support; it is reported as unnecessary when no note needs removal.
+- Layout 2 recognizes the optional paired `loop_policy` and `loop_reason` task
+  fields under strict decoding, protects them through every task re-render, and
+  upgrades tasks with neither field as implicit holds without granting unattended
+  authorization.
+- Preview and apply inspect the exact configured `<planning-dir>/AUTONOMY.tsv`
+  path without following symlink or reparse traversal and refuse any legacy entry
+  there with manual translation/removal guidance; similarly named files elsewhere
+  are unrelated and no TSV contents are parsed or migrated.
 - Older binaries refuse layout 2, and downgrade guidance is Git reversion rather
   than marker editing.
 
 ## Verification Notes
 
-- Map the five criteria to preview output, migration command output, exact file
-  snapshots, old/new binary observations, and sandbox reports.
+- Map every acceptance criterion to preview output, migration command output,
+  exact file snapshots, old/new binary observations, and sandbox reports.
 - Exercise candidate failure, lock contention, old-writer mutation,
   interruption, rollback, old-binary refusal, skill parity, and
-  policy-equivalence boundaries.
+  task-local-policy preservation boundaries.
 - Exercise absent, empty, single, multiple, multiline, and YAML-quoted legacy
   notes; acknowledgement refusal; explicit drop; strict schema-2 rejection;
   fresh-init output; rollback; and direct/multi-hop compatibility.
+- Exercise absent and paired task-local loop fields, preservation across body and
+  lifecycle re-renders, no-authority migration, nested skill metadata, and exact
+  legacy-path refusal including symlink/reparse and same-basename non-matches.
 
 ## Implementation Notes

@@ -26,8 +26,9 @@ archive validity remain downstream.
 - Git discovery enumerates index entries and rejects sparse, missing,
   skip-worktree, assume-unchanged, or unavailable task content; empty archive
   root is optional.
-- Storage derives only from path and loader records exact
-  bytes/mode/mtime/path without reserialization.
+- Storage derives only from path; the loader records exact
+  bytes/mode/mtime/path without reserialization and exposes `loop_policy` and
+  `loop_reason` only from those task bytes, never a sidecar input.
 - Candidate mode inspects source layouts/pre-existing archive without
   activating layout 3 or treating collisions as resolved.
 - Loader returns complete claimant sets for allocator/resolver consumers
@@ -36,8 +37,8 @@ archive validity remain downstream.
 ## Verification Notes
 
 - Map criteria to full root-component grammar, missing/empty/custom roots,
-  index flags, aliases, deep/special entries, source candidates, and exact
-  metadata.
+  index flags, aliases, deep/special entries, source candidates, task-local loop
+  fields, and exact metadata.
 - Prove no loader path mutates or silently omits indexed tasks.
 
 ## Implementation Notes

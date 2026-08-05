@@ -22,6 +22,9 @@ delivery, and bounded process-tree cleanup.
 - Loop acquires the repository lock before semantic preflight snapshots and holds
   it continuously through every child, cleanup, postflight, between-iteration
   selection, and final release; only verified delegated child writers join.
+- Delegation grants only the selected task's required lifecycle and bounded
+  follow-up write sets. Task-local loop-policy commands and field mutations always
+  refuse delegated ownership, including attempts concerning the selected task.
 - Before first child, stage/hash the executable no-replace once; every iteration
   uses it, conflicting inherited `TASKRAIL` is reported/refused, and child writers
   verify bytes plus token.
@@ -40,8 +43,8 @@ delivery, and bounded process-tree cleanup.
 
 - Map criteria to portable helpers covering lock refusal after child exit/before
   postflight, path/argv/no-shell/stdin/streams, `TASKRAIL` conflict, delegation,
-  multi-iteration mutation, no-timeout work, descendants, exact grace, escape,
-  and cleanup.
+  delegated loop-policy refusal, multi-iteration mutation, no-timeout work,
+  descendants, exact grace, escape, and cleanup.
 - Run packaged native Linux, macOS, and Windows smoke checks rather than treating
   cross-build success as execution evidence.
 

@@ -24,18 +24,21 @@ migration and later writers, without enabling any layout-2 opaque write.
 - Presence-aware TaskDraft id distinguishes absent from null/empty/whitespace
   and otherwise requires opaque validity.
 - ImportDraft v1/v2 retain v0.5 meaning and reject id; strict v3 extends
-  reviewed transactional v2 and old binaries reject schema 3 before tasks.
+  reviewed transactional v2 only with optional id, rejects `loop_policy` and
+  `loop_reason`, and old binaries reject schema 3 before tasks.
 - Whole-draft validation plans explicit IDs, generated demand, dependency refs,
   and mixed-family collisions against supplied complete-ledger candidates
   without writes.
 - APIs are pure validation/classification and cannot create, rename, import, or
   mutate tasks before layout 3.
+- Every valid imported draft omits task-local loop fields, so imported tasks use
+  the inherited implicit-hold behavior.
 
 ## Verification Notes
 
-- Map criteria to grammar/reserved/collision/Windows fixtures, null/absent id
-  cases, v1/v2/v3 decoding, old-version rejection, and generated-exhaustion
-  planning.
+- Map criteria to grammar/reserved/collision/Windows fixtures, null/absent id,
+  rejected loop-field additions, v1/v2/v3 decoding, old-version rejection,
+  implicit hold, and generated-exhaustion planning.
 - Prove validators preserve exact opaque bytes and perform no filesystem write.
 
 ## Implementation Notes

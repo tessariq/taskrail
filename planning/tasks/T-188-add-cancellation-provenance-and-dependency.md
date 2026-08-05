@@ -26,19 +26,22 @@ has provenance without stranding open dependents.
   and hold through revalidation/rollback.
 - Cancel accepts live todo/in-progress/blocked or legacy adoption, round-trips
   reason/time, clears exact completion/verification fields, appends note, and
-  reconciles state/blockers without disturbing another active task.
+  reconciles state/blockers without disturbing another active task; it preserves
+  `loop_policy` and `loop_reason` unchanged, including implicit hold when absent.
 - Open dependents refuse with sorted diagnostics; new cancelled edges fail while
   migration debt remains warning/remediable.
 - Dependency remove dry-run writes nothing; apply removes exactly one resolved
   edge from live open work, preserves remaining order, reprojects STATE,
-  revalidates, and refuses additions/replacements/aliases/archive/absent edges.
+  revalidates, preserves task-local loop fields, and refuses
+  additions/replacements/aliases/archive/absent edges.
 - Exact schemas, YAML metacharacters, recovery, archive refusal, and no
   uncancel/reopen match spec.
 
 ## Verification Notes
 
 - Map criteria to pre-read races, statuses/adoption/reasons/state/dependents,
-  dry-run/order/projection, aliases/archive, and transaction faults.
+  loop-field preservation, dry-run/order/projection, aliases/archive, and
+  transaction faults.
 - Manually prove dependent refusal/remediation and exact provenance.
 
 ## Implementation Notes
