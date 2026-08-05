@@ -15,7 +15,9 @@ updated_at: "2026-08-04T21:32:13Z"
 
 Introduce layout 2 on the shared writer-lock foundation. Make upgrade preview
 read-only, make apply transactional, and keep installed packaged skills and the
-layout marker on one validated publication boundary.
+layout marker on one validated publication boundary. Move `STATE.md` to schema 2
+on that same boundary, removing the legacy continuation-note surface without
+silently discarding authored text.
 
 ## Acceptance
 
@@ -30,6 +32,16 @@ layout marker on one validated publication boundary.
   writer makes migration unsafe and is covered explicitly.
 - Installed packaged skills require the combined forced refresh; repositories
   without installed skills do not create them.
+- Fresh layout-2 state uses schema 2 without `continuation_notes` or a rendered
+  `## Notes` section. Upgrade preview explicitly decodes schema 1, reports every
+  legacy note and a machine-readable drop-acknowledgement requirement, and apply
+  requires `--drop-continuation-notes` exactly when the legacy list is non-empty.
+- State-schema migration, body re-render, marker publication, and installed-skill
+  refresh share the transaction and rollback boundary. Schema-2 decoding rejects
+  a reintroduced `continuation_notes` key instead of silently dropping it.
+- The migration-only acknowledgement remains available for every supported
+  direct or multi-hop schema-1 upgrade and is retired only with schema-1
+  migration support; it is reported as unnecessary when no note needs removal.
 - Older binaries refuse layout 2, and downgrade guidance is Git reversion rather
   than marker editing.
 
@@ -40,5 +52,8 @@ layout marker on one validated publication boundary.
 - Exercise candidate failure, lock contention, old-writer mutation,
   interruption, rollback, old-binary refusal, skill parity, and
   policy-equivalence boundaries.
+- Exercise absent, empty, single, multiple, multiline, and YAML-quoted legacy
+  notes; acknowledgement refusal; explicit drop; strict schema-2 rejection;
+  fresh-init output; rollback; and direct/multi-hop compatibility.
 
 ## Implementation Notes

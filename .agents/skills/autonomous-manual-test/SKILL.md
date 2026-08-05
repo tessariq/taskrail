@@ -60,4 +60,5 @@ Prefer a sandbox for most manual testing.
   change needs end-to-end judgment
 - re-run only the affected test step after a fix
 - do not auto-select another task after manual testing completes
+- keep manual-test narrative in the ephemeral report, never in `planning/STATE.md`
 - never commit temporary manual test code

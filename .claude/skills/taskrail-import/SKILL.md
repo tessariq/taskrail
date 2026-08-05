@@ -45,6 +45,8 @@ already-written tasks a second time under new ids.
 ## Rules
 
 - never hand-edit `planning/STATE.md` frontmatter
+- treat `planning/STATE.md` as current state, never as a task/session log; put
+  durable context in task implementation notes or follow-up tasks
 - never hand-edit task status fields
 - return only the JSON draft in step 2; no prose, no code fence
 - every `spec_ref` must point at a heading that already exists

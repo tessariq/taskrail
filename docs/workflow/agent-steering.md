@@ -6,6 +6,9 @@ Prompt guidance for deterministic tracked-work execution in Taskrail.
 
 - Use `go run ./cmd/taskrail ...` for tracked-work transitions once the CLI exists.
 - Do not hand-edit `planning/STATE.md` frontmatter once the CLI exists.
+- Treat `planning/STATE.md` as current state, never as a task/session log. Put
+  durable context in task implementation notes, blocker reasons, portable
+  verification summaries/reports, or follow-up tasks.
 - Do not hand-edit task status fields once the CLI exists.
 - Follow TDD for code changes.
 - Keep tests focused and deterministic.

@@ -43,6 +43,8 @@ do not contain the source helper and skip this source-only guard.
 
 - never hand-edit `planning/STATE.md` frontmatter or task status fields; route
   every correction through `${TASKRAIL:-taskrail} repair`
+- treat `planning/STATE.md` as current state, never as a task/session log; do not
+  add continuation prose while recovering it
 - never force progress by casual state mutation
 - repair the underlying inconsistency instead of hiding it
 - do not implement unrelated product changes during recovery-only runs

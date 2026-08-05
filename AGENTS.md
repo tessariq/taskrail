@@ -119,6 +119,9 @@ Guidance for coding agents working in the Taskrail repository.
 ## Repository Workflow Rules
 
 - `planning/STATE.md` is the authoritative execution state.
+- `planning/STATE.md` is current state, not a task/session log. Never append
+  continuation prose; use task `## Implementation Notes`, blocker reasons,
+  portable verification summaries/reports, or follow-up tasks.
 - Tasks under `planning/tasks/` must declare spec references and dependencies.
 - In this source checkout, run `task taskrail:check` immediately before every
   `${TASKRAIL:-taskrail}` state writer (`next`, `start`, `verify`, `complete`,

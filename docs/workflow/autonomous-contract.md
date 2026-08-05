@@ -5,6 +5,9 @@ Deterministic tracked-work contract for Taskrail repository planning and impleme
 ## Source Of Truth
 
 - `planning/STATE.md` frontmatter is machine-managed run state.
+- `planning/STATE.md` is a bounded current snapshot, not a task/session log;
+  durable context belongs with the task, blocker, verification report, or
+  follow-up work.
 - `planning/tasks/` contains tracked work item metadata, dependencies, and acceptance criteria.
 - `docs/workflow/` contains the human-readable workflow contract.
 - `internal/taskrail/skills/` is the embedded package source for the canonical
@@ -26,6 +29,7 @@ Rules:
 - At most one tracked item may be `in_progress`.
 - `planning/STATE.md` must point at the same active task.
 - Human or agent users should not hand-edit machine-managed state or task statuses once Taskrail commands are available.
+- Human or agent users should never append continuation narratives to `STATE.md`.
 
 ## Deterministic Selection
 

@@ -35,6 +35,9 @@ do not contain the source helper and skip this source-only guard.
 ## Rules
 
 - verification-only runs should not mutate unrelated product code
-- keep artifact paths in notes and reports
+- keep concrete local artifact paths in ephemeral reports; committed task notes
+  and `STATE.md` use portable summaries
+- treat `planning/STATE.md` as current state, never as a task/session log; do not
+  append verification handoff prose to it
 - keep verification grounded in the active spec and the task acceptance criteria
 - create follow-up tasks with `${TASKRAIL:-taskrail} task new`, never by hand-authoring markdown

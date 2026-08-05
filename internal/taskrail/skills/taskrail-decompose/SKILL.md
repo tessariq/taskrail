@@ -65,6 +65,8 @@ do not contain the source helper and skip this source-only guard.
 ## Rules
 
 - never hand-edit `planning/STATE.md` frontmatter or task status fields
+- treat `planning/STATE.md` as current state, never as a task/session log; put
+  durable context in task implementation notes or follow-up tasks
 - create tasks with `import --apply`, never by hand-authoring task markdown
 - every `spec_ref` must point at an anchor from `spec show --anchors`; apply verifies it
 - decompose only uncovered areas (`"covered": false`); do not duplicate covered ones

@@ -19,9 +19,7 @@ func starterState(now time.Time) *State {
 		NextAction:             "Create initial Taskrail tasks and begin tracked work",
 		LastVerificationResult: "Not yet run",
 		RelevantArtifacts:      []string{},
-		ContinuationNotes: []string{
-			"This repository is using manual Taskrail-style workflow scaffolding until the product replaces more of the bootstrap steps.",
-		},
+		ContinuationNotes:      []string{},
 	}
 
 	state := &State{Frontmatter: frontmatter}

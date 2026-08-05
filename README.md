@@ -385,7 +385,7 @@ placeholder is required or tracked.
 
 ## State Contract
 
-`planning/STATE.md` is the authoritative execution state. It carries the active spec, current task, status summary, blockers, the next action, and the last verification result, plus pointers to relevant artifacts. Do not hand-edit machine-managed state fields — let the `taskrail` transitions update them.
+`planning/STATE.md` is the authoritative current execution state. It carries the active spec, current task, status summary, blockers, the next action, and the last verification result, plus pointers to relevant artifacts. It is not a per-task or per-session log: keep durable task context in task `## Implementation Notes`, blocker reasons, portable verification summaries/reports, or follow-up tasks. Do not hand-edit machine-managed state fields or append continuation prose; let the `taskrail` transitions update the file.
 
 ## Repository Layout
 

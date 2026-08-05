@@ -76,6 +76,8 @@ Taskrail CLI behaviour.
 
 - never hand-edit `planning/STATE.md` frontmatter or task status fields; route
   every correction through `${TASKRAIL:-taskrail} repair`
+- treat `planning/STATE.md` as current state, never as a task/session log; repair
+  never appends continuation prose
 - never hand-resolve `STATE.md` merge-conflict markers; take either side, then
   `${TASKRAIL:-taskrail} repair --apply` re-projects it from the task files
 - dry-run and review before `--apply`

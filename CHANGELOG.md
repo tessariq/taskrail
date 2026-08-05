@@ -2,6 +2,14 @@
 
 All notable user-visible changes to Taskrail will be documented in this file.
 
+## Unreleased
+
+### Changed
+
+- `taskrail init` and `retrofit --apply` no longer seed generic continuation
+  prose in fresh `STATE.md` files; packaged workflow guidance keeps durable task
+  context in task notes, blockers, verification reports, or follow-up tasks.
+
 ## v0.4.0 - 2026-07-30
 
 Fourth release. Taskrail makes active-spec work safer to author and

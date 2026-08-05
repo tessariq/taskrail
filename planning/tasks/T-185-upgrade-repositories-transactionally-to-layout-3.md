@@ -32,6 +32,10 @@ validation, archive adoption, and deterministic root discovery.
   recovery.
 - Direct 2-to-3 changes config only; multi-hop skills require consent, stage
   current bytes, and roll back marker/skills transactionally.
+- Multi-hop 1-to-2-to-3 preview reports schema-1 continuation notes and requires
+  `--drop-continuation-notes` when they are non-empty; state schema/body, skills,
+  and marker publish or roll back together. Direct 2-to-3 rejects the inapplicable
+  acknowledgement flag.
 - Preview reports identity/portability/lifecycle/archive debt with exact
   warnings, zero-exit valid-with-warnings, non-null JSON, and zero writes.
 - Existing archive follows absent/empty/adoptable/debt/blocker matrix and
@@ -45,5 +49,7 @@ validation, archive adoption, and deterministic root discovery.
   archive/debt/warnings, rollback races, discovery/mismatch/cwd locks,
   downgrade/recovery, and previews.
 - Persist clean, debt-heavy, adopted-archive, non-Git, and multi-hop reports.
+- Include multi-hop state with absent, empty, and non-empty continuation notes,
+  acknowledgement refusal/success, and rollback after state publication.
 
 ## Implementation Notes

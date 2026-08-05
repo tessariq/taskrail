@@ -79,6 +79,8 @@ do not contain the source helper and skip this source-only guard.
 ## Rules
 
 - never hand-edit `planning/STATE.md` frontmatter or task status fields
+- treat `planning/STATE.md` as current state, never as a task/session log; put
+  durable context in task implementation notes or follow-up tasks
 - `coverage --gaps` is read-only and advisory by default; `--fail-on` changes only its
   exit code and never writes state or gates `validate`
 - proposals are candidates for human review, never auto-created tasks; promote only

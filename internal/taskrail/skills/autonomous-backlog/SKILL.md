@@ -37,7 +37,11 @@ do not contain the source helper and skip this source-only guard.
 ## Rules
 
 - never hand-edit `planning/STATE.md` frontmatter
+- treat `planning/STATE.md` as current state, never as a task/session log; put
+  durable context in task implementation notes, blocker reasons, portable
+  verification summaries/reports, or follow-up tasks
 - never hand-edit task status fields
 - create follow-up tasks with `${TASKRAIL:-taskrail} task new`, never by hand-authoring markdown
-- always keep evidence paths in notes and reports
+- keep concrete local artifact paths in ephemeral reports; committed task notes
+  use portable summaries
 - stop after one task

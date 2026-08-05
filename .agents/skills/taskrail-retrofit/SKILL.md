@@ -50,6 +50,8 @@ do not contain the source helper and skip this source-only guard.
 ## Rules
 
 - never hand-edit `planning/STATE.md` frontmatter
+- treat `planning/STATE.md` as current state, never as a task/session log; put
+  durable context in task implementation notes or follow-up tasks
 - never hand-edit task status fields
 - dry-run and confirm before `--apply`; retrofit never clobbers existing files
 - return only the JSON draft in step 4; no prose, no code fence

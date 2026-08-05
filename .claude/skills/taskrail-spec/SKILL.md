@@ -66,6 +66,8 @@ do not contain the source helper and skip this source-only guard.
 - create tasks through `${TASKRAIL:-taskrail} task new`, never by hand-authoring
   task markdown
 - never hand-edit `planning/STATE.md` frontmatter or task status fields
+- treat `planning/STATE.md` as current state, never as a task/session log; put
+  durable context in task implementation notes or follow-up tasks
 - `spec list`, `spec show`, and `spec diff` are read-only; after any writer check
   `git status` and stage the files the CLI rewrote
 - `spec add` scaffolds but does not activate; activation is a separate,

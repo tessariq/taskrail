@@ -77,6 +77,28 @@ func TestInitEmptyRepoWritesMarker(t *testing.T) {
 	}
 }
 
+func TestInitEmptyRepoDoesNotSeedContinuationNotes(t *testing.T) {
+	t.Parallel()
+
+	repo := initGitRepo(t)
+	svc := newTestService(t, repo, time.Date(2026, 3, 31, 12, 0, 0, 0, time.UTC))
+
+	if _, err := svc.Init(false); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+
+	state, err := svc.loadState()
+	if err != nil {
+		t.Fatalf("load state: %v", err)
+	}
+	if len(state.Frontmatter.ContinuationNotes) != 0 {
+		t.Fatalf("continuation notes = %v, want empty", state.Frontmatter.ContinuationNotes)
+	}
+	if strings.Contains(state.Body, "manual Taskrail-style workflow scaffolding") {
+		t.Fatalf("state body contains bootstrap continuation prose:\n%s", state.Body)
+	}
+}
+
 func TestInitAdoptsLegacyLayoutNonDestructively(t *testing.T) {
 	t.Parallel()
 
