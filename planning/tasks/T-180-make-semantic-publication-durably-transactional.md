@@ -31,6 +31,9 @@ compare-and-swap publication/rollback, and blocking recovery-record primitives.
   backups.
 - APIs expose stable complete read-set/phase checks but do not claim command
   adoption.
+- The reusable protocol can include an absent configured human-owned sidecar in
+  init/migration write sets, preserving existing bytes and rolling back only the
+  transaction's newly created IDEAS file without interpreting its contents.
 
 ## Verification Notes
 

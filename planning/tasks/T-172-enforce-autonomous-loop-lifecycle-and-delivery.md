@@ -18,7 +18,9 @@ updated_at: "2026-08-04T21:32:13Z"
 
 Classify every child termination against frozen lifecycle, verification, Git
 delivery, task-local loop policy, mutation, prompt/executable, lock, and process
-evidence. Continue only after a fully delivered fresh completed pass.
+evidence. Apply committed- or local-mode delivery postconditions and continue only
+after a delivered, fresh completed pass; semantic review convergence remains a
+prompt/skill contract rather than a fabricated postflight attestation.
 
 ## Acceptance
 
@@ -29,9 +31,15 @@ evidence. Continue only after a fully delivered fresh completed pass.
   completion ID across every surface; stale/audit/partial-complete/block/rework/
   no-progress/child failure stop with exact safe recovery.
 - Delivered recognized outcomes require clean tree, same full attached ref,
-  descendant HEAD with a local commit, unchanged frozen spec/config/layout/
-  prompt/executable bytes, unchanged pre-existing `loop_policy` and `loop_reason`
-  fields, valid task policy, and no contained process; remote is not_checked.
+  unchanged frozen spec/config/layout/storage/review/prompt/executable bytes,
+  unchanged pre-existing `loop_policy` and `loop_reason` fields, valid task
+  policy, and no contained process; remote is not_checked.
+- Committed delivery requires implementation plus generated task/state bytes in
+  a descendant local commit. Local completed-pass requires a descendant product
+  commit; blocked/rework requires one only when product bytes changed, otherwise
+  unchanged HEAD plus exact valid ignored lifecycle/verification bytes is valid.
+  No local branch stages/commits Taskrail metadata or creates an empty delivery
+  commit.
 - Pre-existing non-selected task bytes and selected immutable content are
   protected; only canonical lifecycle fields/notes and at most two real
   follow-ups may change. Every new follow-up omits `loop_policy` and `loop_reason`
@@ -39,8 +47,9 @@ evidence. Continue only after a fully delivered fresh completed pass.
   failure.
 - Final diagnostics always report outcome, child exit/signal, all identity
   before/after values, validation, Git/ref/HEAD, task-local policy source and
-  values, prompt/executable hashes, mutation/process violations, local commits,
-  remote, and next action.
+  values, storage mode/root, configured/effective review maximum and source,
+  prompt/executable hashes, mutation/process violations, local commits, remote,
+  and next action.
 - Optional `--result-file` atomically publishes the same final diagnostics in one
   common-envelope JSON document without mixing them with streamed child output;
   requested result publication failure is a non-zero loop outcome.

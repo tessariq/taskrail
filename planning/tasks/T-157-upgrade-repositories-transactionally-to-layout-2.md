@@ -19,12 +19,18 @@ Introduce layout 2 on the shared writer-lock foundation. Make upgrade preview
 read-only, make apply transactional, and keep installed packaged skills and the
 layout marker on one validated publication boundary. Move `STATE.md` to schema 2
 on that same boundary, removing the legacy continuation-note surface without
-silently discarding authored text.
+silently discarding authored text. Add strict committed/local storage and bounded
+implementation-review configuration to the layout contract.
 
 ## Acceptance
 
 - Layout-1 repositories permit inspection and migration only; layout 2 becomes
   the enforceable prerequisite API used by each downstream v0.5 writer.
+- Layout 2 strictly records `storage_mode: committed|local` and explicit
+  `implementation_review_max_iterations` in `1..5`; migration defaults existing
+  repositories to committed mode and review maximum 2. Unknown/invalid fields
+  never disappear through a later marker rewrite; T-222 owns fresh local
+  initialization and discovery against this completed marker contract.
 - Preview validates a complete candidate without writes, while apply requires
   operator-confirmed old-process quiescence, snapshots semantic files, and
   publishes the early migration fence, skills when present, and final marker
@@ -60,6 +66,8 @@ silently discarding authored text.
   are unrelated and no TSV contents are parsed or migrated.
 - Older binaries refuse layout 2, and downgrade guidance is Git reversion rather
   than marker editing.
+- Migration preview/apply report physical and logical roots, committed storage
+  mode, and configured review maximum without weakening read-only preview.
 
 ## Verification Notes
 

@@ -9,6 +9,7 @@ dependencies:
     - T-159-add-a-versioned-workflow-prompt-catalog
     - T-168-parse-and-validate-an-optional-autonomous-run
     - T-217-release-interrupted-active-work-safely
+    - T-223-run-every-v0-5-command-against-local-storage
 updated_at: "2026-08-04T21:32:13Z"
 ---
 
@@ -28,18 +29,25 @@ provider.
   undeclared context.
 - The workflow covers freshness before every writer, start, implementation,
   simplification, regression perturbation, fresh-context review/fallback
-  labeling, correction of high/medium findings, and re-check before closure.
+  labeling, bounded iterative review, correction of every current-scope finding,
+  and re-check/re-review of materially changed final bytes before closure.
+- Every finding receives `fix-now`, `separate-followup`, `blocked`, or `rejected`
+  plus rationale. Budget exhaustion cannot defer current work or permit pass;
+  clean review stops early, while final-pass material change remains rework.
 - Success completes then passes; cannot-proceed blocks then fails; deliberate
   rework may remain in progress with fail. Each branch checks writer exits, then
-  creates one complete local commit containing implementation and generated
-  task/state bytes; completed-unverified/audit recovery reruns only the
-  safe step before commit.
+  follows the selected storage-mode delivery contract: committed mode creates one
+  commit containing implementation and generated task/state bytes; local success
+  commits product bytes only, while metadata-only local blocked/rework may retain
+  HEAD and never fabricates an empty commit. Completed-unverified/audit recovery
+  reruns only the safe step before any required commit.
 - Every consumed command uses the common JSON result, and interrupted/manual
   rework guidance names direct-operator `task release` without allowing a
   delegated child to relinquish its selected task.
 - Headless ambiguity, credentials, destructive scope, and barriers stop for a
   human; at most two real follow-ups are created without `loop_policy` or
-  `loop_reason` and remain implicitly held.
+  `loop_reason` and remain implicitly held. Each follow-up is a separately
+  meaningful outcome rather than a current-task review repair.
 - Delegated task implementation may use only its granted lifecycle and follow-up
   write sets. It cannot allow, hold, clear, or otherwise mutate task-local loop
   policy, and authoring a follow-up body cannot grant unattended authorization.
@@ -49,6 +57,9 @@ provider.
 - Prompt guidance inventories existing repository primitives, stops on material
   ambiguity, and traces requirements to observable executable evidence before
   implementation.
+- Committed mode delivers implementation plus generated planning bytes; local
+  mode commits visible product changes only and leaves a valid ignored Taskrail
+  lifecycle/verification outcome.
 
 ## Verification Notes
 

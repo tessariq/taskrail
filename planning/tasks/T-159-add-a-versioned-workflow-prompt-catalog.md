@@ -6,6 +6,8 @@ priority: high
 spec_ref: specs/v0.5.0.md#workflow-prompt-catalog-and-overrides
 dependencies:
     - T-213-define-the-uniform-agent-machine-api
+    - T-157-upgrade-repositories-transactionally-to-layout-2
+    - T-223-run-every-v0-5-command-against-local-storage
 updated_at: "2026-08-04T21:32:13Z"
 ---
 
@@ -26,8 +28,14 @@ replacements without adding provider integration or hidden execution.
 - The registry includes `task-review`; all JSON representations use the common
   envelope while preserving exact prompt result payloads and clean text output.
 - The task-implementation declaration contains only `TASK_ID`, `TASK_PATH`,
-  `ACTIVE_SPEC_VERSION`, and `ACTIVE_SPEC_PATH`; no policy path or policy-file
-  render input exists.
+  `ACTIVE_SPEC_VERSION`, `ACTIVE_SPEC_PATH`,
+  `IMPLEMENTATION_REVIEW_MAX_ITERATIONS`, and `STORAGE_MODE`; no policy path or
+  policy-file render input exists.
+- Task-implementation rendering resolves repository review maximum 2 by default,
+  accepts only a per-render `--max-review-iterations` override in `1..5`, applies
+  deterministic override-before-repository precedence, and rejects that flag for
+  every other prompt. Loop diagnostics, not generic prompt-render output, report
+  the effective value's source.
 - Resolution order is repository override then built-in, with canonical
   in-repository regular-file and ancestor checks, UTF-8 and size limits, and
   explicit source/path/hash reporting.

@@ -28,6 +28,9 @@ delivery, and bounded process-tree cleanup.
 - Before first child, stage/hash the executable no-replace once; every iteration
   uses it, conflicting inherited `TASKRAIL` is reported/refused, and child writers
   verify bytes plus token.
+- Every child inherits the frozen storage mode/root and effective implementation
+  review maximum; delegated writers refuse mode/root mismatch, and a child cannot
+  mutate repository review policy or widen its own review budget.
 - Bare commands resolve through PATH; separator paths resolve against original
   cwd; argv goes directly to the OS with no shell, repository-root cwd, exact
   finite stdin/EOF, inherited environment except pinned identity, and faithful

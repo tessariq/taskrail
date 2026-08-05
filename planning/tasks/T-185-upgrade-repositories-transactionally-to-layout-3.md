@@ -16,6 +16,7 @@ dependencies:
     - T-182-define-exact-v0-6-machine-result-schemas
     - T-157-upgrade-repositories-transactionally-to-layout-2
     - T-219-prepare-inherited-writers-for-layout-3
+    - T-226-bootstrap-a-configurable-human-owned-ideas-sidecar
 updated_at: "2026-08-04T23:06:23Z"
 ---
 
@@ -23,16 +24,17 @@ updated_at: "2026-08-04T23:06:23Z"
 
 ## Description
 
-Implement map-free config-only 2-to-3 and atomic 1-to-2-to-3 migration, debt
-validation, archive adoption, and deterministic root discovery.
+Implement map-free marker-plus-no-clobber-IDEAS 2-to-3 and atomic 1-to-2-to-3
+migration, debt validation, archive adoption, and deterministic root discovery.
 
 ## Acceptance
 
 - Apply owns the transaction before original-marker/repository resolution and
   holds it through candidate reads, publication, validation, rollback, or
   recovery.
-- Direct 2-to-3 changes config only and preserves task bytes, including
-  `loop_policy` and `loop_reason`. Every migration path rejects stale
+- Direct 2-to-3 writes explicit `ideas_path`, creates its template only when
+  absent, and preserves existing ideas/task bytes, including `loop_policy` and
+  `loop_reason`. Every migration path rejects stale
   `AUTONOMY.tsv` rather than migrating it. Multi-hop skills require consent,
   stage current bytes, and roll back marker/skills transactionally.
 - Multi-hop 1-to-2-to-3 removes schema-1 `continuation_notes` and the rendered
@@ -44,6 +46,10 @@ validation, archive adoption, and deterministic root discovery.
 - Multi-hop preview also offers explicit no-clobber extraction into an absent
   human NOTES sidecar; selected extraction publishes or rolls back with state,
   skills, and the final marker, while an existing sidecar stops for manual merge.
+- Direct and multi-hop preview report the configured IDEAS candidate. Apply
+  creates only an absent safe destination; existing regular content is
+  byte-identical, unsafe destinations refuse, and marker/ideas/state/skills
+  publish or roll back on one transaction boundary.
 - Migration cannot publish layout 3 until inherited semantic writers already use
   combined-ledger resolution/allocation, live-only write sets, and archived-target
   refusal behind the layout guard.
@@ -64,5 +70,7 @@ validation, archive adoption, and deterministic root discovery.
   unnecessary/refused/accepted acknowledgement, extraction/drop and existing
   NOTES refusal, schema/body removal, and
   rollback after state publication; prove no loop-policy sidecar migration.
+- Exercise default/custom ideas paths in committed/local mode, absent/existing/
+  unsafe destinations, direct and multi-hop rollback, and unchanged IDEAS bytes.
 
 ## Implementation Notes

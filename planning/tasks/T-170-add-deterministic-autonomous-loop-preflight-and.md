@@ -9,6 +9,7 @@ dependencies:
     - T-159-add-a-versioned-workflow-prompt-catalog
     - T-169-select-autonomous-work-through-policy-barriers
     - T-213-define-the-uniform-agent-machine-api
+    - T-223-run-every-v0-5-command-against-local-storage
 updated_at: "2026-08-04T21:32:13Z"
 ---
 
@@ -17,24 +18,29 @@ updated_at: "2026-08-04T21:32:13Z"
 ## Description
 
 Implement the loop CLI contract, read-only task-local-policy selection, preflight,
-override authorization, and exact dry-run reporting before child execution.
-Exclude the Taskrail source checkout explicitly while supporting installed
-adopters.
+override authorization, committed/local storage selection, implementation-review
+budget resolution, and exact dry-run reporting before child execution. Exclude
+the Taskrail source checkout explicitly while supporting installed adopters.
 
 ## Acceptance
 
 - Parsing requires a child for execution, forbids one for dry-run, defaults max
   iterations to one, accepts only positive bounds, rejects execution JSON,
   timeout/retry/background options, and ambiguous delimiter/flag forms.
+- `--max-review-iterations` accepts only `1..5`, overrides the configured maximum
+  without changing it, remains distinct from child `--max-iterations`, and is
+  frozen in the rendered task prompt and diagnostics.
 - Preflight requires a valid clean non-bare attached worktree, equal root,
-  attached non-unborn HEAD, no in-progress task, layout 2, and available shared
-  lock.
+  attached non-unborn HEAD, no in-progress task, layout 2, one valid committed or
+  local storage context, and available shared lock. Local metadata must be
+  effectively ignored, untracked, unstaged, and valid.
 - Selection matches read-only active ranking plus the exact task-local loop-policy
   semantics; held tasks are transparent unless they block an allowed candidate,
   and no candidate launches nothing with a clean `none` result.
 - Dry-run emits the common envelope with exact result `action`, `reason`, nullable
   `selected_task`, non-null `tasks` and `violations`, nullable `prompt`, `git`,
-  `lock`, and `delivery`; warnings remain the envelope's non-null top-level array. Selected/task rows use
+  `lock`, `storage`, `review`, and mode-specific `delivery`; warnings remain the
+  envelope's non-null top-level array. Selected/task rows use
   only `task_ref`, `status`, `active_spec`, `source`, `effective_policy`, `reason`,
   `eligible`, `held_dependencies`, and `disposition`; dry-run never mutates task
   or state bytes.

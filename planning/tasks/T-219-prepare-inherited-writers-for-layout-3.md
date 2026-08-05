@@ -27,6 +27,9 @@ archive immutability before migration can make layout 3 active.
 - Layout-1/2 behavior remains unchanged until migration; unsupported layouts still refuse semantic writes and no archive root is created by preparation alone.
 - Migration depends on this readiness, eliminating any accepted-layout window with live-only allocation or mutable archived history. T-192 retains exhaustive sink/write-set verification.
 - Existing task-local loop fields, opaque/control-safe rendering, transaction ownership, and recovery behavior remain preserved.
+- Inherited config/init/import writers preserve and validate `ideas_path`, keep it
+  outside task/state semantics, and cannot activate layout 3 before safe
+  no-clobber IDEAS publication is available.
 
 ## Verification Notes
 

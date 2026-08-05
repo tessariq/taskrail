@@ -40,6 +40,9 @@ exact imported bytes. Preserve v1 behavior explicitly.
 - V1 retains documented partial/scaffold behavior for v0.5 and cannot consume v2
   fields or silently discard a draft presented as v2; v0.6 explicitly upgrades
   publication durability without changing body interpretation.
+- V2 remains source-agnostic: an explicit future `import ideas --to tasks` may
+  produce its reviewed task draft, but source prose never bypasses complete body,
+  real-anchor, trace, review, digest, or implicit-hold requirements.
 
 ## Verification Notes
 
