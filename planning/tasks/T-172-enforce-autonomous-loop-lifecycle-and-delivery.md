@@ -24,12 +24,17 @@ prompt/skill contract rather than a fabricated postflight attestation.
 
 ## Acceptance
 
-- Every termination maps to exactly one specified outcome; only completed_pass
-  with zero child exit may continue, and iteration-cap success reports remaining
-  work.
+- Every child termination maps by exact precedence to one specified per-child
+  outcome; only completed_pass with zero child exit may continue. Invocation
+  success terminates as `no_work` or `iteration_limit`, with no-work taking
+  precedence when the last completed task exhausted eligible work.
 - Fresh success requires a preflight-absent matching verification ID/path and
   completion ID across every surface; stale/audit/partial-complete/block/rework/
   no-progress/child failure stop with exact safe recovery.
+- Completed audit failure requires a fresh bound pass followed by a distinct
+  fresh failing audit in the same iteration; a completed fail without both
+  artifact identities is invalid postflight. Diagnostics identify the
+  intermediate pass verification/binding separately from the final fail.
 - Delivered recognized outcomes require clean tree, same full attached ref,
   unchanged frozen spec/config/layout/storage/review/prompt/executable bytes,
   unchanged pre-existing `loop_policy` and `loop_reason` fields, valid task
@@ -50,12 +55,20 @@ prompt/skill contract rather than a fabricated postflight attestation.
   values, storage mode/root, configured/effective review maximum and source,
   prompt/executable hashes, mutation/process violations, local commits, remote,
   and next action.
+- Exact dry-run and result-file nested schemas define nullability, source enums,
+  iteration counting, commit/violation ordering, and preflight refusal behavior
+  without fabricating iteration-only evidence.
 - Optional `--result-file` atomically publishes the same final diagnostics in one
   common-envelope JSON document without mixing them with streamed child output;
-  requested result publication failure is a non-zero loop outcome.
+  requested result publication failure is non-zero. Once its destination is
+  valid, preflight refusals and handled interruptions also publish their exact
+  error envelope when possible.
 - Result destinations resolve from the caller's original cwd, must be absent
-  canonical regular-file paths outside managed task/spec/state/prompt/review
-  inputs, traverse no symlink/reparse point, and publish no-clobber.
+  canonical paths outside the worktree, Git directories, and managed inputs,
+  traverse no symlink/reparse point, and publish no-clobber without invalidating
+  reported cleanliness.
+- Destination errors map exactly before launch and final publication rechecks the
+  retained parent identity plus target absence before no-clobber creation.
 
 ## Verification Notes
 

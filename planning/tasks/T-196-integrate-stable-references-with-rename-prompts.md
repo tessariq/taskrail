@@ -17,7 +17,7 @@ updated_at: "2026-08-04T23:06:23Z"
 ## Description
 
 Make import, rename, prompts, and packaged skills use stable references and
-actual storage paths without mutating archived history.
+canonical logical storage paths without mutating archived history.
 
 ## Acceptance
 
@@ -25,9 +25,9 @@ actual storage paths without mutating archived history.
   local; all new machine relationships use stable refs.
 - Rename scans durable paths, applies only live generated slugs, and refuses
   archived inbound legacy references before any write.
-- Prompt resolution exposes actual TASK_PATH plus task_ref/task_id/storage and
+- Prompt resolution exposes canonical logical TASK_PATH plus task_ref/task_id/storage and
   rejects archived authoring/implementation targets.
-- Packaged skills use task show/resolved paths rather than live-directory
+- Packaged skills use task show/spec show rather than live-directory or physical-overlay
   assumptions and remain byte-parity clean.
 - Task-local `loop_policy` and `loop_reason` remain attached to resolved task
   bytes and survive live slug rename unchanged; archived tasks remain immutable

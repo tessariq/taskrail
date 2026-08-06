@@ -13,6 +13,8 @@ dependencies:
     - T-214-bootstrap-and-migrate-human-owned-repository-notes
     - T-216-ship-digest-bound-existing-task-review
     - T-218-add-maintainer-skill-release-evaluations
+    - T-224-promote-local-taskrail-state-into-committed
+    - T-225-prove-local-autonomous-delivery-across-git
 updated_at: "2026-08-04T21:32:13Z"
 ---
 

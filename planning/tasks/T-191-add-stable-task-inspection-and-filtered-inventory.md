@@ -18,14 +18,16 @@ updated_at: "2026-08-04T23:06:23Z"
 
 ## Description
 
-Add read-only task show/list over source and layout-3 ledgers, exposing storage
-and stable identity without guessed paths or unsafe terminal controls.
+Extend inherited read-only task show and add filtered inventory over source and
+layout-3 ledgers, exposing storage and stable identity without guessed physical
+paths or unsafe terminal controls.
 
 ## Acceptance
 
 - Show emits exact Markdown/path to non-terminal output, requires raw terminal
-  acceptance for unsafe controls, and emits escaped resolver/frontmatter/body
-  JSON.
+  acceptance for unsafe controls, and emits safely escaped resolver/content JSON.
+- V0.6 explicitly replaces the inherited show JSON payload with exact stable
+  reference, canonical ID/logical path, storage, content, and digest fields.
 - Show and unfiltered inspection operate read-only on layouts 1/2; layout-3-only
   storage/eligibility filters fail clearly before upgrade.
 - List composes active-spec, storage, status, and archive-eligible filters using

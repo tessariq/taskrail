@@ -18,8 +18,15 @@ give later versions one machine contract to extend rather than replace.
 
 ## Acceptance
 
-- Every existing `--json` command emits one strict common envelope with clean stdout, non-null warnings, stable errors, and exact result types; text and JSON classify exits identically.
+- Every existing `--json` command emits one strict common envelope with clean stdout, non-null warnings, stable errors, canonical command paths, registered `(command,error.code)` pairs, and exact result types; text and JSON classify exits identically.
+- Completed `task loop list` and loop dry-run reports retain result envelopes when their reported violations make exit non-zero; every writer refusal and inability to produce a promised report uses an error envelope.
 - `start`, `complete`, and `block` gain JSON without changing human text behavior. Parser/argument, validation, conflict, partial-write, rollback, and recovery errors after command selection are structured.
+- Lifecycle and init success payloads, the closed v0.5 error-code vocabulary, and
+  common violation/snapshot/recovery details match the exact normative fields;
+  later versions replace inner payloads explicitly without changing the envelope.
+- The closed warning union retains inherited slug, selection, and skill-skew
+  signals and adds only exact local-bootstrap and verify-order variants; inherited
+  coverage gates remain completed non-zero result reports.
 - The common init result type defines layout, human-notes, and skill destination candidates/results in one preview/apply shape; T-214 supplies the notes behavior that populates those fields.
 - Packaged skills use JSON whenever they consume IDs, paths, warnings, previews, or failures; content-producing text flows remain explicit exceptions.
 - v0.6/v0.7 schema tasks reuse the envelope and shared registries. README/help/CHANGELOG document the one-time v0.5 compatibility break.

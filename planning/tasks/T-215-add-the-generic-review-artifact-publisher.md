@@ -21,9 +21,18 @@ atomic/no-follow filesystem guarantees.
 
 ## Acceptance
 
-- `review publish --type spec|task|decomposition|workflow` implements exact per-type flags, schemas, common JSON envelopes, and dry-run/apply parity.
+- `review publish --type spec|task|decomposition|workflow` implements the exact per-type flags, ignored proposal-directory bundles, final destination subtrees, schemas, common JSON envelopes, and dry-run/apply parity.
 - Every type rechecks subject/session/digest/path bindings, caps, expected snapshots, and complete output sets before joining the shared writer/recovery protocol.
-- Publication is canonical, no-follow, no-alias, no-clobber, and all-or-none. Spec/task/decomposition subjects stay unchanged; workflow retains report creation plus index CAS replacement.
+- Publication is canonical, no-follow, no-alias, no-clobber, and all-or-none. Spec/task/decomposition publish exact complete bundles to absent directories without changing subjects; workflow retains report creation plus index CAS replacement.
+- Session/review identity binds proposal and destination names. Workflow uses a
+  durable read fence and deterministic `review recover` action so Taskrail never
+  observes a lone report/index after interruption.
+- Recovery handles pre-report fence interruption, lone exact report rollback,
+  and complete-pair acceptance without overwriting changed bytes; result/error
+  payloads use the exact common machine contract.
+- `review show` reads durable logical review paths through either storage mode;
+  local publication requires explicit local initialization before proposal
+  staging and never bootstraps from a pre-existing proposal.
 - Capabilities exclude lifecycle, loop policy, spec activation, import apply, and verification. Conflict/interruption reports exact recovery without partial final files.
 - Review skills hand untrusted proposals to this command and never write final artifacts directly.
 

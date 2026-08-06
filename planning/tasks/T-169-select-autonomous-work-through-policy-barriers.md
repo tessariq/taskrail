@@ -24,7 +24,7 @@ the task ledger.
   priority, and ID tie-breaks as read-only status; it introduces no second queue
   or ordering source.
 - Candidates are exactly active-spec `todo` tasks with explicit `allow` and normal
-  read-only eligibility. Among candidates, priority, dependency, and task-reference
+  read-only eligibility. Among candidates, priority, dependency, and full-task-ID
   tie-breaks exactly match status selection; policy location, mutation time, and
   list order never affect ranking.
 - Explicitly or implicitly held tasks are bypassed for unrelated work. A held task
@@ -37,7 +37,7 @@ the task ledger.
 - Selection is read-only and never adds, clears, or changes task-local loop-policy
   fields. Newly created tasks and follow-ups therefore remain implicit holds.
 - Text and JSON expose the selected candidate and exact task-row fields
-  `task_ref`, `status`, `active_spec`, `source`, `effective_policy`, `reason`,
+  `task_id`, `status`, `active_spec`, `source`, `effective_policy`, `reason`,
   `eligible`, `held_dependencies`, and `disposition`, plus action, violations,
   and the result reason in stable order. JSON uses the common envelope with
   non-null top-level warnings and non-null result violations; repeated selection

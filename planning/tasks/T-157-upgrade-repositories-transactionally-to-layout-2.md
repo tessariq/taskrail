@@ -32,9 +32,9 @@ implementation-review configuration to the layout contract.
   never disappear through a later marker rewrite; T-222 owns fresh local
   initialization and discovery against this completed marker contract.
 - Preview validates a complete candidate without writes, while apply requires
-  operator-confirmed old-process quiescence, snapshots semantic files, and
-  publishes the early migration fence, skills when present, and final marker
-  atomically.
+  explicit `--confirm-quiescent`, snapshots semantic files, durably records
+  recovery, publishes the exact fenced config before semantic bytes, and removes
+  the fence only by publishing the final strict marker after post-validation.
 - Failure and interruption restore only unchanged originals, never overwrite
   concurrent bytes, and provide an exact recovery path; an already-running old
   writer makes migration unsafe and is covered explicitly.
@@ -47,6 +47,9 @@ implementation-review configuration to the layout contract.
   legacy note and machine-readable preservation choices, and apply requires
   either explicit no-clobber extraction or `--drop-continuation-notes` exactly
   when the legacy list is non-empty.
+- State schema 2 accepts only the inherited current-snapshot fields plus optional
+  verification ID/completion binding, with exact omission and canonical summary
+  rules; fresh and migrated legacy state never invent verification identity.
 - State-schema migration, body re-render, marker publication, and installed-skill
   refresh share the transaction and rollback boundary. Schema-2 decoding rejects
   a reintroduced `continuation_notes` key instead of silently dropping it.
@@ -56,6 +59,13 @@ implementation-review configuration to the layout contract.
 - The migration-only acknowledgement remains available for every supported
   direct or multi-hop schema-1 upgrade and is retired only with schema-1
   migration support; it is reported as unnecessary when no note needs removal.
+- Non-empty legacy notes require exactly one of
+  `--extract-continuation-notes` or `--drop-continuation-notes`; migration-only
+  note flags and quiescence confirmation reject inapplicable
+  fresh/current/direct-schema-2 flows.
+- Init JSON represents NOTES file action separately from continuation-note
+  extract/drop choices so preview can expose both alternatives and apply records
+  one without changing the candidate path set.
 - Layout 2 recognizes the optional paired `loop_policy` and `loop_reason` task
   fields under strict decoding, protects them through every task re-render, and
   upgrades tasks with neither field as implicit holds without granting unattended

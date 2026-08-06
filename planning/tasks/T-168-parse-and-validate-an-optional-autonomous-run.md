@@ -27,7 +27,7 @@ delegated agents, body authors, or imports to grant themselves authority.
   concrete ignored-artifact path. Missing fields mean implicit hold with the
   deterministic default reason.
 - `task loop list` is deterministic and read-only in text and JSON, reports every
-  task in canonical reference order, and exposes status, active-spec membership,
+  task in canonical full-ID order, and exposes status, active-spec membership,
   explicit/default source, effective policy, reason, eligibility, ordered held
   dependencies, disposition, and deterministic violations.
 - `task loop allow`, `hold`, and `clear` use the repository transaction protocol,
@@ -38,7 +38,9 @@ delegated agents, body authors, or imports to grant themselves authority.
   lock ownership refuses these commands regardless of its other capabilities or
   task-field write set.
 - Every mutator supports dry-run and common JSON, reports old/effective/candidate
-  policy and validation, and classifies preview/apply refusals identically.
+  policy through the exact result shape. Initialized repositories classify
+  preview/apply semantic refusals identically; uninitialized apply may perform
+  separately disclosed local bootstrap while dry-run remains write-free.
 - Validation rejects malformed or half-present fields. Existing lifecycle, body,
   rename, repoint, import, and review writers preserve the pair exactly and cannot
   use their write sets to change it; `STATE.md` never duplicates the pair.

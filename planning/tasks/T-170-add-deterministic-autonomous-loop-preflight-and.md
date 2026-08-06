@@ -41,10 +41,11 @@ the Taskrail source checkout explicitly while supporting installed adopters.
   `selected_task`, non-null `tasks` and `violations`, nullable `prompt`, `git`,
   `lock`, `storage`, `review`, and mode-specific `delivery`; warnings remain the
   envelope's non-null top-level array. Selected/task rows use
-  only `task_ref`, `status`, `active_spec`, `source`, `effective_policy`, `reason`,
+  only `task_id`, `status`, `active_spec`, `source`, `effective_policy`, `reason`,
   `eligible`, `held_dependencies`, and `disposition`; dry-run never mutates task
   or state bytes.
-- Overrides execute only with frozen exact SHA authorization; source-checkout
+- Overrides execute only with frozen exact template SHA authorization; dry-run
+  and execution distinguish template and per-task rendered hashes; source-checkout
   execution is rejected clearly while installed-repository diagnostics remain
   supported.
 

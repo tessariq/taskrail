@@ -23,6 +23,10 @@ outcome-focused body contract.
 - Task author requires the expected exact digest, layout 2 and writer lock,
   rechecks todo status/bytes, and atomically changes only Description, Acceptance,
   and Verification Notes.
+- Proposals contain exactly the three non-empty ordered level-2 sections with no
+  frontmatter, H1, Implementation Notes, or other level-2 heading; successful
+  text/JSON preserves proposal section bytes and reports the exact before/after
+  digests, canonical unified-diff string, validation, and applied state.
 - Frontmatter, H1, identity, lifecycle fields, and Implementation Notes remain
   byte-equivalent, including `loop_policy` and `loop_reason`; conflict, validation
   failure, interruption, or non-todo prompt rendering writes nothing.

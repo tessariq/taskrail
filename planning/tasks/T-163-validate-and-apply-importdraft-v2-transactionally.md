@@ -22,12 +22,16 @@ exact imported bytes. Preserve v1 behavior explicitly.
 
 ## Acceptance
 
-- V2 exact schemas require complete valid bodies, one review session,
+- V2 exact field schemas require complete valid bodies, one review session,
   bidirectional trace keys, real anchors, unique keys, acyclic true dependencies,
-  immutable ordered passes, and strict unknown/null/duplicate rejection.
+  immutable ordered passes, last-review binding to exact final draft/trace bytes,
+  and strict unknown/null/duplicate rejection.
 - Apply verifies layout 2, lock participation, spec-review manifest, spec, draft,
   trace, every review, and decomposition-manifest path/digest/session identity
   before any write.
+- Every v2 apply uses the exact published draft/manifest command surface, targets
+  tasks with empty spec sections, and requires a final decomposition review;
+  unreviewed and spec-writing imports remain v1-only.
 - Task, spec, and state candidates all stage and validate as one repository
   before atomic publication; every snapshot is rechecked and
   failure/interruption rolls back without overwriting concurrent bytes.

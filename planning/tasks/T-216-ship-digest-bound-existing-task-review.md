@@ -24,7 +24,7 @@ without duplicating the four post-spec lenses or mutating task state directly.
 - `task-review` resolves one task/spec context, uses exact prompt metadata/render contracts, and inventories related tasks and dependencies before judging the proposal.
 - Findings cover outcome/spec alignment, overlap, dependency direction, acceptance, negative boundaries, evidence/oracles, operator gates, and unnecessary implementation prescription in one strict digest-bound schema.
 - Final artifacts publish through the generic review command. Accepted body changes route through `task author`; dependency changes and follow-ups route through explicit reviewed commands.
-- Todo tasks can continue into authoring; active/blocked/terminal and later archived history remain reviewable but not rewritten through the skill.
+- Todo tasks can continue into authoring; active, blocked, completed, and cancelled tasks remain reviewable but are not rewritten through the skill.
 - Packaged/committed copies remain Agent Skills-compliant, provider-neutral, version-aware, and byte-identical.
 
 ## Verification Notes

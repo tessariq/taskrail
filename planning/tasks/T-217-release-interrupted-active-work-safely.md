@@ -20,10 +20,12 @@ deliberate-rework active work without inventing blocker history or cancelling it
 
 ## Acceptance
 
-- `task release` accepts exactly one live `in_progress` task plus a bounded portable reason; dry-run and common JSON report the exact candidate and refusal class.
+- `task release` accepts exactly one full-ID `in_progress` task plus a bounded portable reason; dry-run and common JSON report the exact candidate and refusal class.
 - Apply changes status to `todo`, clears only the matching current-task pointer, appends a timestamped Implementation Note, reprojects state, validates, and publishes transactionally.
+- Reason grammar, exact success/error JSON, candidate digests, contradictory
+  pointer refusal, and dry-run/apply parity follow the canonical contract.
 - Completion/verification history, identity, body, dependencies, spec reference, and paired loop policy remain unchanged. No blocker or cancellation provenance is created.
-- Other statuses, archived targets, ambiguous references, delegated loop ownership, and retained recovery transactions refuse without writes.
+- Other statuses, unknown IDs, delegated loop ownership, and retained recovery transactions refuse without writes.
 - Human/agent recovery docs distinguish release from unblock, cancel, reopen, and automatic continuation.
 
 ## Verification Notes

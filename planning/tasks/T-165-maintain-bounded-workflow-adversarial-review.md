@@ -20,9 +20,13 @@ and unevidenced closure cannot masquerade as current assurance.
 
 ## Acceptance
 
-- Exact schemas retain never-reused IDs, separate outcome/freshness, preserve
-  unresolved findings, enforce caps, and add at most three explained surface keys
-  per run.
+- Exact index/report/nested-object schemas retain never-reused IDs, resolvable
+  evidence references, separate outcome/freshness, preserve unresolved findings,
+  enforce canonical ordering and caps, and add at most three explained surface
+  keys per run.
+- Canonical JSON and product-source hash framing produce byte-identical digests
+  across platforms; obsolete closure uses superseding evidence while resolved and
+  not-reproducible require fresh executed attempts.
 - Review requires a clean source worktree, captures HEAD/spec/product snapshots
   before probing, excludes only the review subtree from product digest, and after
   cleanup permits only memory/report proposals; any other source diff forbids a
@@ -30,9 +34,12 @@ and unevidenced closure cannot masquerade as current assurance.
 - Source/spec/product changes stale rows by default unless evidenced path analysis
   retains freshness; review rotates among untested, stale, and shallow surfaces in
   an isolated sandbox and clean requires an observable probe.
-- Finding transitions require human-created task refs for tracked, fresh
+- Finding transitions require human-created full task IDs for tracked, fresh
   reproduction for resolved, evidence/rationale for other closures, and
   visibility of unchecked findings.
+- Review/probe/observation IDs, severity, nested ordering, evidence resolution,
+  and closure evidence follow the exact schema; review IDs remain globally
+  unique across version rollover.
 - Version rollover retains applicable unresolved IDs/origin, marks prior surfaces
   stale, and keeps findings advisory.
 - The packaged workflow-review skill retains Agent Skills-compliant frontmatter;
