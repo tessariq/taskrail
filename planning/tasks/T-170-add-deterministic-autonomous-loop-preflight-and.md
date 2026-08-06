@@ -5,10 +5,8 @@ status: todo
 priority: high
 spec_ref: specs/v0.5.0.md#cross-platform-autonomous-loop
 dependencies:
-    - T-157-upgrade-repositories-transactionally-to-layout-2
-    - T-159-add-a-versioned-workflow-prompt-catalog
+    - T-160-ship-the-lifecycle-complete-task-implementation
     - T-169-select-autonomous-work-through-policy-barriers
-    - T-213-define-the-uniform-agent-machine-api
     - T-223-run-every-v0-5-command-against-local-storage
 updated_at: "2026-08-04T21:32:13Z"
 ---
@@ -26,7 +24,8 @@ the Taskrail source checkout explicitly while supporting installed adopters.
 
 - Parsing requires a child for execution, forbids one for dry-run, defaults max
   iterations to one, accepts only positive bounds, rejects execution JSON,
-  timeout/retry/background options, and ambiguous delimiter/flag forms.
+  accepts an optional positive per-child timeout, rejects retry/background
+  options, and rejects ambiguous delimiter/flag forms.
 - `--max-review-iterations` accepts only `1..5`, overrides the configured maximum
   without changing it, remains distinct from child `--max-iterations`, and is
   frozen in the rendered task prompt and diagnostics.
@@ -39,22 +38,22 @@ the Taskrail source checkout explicitly while supporting installed adopters.
   and no candidate launches nothing with a clean `none` result.
 - Dry-run emits the common envelope with exact result `action`, `reason`, nullable
   `selected_task`, non-null `tasks` and `violations`, nullable `prompt`, `git`,
-  `lock`, `storage`, `review`, and mode-specific `delivery`; warnings remain the
+  `lock`, `storage`, `review`, `execution`, and mode-specific `delivery`; warnings remain the
   envelope's non-null top-level array. Selected/task rows use
   only `task_id`, `status`, `active_spec`, `source`, `effective_policy`, `reason`,
   `eligible`, `held_dependencies`, and `disposition`; dry-run never mutates task
   or state bytes.
-- Overrides execute only with frozen exact template SHA authorization; dry-run
-  and execution distinguish template and per-task rendered hashes; source-checkout
-  execution is rejected clearly while installed-repository diagnostics remain
-  supported.
+- Built-ins are inherently authorized. Replacements execute only with frozen exact
+  template SHA authorization; absent/mismatch makes dry-run invalid and a supplied
+  digest without a replacement is an argument error. Source-checkout execution is
+  rejected by the exact repository predicate.
 
 ## Verification Notes
 
-- Map criteria to CLI table tests including no-timeout, exact dry-run goldens,
+- Map criteria to CLI table tests including omitted/valid/invalid timeout, exact dry-run goldens,
   no-launch helper evidence, dirty/detached/unborn/bare/root/task/lock/task-policy
   cases, and override/source boundaries.
-- Snapshot all tracked bytes before and after every dry-run and refused execution
-  branch.
+- Snapshot the complete managed semantic store plus visible Git index/status before
+  and after every committed/local dry-run and refused execution branch.
 
 ## Implementation Notes

@@ -29,6 +29,9 @@ canonical logical storage paths without mutating archived history.
   rejects archived authoring/implementation targets.
 - Packaged skills use task show/spec show rather than live-directory or physical-overlay
   assumptions and remain byte-parity clean.
+- New task-review artifacts use schema v2 with stable `task_ref` plus historical
+  snapshot ID/path, and workflow memory v2 migrates tracked findings to paired
+  stable reference and historical ID without rewriting immutable v1 reports.
 - Task-local `loop_policy` and `loop_reason` remain attached to resolved task
   bytes and survive live slug rename unchanged; archived tasks remain immutable
   and no separate loop-policy identity or publication exists.

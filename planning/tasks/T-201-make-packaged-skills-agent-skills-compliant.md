@@ -24,6 +24,8 @@ Make every skill Taskrail ships conform to the Agent Skills frontmatter contract
 - A6. Nested and legacy markers use one running-version skew policy and the same advisory and `--force` remedy. Marker location cannot change whether a version is considered current or skewed.
 - A7. Marker-free installed copies retain parity-aware behavior: bytes identical to the embedded package are accepted, while divergent bytes remain unknown-version and require the existing explicit remedy.
 - A8. Embedded package sources plus `.agents` and `.claude` mirrors remain marker-free and byte-for-byte equal. Installed-output stamping is separate from package parity, and refresh skew checks still protect destination changes.
+- A9. Layout migration classifies a marker-free byte-identical destination as a
+  parity mirror and preserves it marker-free rather than stamping installed output.
 
 ## Verification Notes
 
@@ -31,5 +33,7 @@ Make every skill Taskrail ships conform to the Agent Skills frontmatter contract
 - A3-A5: Boundary integration tests in temporary repositories should exercise fresh install and refresh for no marker, nested-only, legacy-only, matching dual, conflicting dual, empty marker, non-string marker, and unrelated metadata. Assert exact resulting frontmatter for successful cases and unchanged destination bytes for refusals.
 - A6-A7: CLI integration tests should run current-version, older/newer-version, marker-free-identical, and marker-free-divergent destinations with and without `--force`, proving equivalent outcomes for legacy and nested locations.
 - A8: Run the packaged-skill regeneration/parity check and task-body hygiene check; retain command output as verification evidence. A manual installed-copy inspection may supplement the automated checks but is not the oracle for parity.
+- A9: Migration fixtures distinguish mirrors from installed/divergent copies in
+  Taskrail's source checkout and an adopter repository.
 
 ## Implementation Notes

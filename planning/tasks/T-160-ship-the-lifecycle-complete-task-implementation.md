@@ -5,11 +5,9 @@ status: todo
 priority: high
 spec_ref: specs/v0.5.0.md#task-implementation-prompt
 dependencies:
-    - T-158-bind-completion-and-verification-with-stable
-    - T-159-add-a-versioned-workflow-prompt-catalog
-    - T-168-parse-and-validate-an-optional-autonomous-run
     - T-217-release-interrupted-active-work-safely
-    - T-223-run-every-v0-5-command-against-local-storage
+    - T-241-warn-on-passing-verification-before-completion
+    - T-250-render-prompts-from-storage-neutral-context
 updated_at: "2026-08-04T21:32:13Z"
 ---
 
@@ -17,10 +15,9 @@ updated_at: "2026-08-04T21:32:13Z"
 
 ## Description
 
-Ship the built-in task implementation prompt and align full-task packaged skills
-on one lifecycle-complete workflow. The prompt drives independent review and
-verification while preserving Taskrail as orchestration rather than an LLM
-provider.
+Ship the built-in task implementation prompt with bounded independent review,
+simplification, finding dispositions, lifecycle/delivery branches, and recovery
+guidance. Packaged full-task skill command execution is owned by T-242.
 
 ## Acceptance
 
@@ -45,15 +42,14 @@ provider.
   rework guidance names direct-operator `task release` without allowing a
   delegated child to relinquish its selected task.
 - Headless ambiguity, credentials, destructive scope, and barriers stop for a
-  human; at most two real follow-ups are created without `loop_policy` or
-  `loop_reason` and remain implicitly held. Each follow-up is a separately
-  meaningful outcome rather than a current-task review repair.
+  human; necessary independently meaningful out-of-scope follow-ups are created
+  only through selected-task verification, with no arbitrary numeric cap, no
+  `loop_policy`/`loop_reason`, and no current-task repair deferred into follow-up.
 - Delegated task implementation may use only its granted lifecycle and follow-up
   write sets. It cannot allow, hold, clear, or otherwise mutate task-local loop
   policy, and authoring a follow-up body cannot grant unattended authorization.
-- Full-task skills use equivalent blocks, keep `autonomous-verify` as the separate
-  post-transition workflow, and leave provider command, credentials, remote push,
-  and sandboxing to callers.
+- The prompt leaves provider command, credentials, remote push, and sandboxing to
+  callers and never claims reviewer identity attestation.
 - Prompt guidance inventories existing repository primitives, stops on material
   ambiguity, and traces requirements to observable executable evidence before
   implementation.

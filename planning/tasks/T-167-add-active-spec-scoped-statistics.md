@@ -4,7 +4,8 @@ title: Add active-spec scoped statistics
 status: todo
 priority: medium
 spec_ref: specs/v0.5.0.md#active-spec-scoped-statistics
-dependencies: []
+dependencies:
+    - T-223-run-every-v0-5-command-against-local-storage
 updated_at: "2026-08-04T21:32:13Z"
 ---
 
@@ -24,8 +25,8 @@ retaining full-ledger dependency context.
   matching discoverable version/path, and no symlink traversal across supported
   filesystems.
 - Subject, excluded, dependency-context, malformed-subject, and malformed-ledger
-  sets follow exact definitions and ordering, including classifiable active paths
-  with invalid anchors.
+  sets follow exact definitions and ordering. One ordered issue list names every
+  affected task/reference/classification and is the source of JSON/text/graph counts.
 - Metrics use only subjects; traversal uses the full ledger and graphs mark
   off-spec context plus deterministic synthetic missing nodes with no dangling
   edge.

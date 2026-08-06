@@ -22,8 +22,8 @@ as synchronization state.
 
 ## Acceptance
 
-- Receipt schema version 1 has exactly the specified profile, ordered source
-  entries, target spec, v3 draft, v1 mapping, and resulting-task fields. Unknown,
+- Receipt schema version 1 has exactly the specified profile, trust-labelled
+  ordered source entries, target spec, v3 draft, v1 mapping, and resulting-task fields. Unknown,
   missing, duplicate, malformed, or `null` fields and non-canonical values are
   rejected rather than tolerated or upgraded.
 - The receipt ID is exactly `psr-<lower-case 64-hex>` computed from the specified
@@ -38,7 +38,7 @@ as synchronization state.
   points, special files, filename/ID mismatches, and reformatted or truncated
   receipts fail closed.
 - Before preview or apply, all receipts are validated and the tuple
-  `(profile.name, profile.version, source.aggregate_sha256)` is repository-unique.
+  `(profile.name, profile.version, source.trust, source.aggregate_sha256)` is repository-unique.
   A match fails as `duplicate_source_import` and identifies the existing receipt
   and task refs regardless of target spec, mapping, draft, or requested IDs. The
   aggregate already binds the canonical root, so moving the same file bytes to a
@@ -54,7 +54,7 @@ as synchronization state.
   recovery, and repair writer preserves receipt bytes and paths exactly. There
   is no receipt edit, refresh, adoption, redaction, migration, deletion, or
   reconstruction command; malformed existing receipts block new source imports
-  until Git restores valid historical bytes.
+  until exact committed bytes or a local backup/recovery restores valid history.
 - Receipt publication composes with candidate tasks and projected state under the
   common durable transaction as one all-or-none write set; failure or rollback
   ambiguity can never leave a receipt that certifies only a partial task outcome.

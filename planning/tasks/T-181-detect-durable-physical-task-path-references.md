@@ -26,6 +26,9 @@ text.
   and filter scope exactly.
 - Non-Git scanning enumerates canonical regular root files with exact exclusions
   and incomplete-scope warnings.
+- Local-mode Git scanning combines clean tracked text with every managed-overlay
+  semantic file, translates physical paths to logical paths, and refuses external
+  untracked or incomplete overlay scope.
 - Matching uses host-independent conservative ASCII case fold for
   slash/backslash, relative, anchor/suffix, and link destinations decoded
   exactly once; malformed or decoded separator/control ambiguity refuses, while

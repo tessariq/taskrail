@@ -6,7 +6,6 @@ priority: high
 spec_ref: specs/v0.5.0.md#adversarial-spec-to-task-decomposition
 dependencies:
     - T-163-validate-and-apply-importdraft-v2-transactionally
-    - T-162-productize-digest-bound-post-spec-review-lenses
 updated_at: "2026-08-04T21:32:13Z"
 ---
 

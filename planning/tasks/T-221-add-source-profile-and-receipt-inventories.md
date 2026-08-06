@@ -21,10 +21,13 @@ receipts, including prior-import detection before reviewers author new handoffs.
 
 ## Acceptance
 
-- `source profile list/show` reports exact built-in versions, roles, path shapes, and limits in deterministic text and common JSON without reading or writing source repositories.
+- `source profile list/show` reports exact built-in versions, roles, path shapes,
+  and limits in deterministic text and envelope-generation-3 JSON without reading
+  or writing source repositories.
 - `source receipt list/show` validates the complete receipt set, supports profile filtering, and reports canonical summaries or exact receipt objects in receipt-ID order.
 - Profile role/layout/limit objects, receipt filters/summaries, matching receipts, nullability, and ordering use the spec's exact nested schemas with no open-ended maps.
-- `source inspect` reports a nullable existing matching receipt for the exact profile/version/source-digest tuple before draft/mapping authoring.
+- `source inspect` reports a nullable existing matching receipt for the exact
+  profile/version/source-trust/source-digest tuple before draft/mapping authoring.
 - Malformed/unexpected receipt entries fail closed even when filters would hide them. Inventory never repairs, normalizes, refreshes, deletes, or infers current task state.
 - README/help/import/decomposition/SDD-handoff/retrofit guidance uses inventory in the complete inspect-to-import workflow.
 

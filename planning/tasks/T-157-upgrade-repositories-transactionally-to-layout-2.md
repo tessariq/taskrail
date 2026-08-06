@@ -5,9 +5,10 @@ status: todo
 priority: high
 spec_ref: specs/v0.5.0.md#layout-compatibility-and-upgrade
 dependencies:
-    - T-156-protect-existing-semantic-writers-with-snapshot
+    - T-168-parse-and-validate-an-optional-autonomous-run
     - T-201-make-packaged-skills-agent-skills-compliant
     - T-214-bootstrap-and-migrate-human-owned-repository-notes
+    - T-232-recover-v0-5-transactions-through-one-command
 updated_at: "2026-08-04T21:32:13Z"
 ---
 
@@ -38,18 +39,18 @@ implementation-review configuration to the layout contract.
 - Failure and interruption restore only unchanged originals, never overwrite
   concurrent bytes, and provide an exact recovery path; an already-running old
   writer makes migration unsafe and is covered explicitly.
-- Installed packaged skills require the combined forced refresh; repositories
-  without installed skills do not create them. Refreshed installed skills write
-  nested `metadata.taskrail_version`, normalize compatible legacy markers, and
-  retain valid Agent Skills frontmatter.
+- Marker-free destinations byte-identical to the embedded package are preserved as
+  parity mirrors. Installed copies require combined forced refresh, normalize
+  compatible legacy markers to nested metadata, and divergent/conflicting copies
+  refuse before marker publication.
 - Fresh layout-2 state uses schema 2 without `continuation_notes` or a rendered
   `## Notes` section. Upgrade preview explicitly decodes schema 1, reports every
   legacy note and machine-readable preservation choices, and apply requires
   either explicit no-clobber extraction or `--drop-continuation-notes` exactly
   when the legacy list is non-empty.
 - State schema 2 accepts only the inherited current-snapshot fields plus optional
-  verification ID/completion binding, with exact omission and canonical summary
-  rules; fresh and migrated legacy state never invent verification identity.
+  verification ID, predecessor ID, and completion binding, with exact omission and
+  canonical summary rules; fresh and migrated legacy state never invent identity.
 - State-schema migration, body re-render, marker publication, and installed-skill
   refresh share the transaction and rollback boundary. Schema-2 decoding rejects
   a reintroduced `continuation_notes` key instead of silently dropping it.

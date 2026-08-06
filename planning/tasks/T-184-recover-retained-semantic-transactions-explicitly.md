@@ -1,6 +1,6 @@
 ---
 id: T-184-recover-retained-semantic-transactions-explicitly
-title: Recover retained semantic transactions explicitly
+title: Extend shared recovery for task storage moves
 status: todo
 priority: high
 spec_ref: specs/v0.6.0.md#atomic-git-aware-moves-and-recovery
@@ -10,17 +10,17 @@ dependencies:
 updated_at: "2026-08-04T23:06:23Z"
 ---
 
-# T-184-recover-retained-semantic-transactions-explicitly Recover retained semantic transactions explicitly
+# T-184-recover-retained-semantic-transactions-explicitly Extend shared recovery for task storage moves
 
 ## Description
 
-Add inspect, preview, restore-original, and accept-candidate recovery over
-retained durable transactions, including crash safety of recovery itself.
+Extend the inherited v0.5 recovery command and schema-version-2 snapshots for
+committed Git-index and local managed-overlay archive/restore transactions.
 
 ## Acceptance
 
-- Actions are mutually exclusive, refuse a live owner, and default to read-only
-  inspection; preview writes nothing.
+- Inherited actions remain mutually exclusive, refuse a live owner, and default
+  to read-only inspection; v0.6 reports applicable index/local storage states.
 - Restore accepts each component only at recorded original/candidate value
   including expected absence, restores candidate-valued components, leaves
   originals, validates all-original, then clears.

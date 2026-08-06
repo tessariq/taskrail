@@ -13,15 +13,14 @@ updated_at: "2026-08-04T23:06:23Z"
 
 ## Description
 
-Extend the v0.5 common machine envelope with reusable strict result/detail types
-and code registries for v0.6 cancel, dependency, inventory, storage, migration
-warnings, and recovery before command implementations consume them.
+Define common envelope generation 2 and strict result/detail registries for v0.6
+stable identity, cancel, dependency, inventory, storage, migration warnings, and
+recovery before command implementations consume them.
 
 ## Acceptance
 
-- The inherited schema-v1 envelope retains command/result/error exclusivity, nullable fields,
-  string identities/generations, non-null arrays, warning objects, and
-  unknown/missing rejection.
+- Every v0.6 command emits schema version 2 with inherited outer member names and
+  strict command/result/error exclusivity; no command emits schema version 1.
 - Cancel preview/apply, dependency add/remove, inventory, transition, eligibility/recovery, path blocker, unsupported
   path, snapshot, transaction, validation, and refusal-details objects expose
   exact named fields/enums.
@@ -30,8 +29,10 @@ warnings, and recovery before command implementations consume them.
   classification.
 - Error details can carry transition/eligibility/applied/scan facts and encoders
   guarantee one JSON document without free-form nested shapes.
-- Inherited verify_pass_before_complete warning type remains byte/schema
-  compatible while v0.6 outer results can add task_ref.
+- Envelope-v2 replacements add stable task/dependency refs and storage/index facts
+  while preserving inherited verify-order and local warning meanings.
+- The complete warning union names exact unchanged and task-ref-extended v0.5
+  variants plus identity/storage variants and their command-specific subsets.
 
 ## Verification Notes
 

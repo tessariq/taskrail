@@ -1,27 +1,27 @@
 ---
 id: T-220-add-validated-dependency-creation
-title: Add validated dependency creation
+title: Upgrade dependency editing to stable references
 status: todo
 priority: high
 spec_ref: specs/v0.6.0.md#cancellation-transition-and-provenance
 dependencies:
     - T-179-resolve-stable-task-references-across-every
     - T-182-define-exact-v0-6-machine-result-schemas
-    - T-184-recover-retained-semantic-transactions-explicitly
     - T-185-upgrade-repositories-transactionally-to-layout-3
 updated_at: "2026-08-05T20:24:45Z"
 ---
 
-# T-220-add-validated-dependency-creation Add validated dependency creation
+# T-220-add-validated-dependency-creation Upgrade dependency editing to stable references
 
 ## Description
 
-Complement narrow dependency removal with safe addition so operators can redesign
-tracked work without hand-editing increasingly strict task frontmatter.
+Upgrade inherited exact-ID dependency add/remove to the unified stable-reference
+resolver and live-plus-archive ledger without changing their one-edge semantics.
 
 ## Acceptance
 
-- `task dependency add` resolves target/dependency through the unified ledger, supports dry-run/common JSON, and appends exactly one stable reference to a live open target.
+- Both inherited commands resolve target/dependency through the unified ledger,
+  support dry-run/envelope-v2 JSON, and persist or remove one semantic stable edge.
 - Duplicate, self, cycle, missing, ambiguous, cancelled-dependency, archived-target, alias, and recovery-pending cases refuse before writes with stable codes.
 - Candidate validation uses complete-ledger semantics, preserves existing dependency order and task-local loop fields, reprojects STATE, and publishes through the durable transaction protocol.
 - Add/remove share exact result/error types and dry-run/apply classification. Replacement and bulk editing remain excluded.

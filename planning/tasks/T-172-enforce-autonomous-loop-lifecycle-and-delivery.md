@@ -5,10 +5,8 @@ status: todo
 priority: high
 spec_ref: specs/v0.5.0.md#cross-platform-autonomous-loop
 dependencies:
-    - T-158-bind-completion-and-verification-with-stable
-    - T-160-ship-the-lifecycle-complete-task-implementation
-    - T-171-contain-and-pin-autonomous-loop-child-processes
     - T-217-release-interrupted-active-work-safely
+    - T-243-contain-autonomous-loop-process-trees
 updated_at: "2026-08-04T21:32:13Z"
 ---
 
@@ -31,25 +29,24 @@ prompt/skill contract rather than a fabricated postflight attestation.
 - Fresh success requires a preflight-absent matching verification ID/path and
   completion ID across every surface; stale/audit/partial-complete/block/rework/
   no-progress/child failure stop with exact safe recovery.
-- Completed audit failure requires a fresh bound pass followed by a distinct
-  fresh failing audit in the same iteration; a completed fail without both
-  artifact identities is invalid postflight. Diagnostics identify the
+- Completed audit failure requires a fresh bound pass followed directly in the
+  verification predecessor chain by a fresh fail in the same iteration; a
+  completed fail without that chain is invalid postflight. Diagnostics identify the
   intermediate pass verification/binding separately from the final fail.
 - Delivered recognized outcomes require clean tree, same full attached ref,
   unchanged frozen spec/config/layout/storage/review/prompt/executable bytes,
   unchanged pre-existing `loop_policy` and `loop_reason` fields, valid task
   policy, and no contained process; remote is not_checked.
 - Committed delivery requires implementation plus generated task/state bytes in
-  a descendant local commit. Local completed-pass requires a descendant product
-  commit; blocked/rework requires one only when product bytes changed, otherwise
+  exactly one direct-child commit. Local completed-pass requires exactly one
+  direct-child product commit; blocked/rework requires one only when product bytes changed, otherwise
   unchanged HEAD plus exact valid ignored lifecycle/verification bytes is valid.
   No local branch stages/commits Taskrail metadata or creates an empty delivery
   commit.
 - Pre-existing non-selected task bytes and selected immutable content are
-  protected; only canonical lifecycle fields/notes and at most two real
-  follow-ups may change. Every new follow-up omits `loop_policy` and `loop_reason`
-  and remains implicitly held; any child policy-field mutation is an integrity
-  failure.
+  protected; only canonical lifecycle fields/notes and any number of follow-ups
+  proven by selected-task verify reports may change. Every new follow-up depends
+  on the selected task, omits loop policy, and remains implicitly held.
 - Final diagnostics always report outcome, child exit/signal, all identity
   before/after values, validation, Git/ref/HEAD, task-local policy source and
   values, storage mode/root, configured/effective review maximum and source,
@@ -58,17 +55,7 @@ prompt/skill contract rather than a fabricated postflight attestation.
 - Exact dry-run and result-file nested schemas define nullability, source enums,
   iteration counting, commit/violation ordering, and preflight refusal behavior
   without fabricating iteration-only evidence.
-- Optional `--result-file` atomically publishes the same final diagnostics in one
-  common-envelope JSON document without mixing them with streamed child output;
-  requested result publication failure is non-zero. Once its destination is
-  valid, preflight refusals and handled interruptions also publish their exact
-  error envelope when possible.
-- Result destinations resolve from the caller's original cwd, must be absent
-  canonical paths outside the worktree, Git directories, and managed inputs,
-  traverse no symlink/reparse point, and publish no-clobber without invalidating
-  reported cleanliness.
-- Destination errors map exactly before launch and final publication rechecks the
-  retained parent identity plus target absence before no-clobber creation.
+- T-244 owns external result-file path safety and publication of these diagnostics.
 
 ## Verification Notes
 

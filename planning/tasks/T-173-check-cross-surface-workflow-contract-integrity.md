@@ -1,24 +1,19 @@
 ---
 id: T-173-check-cross-surface-workflow-contract-integrity
-title: Check cross-surface workflow contract integrity
+title: Derive and check the v0.5 workflow contract index
 status: todo
 priority: high
 spec_ref: specs/v0.5.0.md#skill-and-prompt-behavioral-contract-tests
 dependencies:
-    - T-164-orchestrate-adversarial-spec-to-task-decomposition
-    - T-166-publish-workflow-review-index-and-reports-with-cas
     - T-167-add-active-spec-scoped-statistics
-    - T-172-enforce-autonomous-loop-lifecycle-and-delivery
-    - T-202-ship-the-lightweight-sdd-handoff-skill
-    - T-214-bootstrap-and-migrate-human-owned-repository-notes
-    - T-216-ship-digest-bound-existing-task-review
-    - T-218-add-maintainer-skill-release-evaluations
     - T-224-promote-local-taskrail-state-into-committed
     - T-225-prove-local-autonomous-delivery-across-git
+    - T-246-classify-every-v0-5-writer-transaction-and
+    - T-249-allow-explicit-skill-evaluation-release-waivers
 updated_at: "2026-08-04T21:32:13Z"
 ---
 
-# T-173-check-cross-surface-workflow-contract-integrity Check cross-surface workflow contract integrity
+# T-173-check-cross-surface-workflow-contract-integrity Derive and check the v0.5 workflow contract index
 
 ## Description
 
@@ -32,9 +27,9 @@ Feature-specific behavior remains owned and verified by its implementation task.
   Agent Skills conformance covers metadata and nested resources; delineated
   command/lifecycle fixtures reject missing, invented, or misordered behavior
   rather than matching unrelated prose.
-- Common-envelope and skill-invocation fixtures reject missing JSON support,
-  prose-parsed results, incompatible outer wrappers, and mixed streamed/result
-  output.
+- Schema-inventory and skill-invocation fixtures reject missing JSON support,
+  prose-parsed results, wrong outer generations, unregistered shapes, and mixed
+  streamed/result output.
 - Cross-surface fixtures prove canonical lifecycle citations,
   review/decomposition and lightweight SDD handoff compatibility, scoped lock
   delegation, task-local loop-policy refusal/preservation, and provider
@@ -44,14 +39,14 @@ Feature-specific behavior remains owned and verified by its implementation task.
 - README, AGENTS, workflow, skill-productization, human-notes, skill-evaluation,
   upgrade/recovery/review-evidence/SDD docs, and terse CHANGELOG entries contain
   one non-contradictory model with no stale repository-policy guidance.
-- Packaged native smoke evidence from feature tasks is complete for Linux, macOS,
-  and Windows, and this task verifies the matrix and release-facing navigation.
+- The derived index identifies portable versus platform-specific suites consumed
+  by T-248; it does not itself change CI.
 
 ## Verification Notes
 
 - Map criteria to registry/parity/drift tests, targeted mutation fixtures,
   Agent Skills validation, loop-policy and SDD drift fixtures, documentation
-  link/search assertions, provider scans, and the collected native smoke manifest.
+  link/search assertions, provider scans, and the generated test-surface manifest.
 - Run formatting, vet, full/race tests, cross-build, parity, task-body, validate,
   and freshness as integration evidence, not as substitutes for feature oracles.
 

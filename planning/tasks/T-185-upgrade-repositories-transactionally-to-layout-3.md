@@ -50,6 +50,9 @@ migration, debt validation, archive adoption, and deterministic root discovery.
   creates only an absent safe destination; existing regular content is
   byte-identical, unsafe destinations refuse, and marker/ideas/state/skills
   publish or roll back on one transaction boundary.
+- Layout-3 local promotion carries live and archived tasks, IDEAS, specs, state,
+  notes, prompts, and durable reviews while preserving storage class and refusing
+  unknown durable local entries.
 - Migration cannot publish layout 3 until inherited semantic writers already use
   combined-ledger resolution/allocation, live-only write sets, and archived-target
   refusal behind the layout guard.

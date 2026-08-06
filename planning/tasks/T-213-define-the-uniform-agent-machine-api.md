@@ -4,7 +4,8 @@ title: Define the uniform agent machine API
 status: todo
 priority: high
 spec_ref: specs/v0.5.0.md#uniform-agent-machine-results
-dependencies: []
+dependencies:
+    - T-230-enforce-the-normative-v0-5-machine-schema
 updated_at: "2026-08-05T20:24:07Z"
 ---
 
@@ -23,13 +24,15 @@ give later versions one machine contract to extend rather than replace.
 - `start`, `complete`, and `block` gain JSON without changing human text behavior. Parser/argument, validation, conflict, partial-write, rollback, and recovery errors after command selection are structured.
 - Lifecycle and init success payloads, the closed v0.5 error-code vocabulary, and
   common violation/snapshot/recovery details match the exact normative fields;
-  later versions replace inner payloads explicitly without changing the envelope.
+  the outer schema version describes those inner payloads and later incompatible
+  releases increment it globally.
 - The closed warning union retains inherited slug, selection, and skill-skew
-  signals and adds only exact local-bootstrap and verify-order variants; inherited
+  signals and adds exact local-bootstrap, local-head-drift, and verify-order variants; inherited
   coverage gates remain completed non-zero result reports.
 - The common init result type defines layout, human-notes, and skill destination candidates/results in one preview/apply shape; T-214 supplies the notes behavior that populates those fields.
 - Packaged skills use JSON whenever they consume IDs, paths, warnings, previews, or failures; content-producing text flows remain explicit exceptions.
-- v0.6/v0.7 schema tasks reuse the envelope and shared registries. README/help/CHANGELOG document the one-time v0.5 compatibility break.
+- v0.6/v0.7 emit envelope generations 2/3 while retaining outer member names.
+  README/help/CHANGELOG document the one-time v0.5 direct-result break.
 
 ## Verification Notes
 

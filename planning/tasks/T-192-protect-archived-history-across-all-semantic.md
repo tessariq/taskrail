@@ -27,9 +27,9 @@ write sets, and archive immutability across inherited semantic writers.
 - Ordinary writers acquire ownership before resolver/allocator/candidate reads,
   require layout 3, persist named live changes, and reject archive mutation;
   init migration retains its exception.
-- Legacy ImportDraft v1 joins durable all-or-none staging/publication/recovery in
-  v0.6 while retaining its existing scaffold/body interpretation; intentional
-  partial success is no longer an ordinary-writer exception.
+- Legacy ImportDraft v1 upgrades its normal v0.5 handled-rollback transaction to
+  durable crash recovery in v0.6 while retaining scaffold/body interpretation and
+  all-or-none handled-failure behavior.
 - Every generated entry point uses one locked allocator against
   archived/index-only claims; every target resolves before status/storage and
   new relationships use stable refs without aliases.

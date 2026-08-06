@@ -1,45 +1,43 @@
 ---
 id: T-156-protect-existing-semantic-writers-with-snapshot
-title: Protect existing semantic writers with snapshot transactions
+title: Build the shared snapshot transaction substrate
 status: todo
 priority: high
-spec_ref: specs/v0.5.0.md#cross-platform-autonomous-loop
+spec_ref: specs/v0.5.0.md#repository-discovery-locking-and-recovery
 dependencies:
     - T-155-add-the-repository-mutation-lock-protocol
-updated_at: "2026-08-04T21:32:13Z"
+    - T-230-enforce-the-normative-v0-5-machine-schema
+updated_at: "2026-08-06T13:52:16Z"
 ---
 
-# T-156-protect-existing-semantic-writers-with-snapshot Protect existing semantic writers with snapshot transactions
+# T-156-protect-existing-semantic-writers-with-snapshot Build the shared snapshot transaction substrate
 
 ## Description
 
-Retrofit every existing task, lifecycle, state, spec, import, repair, and init
-semantic writer to hold the shared mutation lock across candidate reads,
-validation, publication, rollback, and post-validation. Give each writer an
-explicit capability and, where it writes tasks, an exact task-field write set.
+Build reusable normal and durable transaction primitives over the shared lock:
+complete read/write snapshots, candidate staging and validation, atomic file and
+directory publication, compare-and-swap rollback, retained recovery metadata, and
+scoped capabilities. Writer-family integration is owned by T-233 and T-234.
 
 ## Acceptance
 
-- Every existing writer acquires before semantic candidate reads and retains
-  ownership through successful post-validation or rollback; unrelated writers
-  refuse without writes.
-- Each writer snapshots all files it may publish, rechecks bytes before
-  publication, and never overwrites a concurrent edit.
-- Multi-file failure/interruption restores only unchanged originals and reports
-  any partial condition with exact safe recovery.
-- Existing command success outputs and read-only command behavior remain
-  compatible aside from lock-contention diagnostics.
-- A process that cannot prove lock ownership cannot enter any existing semantic
-  write path.
-- Direct writers acquire only their declared capability; delegated writers also
-  prove the matching task and field write set, and refuse any broader mutation.
+- Normal transactions snapshot the complete consumed/published set, validate
+  candidates before writes, and roll back handled failures without claiming crash
+  atomicity.
+- Durable transactions persist exact originals, candidates, path identities, and
+  phases before publication so shared recovery can restore, accept, or clear
+  without inference.
+- File replacement, absent-directory commit, fsync boundaries, external-edit
+  preservation, and rollback failure produce the normative snapshots and recovery
+  reference.
+- Capability objects bind repository, storage, command, selected task, executable,
+  and field/write set and cannot be widened by a delegated join.
 
 ## Verification Notes
 
-- Map each writer family to setup/concurrent action/public result/file snapshot
-  evidence, including linked worktrees, unrelated processes, and refused
-  delegated capability or field-set escalation.
-- Fault-inject candidate reads, publication, post-validation, and rollback per
-  transaction shape without duplicating every command's semantic tests.
+- Exercise normal and durable transaction helpers against changed bytes, absent
+  paths, no-clobber directories, interruption, rollback races, and fsync faults.
+- Prove capability narrowing and exact snapshots independently of command-specific
+  writer semantics.
 
 ## Implementation Notes

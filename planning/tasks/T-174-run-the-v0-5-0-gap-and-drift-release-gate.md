@@ -5,7 +5,7 @@ status: todo
 priority: high
 spec_ref: specs/v0.5.0.md#goals
 dependencies:
-    - T-173-check-cross-surface-workflow-contract-integrity
+    - T-248-run-cross-platform-workflow-contract-tests-in-ci
 updated_at: "2026-08-04T21:32:13Z"
 ---
 
@@ -28,9 +28,9 @@ and remediation task is complete. Do not tag or claim current until it passes.
   validation, release build/snapshot, checklist, clean tree, CI, Planning,
   CodeQL, migration, Agent Skills conformance, SDD/loop-policy drift, unsupported
   legacy-input refusal, and native Linux/macOS/Windows packaged evidence passes.
-- Changed packaged skills have a complete maintainer-run candidate-versus-release
-  evaluation report with raw outcomes, deterministic grades, human review, and no
-  automatically applied skill patch; incomplete/provider-absent runs do not pass.
+- Changed packaged skills have a committed safe candidate-versus-release summary
+  with deterministic grades and human review. Outcome is pass or an explicitly
+  disclosed valid waiver; fail/incomplete block and raw transcripts remain ignored.
 - Every current-version blocker becomes a standalone remediation task and direct
   gate dependency, explicitly not a follow-up-of the gate; the gate stops and
   later restarts the review on fresh bytes. Cancelled dependencies never satisfy

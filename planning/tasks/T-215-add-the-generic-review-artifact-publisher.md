@@ -5,9 +5,8 @@ status: todo
 priority: high
 spec_ref: specs/v0.5.0.md#safe-review-artifact-publication
 dependencies:
-    - T-157-upgrade-repositories-transactionally-to-layout-2
-    - T-159-add-a-versioned-workflow-prompt-catalog
-    - T-213-define-the-uniform-agent-machine-api
+    - T-223-run-every-v0-5-command-against-local-storage
+    - T-240-implement-the-normative-review-schema-decoders
 updated_at: "2026-08-05T20:24:17Z"
 ---
 
@@ -15,30 +14,30 @@ updated_at: "2026-08-05T20:24:17Z"
 
 ## Description
 
-Add one schema-aware publication command for spec, task, decomposition, and
-workflow review proposals so static skills do not pretend to provide portable
-atomic/no-follow filesystem guarantees.
+Add the common no-follow publication core plus spec, task, and decomposition
+directory adapters and storage-neutral review reads. Workflow report/index
+derivation and pair publication remain T-166.
 
 ## Acceptance
 
-- `review publish --type spec|task|decomposition|workflow` implements the exact per-type flags, ignored proposal-directory bundles, final destination subtrees, schemas, common JSON envelopes, and dry-run/apply parity.
-- Every type rechecks subject/session/digest/path bindings, caps, expected snapshots, and complete output sets before joining the shared writer/recovery protocol.
-- Publication is canonical, no-follow, no-alias, no-clobber, and all-or-none. Spec/task/decomposition publish exact complete bundles to absent directories without changing subjects; workflow retains report creation plus index CAS replacement.
-- Session/review identity binds proposal and destination names. Workflow uses a
-  durable read fence and deterministic `review recover` action so Taskrail never
-  observes a lone report/index after interruption.
-- Recovery handles pre-report fence interruption, lone exact report rollback,
-  and complete-pair acceptance without overwriting changed bytes; result/error
-  payloads use the exact common machine contract.
+- `review publish --type spec|task|decomposition` implements exact flags, fixed
+  proposal bundles, 1 MiB per-file limits, final subtrees, common envelopes, and
+  dry-run/apply parity through registered strict adapters.
+- Every type rechecks subject/session/digest/path bindings, expected snapshots,
+  manifest authority, and complete output sets before one no-clobber directory commit.
+- Publication is canonical, no-follow, no-alias, no-clobber, and does not change
+  reviewed subjects. Common routing admits the workflow adapter later without
+  owning its report/index semantics.
 - `review show` reads durable logical review paths through either storage mode;
   local publication requires explicit local initialization before proposal
   staging and never bootstraps from a pre-existing proposal.
-- Capabilities exclude lifecycle, loop policy, spec activation, import apply, and verification. Conflict/interruption reports exact recovery without partial final files.
+- Capabilities exclude lifecycle, loop policy, spec activation, import apply, and
+  verification. Directory publication either exposes one complete destination or none.
 - Review skills hand untrusted proposals to this command and never write final artifacts directly.
 
 ## Verification Notes
 
-- Map every type to strict schema/path/digest/session fixtures, preview snapshots, publication races, alias swaps, interruption points, rollback, and forbidden-write sentinels.
-- Run simultaneous workflow/index and absent-destination attempts on Linux, macOS, and Windows and prove one complete outcome or none.
+- Map each owned type to strict schema/path/digest/session fixtures, preview
+  snapshots, publication races, alias swaps, interruption points, and forbidden-write sentinels.
 
 ## Implementation Notes

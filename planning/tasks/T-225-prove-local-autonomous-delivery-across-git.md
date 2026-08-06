@@ -5,10 +5,7 @@ status: todo
 priority: high
 spec_ref: specs/v0.5.0.md#cross-platform-autonomous-loop
 dependencies:
-    - T-223-run-every-v0-5-command-against-local-storage
-    - T-160-ship-the-lifecycle-complete-task-implementation
-    - T-170-add-deterministic-autonomous-loop-preflight-and
-    - T-172-enforce-autonomous-loop-lifecycle-and-delivery
+    - T-245-cover-the-complete-implicit-local-bootstrap-matrix
 updated_at: "2026-08-05T22:04:34Z"
 ---
 
@@ -25,13 +22,13 @@ evidence required of committed mode.
 
 - Local preflight freezes mode/root, effective review maximum, prompt/executable,
   task ledger, attached ref/HEAD, index, exclusion, and visible cleanliness.
-- A completed-pass child commits product changes only, leaves no staged/committed
+- A completed-pass child creates exactly one direct-child product commit, leaves no staged/committed
   Taskrail path, and records exact valid ignored completion/verification bytes;
   committed-mode fixtures retain their combined delivery requirement.
 - Blocked, rework, completed-unverified, audit-fail, child/process failure, and
   local metadata mutation map to the specified outcomes and never continue to
   another task. Metadata-only blocked/rework may retain HEAD; changed product
-  bytes require a product commit, and no branch creates an empty delivery commit.
+  bytes require exactly one direct-child product commit, and no branch creates an empty delivery commit.
 - Linked-worktree contention, branch drift, exclusion changes, mode/root changes,
   escaped descendants, and unrelated local ledger edits fail postflight with
   complete safe diagnostics.

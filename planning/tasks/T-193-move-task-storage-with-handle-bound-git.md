@@ -1,6 +1,6 @@
 ---
 id: T-193-move-task-storage-with-handle-bound-git
-title: Move task storage with handle-bound Git transactions
+title: Move task storage with handle-bound transactions
 status: todo
 priority: high
 spec_ref: specs/v0.6.0.md#atomic-git-aware-moves-and-recovery
@@ -11,23 +11,24 @@ dependencies:
 updated_at: "2026-08-04T23:06:23Z"
 ---
 
-# T-193-move-task-storage-with-handle-bound-git Move task storage with handle-bound Git transactions
+# T-193-move-task-storage-with-handle-bound-git Move task storage with handle-bound transactions
 
 ## Description
 
-Implement the cross-platform no-follow move engine that binds ancestry by
-handle, preserves Git filters, stages an exact rename, and recovers interrupted
-states.
+Implement the cross-platform no-follow move engine that binds ancestry by handle,
+stages an exact rename in committed mode, performs an ignored-overlay rename in
+local mode, and recovers interrupted states.
 
 ## Acceptance
 
-- Require clean non-bare root-equal Git state, except exact inverse staged
-  archive rename with matching blobs/modes.
+- Require clean non-bare root-equal Git state. Committed mode permits the exact
+  inverse staged archive rename; local mode requires complete ignored managed
+  storage and leaves index/visible status unchanged.
 - Bind root/source/destination handles and create missing parents
   handle-relatively; source attributes/filters/index semantics fail closed as
   specified.
-- Native rename plus exact staging preserves worktree bytes/index blob/mode and
-  expected rename without path-resolving git mv.
+- Native rename plus mode-specific exact staging or no-Git local publication
+  preserves bytes/mode and expected logical storage without path-resolving git mv.
 - Final full read-set/path/eligibility/attribute check authorizes success;
   changes roll back conditionally and command-created empty directories remove
   in reverse order only.

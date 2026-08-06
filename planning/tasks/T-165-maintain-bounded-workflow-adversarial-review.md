@@ -5,8 +5,9 @@ status: todo
 priority: medium
 spec_ref: specs/v0.5.0.md#workflow-adversarial-review-memory
 dependencies:
-    - T-159-add-a-versioned-workflow-prompt-catalog
     - T-201-make-packaged-skills-agent-skills-compliant
+    - T-240-implement-the-normative-review-schema-decoders
+    - T-250-render-prompts-from-storage-neutral-context
 updated_at: "2026-08-04T21:32:13Z"
 ---
 
@@ -14,26 +15,25 @@ updated_at: "2026-08-04T21:32:13Z"
 
 ## Description
 
-Add strict bounded workflow-adversarial index/report contracts and the sandboxed
-review prompt/skill so stale evidence, dirty-source probes, repeated easy tests,
-and unevidenced closure cannot masquerade as current assurance.
+Add the sandboxed workflow-adversarial prompt/skill and strict report semantics so
+stale evidence, dirty probes, repeated easy tests, and unevidenced closure cannot
+masquerade as current assurance. Taskrail index derivation/publication is T-166.
 
 ## Acceptance
 
-- Exact index/report/nested-object schemas retain never-reused IDs, resolvable
-  evidence references, separate outcome/freshness, preserve unresolved findings,
-  enforce canonical ordering and caps, and add at most three explained surface
-  keys per run.
-- Canonical JSON and product-source hash framing produce byte-identical digests
+- Exact report objects retain never-reused IDs, terminal typed observation
+  evidence, resolvable references, separate outcome/freshness, canonical ordering,
+  1 MiB input cap, and at most three explained surface keys per run.
+- Canonical JSON and recorded-HEAD-tree hash framing produce byte-identical digests
   across platforms; obsolete closure uses superseding evidence while resolved and
   not-reproducible require fresh executed attempts.
 - Review requires a clean source worktree, captures HEAD/spec/product snapshots
   before probing, excludes only the review subtree from product digest, and after
   cleanup permits only memory/report proposals; any other source diff forbids a
   clean claim.
-- Source/spec/product changes stale rows by default unless evidenced path analysis
-  retains freshness; review rotates among untested, stale, and shallow surfaces in
-  an isolated sandbox and clean requires an observable probe.
+- Source/spec/product changes stale rows by default unless a reviewed changed-path
+  assertion retains freshness; Taskrail validates shape/digests, not semantic
+  correctness. Review rotates surfaces and clean requires an observable probe.
 - Finding transitions require human-created full task IDs for tracked, fresh
   reproduction for resolved, evidence/rationale for other closures, and
   visibility of unchecked findings.

@@ -29,6 +29,8 @@ lifecycle, and aggregate state while enforcing eligibility/recovery.
 - Moves preserve bytes/mode/frontmatter/status/IDs/timestamps/dependencies,
   including `loop_policy` and `loop_reason`, and never rewrite
   STATE/artifacts/specs/unrelated storage.
+- Committed and local layout-3 storage share logical results; local archive/restore
+  uses the managed-overlay digest transaction and leaves visible Git/index clean.
 - Restore keeps terminal status and permits only narrow storage-derived-invalid
   recovery that fully validates live; edits require restore first.
 - Destination/storage/eligibility/path/scan/Git/conflict/partial/rollback

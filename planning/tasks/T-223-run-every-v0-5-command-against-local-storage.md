@@ -1,16 +1,17 @@
 ---
 id: T-223-run-every-v0-5-command-against-local-storage
-title: Run every v0.5 command against local storage
+title: Route existing commands through local storage context
 status: todo
 priority: high
 spec_ref: specs/v0.5.0.md#local-planning-mode
 dependencies:
-    - T-156-protect-existing-semantic-writers-with-snapshot
     - T-222-initialize-and-discover-ignored-local-taskrail
+    - T-233-protect-lifecycle-and-task-writers-transactionally
+    - T-234-protect-repository-and-planning-writers
 updated_at: "2026-08-05T22:04:22Z"
 ---
 
-# T-223-run-every-v0-5-command-against-local-storage Run every v0.5 command against local storage
+# T-223-run-every-v0-5-command-against-local-storage Route existing commands through local storage context
 
 ## Description
 
@@ -30,8 +31,8 @@ integration acceptance.
   review, and loop tasks consume the same context and prove their own behavior.
 - Local writers remain untracked/unstaged and ordinary Git status clean; rename
   uses filesystem publication rather than staging local files.
-- Local skill installation changes only Taskrail-owned destinations with exact
-  excludes and refuses adopter-owned tracked/staged/colliding assistant content.
+- Local prompt and skill feature tasks consume this context but own their separate
+  collision, exclusion, and promotion behavior.
 - Unsupported mode-specific behavior returns a classified capability refusal and
   never falls back to committed paths or creates mixed state.
 

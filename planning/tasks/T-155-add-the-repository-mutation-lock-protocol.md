@@ -3,29 +3,29 @@ id: T-155-add-the-repository-mutation-lock-protocol
 title: Add the repository mutation lock protocol
 status: todo
 priority: high
-spec_ref: specs/v0.5.0.md#cross-platform-autonomous-loop
+spec_ref: specs/v0.5.0.md#repository-discovery-locking-and-recovery
 dependencies: []
-updated_at: "2026-08-04T21:32:13Z"
+updated_at: "2026-08-06T13:51:44Z"
 ---
 
 # T-155-add-the-repository-mutation-lock-protocol Add the repository mutation lock protocol
 
 ## Description
 
-Introduce one Git-common-directory mutation-lock protocol shared by linked
-worktrees and committed/local storage modes, with explicit ownership, refusal,
-stale recovery, and scoped delegated-join primitives. Writer-family retrofit is
-a separate dependent task.
+Introduce one mutation-lock protocol using the Git common directory for matching
+worktrees and the configured root-local runtime directory outside Git. Provide
+ownership, refusal, and delegated-join primitives; operator lock recovery and
+writer-family integration are separate dependent outcomes.
 
 ## Acceptance
 
-- One exclusive lock coordinates linked worktrees and records command, PID, host,
-  start time, repository identity, storage mode/root, and only a
-  delegation-token digest.
+- One exclusive lock coordinates linked worktrees or one discovered non-Git root
+  and records the exact normative metadata including random lock ID, executable
+  digest when delegated, and only a delegation-token digest.
 - A second owner refuses without mutation; same-process misuse and malformed
   metadata fail safely, and lock acquisition/release is interruption-aware.
-- Abruptly abandoned locks are never auto-cleared; diagnostics provide
-  inspect-and-remove recovery without claiming a distributed lease.
+- Abruptly abandoned locks are never auto-cleared; T-231 owns operator inspection
+  and guarded clearing without claiming a distributed lease.
 - Delegation tokens are unguessable, metadata exposes only their digest, and
   joining requires matching repository, executable identity, token, delegated
   writer capability, and task-field write set.

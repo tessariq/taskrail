@@ -5,7 +5,7 @@ status: todo
 priority: medium
 spec_ref: specs/v0.5.0.md#lightweight-sdd-handoff-skill
 dependencies:
-    - T-201-make-packaged-skills-agent-skills-compliant
+    - T-164-orchestrate-adversarial-spec-to-task-decomposition
 updated_at: "2026-08-05T19:17:42Z"
 ---
 

@@ -5,8 +5,8 @@ status: todo
 priority: high
 spec_ref: specs/v0.5.0.md#local-planning-mode
 dependencies:
-    - T-223-run-every-v0-5-command-against-local-storage
-    - T-156-protect-existing-semantic-writers-with-snapshot
+    - T-166-publish-workflow-review-index-and-reports-with-cas
+    - T-247-install-packaged-skills-safely-in-local-mode
 updated_at: "2026-08-05T22:04:28Z"
 ---
 
@@ -24,16 +24,17 @@ committed candidate validates.
 - `local promote` preview reports every source/destination/reference/exclusion
   change, linked-worktree consequence, collision, and committed validation result
   with zero writes.
-- Apply rejects mixed state, destination/index conflicts, unsafe paths, branch or
-  source drift, affected sibling local installations, and ambiguous skill
-  promotion before publication.
+- Apply rejects mixed state, destination/index conflicts, unsafe paths, source
+  changes during the transaction, affected sibling installations, and ambiguous
+  skill promotion. Historical origin drift alone is an advisory, not refusal.
 - The transactional candidate switches config mode while preserving the logical
   path namespace plus task IDs/statuses/timestamps/bodies, excludes local
-  artifacts/runtime locks, and publishes specs/tasks/state/config plus durable
-  NOTES/review files all-or-none under the mutation lock.
-- Managed exclusion entries are removed last and only after post-validation;
-  failure retains recoverable local source and restores unchanged originals
-  without hiding or overwriting external edits.
+  artifacts/runtime data, and publishes specs/tasks/state/config plus durable
+  NOTES/review/prompt files all-or-none under the durable transaction.
+- After post-validation, apply removes only local semantic/prompt files whose
+  exact bytes were published and then managed exclusions. Interruption or cleanup
+  failure retains shared recovery so committed and local semantic stores are not
+  simultaneously accepted.
 - Success leaves committed planning visible for operator review/staging but makes
   no Git commit; `--with-skills` is the only skill-promotion consent and exact
   text/JSON candidate/result fields agree between preview and apply.

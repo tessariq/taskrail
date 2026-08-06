@@ -5,9 +5,9 @@ status: todo
 priority: high
 spec_ref: specs/v0.5.0.md#post-spec-review-lenses
 dependencies:
-    - T-159-add-a-versioned-workflow-prompt-catalog
     - T-201-make-packaged-skills-agent-skills-compliant
     - T-215-add-the-generic-review-artifact-publisher
+    - T-250-render-prompts-from-storage-neutral-context
 updated_at: "2026-08-04T21:32:13Z"
 ---
 
@@ -22,15 +22,16 @@ disposition manifest.
 ## Acceptance
 
 - Separate contexts independently emit fixed lens filenames with the exact
-  schema-v1 fields, severity meanings, evidence, scope, disposition, session
+  schema-v1 fields, severity meanings, evidence, scope, open disposition, session
   identity, selected spec path, and lower-case digest without receiving earlier
   conclusions as facts.
 - The final manifest binds one final spec digest, every lens path/file
   digest/spec digest, and exactly one disposition per finding; strict decoding
   rejects unknown, null, duplicate, missing, or malformed data.
-- Accepted findings name resulting headings, rejected findings explain why,
-  deferred findings name a future version, and unresolved high/medium findings
-  forbid decomposition.
+- The skill guides the human through every finding; the manifest alone records
+  accepted/rejected/deferred decisions and rationale. Accepted findings name
+  resulting headings, deferred findings name a future version, and unresolved
+  high/medium findings forbid decomposition.
 - Any spec byte edit stales all four lens reports and requires all four rerun
   against the final digest; additions cannot silently expand scope.
 - Final outputs publish through the generic review command with canonical

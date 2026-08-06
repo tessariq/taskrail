@@ -1,6 +1,6 @@
 ---
 id: T-180-make-semantic-publication-durably-transactional
-title: Make semantic publication durably transactional
+title: Extend durable transactions for storage and Git index moves
 status: todo
 priority: high
 spec_ref: specs/v0.6.0.md#atomic-git-aware-moves-and-recovery
@@ -9,28 +9,26 @@ dependencies:
 updated_at: "2026-08-04T23:06:23Z"
 ---
 
-# T-180-make-semantic-publication-durably-transactional Make semantic publication durably transactional
+# T-180-make-semantic-publication-durably-transactional Extend durable transactions for storage and Git index moves
 
 ## Description
 
-Extend the completed v0.5 lock with reusable write-ahead backup, durable phase,
-compare-and-swap publication/rollback, and blocking recovery-record primitives.
+Extend the completed v0.5 durable transaction substrate with Git-index snapshots,
+handle-bound directory creation, and committed/local live-to-archive move state.
 
 ## Acceptance
 
-- The engine acquires ownership before initial
+- The inherited engine acquires ownership before initial
   resolver/allocator/candidate reads and holds through validation, publication,
   post-validation, rollback, or retained recovery.
-- Lock selection uses Git common directory only for root-equal worktrees and
-  root-local otherwise; linked/delegated ownership stays coherent.
-- Private no-follow recovery roots and files enforce owner-only permissions;
-  manifests record absence, original bytes/modes/index, candidate digests, and
-  durable synced phase before publication.
+- Manifests extend inherited path snapshots with explicit original/candidate/current
+  Git index states where committed mode stages a rename; local mode records
+  unchanged index/status and managed-overlay identities instead.
 - Publication/rollback use per-component compare-and-swap; clean outcomes
   remove only owned data while death/failure retains reconstructable blocking
   backups.
-- APIs expose stable complete read-set/phase checks but do not claim command
-  adoption.
+- APIs expose stable complete read-set/phase checks consumed by archive/restore but
+  do not reimplement the inherited shared recovery command.
 - The reusable protocol can include an absent configured human-owned sidecar in
   init/migration write sets, preserving existing bytes and rolling back only the
   transaction's newly created IDEAS file without interpreting its contents.

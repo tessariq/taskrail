@@ -28,10 +28,10 @@ accepts source-system evidence as a task `spec_ref`.
   integer forms, invalid portable IDs/keys, duplicate array members, and
   non-canonical review timestamps are rejected deterministically.
 - The mapping binds exactly to the freshly inspected profile name/version,
-  canonical source root and aggregate digest, selected local spec
-  version/path/raw digest, final draft raw digest, and the v3
-  `review_session_id`; stale or mismatched bindings fail without repair or
-  normalization of the reviewed file.
+  canonical source root/trust/aggregate digest, selected local spec
+  version/path/raw digest/trust, final draft raw digest/trust, and the mapping's
+  derived trust plus v3 `review_session_id`; stale or mismatched bindings fail
+  without repair or normalization of the reviewed file.
 - Every descriptor role/path pair appears in at least one mapping item with a
   valid inclusive one-based range in the exact decoded source, including CRLF
   and final-unterminated-line handling. Each item has sources, live local
@@ -43,7 +43,7 @@ accepts source-system evidence as a task `spec_ref`.
   external paths, URLs, source-system paths or anchors, another spec version,
   and traversal spellings are refused.
 - Planning-source normalization accepts exactly the existing `ImportDraft`
-  schema version 3 with `target: tasks`, absent `spec_sections`, unique non-empty
+  schema version 3 with `target: tasks`, required `spec_sections: []`, unique non-empty
   keys, complete reviewed v2 bodies, and exactly one selected-spec `spec_ref`
   per task. Source import rejects v1, v2, and v4 rather than introducing or
   implying an `ImportDraft` v4.

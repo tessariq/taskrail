@@ -5,7 +5,7 @@ status: todo
 priority: high
 spec_ref: specs/v0.5.0.md#task-local-loop-policy
 dependencies:
-    - T-168-parse-and-validate-an-optional-autonomous-run
+    - T-237-report-task-local-loop-policy-deterministically
 updated_at: "2026-08-04T21:32:13Z"
 ---
 

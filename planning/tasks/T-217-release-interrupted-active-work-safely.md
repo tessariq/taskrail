@@ -5,9 +5,8 @@ status: todo
 priority: high
 spec_ref: specs/v0.5.0.md#canonical-transition-order
 dependencies:
-    - T-157-upgrade-repositories-transactionally-to-layout-2
     - T-158-bind-completion-and-verification-with-stable
-    - T-213-define-the-uniform-agent-machine-api
+    - T-223-run-every-v0-5-command-against-local-storage
 updated_at: "2026-08-05T20:24:26Z"
 ---
 
@@ -21,7 +20,9 @@ deliberate-rework active work without inventing blocker history or cancelling it
 ## Acceptance
 
 - `task release` accepts exactly one full-ID `in_progress` task plus a bounded portable reason; dry-run and common JSON report the exact candidate and refusal class.
-- Apply changes status to `todo`, clears only the matching current-task pointer, appends a timestamped Implementation Note, reprojects state, validates, and publishes transactionally.
+- Apply changes status to `todo`, clears both matching current-task fields,
+  recomputes summary/blockers/next action from the candidate ledger, appends a
+  timestamped Implementation Note, validates, and publishes transactionally.
 - Reason grammar, exact success/error JSON, candidate digests, contradictory
   pointer refusal, and dry-run/apply parity follow the canonical contract.
 - Completion/verification history, identity, body, dependencies, spec reference, and paired loop policy remain unchanged. No blocker or cancellation provenance is created.

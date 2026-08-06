@@ -7,7 +7,7 @@ spec_ref: specs/v0.7.0.md#source-inspect-and-import-commands
 dependencies:
     - T-205-add-the-built-in-openspec-planning-profile
     - T-206-add-the-built-in-spec-kit-planning-profile
-    - T-208-publish-strict-planning-provenance-sidecars
+    - T-253-upgrade-v0-7-envelopes-and-local-promotion
 updated_at: "2026-08-05T19:18:16Z"
 ---
 
@@ -17,15 +17,17 @@ updated_at: "2026-08-05T19:18:16Z"
 
 Wire `taskrail source inspect` and `taskrail source import` into the CLI as the
 reviewed planning-source handoff. Inspection and default import preview are
-read-only; `--apply` alone publishes fresh tasks, projected `STATE.md`, and one
+read-only; `--apply` alone publishes fresh tasks, projected logical
+`<planning-dir>/STATE.md`, and one
 canonical receipt as a single recoverable outcome after all inputs and
 destinations are rechecked under the repository mutation lock.
 
 ## Acceptance
 
 - `source inspect --profile <openspec|spec-kit> --root <repo-path> [--json]`
-  recognizes exactly the built-in profile/version, validates one complete clean
-  snapshot, and emits the deterministic ordered descriptor. It creates no lock,
+  recognizes exactly the built-in profile/version, validates one complete
+  `git_clean` or `local_snapshot` set, and emits the deterministic ordered
+  descriptor. It creates no lock,
   temporary repository file, normalized source, task, state, receipt, or
   provenance directory.
 - `source import` requires profile, root, spec version, v3 draft, and v1 mapping,
@@ -35,9 +37,10 @@ destinations are rechecked under the repository mutation lock.
   `applied:false` and exact candidate task and receipt paths without reserving
   IDs or authorizing a later apply.
 - `--apply` is the sole write opt-in. Under the common mutation lock it rechecks
-  the complete source/input/receipt/ledger/state read set, performs final
-  allocation, and atomically publishes exactly new live task files,
-  `planning/STATE.md`, one receipt, and newly required provenance directories.
+  or privately snapshots the complete source/input/receipt/ledger/state read set,
+  performs final allocation, and atomically publishes exactly new live task files,
+  logical `<planning-dir>/STATE.md`, one receipt, and newly required provenance
+  directories through active storage.
   Source files, local spec, draft, mapping, existing or archived tasks, prompts,
   skills, configuration, artifacts, and layout metadata are never written.
 - Candidate validation runs before first publication and after publication.
@@ -51,9 +54,10 @@ destinations are rechecked under the repository mutation lock.
   Retry after complete rollback repeats duplicate detection and allocation;
   tasks, state, and receipt can never be reported successful independently.
 - Text and JSON modes have identical ordering, warnings, exit classification,
-  and semantics. JSON uses the inherited common envelope and exact inspect/import
+  and semantics. JSON uses common envelope generation 3 and exact trust-labelled inspect/import
   result fields; error details use only the specified stable codes, sorted paths,
-  ordered violations, non-null arrays, and one uncontaminated
+  ordered violations, snapshot digests, nullable recovery identity, non-null arrays,
+  and one uncontaminated
   stdout document with no unknown fields.
 - Help and argument validation expose exactly the specified command forms and
   reject unknown profiles, invalid path/input combinations, unsupported draft
@@ -78,7 +82,8 @@ destinations are rechecked under the repository mutation lock.
   refusal with complete digest diagnostics.
 - Map output/error criteria to unknown-field schema tests and golden matrices
   for every stable top-level code, sorted paths, validation-phase violation
-  order, empty non-null arrays, JSON stdout purity, and text/JSON exit parity.
+  order, snapshot/recovery evidence, empty non-null arrays, JSON stdout purity, and
+  text/JSON exit parity.
 - Record OpenSpec and Spec Kit inspect/preview/apply transcripts, manifests,
   rollback diagnostics, and no-input-write checks in
   `planning/artifacts/manual-test/T-209/<timestamp>/report.md` using the built
