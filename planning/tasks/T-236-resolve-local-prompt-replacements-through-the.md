@@ -23,15 +23,17 @@ catalog's public path, validation, authorization, or whole-file replacement mode
   managed overlay and reports only the logical path.
 - A2. A simultaneous committed replacement, alias, tracked/staged entry, invalid
   UTF-8, oversize file, or physical-path substitution fails without fallback.
-- A3. Local replacement bytes participate in prompt hashes, drift snapshots, and
-  promotion while runtime/artifact paths do not.
+- A3. Local replacement bytes determine the ordinary exact template hash while
+  source class remains separate metadata; both participate in drift snapshots and
+  expose exact logical inputs for later promotion while runtime/artifact paths do not.
 
 ## Verification Notes
 
 - A1: catalog show/render fixtures compare committed and local logical results.
 - A2: collision and no-follow matrices observe exact refusals and unchanged Git
   status.
-- A3: hash/promotion integration proves exact bytes move to the committed logical
-  destination and no physical prefix becomes durable.
+- A3: hash fixtures prove equal-byte built-in/replacement resolutions retain equal
+  hashes but distinct source classes and expose no physical prefix. T-224 owns the
+  later byte-preserving promotion; T-255 owns publication-time replacement races.
 
 ## Implementation Notes

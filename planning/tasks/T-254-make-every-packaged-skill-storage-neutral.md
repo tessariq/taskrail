@@ -39,29 +39,32 @@ overlay, or applying committed-mode Git delivery rules to ignored local state.
 - A3. Physical transient output is used only when an exact Taskrail result reports
   the path for that purpose, and durable writes return through sanctioned Taskrail
   commands.
-- A4. T-242's full-task fixtures and every other skill-producing task compose into
+- A4. Review-producing skills copy exact prompt ID/version/source/template-digest
+  metadata from `prompt render --json` into leaf proposals; they never infer a
+  replacement path, template hash, or physical managed location.
+- A5. T-242's full-task fixtures and every other skill-producing task compose into
   one package-level matrix with no conflicting storage, lifecycle, or delivery
   instruction; T-254 does not re-own their feature implementation.
-- A5. Planning, review, recovery, verification, import, retrofit, spec, gap, and
+- A6. Planning, review, recovery, verification, import, retrofit, spec, gap, and
   decomposition skills neither stage local metadata nor invoke `local promote`
   without an explicit human request.
-- A6. A checked per-skill inventory classifies each observable as
+- A7. A checked per-skill inventory classifies each observable as
   storage-independent or explicitly mode-specific before execution. Installed
   local copies are discoverable from both supported assistant roots;
   storage-independent observables match exactly, while every mode-specific
   difference matches its enumerated path, artifact, or Git-delivery oracle.
-- A7. Embedded and committed copies remain provider-neutral, Agent
+- A8. Embedded and committed copies remain provider-neutral, Agent
   Skills-compliant, marker-free, byte-identical, source-checkout-freshness-aware,
   and covered by the derived skill registry.
 
 ## Verification Notes
 
-- A1-A3: static command/path mutation checks plus committed/local sandboxes with
+- A1-A4: static command/path/binding mutation checks plus committed/local sandboxes with
   stale decoy logical files prove machine consumption and subject-command reads.
-- A4-A6: the checked applicability inventory drives executable skill fixtures over
+- A5-A7: the checked applicability inventory drives executable skill fixtures over
   exact index, worktree, commit, ignored state, assistant discovery, transient
   artifacts, and promotion behavior.
-- A7: run frontmatter validation, provider scans, skill regeneration/parity,
+- A8: run frontmatter validation, provider scans, skill regeneration/parity,
   freshness checks, and the derived registry suite.
 
 ## Implementation Notes

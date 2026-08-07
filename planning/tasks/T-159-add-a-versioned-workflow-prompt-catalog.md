@@ -30,7 +30,8 @@ rendering, task inspection, and local replacement mapping are separate outcomes.
   policy-file render input exists.
 - Resolution order is repository override then built-in, with canonical
   in-repository regular-file and ancestor checks, UTF-8 and size limits, and
-  explicit source/path/hash reporting.
+  explicit ID/version/source/logical-path/template-hash reporting over the exact
+  resolved bytes later consumed by review publication.
 - Neither default nor skill-installing init materializes built-ins, placeholders,
   or `.taskrail/prompts/`; local overrides are created only by users.
 - T-250 owns context flags, placeholder substitution, review-budget rendering, and
@@ -42,6 +43,8 @@ rendering, task inspection, and local replacement mapping are separate outcomes.
 
 - Map criteria to golden list/show fixtures, init snapshots, and negative
   path/encoding/size/version/alias cases.
+- Mutate one template byte and add/remove an equal-byte replacement to prove the
+  digest and source class independently identify the exact resolution.
 - Check committed package parity and packaged behavior while proving catalog
   commands and failed renders are read-only.
 

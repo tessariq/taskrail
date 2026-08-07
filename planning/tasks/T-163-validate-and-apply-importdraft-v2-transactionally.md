@@ -30,7 +30,9 @@ strict bundle/schema/relation validation.
   failure/interruption rolls back without overwriting concurrent bytes.
 - Exact non-empty reviewed body bytes reach tasks; previously published final
   session files are immutable validated inputs to apply, while abandoned
-  proposals are excluded and never copied or rewritten by import.
+  proposals are excluded and never copied or rewritten by import. Later prompt
+  changes do not cause apply to re-resolve or invalidate historical published
+  prompt bindings.
 - Imported tasks contain no separate loop-policy output or authorization. Their
   `loop_policy` and `loop_reason` fields are absent and therefore implicitly held,
   and v2 rejects drafts that attempt to set them.

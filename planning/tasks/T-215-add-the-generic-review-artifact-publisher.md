@@ -24,7 +24,9 @@ derivation and pair publication remain T-166.
   proposal bundles, 1 MiB per-file limits, final subtrees, common envelopes, and
   dry-run/apply parity through registered strict adapters.
 - Every type rechecks subject/session/digest/path bindings, expected snapshots,
-  manifest authority, and complete output sets before one no-clobber directory commit.
+  manifest authority, adapter-registered consumed inputs and validators, and
+  complete output sets before one no-clobber directory commit. T-255 registers
+  prompt-template resolution after contextual rendering exists.
 - Publication is canonical, no-follow, no-alias, no-clobber, and does not change
   reviewed subjects. Common routing admits the workflow adapter later without
   owning its report/index semantics.
@@ -38,6 +40,7 @@ derivation and pair publication remain T-166.
 ## Verification Notes
 
 - Map each owned type to strict schema/path/digest/session fixtures, preview
-  snapshots, publication races, alias swaps, interruption points, and forbidden-write sentinels.
+  snapshots, an injected consumed-input validator, publication races, alias swaps,
+  interruption points, and forbidden-write sentinels.
 
 ## Implementation Notes

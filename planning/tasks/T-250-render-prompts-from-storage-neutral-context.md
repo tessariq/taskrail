@@ -26,7 +26,8 @@ resolution exist.
   derives task/spec context, and rejects unknown/unresolved/non-recursive tokens.
 - A2. Managed task/spec/review bytes are read through `task show`, `spec show`, and
   `review show`; only declared transient output paths may expose the local overlay.
-- A3. Built-in and replacement content/hash/source results are exact and read-only;
+- A3. Built-in and replacement results atomically distinguish the exact returned
+  content digest from the resolved pre-substitution template digest and source;
   invalid replacements never fall back.
 
 ## Verification Notes
@@ -34,6 +35,7 @@ resolution exist.
 - A1: per-prompt positive/negative context matrices and token mutation fixtures.
 - A2: committed/local parity tests use stale decoy logical paths to prove subject
   commands, not direct filesystem opens, supply context.
-- A3: exact text/JSON hash goldens plus repository snapshots prove read-only behavior.
+- A3: exact text/JSON template/content hash goldens, one-byte replacement races,
+  and repository snapshots prove atomic resolution and read-only behavior.
 
 ## Implementation Notes

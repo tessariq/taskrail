@@ -22,8 +22,9 @@ masquerade as current assurance. Taskrail index derivation/publication is T-166.
 ## Acceptance
 
 - Exact report objects retain never-reused IDs, terminal typed observation
-  evidence, resolvable references, separate outcome/freshness, canonical ordering,
-  1 MiB input cap, and at most three explained surface keys per run.
+  evidence, resolvable references, a role-mandated v1 prompt source/template
+  binding, separate outcome/freshness, canonical ordering, 1 MiB input cap, and
+  at most three explained surface keys per run.
 - Canonical JSON and recorded-HEAD-tree hash framing produce byte-identical digests
   across platforms; obsolete closure uses superseding evidence while resolved and
   not-reproducible require fresh executed attempts.
@@ -41,7 +42,8 @@ masquerade as current assurance. Taskrail index derivation/publication is T-166.
   and closure evidence follow the exact schema; review IDs remain globally
   unique across version rollover.
 - Version rollover retains applicable unresolved IDs/origin, marks prior surfaces
-  stale, and keeps findings advisory.
+  stale, keeps report-local prompt bindings as historical evidence, does not copy
+  them into `INDEX.json`, and keeps findings advisory.
 - The packaged workflow-review skill retains Agent Skills-compliant frontmatter;
   installed copies use nested `metadata.taskrail_version`, with marker-free
   embedded and committed copies remaining byte-identical.
@@ -49,8 +51,8 @@ masquerade as current assurance. Taskrail index derivation/publication is T-166.
 ## Verification Notes
 
 - Map criteria to schema/state fixtures, dirty/untracked source cases,
-  digest/path changes, caps/rotation, sandbox cleanup, every disposition,
-  output-only source diffs, and rollover.
+  prompt/source and digest/path changes, caps/rotation, sandbox cleanup, every
+  disposition, output-only source diffs, and rollover.
 - Produce a two-run report where clean becomes stale, a finding cannot close
   without reproduction, and a dirty source can never claim clean.
 - Run Agent Skills conformance and package-parity checks for the workflow-review

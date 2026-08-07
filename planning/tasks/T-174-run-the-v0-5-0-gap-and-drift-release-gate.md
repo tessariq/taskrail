@@ -24,6 +24,10 @@ and remediation task is complete. Do not tag or claim current until it passes.
   lightweight SDD handoff, task-local loop policy, docs, and release notes.
 - Coverage is 100 percent, every structural signal has a disposition, and
   independent semantic/adversarial review leaves no blocker.
+- Final task, spec, decomposition, and workflow review evidence carries valid
+  role-mandated prompt-template bindings; built-in and replacement publication
+  pass, stale replacement publication fails, and final planning reviews bind the
+  current prompt/spec bytes without overstating reviewer attestation.
 - Full formatting, vet, tests, race, cross-build, parity, bodies, freshness,
   validation, release build/snapshot, checklist, clean tree, CI, Planning,
   CodeQL, migration, Agent Skills conformance, SDD/loop-policy drift, unsupported
@@ -44,8 +48,8 @@ and remediation task is complete. Do not tag or claim current until it passes.
 ## Verification Notes
 
 - Map each criterion to the semantic matrix, command logs, remote URLs,
-  Agent Skills/SDD/loop-policy evidence, native/manual reports, Git/task
-  dependency observations, and final fresh verification.
+  Agent Skills/SDD/loop-policy/prompt-binding evidence, native/manual reports,
+  Git/task dependency observations, and final fresh verification.
 - In a sandbox create a standalone blocker, add only the gate-to-remediation
   dependency, prove no cycle and gate ineligibility, complete it, then restart
   review.

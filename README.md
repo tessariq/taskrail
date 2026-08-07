@@ -194,7 +194,12 @@ v0.5 roadmap adds distinct advisory stages rather than one overloaded "review":
 - post-implementation workflow-adversarial probes with bounded review memory.
 
 Semantic findings never become `validate` violations automatically. Humans adopt
-accepted changes through the bounded task/spec/import commands.
+accepted changes through the bounded task/spec/import commands. Publisher-backed
+review prompts may be replaced whole-file at repository scope; their durable leaf
+artifacts record the exact prompt template resolution without claiming that
+Taskrail observed or certified the external review process. Implementation review
+remains instructed by the separate `task-implementation` flow and is outside
+review-artifact publication.
 
 ### Shell completion
 
@@ -520,7 +525,7 @@ the active development specification is `v0.5.0`.
 - `v0.2.0` makes adoption in existing repositories easy — guided `retrofit`, LLM-free `import` of rough notes into spec/task drafts, opt-in shippable agent skills, a version-aware non-destructive `init`, and conservative `STATE.md` repair — while keeping the core CLI provider- and tooling-independent.
 - `v0.3.0` adds read-only insight into tracked work — `status`, `stats`, and `coverage` — plus the `spec` command family for inspecting and authoring specs, `unblock` to release blocked tasks, and Windows install via WinGet.
 - `v0.4.0` adds active-spec task selection and authoring, slugged task creation and atomic rename/repoint operations, mechanical spec/gap review, and version-skew detection across the binary, repository layout, and installed skills.
-- `v0.5.0` is active development: uniform agent results, lifecycle-complete skills, human-owned repository notes, prompt/task/spec review, safe review publication, a bounded external-process loop, and maintainer-run skill evaluations.
+- `v0.5.0` is active development: uniform agent results, lifecycle-complete skills, human-owned repository notes, configurable prompt/task/spec review, prompt-bound safe review publication, a bounded external-process loop, and maintainer-run skill evaluations.
 - `v0.6.0` plans durable task identity, cancellation preview, dependency editing, all-or-none legacy imports, and immutable archival over one ledger.
 - `v0.7.0` plans reviewed OpenSpec/Spec Kit handoff, immutable planning-source receipts, and profile/receipt inventory.
 - Later work is tracked under [`specs/README.md`](specs/README.md).

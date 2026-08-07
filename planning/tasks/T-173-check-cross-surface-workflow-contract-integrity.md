@@ -34,11 +34,13 @@ Feature-specific behavior remains owned and verified by its implementation task.
   discovery paths, broad assistant exclusions, direct logical-path opens,
   force-added metadata, unconsented promotion, and storage-blind delivery.
 - Cross-surface fixtures prove canonical lifecycle citations,
-  review/decomposition and lightweight SDD handoff compatibility, scoped lock
-  delegation, task-local loop-policy refusal/preservation, and provider
-  independence without recopying each feature's unit matrix.
+  review-artifact role-to-prompt mappings, template-binding and historical-read
+  behavior, review/decomposition and lightweight SDD handoff compatibility,
+  scoped lock delegation, task-local loop-policy refusal/preservation, and
+  provider independence without recopying each feature's unit matrix.
 - Arbitrary repository overrides are not represented as certified and no embedded
-  workflow invokes a named model API/provider CLI.
+  workflow invokes a named model API/provider CLI. No durable binding contains a
+  physical local path or claims prompt delivery, reviewer identity, or semantic quality.
 - README, AGENTS, workflow, skill-productization, human-notes, skill-evaluation,
   upgrade/recovery/review-evidence/SDD docs, and terse CHANGELOG entries contain
   one non-contradictory model with no stale repository-policy guidance.
@@ -48,8 +50,9 @@ Feature-specific behavior remains owned and verified by its implementation task.
 ## Verification Notes
 
 - Map criteria to registry/parity/drift tests, targeted mutation fixtures,
-  Agent Skills validation, loop-policy and SDD drift fixtures, documentation
-  link/search assertions, provider scans, and the generated test-surface manifest.
+  wrong-role and stale-prompt fixtures, historical review reads, Agent Skills
+  validation, loop-policy and SDD drift fixtures, documentation link/search
+  assertions, provider scans, and the generated test-surface manifest.
 - Run formatting, vet, full/race tests, cross-build, parity, task-body, validate,
   and freshness as integration evidence, not as substitutes for feature oracles.
 

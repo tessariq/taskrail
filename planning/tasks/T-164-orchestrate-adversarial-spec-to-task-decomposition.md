@@ -6,6 +6,7 @@ priority: high
 spec_ref: specs/v0.5.0.md#adversarial-spec-to-task-decomposition
 dependencies:
     - T-163-validate-and-apply-importdraft-v2-transactionally
+    - T-255-bind-review-artifacts-to-resolved-prompt-templates
 updated_at: "2026-08-04T21:32:13Z"
 ---
 
@@ -28,10 +29,11 @@ two-pass bound, and hand an approved manifest to the v2 writer.
 - Decomposition and review artifacts cannot authorize unattended execution;
   proposed tasks omit `loop_policy` and `loop_reason` and arrive implicitly held.
 - Reviews record fresh-process/context or explicitly accepted same-context mode
-  and exact spec/draft/trace digests; high/medium cannot defer and final bytes
-  receive review.
+  and exact prompt/spec/draft/trace bindings; high/medium cannot defer and final
+  bytes receive review.
 - Material changes require pass 2; material changes after pass 2 start a new
-  session instead of applying unreviewed bytes.
+  session instead of applying unreviewed bytes. Prompt drift between a pass and
+  publication likewise abandons the stale session rather than editing metadata.
 - Human approval binds all final files; apply is followed by validate and the
   relevant coverage report. Final session artifacts publish through the generic
   review command before import; abandoned sessions are removed.
@@ -40,8 +42,8 @@ two-pass bound, and hand an approved manifest to the v2 writer.
 
 - Map criteria to active/inactive fixture sessions, requirement coverage oracles,
   duplicate-task detection, loop-policy escalation rejection, context metadata,
-  digest mutations, pass-limit restarts, post-apply validation, coverage, and
-  tracked handoff diffs.
+  subject/template digest mutations, prompt changes between passes, pass-limit
+  restarts, post-apply validation, coverage, and tracked handoff diffs.
 - Run one first-pass-clean and one materially revised two-pass sandbox
   decomposition end to end.
 

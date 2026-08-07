@@ -22,7 +22,8 @@ struct or skill parser.
   schema-version-1 result type, warning subset, error subset, and exit policy.
 - A2. Strict decoders reject unknown/missing fields, wrong nullability, null arrays,
   unsupported envelope versions, invalid snapshot path-kind/path combinations,
-  and command-local warning fields.
+  ambiguous prompt template/content hashes, command-local warning fields, and a
+  review publisher error outside its exact prompt-aware subset.
 - A3. Registry drift fails when a command or schema exists in implementation,
   tests, prompts, or skills without a normative inventory entry.
 
@@ -30,7 +31,8 @@ struct or skill parser.
 
 - A1: generate a registry report from command construction and compare it with the
   companion inventory; expected observation is a complete one-to-one mapping.
-- A2: golden positive and mutation-negative fixtures provide decoder evidence.
+- A2: golden positive and mutation-negative fixtures cover prompt content/template
+  digests and `prompt_invalid` review-publication errors alongside inherited shapes.
 - A3: deliberately add an unregistered fixture command/schema and show the drift
   check fails before restoring the registry.
 
