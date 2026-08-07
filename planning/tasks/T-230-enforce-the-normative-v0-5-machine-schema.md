@@ -21,7 +21,8 @@ struct or skill parser.
 - A1. Every JSON-capable v0.5 command and loop result file has exactly one
   schema-version-1 result type, warning subset, error subset, and exit policy.
 - A2. Strict decoders reject unknown/missing fields, wrong nullability, null arrays,
-  unsupported envelope versions, and command-local warning fields.
+  unsupported envelope versions, invalid snapshot path-kind/path combinations,
+  and command-local warning fields.
 - A3. Registry drift fails when a command or schema exists in implementation,
   tests, prompts, or skills without a normative inventory entry.
 

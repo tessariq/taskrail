@@ -25,6 +25,10 @@ without asking the operator or binary to choose semantic content.
   validates the resulting coherent state, and is itself interruption-safe.
 - A3. A live owner, changed/mixed byte, substituted ancestor, or invalid candidate
   refuses without overwrite and preserves complete evidence.
+- A4. Typed snapshots recover mixed transactions containing managed logical,
+  worktree-physical skill/runtime, and canonical absolute Git exclusion-store
+  paths without conflating equal-looking strings or exposing a physical overlay
+  as durable semantic data.
 
 ## Verification Notes
 
@@ -34,5 +38,7 @@ without asking the operator or binary to choose semantic content.
   recovery evidence.
 - A3: race and alias substitutions prove exact `write_conflict` diagnostics and
   unchanged external bytes.
+- A4: local init-with-skills failure fixtures bind semantic, assistant, runtime,
+  and effective Git exclusion snapshots in one recoverable transaction.
 
 ## Implementation Notes

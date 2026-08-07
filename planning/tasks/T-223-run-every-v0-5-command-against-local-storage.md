@@ -24,7 +24,7 @@ integration acceptance.
 ## Acceptance
 
 - Shared readers/writers resolve configured logical and physical roots; no
-  template, artifact guard, skill, rename, validation, or state renderer requires
+  template, artifact guard, rename, validation, or state renderer requires
   literal repository-root `specs/` or `planning/` paths.
 - Existing lifecycle, task/spec/import, repair, and local status/path commands
   produce equivalent semantic results in committed and local fixtures; new prompt,
@@ -32,7 +32,9 @@ integration acceptance.
 - Local writers remain untracked/unstaged and ordinary Git status clean; rename
   uses filesystem publication rather than staging local files.
 - Local prompt and skill feature tasks consume this context but own their separate
-  collision, exclusion, and promotion behavior.
+  content, collision, exclusion, delivery, and promotion behavior.
+- Status exposes exact storage mode/root from the same context so agents never
+  inspect config or probe physical semantic paths to determine delivery mode.
 - Unsupported mode-specific behavior returns a classified capability refusal and
   never falls back to committed paths or creates mixed state.
 

@@ -6,9 +6,7 @@ priority: high
 spec_ref: specs/v0.5.0.md#maintainer-skill-release-evaluations
 dependencies:
     - T-166-publish-workflow-review-index-and-reports-with-cas
-    - T-202-ship-the-lightweight-sdd-handoff-skill
-    - T-216-ship-digest-bound-existing-task-review
-    - T-242-align-full-task-skills-with-the-canonical
+    - T-254-make-every-packaged-skill-storage-neutral
 updated_at: "2026-08-05T20:24:33Z"
 ---
 
@@ -32,10 +30,15 @@ automatic source modification outside Taskrail core and installed packages.
   passing check. T-249 owns the separately reviewed waiver outcome.
 - Analysis may generate patch proposals and rerun candidates only in an isolated workspace. It cannot alter fixtures/assertions, shipped skills, mirrors, tracked state, commits, or select/apply a winner.
 - Required no-model CI separately checks frontmatter, references, command/flag existence, lifecycle/JSON policy, nested resources, provider independence, and package parity.
+- Every applicable behavioral case runs against committed and local storage;
+  local cases detect direct logical-path opens, physical-overlay reconstruction,
+  force-added metadata, and incorrect product-only delivery.
 
 ## Verification Notes
 
-- Seed positive/negative/recovery/boundary cases for every packaged skill and prove eval assets are absent from `init --with-skills` output.
+- Seed positive/negative/recovery/boundary cases for every packaged skill across
+  committed and local fixtures, and prove eval assets are absent from
+  `init --with-skills` output.
 - Run one candidate-vs-release suite, capture blind/human comparison plus deterministic grades, propose but do not apply a patch, and link the final untouched-case release report.
 
 ## Implementation Notes

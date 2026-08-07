@@ -28,6 +28,9 @@ and remediation task is complete. Do not tag or claim current until it passes.
   validation, release build/snapshot, checklist, clean tree, CI, Planning,
   CodeQL, migration, Agent Skills conformance, SDD/loop-policy drift, unsupported
   legacy-input refusal, and native Linux/macOS/Windows packaged evidence passes.
+- Opt-in local skill install/refresh/discovery, narrow exclusion, storage-neutral
+  execution, product-only local delivery, and consented/unconsented promotion
+  evidence passes without a `--without-skills` surface or implicit install path.
 - Changed packaged skills have a committed safe candidate-versus-release summary
   with deterministic grades and human review. Outcome is pass or an explicitly
   disclosed valid waiver; fail/incomplete block and raw transcripts remain ignored.

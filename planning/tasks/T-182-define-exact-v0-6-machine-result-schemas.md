@@ -30,7 +30,8 @@ recovery before command implementations consume them.
 - Error details can carry transition/eligibility/applied/scan facts and encoders
   guarantee one JSON document without free-form nested shapes.
 - Envelope-v2 replacements add stable task/dependency refs and storage/index facts
-  while preserving inherited verify-order and local warning meanings.
+  while preserving inherited typed snapshot path kinds, verify-order, and local
+  warning meanings.
 - The complete warning union names exact unchanged and task-ref-extended v0.5
   variants plus identity/storage variants and their command-specific subsets.
 

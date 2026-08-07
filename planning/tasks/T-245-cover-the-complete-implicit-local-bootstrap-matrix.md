@@ -29,6 +29,8 @@ remains write-free.
   list, and every other reader never bootstrap.
 - A3. A crash during bootstrap is recoverable through the shared transaction; a
   completed bootstrap remains valid, ignored, and discoverable after later refusal.
+- A4. Every implicit bootstrap leaves `.agents/`, `.claude/`, and skill exclusion
+  bytes untouched; packaged skill installation or refresh never occurs implicitly.
 
 ## Verification Notes
 
@@ -36,5 +38,7 @@ remains write-free.
   fresh Git worktree and compares config/exclude/storage bytes plus envelopes.
 - A3: failure injection at exclusion/config/spec/state/note boundaries exercises
   shared recovery and clean visible Git status.
+- A4: command-matrix snapshots include both assistant roots and every effective
+  exclusion source.
 
 ## Implementation Notes

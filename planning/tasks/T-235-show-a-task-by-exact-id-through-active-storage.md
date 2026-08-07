@@ -6,6 +6,7 @@ priority: high
 spec_ref: specs/v0.5.0.md#workflow-prompt-catalog-and-overrides
 dependencies:
     - T-157-upgrade-repositories-transactionally-to-layout-2
+    - T-223-run-every-v0-5-command-against-local-storage
 updated_at: "2026-08-06T13:46:30Z"
 ---
 

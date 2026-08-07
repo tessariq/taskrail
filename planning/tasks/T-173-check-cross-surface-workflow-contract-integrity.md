@@ -30,6 +30,9 @@ Feature-specific behavior remains owned and verified by its implementation task.
 - Schema-inventory and skill-invocation fixtures reject missing JSON support,
   prose-parsed results, wrong outer generations, unregistered shapes, and mixed
   streamed/result output.
+- Local skill fixtures reject default or implicit installation, overlay-prefixed
+  discovery paths, broad assistant exclusions, direct logical-path opens,
+  force-added metadata, unconsented promotion, and storage-blind delivery.
 - Cross-surface fixtures prove canonical lifecycle citations,
   review/decomposition and lightweight SDD handoff compatibility, scoped lock
   delegation, task-local loop-policy refusal/preservation, and provider

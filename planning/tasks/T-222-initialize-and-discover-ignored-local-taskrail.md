@@ -22,6 +22,8 @@ is owned by T-245.
 - Explicit local init durably writes layout-2 local config, specs, planning,
   notes, and strict runtime origin only after managed Git exclusions are effective;
   T-247 owns optional local skills.
+- Plain `init --local` leaves `.agents/`, `.claude/`, and skill exclusions
+  byte-for-byte unchanged; no assistant content is part of the default scaffold.
 - Discovery preserves distinct worktree, Git/common-directory, storage-root, and
   logical-path identities from any descendant invocation and linked worktree.
 - Tracked, staged, mixed-mode, aliased, symlink/reparse, special, conflicting, or
@@ -35,6 +37,7 @@ is owned by T-245.
 
 - Use temporary ordinary/linked Git worktrees for explicit/read-only,
   collision, exclusion, descendant-cwd, branch-drift, and rollback observations.
+- Snapshot both assistant roots and effective exclusions around plain local init.
 - Snapshot worktree/index/exclude bytes before each refusal and retain CLI golden
   output proving visible `git status` remains clean after success.
 

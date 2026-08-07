@@ -36,8 +36,18 @@ committed candidate validates.
   failure retains shared recovery so committed and local semantic stores are not
   simultaneously accepted.
 - Success leaves committed planning visible for operator review/staging but makes
-  no Git commit; `--with-skills` is the only skill-promotion consent and exact
-  text/JSON candidate/result fields agree between preview and apply.
+  no Git commit. Installed local skills already occupy normal assistant paths;
+  `--with-skills` is the only consent to validate their unchanged bytes and remove
+  exact exclusions, while promotion without it leaves skill bytes and exclusions
+  untouched. Exact text/JSON candidate/result fields agree between preview and
+  apply.
+- Semantic promotion without skills leaves an explicit pending-skill state. In
+  that state only, a later `local promote --with-skills` preview/apply is valid
+  against committed storage, reports empty semantic arrays, and removes exact
+  skill exclusions without changing file bytes; omission of the flag, no pending
+  exclusions, or a repeated call is `unsupported`.
+- Preview `promote` actions describe candidates only; apply plus top-level
+  `applied:true` is the sole claim that visibility changed.
 
 ## Verification Notes
 
@@ -45,6 +55,10 @@ committed candidate validates.
   collision, source races, publication faults, exclusion-removal faults, rollback,
   and successful validation in temporary Git repositories.
 - Compare exact semantic task/spec/state snapshots before and after promotion and
-  prove artifacts plus unconsented skills remain local.
+  prove artifacts plus unconsented skills remain local; consented skill promotion
+  changes visibility without changing destination bytes.
+- Exercise immediate combined promotion and deferred skill-only promotion,
+  including preview, apply, second-call refusal, and interruption recovery over
+  typed semantic/worktree/Git snapshots.
 
 ## Implementation Notes

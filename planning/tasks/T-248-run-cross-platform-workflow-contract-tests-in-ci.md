@@ -19,7 +19,9 @@ macOS, and native Windows after the cross-surface registry is complete.
 ## Acceptance
 
 - A1. CI executes the registry-selected lock/path/process/CLI/skill/prompt suites on
-  all three operating systems without replacing required manual agent evidence.
+  all three operating systems, including local skill destination, exclusion,
+  no-follow, collision, and discovery-path suites, without replacing required
+  manual agent evidence.
 - A2. Platform-specific unsupported guarantees are explicit skips with reasons;
   supported behavior cannot silently disappear from one matrix leg.
 - A3. Required checks remain reproducible locally and do not add provider
