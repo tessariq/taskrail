@@ -8,6 +8,11 @@
   selection.
 - The runner uses Claude by default. Select one backend for the complete invocation
   with `--backend claude` or `--backend opencode`; dry-run reports that selection.
+- The shared prompt requires separate fresh subagents for simplification and
+  correctness review. Each backend must inspect installed capabilities, prefer
+  specialist skills or subagents, and fail closed when delegation is unavailable.
+  Fix high and medium current-scope findings; low findings are report-only unless
+  acceptance, specification, invariants, or required evidence makes them mandatory.
 - Do not add logs, results, session data, credentials, or generated files here.
   Runtime output belongs under ignored `planning/artifacts/runs/` or external
   temporary storage.

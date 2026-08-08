@@ -19,6 +19,27 @@ assert_contains() {
   [[ "$value" == *"$expected"* ]] || fail "$name: expected '$expected' in '$value'"
 }
 
+assert_review_prompt() {
+  local name="$1" value
+  value="$(printf '%s\n' "$2" | tr -s '[:space:]' ' ')"
+  assert_contains "$name capability selection" "$value" "inspect the available installed skills and subagents"
+  assert_contains "$name specialist preference" "$value" "Prefer dedicated code-simplifier and code-reviewer capabilities"
+  assert_contains "$name general fallback" "$value" "otherwise use a general-purpose fresh subagent"
+  assert_contains "$name explicit lenses" "$value" "with an explicit simplification or correctness lens"
+  assert_contains "$name simplification delegation" "$value" "First use one fresh subagent for a behavior-preserving simplification pass"
+  assert_contains "$name correctness delegation" "$value" "Then use a separate fresh subagent for correctness review"
+  assert_contains "$name ordered snapshot" "$value" "freeze the resulting snapshot"
+  assert_contains "$name frozen snapshot" "$value" "frozen current implementation snapshot"
+  assert_contains "$name parent applies fixes" "$value" "the parent applies fixes"
+  assert_contains "$name self-review rejection" "$value" "Parent-context self-review does not satisfy either pass"
+  assert_contains "$name high-medium policy" "$value" "Fix high- and medium-severity current-scope findings"
+  assert_contains "$name low policy" "$value" "Leave low-severity observations report-only unless"
+  assert_contains "$name material re-review" "$value" "After any material correctness fix"
+  assert_contains "$name fresh re-review" "$value" "obtain another fresh correctness review while the budget remains"
+  assert_contains "$name delegation failure" "$value" "If fresh subagent delegation is unavailable or fails, block"
+  assert_contains "$name unresolved finding" "$value" "If any required finding remains unresolved or final bytes requiring re-review cannot be reviewed within budget, block"
+}
+
 create_fixture() {
   local name="$1" root="$TMP_ROOT/$1" remote="$TMP_ROOT/$1.git"
   mkdir -p "$root/scripts/autonomous-loop" "$root/scripts" "$root/planning/tasks" \
@@ -168,7 +189,9 @@ output="$(run_fixture "$root" --max-iterations 1)"
 rc=$?
 [[ $rc -eq 0 ]] || fail "successful run exited $rc: $output"
 assert_contains "successful task" "$output" "completed and pushed: T-900"
-assert_contains "rendered task" "$(<"$root/captures/prompt")" "T-900"
+claude_prompt="$(<"$root/captures/prompt")"
+assert_contains "rendered task" "$claude_prompt" "T-900"
+assert_review_prompt "shared backend prompt" "$claude_prompt"
 [[ "$(<"$root/captures/backend")" == "claude" ]] || fail "default backend did not invoke Claude"
 assert_contains "default Claude arguments" "$(<"$root/captures/agent-args")" "-p --permission-mode acceptEdits"
 [[ "$(git -C "$root" rev-list --count HEAD~1..HEAD)" == "1" ]] || fail "successful run did not create one commit"
@@ -187,6 +210,8 @@ rc=$?
 [[ $rc -eq 0 ]] || fail "explicit OpenCode run exited $rc: $output"
 [[ "$(<"$root/captures/backend")" == "opencode" ]] || fail "explicit OpenCode backend invoked the wrong CLI"
 assert_contains "explicit OpenCode arguments" "$(<"$root/captures/agent-args")" "run --auto"
+opencode_prompt="$(<"$root/captures/prompt")"
+[[ "$opencode_prompt" == "$claude_prompt" ]] || fail "Claude and OpenCode received different prompts"
 
 root="$(create_fixture invalid-backend)"
 output="$(run_fixture "$root" --backend unknown)"

@@ -2,6 +2,7 @@ task_id	mode	reason
 T-257-add-the-temporary-source-checkout-autonomous-loop	run	-
 T-265-accept-rendered-empty-current-task-in-loop	run	-
 T-266-select-temporary-loop-backend-per-invocation	hold-operator	Operator-owned temporary-loop maintenance
+T-267-require-specialized-fresh-review-subagents-in-the	hold-operator	Operator-owned temporary-loop maintenance
 T-155-add-the-repository-mutation-lock-protocol	run	-
 T-201-make-packaged-skills-agent-skills-compliant	run	-
 T-229-canonicalize-v0-5-lifecycle-and-task-identities	run	-
