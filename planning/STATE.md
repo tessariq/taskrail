@@ -1,6 +1,6 @@
 ---
 schema_version: 1
-updated_at: "2026-08-08T12:55:45Z"
+updated_at: "2026-08-08T13:56:14Z"
 active_spec_version: v0.5.0
 active_spec_path: specs/v0.5.0.md
 current_task: ""
@@ -8,7 +8,7 @@ current_task_title: ""
 status_summary: idle
 blockers: []
 next_action: Select the next eligible task
-last_verification_result: pass for T-267-require-specialized-fresh-review-subagents-in-the at 2026-08-08T12:55:45Z
+last_verification_result: pass for T-155-add-the-repository-mutation-lock-protocol at 2026-08-08T13:56:14Z
 relevant_artifacts: []
 continuation_notes:
     - This repository is temporarily dogfooding bootstrap workflow tooling until Taskrail v0.1.0 exists.
@@ -34,7 +34,7 @@ continuation_notes:
 
 ## Last Verification
 
-- pass for T-267-require-specialized-fresh-review-subagents-in-the at 2026-08-08T12:55:45Z
+- pass for T-155-add-the-repository-mutation-lock-protocol at 2026-08-08T13:56:14Z
 
 ## Next Action
 
@@ -50,8 +50,8 @@ continuation_notes:
 
 ## Task Counts
 
-- todo: 108
+- todo: 107
 - in_progress: 0
-- completed: 158
+- completed: 159
 - blocked: 0
 - cancelled: 0

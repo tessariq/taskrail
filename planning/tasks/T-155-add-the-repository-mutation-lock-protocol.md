@@ -1,11 +1,11 @@
 ---
 id: T-155-add-the-repository-mutation-lock-protocol
 title: Add the repository mutation lock protocol
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#repository-discovery-locking-and-recovery
 dependencies: []
-updated_at: "2026-08-08T08:40:49Z"
+updated_at: "2026-08-08T13:56:14Z"
 ---
 
 # T-155-add-the-repository-mutation-lock-protocol Add the repository mutation lock protocol
@@ -48,3 +48,6 @@ writer-family integration are separate dependent outcomes.
 - Use portable process helpers rather than timing-only goroutine assertions.
 
 ## Implementation Notes
+
+- 2026-08-08T13:55:50Z: Added internal/repolock: explicit Repository context, Git-common-dir vs root-local runtime lock placement, exclusive acquire/release/inspect, normative owner metadata, capability bounds, and unguessable delegation tokens whose digest alone is persisted.
+- 2026-08-08T13:56:14Z: verification pass
