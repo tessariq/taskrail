@@ -7,7 +7,7 @@ spec_ref: specs/v0.5.0.md#safe-review-artifact-publication
 dependencies:
     - T-223-run-every-v0-5-command-against-local-storage
     - T-240-implement-the-normative-review-schema-decoders
-updated_at: "2026-08-05T20:24:17Z"
+updated_at: "2026-08-08T08:40:49Z"
 ---
 
 # T-215-add-the-generic-review-artifact-publisher Add the generic review artifact publisher
@@ -36,6 +36,11 @@ derivation and pair publication remain T-166.
 - Capabilities exclude lifecycle, loop policy, spec activation, import apply, and
   verification. Directory publication either exposes one complete destination or none.
 - Review skills hand untrusted proposals to this command and never write final artifacts directly.
+- At publication recheck in Git repositories, selected proposal paths are
+  effectively ignored and every existing proposal input is untracked and unstaged;
+  tracked, staged, or non-ignored inputs fail with the stable path refusal. T-250
+  owns the render-time check. Non-Git publication
+  enforces transient-root containment without claiming ignore state.
 
 ## Verification Notes
 

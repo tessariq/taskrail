@@ -5,7 +5,7 @@ status: todo
 priority: high
 spec_ref: specs/v0.5.0.md#canonical-transition-order
 dependencies: []
-updated_at: "2026-08-06T13:46:30Z"
+updated_at: "2026-08-08T08:40:49Z"
 ---
 
 # T-229-canonicalize-v0-5-lifecycle-and-task-identities Canonicalize v0.5 lifecycle and task identities
@@ -23,8 +23,10 @@ implement their own behavior.
   delegated capabilities without introducing stable `task_ref` semantics.
 - A2. The legal completion/verification metadata table and predecessor-chain
   invariants are represented once and consumed by validation and later writers.
-- A3. Documentation and fixtures reject complete-on-failure, verify-as-transition,
-  fuzzy task identity, and any lifecycle branch not named by the v0.5 spec.
+- A3. The reusable contract, current documentation, and contract-lint fixtures
+  reject complete-on-failure, verify-as-transition, fuzzy task identity, and any
+  lifecycle branch not named by the v0.5 spec. T-173 owns final proof that every
+  later prompt, skill, and command consumes the contract.
 
 ## Verification Notes
 
@@ -32,7 +34,7 @@ implement their own behavior.
   expected observations are the named branch or a stable identity refusal.
 - A2: validation fixtures exercise every legal table row and each partial/broken
   combination; evidence is unit-level validation output.
-- A3: golden docs/registry checks demonstrate that prompts and later command tests
-  cite the shared contract rather than restating a divergent order.
+- A3: golden docs/registry checks demonstrate the reusable citation/lint mechanism;
+  T-173 applies it to the complete shipped cross-surface inventory.
 
 ## Implementation Notes

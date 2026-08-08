@@ -7,7 +7,7 @@ spec_ref: specs/v0.5.0.md#local-planning-mode
 dependencies:
     - T-166-publish-workflow-review-index-and-reports-with-cas
     - T-247-install-packaged-skills-safely-in-local-mode
-updated_at: "2026-08-05T22:04:28Z"
+updated_at: "2026-08-08T08:40:49Z"
 ---
 
 # T-224-promote-local-taskrail-state-into-committed Promote local Taskrail state into committed planning
@@ -23,7 +23,11 @@ committed candidate validates.
 
 - `local promote` preview reports every source/destination/reference/exclusion
   change, linked-worktree consequence, collision, and committed validation result
-  with zero writes.
+  with zero writes. Spec/state/task/note/review/prompt entries use managed logical
+  paths; config/artifact/runtime entries use repository-root physical paths, with
+  physical local artifact/runtime values confined to the transient result.
+  Writes/preserved reject artifact/runtime kinds, and excluded rejects every
+  published semantic/config kind.
 - Apply rejects mixed state, destination/index conflicts, unsafe paths, source
   changes during the transaction, affected sibling installations, and ambiguous
   skill promotion. Historical origin drift alone is an advisory, not refusal.

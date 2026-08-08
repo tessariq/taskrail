@@ -10,7 +10,8 @@ dependencies:
     - T-225-prove-local-autonomous-delivery-across-git
     - T-246-classify-every-v0-5-writer-transaction-and
     - T-249-allow-explicit-skill-evaluation-release-waivers
-updated_at: "2026-08-04T21:32:13Z"
+    - T-256-retire-bootstrap-planning-reviews
+updated_at: "2026-08-08T08:40:49Z"
 ---
 
 # T-173-check-cross-surface-workflow-contract-integrity Derive and check the v0.5 workflow contract index
@@ -32,7 +33,13 @@ Feature-specific behavior remains owned and verified by its implementation task.
   streamed/result output.
 - Local skill fixtures reject default or implicit installation, overlay-prefixed
   discovery paths, broad assistant exclusions, direct logical-path opens,
-  force-added metadata, unconsented promotion, and storage-blind delivery.
+  force-added metadata, unconsented promotion, storage-blind delivery, incidental
+  private provenance, invented attribution, and Git identity/configuration edits.
+  Committed custom planning directories and the fixed local overlay consume exact
+  reported transient artifact paths. Frozen repository-visible policy governs
+  generic Git conventions, only caller-owned instruction authorizes exposing local
+  Taskrail identity/path provenance, and outcome-required product-byte cases remain
+  positive exceptions rather than false failures.
 - Cross-surface fixtures prove canonical lifecycle citations,
   review-artifact role-to-prompt mappings, template-binding and historical-read
   behavior, review/decomposition and lightweight SDD handoff compatibility,
@@ -41,6 +48,9 @@ Feature-specific behavior remains owned and verified by its implementation task.
 - Arbitrary repository overrides are not represented as certified and no embedded
   workflow invokes a named model API/provider CLI. No durable binding contains a
   physical local path or claims prompt delivery, reviewer identity, or semantic quality.
+- Deterministic checks certify embedded instructions and scripted observable
+  outcomes only; the index assigns opaque real-agent path/provenance observations
+  to T-218 and never presents them as credential-free attestation.
 - README, AGENTS, workflow, skill-productization, human-notes, skill-evaluation,
   upgrade/recovery/review-evidence/SDD docs, and terse CHANGELOG entries contain
   one non-contradictory model with no stale repository-policy guidance.

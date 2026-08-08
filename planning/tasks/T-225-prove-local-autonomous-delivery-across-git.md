@@ -5,8 +5,9 @@ status: todo
 priority: high
 spec_ref: specs/v0.5.0.md#cross-platform-autonomous-loop
 dependencies:
+    - T-244-publish-streamed-loop-results-out-of-band
     - T-245-cover-the-complete-implicit-local-bootstrap-matrix
-updated_at: "2026-08-05T22:04:34Z"
+updated_at: "2026-08-08T08:40:49Z"
 ---
 
 # T-225-prove-local-autonomous-delivery-across-git Prove local autonomous delivery across Git worktrees
@@ -21,9 +22,16 @@ evidence required of committed mode.
 ## Acceptance
 
 - Local preflight freezes mode/root, effective review maximum, prompt/executable,
-  task ledger, attached ref/HEAD, index, exclusion, and visible cleanliness.
+  task ledger, attached ref/HEAD, complete local ref namespace, dynamic uppercase root ref candidates,
+  index, exclusion, and visible cleanliness.
 - A completed-pass child creates exactly one direct-child product commit, leaves no staged/committed
   Taskrail path, and records exact valid ignored completion/verification bytes;
+  the commit tree and Git-visible provenance contain no incidental ignored
+  task/spec/review/verification identifiers, managed paths, storage details, or
+  invented attribution. Frozen repository-visible policy governs generic Git
+  conventions, but only caller-owned instruction outside managed planning can
+  authorize exposing a local Taskrail identity/path in commit metadata;
+  outcome-required product bytes are distinct from that authorization;
   committed-mode fixtures retain their combined delivery requirement.
 - Blocked, rework, completed-unverified, audit-fail, child/process failure, and
   local metadata mutation map to the specified outcomes and never continue to
@@ -35,6 +43,11 @@ evidence required of committed mode.
 - Final results report storage and review policy evidence alongside Git/lifecycle
   evidence without claiming remote delivery, reviewer identity, or mechanically
   observed review-iteration counts.
+- Scripted prompt/skill fixtures preserve caller-owned author/committer/signing
+  configuration and do not instruct hook bypass. Postflight rejects unexpected
+  local ref changes and enforces identity/signature/provenance only where frozen
+  visible policy supplies an exact oracle; it does not claim to attest hook
+  execution or arbitrary child tools.
 
 ## Verification Notes
 
@@ -42,6 +55,10 @@ evidence required of committed mode.
   outcome using real child helpers and real local commits on Linux, macOS, and
   native Windows where behavior is platform-specific.
 - Assert exact visible Git diff/index/commit contents separately from ignored
-  Taskrail state and rerun the full behavioral contract suite.
+  Taskrail state, inspect commit subject/body/trailers and identity separately,
+  exercise generic visible policy, caller-authorized identity/path provenance,
+  outcome-required product bytes, and delayed/current self-authorization refusal,
+  then rerun the full behavioral contract suite including out-of-band terminal
+  result publication.
 
 ## Implementation Notes

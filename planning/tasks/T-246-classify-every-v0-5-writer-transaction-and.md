@@ -6,10 +6,11 @@ priority: high
 spec_ref: specs/v0.5.0.md#repository-discovery-locking-and-recovery
 dependencies:
     - T-224-promote-local-taskrail-state-into-committed
+    - T-231-inspect-and-clear-stale-repository-locks-safely
     - T-244-publish-streamed-loop-results-out-of-band
     - T-245-cover-the-complete-implicit-local-bootstrap-matrix
     - T-255-bind-review-artifacts-to-resolved-prompt-templates
-updated_at: "2026-08-06T13:46:30Z"
+updated_at: "2026-08-08T08:40:49Z"
 ---
 
 # T-246-classify-every-v0-5-writer-transaction-and Classify every v0.5 writer transaction and exception

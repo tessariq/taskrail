@@ -7,7 +7,7 @@ spec_ref: specs/v0.5.0.md#cross-platform-autonomous-loop
 dependencies:
     - T-217-release-interrupted-active-work-safely
     - T-243-contain-autonomous-loop-process-trees
-updated_at: "2026-08-04T21:32:13Z"
+updated_at: "2026-08-08T08:40:49Z"
 ---
 
 # T-172-enforce-autonomous-loop-lifecycle-and-delivery Enforce autonomous loop lifecycle and delivery postflight
@@ -36,7 +36,11 @@ prompt/skill contract rather than a fabricated postflight attestation.
 - Delivered recognized outcomes require clean tree, same full attached ref,
   unchanged frozen spec/config/layout/storage/review/prompt/executable bytes,
   unchanged pre-existing `loop_policy` and `loop_reason` fields, valid task
-  policy, and no contained process; remote is not_checked.
+  policy, and no contained process; remote is not_checked. The final complete local
+  ref namespace is unchanged except for the expected attached-branch advance; no
+  unexpected ref change may survive postflight, and the dynamically enumerated
+  uppercase root-ref-candidate set remains byte-identical with no new matching
+  entry other than excluded `COMMIT_EDITMSG`.
 - Committed delivery requires implementation plus generated task/state bytes in
   exactly one direct-child commit. Local completed-pass requires exactly one
   direct-child product commit; blocked/rework requires one only when product bytes changed, otherwise
@@ -56,11 +60,18 @@ prompt/skill contract rather than a fabricated postflight attestation.
   iteration counting, commit/violation ordering, and preflight refusal behavior
   without fabricating iteration-only evidence.
 - T-244 owns external result-file path safety and publication of these diagnostics.
+- Hook execution and semantic necessity are not fabricated postflight evidence;
+  exact final commit identity/signature/provenance is enforced only where frozen
+  repository policy provides a mechanical oracle, while prompt and T-218 evidence
+  cover opaque child behavior.
+- Transient ref/reflog movement is likewise prompt/manual-evaluation behavior:
+  before/after snapshots prove final namespace equality, not that a child never
+  moved and restored a ref or wrote a reflog entry.
 
 ## Verification Notes
 
 - Map every outcome to setup/action/public diagnostic/filesystem+Git evidence;
-  cover stale/mismatched IDs, every ref/ancestry/dirty/control/task mutation,
+  cover stale/mismatched IDs, full ref-namespace/ancestry/dirty/control/task mutation,
   bounded implicitly held follow-ups, frozen policy fields, iteration caps, and
   recovery-only verify.
 - Persist manual success, hold, blocked, rework, partial-complete, audit-fail,

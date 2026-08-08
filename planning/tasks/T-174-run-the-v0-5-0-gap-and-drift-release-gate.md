@@ -6,7 +6,7 @@ priority: high
 spec_ref: specs/v0.5.0.md#goals
 dependencies:
     - T-248-run-cross-platform-workflow-contract-tests-in-ci
-updated_at: "2026-08-04T21:32:13Z"
+updated_at: "2026-08-08T08:40:49Z"
 ---
 
 # T-174-run-the-v0-5-0-gap-and-drift-release-gate Run the v0.5.0 gap and drift release gate
@@ -35,9 +35,24 @@ and remediation task is complete. Do not tag or claim current until it passes.
 - Opt-in local skill install/refresh/discovery, narrow exclusion, storage-neutral
   execution, product-only local delivery, and consented/unconsented promotion
   evidence passes without a `--without-skills` surface or implicit install path.
+  Local delivery evidence includes reported transient paths, absence of incidental
+  private planning provenance, unchanged Git identity/configuration, frozen generic
+  policy, outcome-required product-byte cases, caller-authorized local identity/path
+  commit-metadata cases, auxiliary-ref refusal, and delayed/current planning self-
+  authorization refusal.
 - Changed packaged skills have a committed safe candidate-versus-release summary
   with deterministic grades and human review. Outcome is pass or an explicitly
-  disclosed valid waiver; fail/incomplete block and raw transcripts remain ignored.
+  disclosed valid strict schema-v1 waiver; fail/incomplete or malformed reports
+  block, raw transcripts remain transient under the reported artifacts directory,
+  and the committed report retains digest-only raw references. A waiver also
+  requires explicit human disposition that its approver is the authorized v0.5.0
+  release operator; the report cannot establish that authority itself. Exactly one
+  committed report must match the final tested product, candidate package, and
+  fixture inventory and bind the evaluated candidate/baseline binaries; final HEAD
+  descends from its tested HEAD with only task/state/skill-eval-review bookkeeping
+  changes, while zero or
+  multiple current reports block selection among committed sessions. Discarded retries remain disclosed human
+  evaluation risk rather than a fabricated append-only ledger.
 - Every current-version blocker becomes a standalone remediation task and direct
   gate dependency, explicitly not a follow-up-of the gate; the gate stops and
   later restarts the review on fresh bytes. Cancelled dependencies never satisfy

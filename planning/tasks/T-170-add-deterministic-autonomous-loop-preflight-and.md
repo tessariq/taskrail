@@ -8,7 +8,7 @@ dependencies:
     - T-160-ship-the-lifecycle-complete-task-implementation
     - T-169-select-autonomous-work-through-policy-barriers
     - T-223-run-every-v0-5-command-against-local-storage
-updated_at: "2026-08-04T21:32:13Z"
+updated_at: "2026-08-08T08:40:49Z"
 ---
 
 # T-170-add-deterministic-autonomous-loop-preflight-and Add deterministic autonomous loop preflight and dry-run
@@ -33,6 +33,11 @@ the Taskrail source checkout explicitly while supporting installed adopters.
   attached non-unborn HEAD, no in-progress task, layout 2, one valid committed or
   local storage context, and available shared lock. Local metadata must be
   effectively ignored, untracked, unstaged, and valid.
+- Preflight snapshots the complete local `refs/*` namespace and dynamically
+  enumerated uppercase root ref candidates in the worktree/common Git directories,
+  excluding only `COMMIT_EDITMSG`. Repository policy and
+  caller-owned provenance authorization remain semantic prompt/manual-evaluation
+  context rather than a new parsed or mechanically frozen loop input.
 - Selection matches read-only active ranking plus the exact task-local loop-policy
   semantics; held tasks are transparent unless they block an allowed candidate,
   and no candidate launches nothing with a clean `none` result.
@@ -54,6 +59,9 @@ the Taskrail source checkout explicitly while supporting installed adopters.
   no-launch helper evidence, dirty/detached/unborn/bare/root/task/lock/task-policy
   cases, and override/source boundaries.
 - Snapshot the complete managed semantic store plus visible Git index/status before
-  and after every committed/local dry-run and refused execution branch.
+  and after every committed/local dry-run and refused execution branch; execution
+  fixtures also snapshot all local refs and standard, arbitrary-name, and custom
+  uppercase root ref candidates, including absent/present transitions, `EVIL_REV`,
+  and alias refusal.
 
 ## Implementation Notes

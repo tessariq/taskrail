@@ -8,7 +8,7 @@ dependencies:
     - T-222-initialize-and-discover-ignored-local-taskrail
     - T-233-protect-lifecycle-and-task-writers-transactionally
     - T-234-protect-repository-and-planning-writers
-updated_at: "2026-08-05T22:04:22Z"
+updated_at: "2026-08-08T08:40:49Z"
 ---
 
 # T-223-run-every-v0-5-command-against-local-storage Route existing commands through local storage context
@@ -33,15 +33,18 @@ integration acceptance.
   uses filesystem publication rather than staging local files.
 - Local prompt and skill feature tasks consume this context but own their separate
   content, collision, exclusion, delivery, and promotion behavior.
-- Status exposes exact storage mode/root from the same context so agents never
-  inspect config or probe physical semantic paths to determine delivery mode.
+- Status exposes exact storage mode/root and the physical fixed-overlay
+  `artifacts_dir` from the same context so agents never inspect config or probe
+  physical semantic paths to determine delivery or transient staging. Its local
+  artifacts value is byte-identical to `local path` from the same snapshot.
 - Unsupported mode-specific behavior returns a classified capability refusal and
   never falls back to committed paths or creates mixed state.
 
 ## Verification Notes
 
 - Build a table-driven committed/local command matrix with exact state/task/spec
-  snapshots, Git index/status assertions, custom invocation cwd, and fault points.
+  snapshots, Git index/status assertions, custom invocation cwd, fixed local
+  overlay artifact mapping, and fault points.
 - Run skill parity plus sandbox CLI smoke workflows through create, start, verify,
   complete/block, repair, import, and rename paths; expose reusable fixtures for
   downstream prompt/review/loop tasks.

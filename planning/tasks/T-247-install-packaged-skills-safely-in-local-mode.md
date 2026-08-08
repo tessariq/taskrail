@@ -7,7 +7,7 @@ spec_ref: specs/v0.5.0.md#local-planning-mode
 dependencies:
     - T-201-make-packaged-skills-agent-skills-compliant
     - T-222-initialize-and-discover-ignored-local-taskrail
-updated_at: "2026-08-06T13:46:30Z"
+updated_at: "2026-08-08T08:40:49Z"
 ---
 
 # T-247-install-packaged-skills-safely-in-local-mode Install packaged skills safely in local mode
@@ -39,8 +39,8 @@ parity mirrors.
 - A5. Marker-free byte-identical mirrors are preserved as mirrors; installed
   copies receive nested version metadata, compatible legacy markers normalize
   only on forced refresh, and conflicting/divergent copies refuse unchanged.
-- A6. Init JSON and local status report every installed file and exact managed
-  skill-subtree exclusion in both assistant roots; ordinary committed installs
+- A6. Init JSON reports every installed file, while local status reports the exact
+  managed skill-subtree exclusions in both assistant roots; ordinary committed installs
   report no exclusions, and ordinary Git status remains clean after local install
   or refresh.
 - A7. The installer exposes exact destination ownership, digest, and exclusion

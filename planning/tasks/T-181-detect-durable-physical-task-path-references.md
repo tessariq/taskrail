@@ -8,7 +8,7 @@ dependencies:
     - T-179-resolve-stable-task-references-across-every
     - T-178-load-live-and-archived-tasks-as-one-immutable
     - T-180-make-semantic-publication-durably-transactional
-updated_at: "2026-08-04T23:06:23Z"
+updated_at: "2026-08-08T08:40:49Z"
 ---
 
 # T-181-detect-durable-physical-task-path-references Detect durable physical task path references
@@ -38,6 +38,9 @@ text.
   roots and self/inverse refs need no active layout 3.
 - Core is read-only, never rewrites/tombstones/redirects, and leaves bare
   ID-like prose outside matching.
+- The scanner accepts a registered schema-aware exception mechanism and inherited
+  schema-v1 task-review behavior; T-196 registers v2. Malformed JSON, prose,
+  unknown schemas, and every other occurrence remain blockers.
 
 ## Verification Notes
 
@@ -46,5 +49,7 @@ text.
   encodings, gitlinks/filters/index flags, symlinks, non-Git scope, and source
   candidates.
 - Prove zero writes and exact remediation on every blocker/incomplete case.
+- Mutation fixtures cover valid v1 registration plus malformed, wrong-field,
+  prose, and unknown-schema lookalikes; T-196 extends the matrix with v2.
 
 ## Implementation Notes

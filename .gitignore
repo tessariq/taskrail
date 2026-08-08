@@ -45,6 +45,8 @@ go.work.sum
 /planning/artifacts/manual-test/
 /planning/artifacts/verify/
 /planning/artifacts/runs/
+/planning/artifacts/review-proposals/
+/planning/artifacts/skill-evals/
 
 # Temporary editor files
 *.swp

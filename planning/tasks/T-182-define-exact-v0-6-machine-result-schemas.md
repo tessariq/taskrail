@@ -6,7 +6,7 @@ priority: high
 spec_ref: specs/v0.6.0.md#archive-and-restore-commands
 dependencies:
     - T-174-run-the-v0-5-0-gap-and-drift-release-gate
-updated_at: "2026-08-04T23:06:23Z"
+updated_at: "2026-08-08T08:40:49Z"
 ---
 
 # T-182-define-exact-v0-6-machine-result-schemas Define exact v0.6 machine result schemas
@@ -32,6 +32,9 @@ recovery before command implementations consume them.
 - Envelope-v2 replacements add stable task/dependency refs and storage/index facts
   while preserving inherited typed snapshot path kinds, verify-order, and local
   warning meanings.
+- Task-targeting prompt contract v2 adds exact `TASK_REF`/`TASK_STORAGE` context;
+  schema-2 loop dry-run and iteration prompt objects add required
+  `contract_version`, while schema-1 objects and explicit prompt v1 stay unchanged.
 - The complete warning union names exact unchanged and task-ref-extended v0.5
   variants plus identity/storage variants and their command-specific subsets.
 

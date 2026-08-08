@@ -10,7 +10,7 @@ dependencies:
     - T-191-add-stable-task-inspection-and-filtered-inventory
     - T-194-add-explicit-archive-and-restore-commands
     - T-167-add-active-spec-scoped-statistics
-updated_at: "2026-08-04T23:06:23Z"
+updated_at: "2026-08-08T08:40:49Z"
 ---
 
 # T-195-report-unified-ledger-storage-without-semantic Report unified ledger storage without semantic drift
@@ -23,9 +23,10 @@ without lifecycle drift.
 
 ## Acceptance
 
-- Status/stats JSON adds exactly `storage:{live,archived}` and equivalent text;
-  the sum matches total while inherited done/cancelled/distribution semantics
-  remain.
+- Status/stats JSON adds exactly `task_storage:{live,archived}` and equivalent
+  text; status retains inherited `storage` mode/root/artifacts context unchanged,
+  and the task-storage sum matches total while inherited
+  done/cancelled/distribution semantics remain.
 - Coverage, gaps, spec linkage, verification history, dependencies, chains, and
   active-spec projections are invariant under pure archive moves.
 - DOT/Mermaid retain archived nodes, label storage, use injective keys, and

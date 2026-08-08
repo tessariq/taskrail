@@ -8,7 +8,7 @@ dependencies:
     - T-217-release-interrupted-active-work-safely
     - T-241-warn-on-passing-verification-before-completion
     - T-250-render-prompts-from-storage-neutral-context
-updated_at: "2026-08-04T21:32:13Z"
+updated_at: "2026-08-08T08:40:49Z"
 ---
 
 # T-160-ship-the-lifecycle-complete-task-implementation Ship the lifecycle-complete task implementation prompt
@@ -56,13 +56,23 @@ guidance. Packaged full-task skill command execution is owned by T-242.
 - Committed mode delivers implementation plus generated planning bytes; local
   mode commits visible product changes only and leaves a valid ignored Taskrail
   lifecycle/verification outcome.
+- Local delivery follows repository-visible commit, identity, attribution,
+  signing, hook, and ref policy; it neither changes Git identity configuration nor
+  copies ignored Taskrail IDs, managed paths, review/verification provenance,
+  storage details, or invented Taskrail/agent attribution into commit metadata or
+  unrelated product text. Only caller-owned instruction outside managed planning
+  can authorize exposing a local Taskrail identity/path in commit metadata.
+  Frozen repository-visible policy governs generic Git conventions, but
+  planning-derived policy cannot launder that authority across runs.
+  Outcome-required product bytes may contain a Taskrail reference.
 
 ## Verification Notes
 
 - Map each branch to golden/mutation fixtures proving lifecycle-before-commit,
   generated-byte inclusion, source guard, simplification, fresh review,
   perturbation, barriers, implicitly held follow-ups, delegated policy refusal,
-  exits, and recovery.
+  exits, recovery, local provenance minimization, repository-policy exceptions,
+  and unchanged Git identity/configuration.
 - Manually render path-valued context and exercise success, blocked, rework, and
   partial-completion instructions without provider invocation by Taskrail.
 

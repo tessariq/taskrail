@@ -5,7 +5,7 @@ status: todo
 priority: high
 spec_ref: specs/v0.5.0.md#uniform-agent-machine-results
 dependencies: []
-updated_at: "2026-08-06T13:46:30Z"
+updated_at: "2026-08-08T08:40:49Z"
 ---
 
 # T-230-enforce-the-normative-v0-5-machine-schema Enforce the normative v0.5 machine schema inventory
@@ -18,22 +18,26 @@ struct or skill parser.
 
 ## Acceptance
 
-- A1. Every JSON-capable v0.5 command and loop result file has exactly one
-  schema-version-1 result type, warning subset, error subset, and exit policy.
+- A1. The checked normative inventory assigns every planned JSON-capable v0.5
+  command and loop result file exactly one schema-version-1 result type, warning
+  subset, error subset, and exit policy before feature implementation exists.
 - A2. Strict decoders reject unknown/missing fields, wrong nullability, null arrays,
   unsupported envelope versions, invalid snapshot path-kind/path combinations,
   ambiguous prompt template/content hashes, command-local warning fields, and a
   review publisher error outside its exact prompt-aware subset.
-- A3. Registry drift fails when a command or schema exists in implementation,
-  tests, prompts, or skills without a normative inventory entry.
+- A3. Registration and drift checks fail when an implemented command or schema
+  lacks its normative entry or disagrees with it. Feature tasks populate their
+  registered results; T-173 owns final implementation/test/prompt/skill inventory
+  completeness.
 
 ## Verification Notes
 
-- A1: generate a registry report from command construction and compare it with the
-  companion inventory; expected observation is a complete one-to-one mapping.
+- A1: generate the complete normative inventory and compare currently constructed
+  commands with their registered subset; future inventory entries remain checked
+  declarations rather than pretending their commands already exist.
 - A2: golden positive and mutation-negative fixtures cover prompt content/template
   digests and `prompt_invalid` review-publication errors alongside inherited shapes.
-- A3: deliberately add an unregistered fixture command/schema and show the drift
-  check fails before restoring the registry.
+- A3: deliberately add an unregistered fixture command/schema and a mismatched
+  registered implementation and show the drift check fails before restoration.
 
 ## Implementation Notes
