@@ -52,9 +52,14 @@ If state appears inconsistent:
 
 1. run `go run ./cmd/taskrail validate --json`
 2. inspect the reported violations
-3. repair the repo through normal Taskrail commands or explicit bootstrap edits
+3. repair the repo through normal Taskrail commands — `taskrail repair --apply`
+   for mechanical `STATE.md` drift, the ordinary transition commands otherwise
 
-Do not mutate `planning/STATE.md` or task statuses casually once the CLI is in normal use.
+Never mutate `planning/STATE.md` or task statuses by hand. Earlier guidance
+allowed "explicit bootstrap edits" because the CLI did not exist yet; it has
+shipped since v0.1.0 and owns every tracked-work write. If no command can
+express the repair you need, that is a missing capability worth a task, not a
+reason to edit state directly.
 
 ### Refreshing rendered `STATE.md` after hand-edits
 

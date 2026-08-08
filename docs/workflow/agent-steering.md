@@ -4,14 +4,15 @@ Prompt guidance for deterministic tracked-work execution in Taskrail.
 
 ## Baseline Rules
 
-- Use `go run ./cmd/taskrail ...` for tracked-work transitions once the CLI exists.
-- Do not hand-edit `planning/STATE.md` frontmatter once the CLI exists.
+- Use `go run ./cmd/taskrail ...` for tracked-work transitions.
+- Never hand-edit `planning/STATE.md` frontmatter. Re-project mechanical drift
+  with `taskrail repair --apply`.
 - Treat `planning/STATE.md` as current state, never as a task/session log. Put
   durable context in task implementation notes, blocker reasons, portable
   verification summaries/reports, or follow-up tasks.
 - Treat optional `planning/NOTES.md` as human-owned repository context. Read it
   when relevant; edit it only on explicit human instruction.
-- Do not hand-edit task status fields once the CLI exists.
+- Never hand-edit task status fields; route every transition through the CLI.
 - Follow TDD for code changes.
 - Keep tests focused and deterministic.
 - Keep product scope anchored to the Taskrail specs.

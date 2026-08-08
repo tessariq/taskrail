@@ -9,14 +9,16 @@ Guidance for coding agents working in the Taskrail repository.
 - Product specs live under `./specs/`.
 - Planning and tracked work live under `./planning/`.
 - Keep changes small, explicit, and easy to inspect.
-- Until Taskrail is fully usable, this repository dogfoods an adapted workflow using `planning/`, `docs/workflow/`, and the packaged skill set it adopts like any adopter.
+- Taskrail is released software (v0.1.0 through v0.4.0 are tagged). This repository dogfoods its own shipped CLI, `planning/`, `docs/workflow/`, and the packaged skill set exactly like any adopter — not an "adapted" pre-release workflow.
+- The one place that is not yet self-hosting is the *active* spec: a version under development defines surfaces the binary does not implement yet, so their evidence is produced by hand under a quarantined path (`planning/bootstrap-reviews/`) until the owning task ships. That gap is narrow, named, and never a licence to hand-edit CLI-managed state.
 
 ## Source-Of-Truth Files
 
-- Product specifications: `specs/v0.1.0.md`, `specs/v0.2.0.md`, `specs/v0.3.0.md`, `specs/v0.4.0.md`
+- Product specifications: `specs/v0.1.0.md` through `specs/v0.7.0.md` (released: v0.1.0-v0.4.0; active: the `active_spec_version` in `planning/STATE.md`)
 - Spec reading order and versioning: `specs/README.md`
 - Active planning state: `planning/STATE.md`
 - Tracked tasks: `planning/tasks/`
+- Bootstrap planning reviews: `planning/bootstrap-reviews/` (human-owned, hand-produced spec-review evidence for active-spec surfaces the binary cannot yet publish; see Notes On Repository Behavior)
 - Workflow contract: `docs/workflow/`
 - Release checklist: `docs/workflow/releasing.md`
 - Build and convenience commands: `Taskfile.yml`
@@ -128,8 +130,9 @@ Guidance for coding agents working in the Taskrail repository.
   `block`, and other commands that write tracked files). Stop on failure and
   apply its named remedy before writing; `go run ./cmd/taskrail ...` builds the
   current source directly and does not need this guard.
-- Use `taskrail start`, `complete`, `block`, and `verify` for tracked status transitions once the CLI exists.
-- Do not hand-edit task statuses or machine-managed state fields unless the task is explicitly about Taskrail bootstrapping before the CLI is available.
+- Use `taskrail start`, `complete`, `block`, and `verify` for tracked status transitions.
+- Never hand-edit task statuses or machine-managed state fields. The pre-v0.1.0 "Taskrail bootstrapping before the CLI is available" exception is retired — the CLI has shipped since v0.1.0 and owns every tracked-work transition. If no command expresses the change you need, that is a missing capability: file a task and say so. Do not hand-edit, and do not treat an unimplemented *active-spec* surface as reviving the old exception.
+- Mechanical `STATE.md` drift is re-projected by `taskrail repair --apply`, never by hand — including when a merge or rebase conflicts on it.
 - Verification artifacts belong under `planning/artifacts/verify/`.
 - Follow-up work discovered during verification should become new task files.
 
@@ -203,6 +206,8 @@ Guidance for coding agents working in the Taskrail repository.
 
 Intentional, non-obvious decisions — do not "fix" these:
 
+- `planning/bootstrap-reviews/` holds hand-produced v0.5 spec-review evidence: one immutable `<version>[-rN].md` report plus a sibling `<version>[-rN]-task-manifest.sha256` in plain `sha256sum -c` format. The report records the manifest's own digest, so one digest transitively binds the exact bytes of every task file that revision reviewed. No command, skill, or script generates these — the v0.5 publisher (T-215) and review lenses (T-162) do not exist yet, which is the whole reason they are hand-made. Do not add a `Taskfile.yml`/CI check for them: superseded revisions verify *partially* on purpose (each is frozen to its own snapshot, and later task edits are expected to break it), so a green/red gate would be meaningless. They are committed because they are evidence, not build output — unreproducible once task files move on, and worthless outside the git history they annotate. Never gitignore them, never edit a published revision's digests, and never place them under the real durable review roots (`<planning-dir>/reviews/...`, per `specs/v0.5.0.md`) — the separate directory name is deliberate quarantine so hand-made evidence cannot be mistaken for a schema-v1 artifact. T-256 retires the directory once real publication ships.
+- `planning/STATE.md` still carries a stale `continuation_notes` entry naming Taskrail v0.1.0. It is byte-preserved on purpose: T-200 stopped *seeding* such notes but requires existing ones to survive until the state schema-v2 migration (T-157) exposes and explicitly drops them. No migration silently discards authored text, so do not hand-clear it.
 - `validate` is read-only. It never writes `planning/STATE.md` or task files.
 - `coverage` is read-only (side-effect-free like `validate`): it reports advisory spec-coverage/orphan/drift signals and never writes `planning/STATE.md` or task files, so it needs no post-run `git status`/staging follow-up. Its signals never make `validate` fail.
 - `coverage --gaps` is read-only and advisory by default (side-effect-free like `coverage`): it emits mechanical structural-gap candidates over covered active-spec areas (`missing-verification`, `dependency-anomaly`, `under-decomposed-area`) and never writes `planning/STATE.md` or task files. `--fail-on <category>` opts into a repository-selected exit code policy without changing the report, and gap findings never make `validate` fail. Every signal is a candidate to promote into a real task, never auto-created state; it composes with `--area`, while coverage-only `--min` is rejected with `--gaps`. It stays mechanical — counts and graph edges only, no semantic inference.
@@ -228,7 +233,7 @@ Intentional, non-obvious decisions — do not "fix" these:
 - Commit the CLI-regenerated `planning/STATE.md` (and rewritten task files) with the change that produced it.
 - Keep each change focused on one logical outcome.
 - Reference concrete evidence paths in verification notes.
-- Preserve the distinction between Taskrail product behavior and temporary bootstrap scaffolding.
+- Preserve the distinction between shipped Taskrail product behavior and hand-produced evidence for active-spec surfaces that do not exist yet (`planning/bootstrap-reviews/`). Hand-produced evidence must disclaim itself and must never be presented as a real Taskrail artifact.
 
 **Ask first:**
 
@@ -238,7 +243,7 @@ Intentional, non-obvious decisions — do not "fix" these:
 
 **Never:**
 
-- Hand-edit `planning/STATE.md` or task status fields once the CLI exists.
+- Hand-edit `planning/STATE.md` or task status fields.
 - Commit anything under `planning/artifacts/`, or add `.gitkeep` placeholders.
 - Add built-in LLM-provider integration in `v0.1.0`.
 - Turn Taskrail into a sandbox/runtime manager or add container-orchestration semantics.
