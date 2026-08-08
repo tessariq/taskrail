@@ -378,7 +378,7 @@ run_iteration() {
   case "$BACKEND" in
     claude)
       agent_command=(
-        claude -p --permission-mode acceptEdits --add-dir "$TMP_DIR"
+        claude -p --permission-mode auto --add-dir "$TMP_DIR"
         --allowedTools "Bash($TMP_DIR/taskrail-writer *)"
       )
       ;;

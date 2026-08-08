@@ -217,7 +217,7 @@ assert_not_contains "redundant freshness command" "$claude_prompt" 'TASKRAIL="$A
 assert_review_prompt "shared backend prompt" "$claude_prompt"
 [[ "$(<"$root/captures/backend")" == "claude" ]] || fail "default backend did not invoke Claude"
 claude_args="$(<"$root/captures/agent-args")"
-assert_contains "default Claude arguments" "$claude_args" "-p --permission-mode acceptEdits"
+assert_contains "default Claude arguments" "$claude_args" "-p --permission-mode auto"
 assert_contains "Claude temporary directory access" "$claude_args" "--add-dir "
 assert_contains "Claude wrapper permission" "$claude_args" "--allowedTools Bash("
 assert_contains "Claude wrapper path" "$claude_args" "taskrail-writer *)"
