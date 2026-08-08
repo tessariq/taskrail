@@ -34,7 +34,7 @@ create_fixture() {
   printf '%s\n' '# Taskrail v0.5.0' '## Test Area' >"$root/specs/v0.5.0.md"
   printf '%s\n' 'id: T-900' 'status: todo' 'spec_ref: specs/v0.5.0.md#test-area' 'dependencies: []' >"$root/planning/tasks/T-900.md"
   printf '%s\n' 'id: T-901' 'status: todo' 'spec_ref: specs/v0.5.0.md#test-area' 'dependencies:' '    - T-900' >"$root/planning/tasks/T-901.md"
-  printf '%s\n' 'active_spec_path: specs/v0.5.0.md' 'current_task:' 'last_verification_result: none' >"$root/planning/STATE.md"
+  printf '%s\n' 'active_spec_path: specs/v0.5.0.md' 'current_task: ""' 'last_verification_result: none' >"$root/planning/STATE.md"
   printf '%s\n' $'task_id\tagent\tmode\treason' $'T-900\topencode\trun\t-' $'T-901\tnone\thold-operator\ttest hold' >"$root/scripts/autonomous-loop/queue.tsv"
 
   cat >"$root/bin/taskrail" <<'EOF'

@@ -1,5 +1,6 @@
 task_id	agent	mode	reason
 T-257-add-the-temporary-source-checkout-autonomous-loop	opencode	run	-
+T-265-accept-rendered-empty-current-task-in-loop	opencode	run	-
 T-155-add-the-repository-mutation-lock-protocol	claude	run	-
 T-201-make-packaged-skills-agent-skills-compliant	opencode	run	-
 T-229-canonicalize-v0-5-lifecycle-and-task-identities	claude	run	-

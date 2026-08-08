@@ -207,7 +207,7 @@ preflight() {
   remote="$(remote_main)" || die "cannot resolve exactly one origin/main" 2
   [[ "$head" == "$remote" ]] || die "local main is not exactly aligned with origin/main" 2
 
-  current_task="$(awk '$1 == "current_task:" { print $2; exit }' planning/STATE.md)"
+  current_task="$(awk '$1 == "current_task:" { value = $2; if (value == "\"\"") value = ""; print value; exit }' planning/STATE.md)"
   [[ -z "$current_task" ]] || die "STATE.md has active work: $current_task" 2
   shopt -s nullglob
   for file in planning/tasks/*.md; do
