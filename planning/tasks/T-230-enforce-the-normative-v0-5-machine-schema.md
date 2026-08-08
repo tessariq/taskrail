@@ -1,11 +1,11 @@
 ---
 id: T-230-enforce-the-normative-v0-5-machine-schema
 title: Inventory the normative v0.5 machine schemas
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#uniform-agent-machine-results
 dependencies: []
-updated_at: "2026-08-08T08:40:49Z"
+updated_at: "2026-08-08T16:57:28Z"
 ---
 
 # T-230-enforce-the-normative-v0-5-machine-schema Inventory the normative v0.5 machine schemas
@@ -37,3 +37,5 @@ machine companion as their only wire-contract authority.
   schema authority is required; T-269 owns deliberate drift failures.
 
 ## Implementation Notes
+
+- 2026-08-08T16:57:22Z: verification pass
