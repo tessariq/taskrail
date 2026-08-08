@@ -14,8 +14,9 @@ updated_at: "2026-08-08T08:40:49Z"
 ## Description
 
 Define common envelope generation 2 and strict result/detail registries for v0.6
-stable identity, cancel, dependency, inventory, storage, migration warnings, and
-recovery before command implementations consume them.
+stable identity, cancel, dependency, inventory, storage, transition/readiness,
+embedded skill/help inspection, migration warnings, and recovery before command
+implementations consume them.
 
 ## Acceptance
 
@@ -37,6 +38,12 @@ recovery before command implementations consume them.
   `contract_version`, while schema-1 objects and explicit prompt v1 stay unchanged.
 - The complete warning union names exact unchanged and task-ref-extended v0.5
   variants plus identity/storage variants and their command-specific subsets.
+- Transition inventory/preview/apply, release-check, embedded skill list/show,
+  and structured help expose their exact field order, nullability, collection
+  ordering, result/error classification, and stable error codes. A not-ready
+  release report is a registered completed non-zero result.
+- Agent mode selects existing schema-version-2 output only; it creates no second
+  envelope generation or command-specific result variant.
 
 ## Verification Notes
 

@@ -26,6 +26,10 @@ review from fresh candidate bytes after all implementation/remediation.
 - Final drift review proves `loop_policy` and `loop_reason` remain task-local and
   preserved, all creation/import/follow-up paths use implicit hold, and no
   `AUTONOMY.tsv` or separate policy storage/publication assumption remains.
+- Final drift review also proves transitions require complete digest-bound
+  dispositions and reviewed task drafts, release-check remains read-only and
+  non-authoritative for tagging, embedded skill inspection never materializes
+  files, and agent mode changes representation rather than command semantics.
 - Full CI/race/native packaged/migration/map/crash recovery/Git
   move/parity/body/release/checklist/remote/clean-tree evidence passes and binds
   candidate commit SHA, binary digest, platform/toolchain, commands, and

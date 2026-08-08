@@ -67,9 +67,9 @@ the version whose spec adopts it.
   mostly a packaging-and-parity-check extension, not new runtime behavior. Grows
   the parity check surface — confirm scope before adding install targets.
 
-- **`taskrail spec migrate` (builds on shipped migration primitives)** — a guided
-  migration that, on `spec activate`, walks the
-  added areas (offer `task new` for each) and the vanished areas (flag orphaned
-  tasks for re-point or cancel). Turns the anchor-set delta into actionable
-  tracked-work moves. The shipped `spec diff` (T-113) provides the delta, and the
-  shipped `task repoint` (T-114) provides the re-point step.
+- **`taskrail spec migrate` (adopted for v0.6 as `spec transition`)** — the
+  guided transition contract is now specified under
+  `specs/v0.6.0.md#guided-active-spec-transition` and decomposed into tracked
+  tasks. Its implementation builds on shipped `spec diff` for the anchor delta
+  and shipped `task repoint` for one disposition primitive while adding explicit
+  reviewed cancel/retain/new-task actions and atomic activation.

@@ -14,6 +14,9 @@ dependencies:
     - T-197-extend-loop-postflight-for-storage-and
     - T-220-add-validated-dependency-creation
     - T-228-align-ideas-adoption-with-spec-review-and
+    - T-260-inspect-the-embedded-skill-package
+    - T-261-report-spec-release-readiness-read-only
+    - T-264-integrate-guided-spec-transitions-with-packaged
 updated_at: "2026-08-08T08:40:49Z"
 ---
 
@@ -30,7 +33,8 @@ one workflow.
 - Registry/drift checks cover selectors, schemas, storage, warnings, recovery,
   debt, allocator entry points, explicit write sets, task-local loop fields, and
   stable-read contracts without duplicating feature tests. The integrated release
-  closure includes IDEAS adoption through T-228.
+  closure includes IDEAS adoption through T-228 and guided spec workflows through
+  T-264.
 - One end-to-end sandbox upgrades layout, creates generated/opaque tasks,
   adds and removes a dependency, previews then applies cancellation, completes/verifies or cancels/remediates, archives,
   shows/lists/reports invariantly, restores, and proves restore-before-edit.
@@ -45,6 +49,10 @@ one workflow.
   while preserving provider independence.
 - Tag release gates run exact CI/checklist acceptance before any publisher and
   tests prove a failed gate skips GoReleaser/all publication jobs.
+- Integrated scenarios inventory and apply a reviewed active-spec transition,
+  inspect embedded skills, consume structured help/agent-mode output, and move a
+  not-ready release check to ready without hidden writes or persisted release
+  state.
 
 ## Verification Notes
 

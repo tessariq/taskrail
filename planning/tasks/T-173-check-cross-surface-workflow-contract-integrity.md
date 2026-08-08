@@ -11,6 +11,7 @@ dependencies:
     - T-246-classify-every-v0-5-writer-transaction-and
     - T-249-allow-explicit-skill-evaluation-release-waivers
     - T-256-retire-bootstrap-planning-reviews
+    - T-258-retire-the-temporary-source-checkout-autonomous
 updated_at: "2026-08-08T08:40:49Z"
 ---
 
@@ -54,6 +55,9 @@ Feature-specific behavior remains owned and verified by its implementation task.
 - README, AGENTS, workflow, skill-productization, human-notes, skill-evaluation,
   upgrade/recovery/review-evidence/SDD docs, and terse CHANGELOG entries contain
   one non-contradictory model with no stale repository-policy guidance.
+- The temporary source-checkout loop has been retired completely; no runner,
+  queue, prompt, harness, executable guidance, or packaged/release reference
+  remains outside historical task/spec evidence.
 - The derived index identifies portable versus platform-specific suites consumed
   by T-248; it does not itself change CI.
 

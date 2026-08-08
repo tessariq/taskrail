@@ -59,6 +59,9 @@ and remediation task is complete. Do not tag or claim current until it passes.
   it.
 - Changelog/README become final only after all other criteria; final verify occurs
   only with no open release remediation, and tagging remains a maintainer action.
+- The source-checkout bootstrap cleanup is completed through T-258 and searches
+  prove `scripts/autonomous-loop/` plus every live invocation/test reference is
+  absent from the tagged tree and release artifacts.
 
 ## Verification Notes
 
