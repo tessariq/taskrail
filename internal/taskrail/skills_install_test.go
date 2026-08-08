@@ -316,3 +316,95 @@ func TestWriteShippableSkillsForceSkipsIdentical(t *testing.T) {
 		t.Errorf("force over identical install changed files: %+v", res)
 	}
 }
+
+func TestWriteShippableSkillsRejectsInvalidMarkerBeforeWriting(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name    string
+		marker  string
+		wantErr string
+	}{
+		{"conflicting dual", "taskrail_version: old\nmetadata:\n  taskrail_version: new\n", "conflicting"},
+		{"duplicate legacy", "taskrail_version: old\ntaskrail_version: new\n", "duplicate"},
+		{"empty nested", "metadata:\n  taskrail_version: ''\n", "non-empty"},
+		{"non-string nested", "metadata:\n  taskrail_version: [old]\n", "string"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			repo := initGitRepo(t)
+			svc := newTestService(t, repo, time.Date(2026, 3, 31, 12, 0, 0, 0, time.UTC))
+			if _, err := svc.Init(false); err != nil {
+				t.Fatalf("init: %v", err)
+			}
+
+			invalid := filepath.Join(repo, shippableSkillTargets[1], shippableSkills[0], skillFileName)
+			writeFile(t, invalid, string(skillDocument("name: probe\ndescription: useful\n"+tc.marker)))
+			before := snapshotTree(t, repo)
+
+			if _, err := svc.WriteShippableSkills("v0.5.0", true); err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("WriteShippableSkills error = %v, want %q refusal", err, tc.wantErr)
+			}
+			after := snapshotTree(t, repo)
+			if len(after) != len(before) {
+				t.Fatalf("refusal changed file count: %d -> %d", len(before), len(after))
+			}
+			for path, want := range before {
+				if after[path] != want {
+					t.Errorf("refusal changed %s", path)
+				}
+			}
+		})
+	}
+}
+
+func TestWriteShippableSkillsForceNormalizesMatchingDualMarker(t *testing.T) {
+	t.Parallel()
+
+	repo, svc := installedSkillsRepo(t, "v0.4.0")
+	dual := filepath.Join(repo, shippableSkillTargets[0], shippableSkills[0], skillFileName)
+	data, err := os.ReadFile(dual)
+	if err != nil {
+		t.Fatalf("read installed skill: %v", err)
+	}
+	data = []byte(strings.Replace(string(data), "description:", "taskrail_version: v0.4.0\ndescription:", 1))
+	if err := os.WriteFile(dual, data, 0o644); err != nil {
+		t.Fatalf("write dual marker: %v", err)
+	}
+
+	if _, err := svc.WriteShippableSkills("v0.5.0", true); err != nil {
+		t.Fatalf("refresh dual install: %v", err)
+	}
+	got, err := os.ReadFile(dual)
+	if err != nil {
+		t.Fatalf("read refreshed skill: %v", err)
+	}
+	if strings.Contains(string(got), "\ntaskrail_version:") || !strings.Contains(string(got), "metadata:\n    taskrail_version: v0.5.0") {
+		t.Fatalf("refresh did not normalize matching dual marker:\n%s", got)
+	}
+}
+
+func TestWriteShippableSkillsForceNormalizesLegacyMarker(t *testing.T) {
+	t.Parallel()
+
+	repo, svc := installedSkillsRepo(t, "v0.4.0")
+	legacy := filepath.Join(repo, shippableSkillTargets[0], shippableSkills[0], skillFileName)
+	data, err := os.ReadFile(legacy)
+	if err != nil {
+		t.Fatalf("read installed skill: %v", err)
+	}
+	data = []byte(strings.Replace(string(data), "metadata:\n    taskrail_version: v0.4.0", "taskrail_version: v0.4.0", 1))
+	if err := os.WriteFile(legacy, data, 0o644); err != nil {
+		t.Fatalf("write legacy marker: %v", err)
+	}
+
+	if _, err := svc.WriteShippableSkills("v0.5.0", true); err != nil {
+		t.Fatalf("refresh legacy install: %v", err)
+	}
+	got, err := os.ReadFile(legacy)
+	if err != nil {
+		t.Fatalf("read refreshed skill: %v", err)
+	}
+	if strings.Contains(string(got), "\ntaskrail_version:") || !strings.Contains(string(got), "metadata:\n    taskrail_version: v0.5.0") {
+		t.Fatalf("refresh did not normalize marker:\n%s", got)
+	}
+}

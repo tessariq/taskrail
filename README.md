@@ -455,7 +455,7 @@ The packaged skill set lives in `internal/taskrail/skills/` (embedded; installed
 by `taskrail init --with-skills`). This repository adopts it: committed copies in
 `.agents/skills/` and `.claude/skills/` are kept byte-identical to the package by
 `task check:skills`. Installed skills additionally record the Taskrail version
-that wrote them in a `taskrail_version` frontmatter key, so an install left behind
+that wrote them in `metadata.taskrail_version`, so an install left behind
 by an older binary stays detectable: every command warns on stderr when the
 recorded version is not the running one, naming the affected skills and both
 versions. The warning is advisory — it never fails `validate` or blocks a
@@ -465,10 +465,10 @@ to the unstamped package; byte-identical marker-free copies are silent rather th
 reported as unknown-version. Do not run `--force` here, since stamping the
 committed copies would break `task check:skills`.
 
-The active v0.5 migration moves installed version metadata to standard
-`metadata.taskrail_version`; released v0.4 binaries still use the legacy top-level
-key. Maintainer skill eval cases remain outside the embedded package and are not
-installed into adopter repositories.
+Readers retain the legacy top-level marker written by released v0.4 binaries, and
+an explicit successful refresh normalizes it to nested metadata. Maintainer skill
+eval cases remain outside the embedded package and are not installed into adopter
+repositories.
 
 ## Development
 

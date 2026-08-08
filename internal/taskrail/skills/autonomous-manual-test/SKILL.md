@@ -1,7 +1,6 @@
 ---
 name: autonomous-manual-test
 description: Generate and execute a manual test plan against Taskrail task acceptance criteria in a temporary sandbox
-argument-hint: "[task-id]"
 ---
 
 # autonomous-manual-test

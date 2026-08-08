@@ -183,6 +183,12 @@ func TestInitMigrationApplyBumpsMarkerAndValidates(t *testing.T) {
 	humanSpec := filepath.Join(repo, "specs", "v0.1.0.md")
 	humanContent := "# Taskrail v0.1.0\n\n## Summary\n\nHand-authored content.\n"
 	writeFile(t, humanSpec, humanContent)
+	paritySkill := filepath.Join(repo, ".agents", "skills", shippableSkills[0], skillFileName)
+	embeddedSkill, err := shippableSkillsFS.ReadFile(shippableSkillsRoot + "/" + shippableSkills[0] + "/" + skillFileName)
+	if err != nil {
+		t.Fatalf("read embedded skill: %v", err)
+	}
+	writeFile(t, paritySkill, string(embeddedSkill))
 
 	svc := newTestService(t, repo, time.Date(2026, 3, 31, 12, 0, 0, 0, time.UTC))
 	result, err := svc.Init(true)
@@ -191,6 +197,13 @@ func TestInitMigrationApplyBumpsMarkerAndValidates(t *testing.T) {
 	}
 	if result.Outcome != InitMigrated || !result.Applied {
 		t.Fatalf("outcome = %q applied=%v, want %q applied", result.Outcome, result.Applied, InitMigrated)
+	}
+	skillsResult, err := svc.WriteShippableSkills("v0.5.0", false)
+	if err != nil {
+		t.Fatalf("install skills after migration: %v", err)
+	}
+	if len(skillsResult.Overwritten) != 0 || len(skillsResult.BackedUp) != 0 {
+		t.Fatalf("migration skill install replaced parity mirror: %+v", skillsResult)
 	}
 	if result.Validation == nil || !result.Validation.Valid {
 		t.Fatalf("expected valid post-migration validation, got %+v", result.Validation)
@@ -210,6 +223,13 @@ func TestInitMigrationApplyBumpsMarkerAndValidates(t *testing.T) {
 	}
 	if string(got) != humanContent {
 		t.Fatal("migration rewrote human-authored spec content")
+	}
+	migratedSkill, err := os.ReadFile(paritySkill)
+	if err != nil {
+		t.Fatalf("read migrated parity skill: %v", err)
+	}
+	if string(migratedSkill) != string(embeddedSkill) {
+		t.Fatal("migration stamped or rewrote a marker-free parity skill")
 	}
 }
 

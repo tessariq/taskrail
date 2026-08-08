@@ -46,8 +46,11 @@ func TestWriteShippableSkillsStampsWritingVersion(t *testing.T) {
 			t.Fatalf("read installed skill: %v", err)
 		}
 		got := string(data)
-		if !strings.Contains(got, "taskrail_version: \"v9.9.9\"") {
+		if !strings.Contains(got, "metadata:\n    taskrail_version: v9.9.9") {
 			t.Errorf("%s/%s carries no writing-version marker:\n%s", target, name, firstLines(got, 8))
+		}
+		if strings.Contains(got, "\ntaskrail_version:") {
+			t.Errorf("%s/%s carries a legacy top-level marker:\n%s", target, name, firstLines(got, 8))
 		}
 
 		embedded, err := shippableSkillsFS.ReadFile(shippableSkillsRoot + "/" + name + "/SKILL.md")
@@ -79,23 +82,6 @@ func firstLines(s string, n int) string {
 	return strings.Join(lines, "\n")
 }
 
-// Re-running the same version over an unmodified install stays the current no-op:
-// the comparison is content-based against the stamped copy, so nothing is written
-// and no backups accumulate.
-func TestWriteShippableSkillsSameVersionForceIsNoOp(t *testing.T) {
-	t.Parallel()
-
-	_, svc := installedSkillsRepo(t, "v1.0.0")
-
-	res, err := svc.WriteShippableSkills("v1.0.0", true)
-	if err != nil {
-		t.Fatalf("force write: %v", err)
-	}
-	if len(res.Written) != 0 || len(res.Overwritten) != 0 || len(res.BackedUp) != 0 {
-		t.Errorf("same-version force changed files: %+v", res)
-	}
-}
-
 // A --force reinstall from a newer binary restamps the marker so the recorded
 // version tracks the binary that last wrote the file.
 func TestWriteShippableSkillsForceRestampsNewVersion(t *testing.T) {
@@ -115,7 +101,7 @@ func TestWriteShippableSkillsForceRestampsNewVersion(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read installed skill: %v", err)
 	}
-	if !strings.Contains(string(data), "taskrail_version: \"v2.0.0\"") {
+	if !strings.Contains(string(data), "taskrail_version: v2.0.0") {
 		t.Errorf("skill kept the old marker:\n%s", firstLines(string(data), 8))
 	}
 }

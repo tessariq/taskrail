@@ -20,7 +20,7 @@ func stageSkillSkew(t *testing.T, root string) {
 	if err != nil {
 		t.Fatalf("read installed skill: %v", err)
 	}
-	staged := strings.Replace(string(data), "taskrail_version: \""+version+"\"", "taskrail_version: \"v0.0.1-stale\"", 1)
+	staged := strings.Replace(string(data), "taskrail_version: "+version, "taskrail_version: v0.0.1-stale", 1)
 	if staged == string(data) {
 		t.Fatalf("installed skill carries no %q marker to restage:\n%s", version, staged)
 	}
@@ -33,7 +33,7 @@ func stageSkillSkew(t *testing.T, root string) {
 // materialized skill, restoring the embedded package bytes.
 func stripSkillMarkers(t *testing.T, root string) {
 	t.Helper()
-	marker := "taskrail_version: \"" + version + "\"\n"
+	marker := "metadata:\n    taskrail_version: " + version + "\n"
 	for _, target := range []string{".agents", ".claude"} {
 		paths, err := filepath.Glob(filepath.Join(root, target, "skills", "*", "SKILL.md"))
 		if err != nil {

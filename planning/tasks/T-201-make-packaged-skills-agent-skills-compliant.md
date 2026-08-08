@@ -1,11 +1,11 @@
 ---
 id: T-201-make-packaged-skills-agent-skills-compliant
 title: Make packaged skills Agent Skills compliant
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#agent-skills-format-and-version-metadata
 dependencies: []
-updated_at: "2026-08-08T08:40:49Z"
+updated_at: "2026-08-08T15:20:32Z"
 ---
 
 # T-201-make-packaged-skills-agent-skills-compliant Make packaged skills Agent Skills compliant
@@ -37,3 +37,6 @@ Make every skill Taskrail ships conform to the Agent Skills frontmatter contract
   Taskrail's source checkout and an adopter repository.
 
 ## Implementation Notes
+
+- 2026-08-08T15:20:16Z: Shipped Agent Skills-compliant packaged frontmatter, nested version metadata with strict legacy normalization, parity-safe migration behavior, and comprehensive conformance/skew tests.
+- 2026-08-08T15:20:32Z: verification pass

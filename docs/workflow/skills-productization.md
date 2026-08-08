@@ -44,15 +44,11 @@ Rejected alternative:
 Note: writing skills on default `taskrail init` was never an option — it is
 ruled out by the constraint above, not a considered alternative.
 
-Materialized skill files carry a `taskrail_version` frontmatter key recording the
-binary that wrote them (T-121), because a non-destructive install means upgrading
-the binary never refreshes an existing on-disk copy. Agent tools read
-`name`/`description`, so the extra key is inert where the skill is used.
-
-The active v0.5 migration moves this marker to standard
-`metadata.taskrail_version`, retains compatible reads of the legacy top-level
-field, and normalizes installed copies only during an explicit successful refresh.
-Until that task ships, released v0.4 binaries continue writing the legacy form.
+Materialized skill files carry `metadata.taskrail_version` recording the binary
+that wrote them, because a non-destructive install means upgrading the binary
+never refreshes an existing on-disk copy. Readers accept the legacy top-level
+`taskrail_version` field from released v0.4 binaries; an explicit successful
+refresh normalizes that legacy form to nested metadata.
 
 This repository's committed `.agents/`/`.claude/` copies are regenerated from the
 embedded package by `task skills:regen`, which copies the package source and

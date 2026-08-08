@@ -6,6 +6,8 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ### Changed
 
+- `taskrail init --with-skills` now installs Agent Skills-compliant copies with
+  `metadata.taskrail_version`; `--force` safely normalizes legacy markers.
 - `taskrail init` and `retrofit --apply` no longer seed generic continuation
   prose in fresh `STATE.md` files; packaged workflow guidance keeps durable task
   context in task notes, blockers, verification reports, or follow-up tasks.

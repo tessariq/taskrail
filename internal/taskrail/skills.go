@@ -52,7 +52,11 @@ type SkillInstallResult struct {
 // a force run of the same version over an unmodified install writes nothing and
 // accumulates no backups; a force run from a different version restamps.
 func (s *Service) WriteShippableSkills(version string, force bool) (SkillInstallResult, error) {
-	var res SkillInstallResult
+	type skillWrite struct {
+		dest string
+		data []byte
+	}
+	var writes []skillWrite
 	err := fs.WalkDir(shippableSkillsFS, shippableSkillsRoot, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -64,19 +68,47 @@ func (s *Service) WriteShippableSkills(version string, force bool) (SkillInstall
 		if err != nil {
 			return fmt.Errorf("read embedded skill %s: %w", p, err)
 		}
-		data = stampSkillVersion(data, version)
+		if err := validateAgentSkill(data); err != nil {
+			return fmt.Errorf("validate embedded skill %s: %w", p, err)
+		}
+		data, err = stampSkillVersion(data, version)
+		if err != nil {
+			return fmt.Errorf("stamp embedded skill %s: %w", p, err)
+		}
 		rel := strings.TrimPrefix(p, shippableSkillsRoot+"/")
 		for _, target := range shippableSkillTargets {
-			dest := filepath.Join(s.paths.RepoRoot, target, filepath.FromSlash(rel))
-			if err := s.installSkillFile(dest, data, force, &res); err != nil {
-				return err
-			}
+			writes = append(writes, skillWrite{dest: filepath.Join(s.paths.RepoRoot, target, filepath.FromSlash(rel)), data: data})
 		}
 		return nil
 	})
+	if err != nil {
+		return SkillInstallResult{}, err
+	}
+
+	// Validate every existing marker before the first write so conflicting or
+	// malformed version evidence cannot leave a partially refreshed skill set.
+	for _, write := range writes {
+		existing, err := os.ReadFile(write.dest)
+		if errors.Is(err, os.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return SkillInstallResult{}, fmt.Errorf("read %s: %w", relPath(s.paths.RepoRoot, write.dest), fsCause(err))
+		}
+		if _, err := skillVersionOf(existing); err != nil {
+			return SkillInstallResult{}, fmt.Errorf("read skill marker %s: %w", relPath(s.paths.RepoRoot, write.dest), err)
+		}
+	}
+
+	var res SkillInstallResult
+	for _, write := range writes {
+		if err := s.installSkillFile(write.dest, write.data, force, &res); err != nil {
+			return res, err
+		}
+	}
 	// Return the partial result even on error so callers can report what was
 	// installed before a mid-walk failure rather than hiding the partial state.
-	return res, err
+	return res, nil
 }
 
 // installSkillFile writes a single embedded skill file to dest, honoring the

@@ -1,7 +1,6 @@
 ---
 name: autonomous-verify
 description: Run deterministic verification against Taskrail tracked-work acceptance criteria and spec alignment
-argument-hint: "[task-id]"
 ---
 
 # autonomous-verify

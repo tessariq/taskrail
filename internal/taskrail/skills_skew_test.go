@@ -13,21 +13,18 @@ import (
 // unmarked, the way an install from before the marker existed reads.
 func restampSkill(t *testing.T, repo, target, skill, version string) {
 	t.Helper()
-	path := filepath.Join(repo, filepath.FromSlash(target), skill, "SKILL.md")
-	data, err := os.ReadFile(path)
+	data, err := shippableSkillsFS.ReadFile(shippableSkillsRoot + "/" + skill + "/" + skillFileName)
 	if err != nil {
-		t.Fatalf("read installed skill: %v", err)
+		t.Fatalf("read embedded skill: %v", err)
 	}
-	var unmarked []string
-	for _, line := range strings.Split(string(data), "\n") {
-		if !strings.HasPrefix(line, skillVersionKey+":") {
-			unmarked = append(unmarked, line)
+	restamped := data
+	if version != "" {
+		restamped, err = stampSkillVersion(restamped, version)
+		if err != nil {
+			t.Fatalf("stamp skill: %v", err)
 		}
 	}
-	restamped := []byte(strings.Join(unmarked, "\n"))
-	if version != "" {
-		restamped = stampSkillVersion(restamped, version)
-	}
+	path := filepath.Join(repo, filepath.FromSlash(target), skill, skillFileName)
 	if err := os.WriteFile(path, restamped, 0o644); err != nil {
 		t.Fatalf("restamp skill: %v", err)
 	}
@@ -125,6 +122,39 @@ func TestSkillSkewWarningsReportsBothDirections(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestSkillSkewWarningsTreatsLegacyAndNestedMarkersEqually(t *testing.T) {
+	t.Parallel()
+
+	var messages []string
+	for _, legacy := range []bool{false, true} {
+		repo, svc := installedSkillsRepo(t, "v0.4.0")
+		skill := shippableSkills[0]
+		restampSkill(t, repo, shippableSkillTargets[0], skill, "v0.3.0")
+		if legacy {
+			path := filepath.Join(repo, shippableSkillTargets[0], skill, skillFileName)
+			data, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatalf("read nested marker: %v", err)
+			}
+			data = []byte(strings.Replace(string(data), "metadata:\n    taskrail_version: v0.3.0", "taskrail_version: v0.3.0", 1))
+			if err := os.WriteFile(path, data, 0o644); err != nil {
+				t.Fatalf("write legacy marker: %v", err)
+			}
+		}
+		warnings, err := svc.SkillSkewWarnings("v0.4.0")
+		if err != nil {
+			t.Fatalf("skill skew warnings: %v", err)
+		}
+		if len(warnings) != 1 {
+			t.Fatalf("legacy=%v: warnings = %+v, want one", legacy, warnings)
+		}
+		messages = append(messages, warnings[0].Message)
+	}
+	if messages[0] != messages[1] {
+		t.Fatalf("nested and legacy markers produced different policy:\n%s\n%s", messages[0], messages[1])
 	}
 }
 

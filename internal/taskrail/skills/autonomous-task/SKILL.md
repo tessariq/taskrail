@@ -1,7 +1,6 @@
 ---
 name: autonomous-task
 description: Execute one specified Taskrail tracked task with deterministic workflow transitions
-argument-hint: "[task-id]"
 ---
 
 # autonomous-task
