@@ -173,7 +173,7 @@ Guidance for coding agents working in the Taskrail repository.
 ## Commit Conventions
 
 - Use Conventional Commits: `<type>: <description>` (types: `feat`, `fix`, `refactor`, `docs`, `test`, `chore`, `perf`, `ci`).
-- Reference the task ID as a parenthetical suffix on the subject, never as a prefix: `feat: add version reporting to taskrail CLI (T-012)`, not `feat: T-012 add version reporting`.
+- Reference only the short task key as a parenthetical suffix on the subject, never the full slugged task identifier and never a prefix: `feat: add version reporting to taskrail CLI (T-012)`, not `feat: add version reporting to taskrail CLI (T-012-add-version-reporting)` or `feat: T-012 add version reporting`.
 - Keep the subject imperative and scoped to one logical outcome; use the body to explain the why when it is not obvious.
 
 ### Committing Tracked-Work State

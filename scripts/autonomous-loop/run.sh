@@ -89,6 +89,12 @@ task_file() {
   printf '%s/planning/tasks/%s.md\n' "$ROOT" "$1"
 }
 
+task_key() {
+  local id="$1"
+  [[ "$id" =~ ^(T-[0-9]+)(-|$) ]] || die "task id has no short task key: $id" 2
+  printf '%s\n' "${BASH_REMATCH[1]}"
+}
+
 task_field() {
   local id="$1" field="$2" file
   file="$(task_file "$id")"
@@ -254,11 +260,13 @@ validate_selected() {
 }
 
 render_prompt() {
-  local id="$1" tokens
+  local id="$1" key tokens
   [[ -f "$PROMPT" ]] || die "prompt missing: ${PROMPT#$ROOT/}" 2
+  key="$(task_key "$id")"
   tokens="$(grep -oE '\{\{[A-Z0-9_]+\}\}' "$PROMPT" | sort -u || true)"
-  [[ "$tokens" == "{{TASK_ID}}" ]] || die "prompt contains unknown or missing template tokens" 2
-  sed "s|{{TASK_ID}}|$id|g" "$PROMPT" >"$TMP_DIR/rendered-prompt.md" || die "failed to render prompt" 2
+  [[ "$tokens" == $'{{TASK_ID}}\n{{TASK_KEY}}' ]] || die "prompt contains unknown or missing template tokens" 2
+  sed -e "s|{{TASK_ID}}|$id|g" -e "s|{{TASK_KEY}}|$key|g" "$PROMPT" >"$TMP_DIR/rendered-prompt.md" || \
+    die "failed to render prompt" 2
   ! grep -qE '\{\{[A-Z0-9_]+\}\}' "$TMP_DIR/rendered-prompt.md" || die "rendered prompt retains a template token" 2
 }
 
@@ -346,9 +354,10 @@ run_iteration() {
   local id="$1" before_head before_remote before_index before_reports
   local before_git_control after_git_control reports_before_manifest
   local stamp log_file child_rc tee_rc after_status verification report report_bytes result
-  local commit_message commit_subject parent count after_head after_remote generated_at
+  local commit_message commit_subject key parent count after_head after_remote generated_at
 
   validate_selected "$id"
+  key="$(task_key "$id")"
   render_prompt "$id"
   write_taskrail_wrapper
   before_head="$(git rev-parse HEAD)"
@@ -365,7 +374,12 @@ run_iteration() {
   log_file="$RUNS_DIR/$stamp-$id.log"
 
   case "$BACKEND" in
-    claude) agent_command=(claude -p --permission-mode acceptEdits) ;;
+    claude)
+      agent_command=(
+        claude -p --permission-mode acceptEdits --add-dir "$TMP_DIR"
+        --allowedTools "Bash($TMP_DIR/taskrail-writer *)"
+      )
+      ;;
     opencode) agent_command=(opencode run --auto) ;;
   esac
   command -v "${agent_command[0]}" >/dev/null 2>&1 || die "$BACKEND CLI not found"
@@ -416,7 +430,7 @@ run_iteration() {
   validate_queue
   "$ROOT/scripts/check-commit-msg.sh" "$commit_message" || die "$id published an invalid commit message"
   commit_subject="$(grep -vE '^[[:space:]]*#' "$commit_message" | sed '/^[[:space:]]*$/d' | head -n 1)"
-  [[ "$commit_subject" =~ \($id\)$ ]] || die "$id commit subject must end with ($id)"
+  [[ "$commit_subject" =~ \($key\)$ ]] || die "$id commit subject must end with ($key)"
   git diff --cached --quiet || die "$id left staged changes"
 
   git add -A || die "$id changes could not be staged"

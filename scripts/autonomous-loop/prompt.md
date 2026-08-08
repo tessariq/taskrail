@@ -9,12 +9,10 @@ Follow this exact workflow:
 2. Work only on `{{TASK_ID}}`. Never invoke `taskrail next`, continue another
    task, or edit anything under `scripts/autonomous-loop/`.
 3. Invoke Taskrail only through `${TASKRAIL:-taskrail}`. The outer runner points
-   `TASKRAIL` at a freshness-checking wrapper. Immediately before every Taskrail
-   command that writes tracked state, also run
-   `TASKRAIL="$AUTONOMOUS_TASKRAIL_BINARY" task taskrail:check`. Stop if it fails
-   and apply only the remedy it names. Never invoke `bin/taskrail` directly.
-4. After the initial freshness check, run
-   `${TASKRAIL:-taskrail} start {{TASK_ID}}`.
+   `TASKRAIL` at a wrapper that runs the source-checkout freshness guard before
+   every invocation. Stop if that wrapper fails and apply only the remedy it
+   names. Never invoke `bin/taskrail` directly.
+4. Start work with `${TASKRAIL:-taskrail} start {{TASK_ID}}`.
 5. Implement the smallest correct change. Start behavior changes with a failing
    test when practical, preserve repository architecture, and avoid unrelated
    refactors.
@@ -63,7 +61,8 @@ Follow this exact workflow:
     bypass hooks. The outer runner owns Git delivery.
 14. Write exactly one valid Conventional Commit message to
     `$AUTONOMOUS_COMMIT_MESSAGE_FILE`. Its subject must describe this task and end
-    with `({{TASK_ID}})`. Add no attribution trailer.
+    with the short task key `({{TASK_KEY}})`, not the full slugged task identifier.
+    Add no attribution trailer.
 
 Exit zero only after publishing the commit message and leaving either a valid
 completed/pass outcome or a valid blocked/fail outcome. Otherwise exit non-zero.

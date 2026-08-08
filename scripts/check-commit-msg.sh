@@ -33,6 +33,12 @@ case "$subject" in
     ;;
 esac
 
+if printf '%s' "$subject" | grep -qE '\(T-[0-9]+-[^)]+\)$'; then
+  echo "check-commit-msg: use only the short task key in the subject suffix:" >&2
+  echo "  (T-155), not (T-155-descriptive-task-slug)" >&2
+  exit 1
+fi
+
 # Reject automated-attribution lines (trailer-style, to avoid prose false-positives).
 if grep -qiE '^[[:space:]]*co-authored-by:|generated with \[?claude' "$msg_file" \
   || grep -qF '🤖' "$msg_file"; then

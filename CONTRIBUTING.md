@@ -35,8 +35,9 @@ Direct `go` commands work without mise.
 
 - `gofmt -w` on changed Go files; `go vet ./...`; `go test ./...` — all green.
 - `taskrail validate` if you touched `planning/`, `specs/`, or the task/state schema.
-- Conventional Commit subject with the task id as a suffix:
-  `feat: add repair surface (T-050)` — never as a prefix.
+- Conventional Commit subject with only the short task key as a suffix:
+  `feat: add repair surface (T-050)` — never the full slugged task identifier or
+  a task prefix.
 - Update `CHANGELOG.md` under `## Unreleased` for user-visible changes only.
   Keep it terse: one to two lines, lead with the command. Skip internal refactors.
 - No bot-attribution trailers (see above).

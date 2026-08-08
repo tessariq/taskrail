@@ -19,6 +19,11 @@ assert_contains() {
   [[ "$value" == *"$expected"* ]] || fail "$name: expected '$expected' in '$value'"
 }
 
+assert_not_contains() {
+  local name="$1" value="$2" unexpected="$3"
+  [[ "$value" != *"$unexpected"* ]] || fail "$name: did not expect '$unexpected' in '$value'"
+}
+
 assert_review_prompt() {
   local name="$1" value
   value="$(printf '%s\n' "$2" | tr -s '[:space:]' ' ')"
@@ -53,10 +58,10 @@ create_fixture() {
 
   printf '%s\n' 'planning/artifacts/' >"$root/.gitignore"
   printf '%s\n' '# Taskrail v0.5.0' '## Test Area' >"$root/specs/v0.5.0.md"
-  printf '%s\n' 'id: T-900' 'status: todo' 'spec_ref: specs/v0.5.0.md#test-area' 'dependencies: []' >"$root/planning/tasks/T-900.md"
-  printf '%s\n' 'id: T-901' 'status: todo' 'spec_ref: specs/v0.5.0.md#test-area' 'dependencies:' '    - T-900' >"$root/planning/tasks/T-901.md"
+  printf '%s\n' 'id: T-900-fixture-task' 'status: todo' 'spec_ref: specs/v0.5.0.md#test-area' 'dependencies: []' >"$root/planning/tasks/T-900-fixture-task.md"
+  printf '%s\n' 'id: T-901' 'status: todo' 'spec_ref: specs/v0.5.0.md#test-area' 'dependencies:' '    - T-900-fixture-task' >"$root/planning/tasks/T-901.md"
   printf '%s\n' 'active_spec_path: specs/v0.5.0.md' 'current_task: ""' 'last_verification_result: none' >"$root/planning/STATE.md"
-  printf '%s\n' $'task_id\tmode\treason' $'T-900\trun\t-' $'T-901\thold-operator\ttest hold' >"$root/scripts/autonomous-loop/queue.tsv"
+  printf '%s\n' $'task_id\tmode\treason' $'T-900-fixture-task\trun\t-' $'T-901\thold-operator\ttest hold' >"$root/scripts/autonomous-loop/queue.tsv"
 
   cat >"$root/bin/taskrail" <<'EOF'
 #!/usr/bin/env bash
@@ -115,15 +120,15 @@ else
   status=completed
   result=pass
 fi
-printf '%s\n' 'id: T-900' "status: $status" 'spec_ref: specs/v0.5.0.md#test-area' 'dependencies: []' >"$AUTONOMOUS_TEST_ROOT/planning/tasks/T-900.md"
-printf '%s\n' 'active_spec_path: specs/v0.5.0.md' 'current_task:' "last_verification_result: $result for T-900 at 2026-08-08T00:00:00Z" >"$AUTONOMOUS_TEST_ROOT/planning/STATE.md"
-mkdir -p "$AUTONOMOUS_TEST_ROOT/planning/artifacts/verify/T-900/20260808T000000Z"
+printf '%s\n' 'id: T-900-fixture-task' "status: $status" 'spec_ref: specs/v0.5.0.md#test-area' 'dependencies: []' >"$AUTONOMOUS_TEST_ROOT/planning/tasks/T-900-fixture-task.md"
+printf '%s\n' 'active_spec_path: specs/v0.5.0.md' 'current_task:' "last_verification_result: $result for T-900-fixture-task at 2026-08-08T00:00:00Z" >"$AUTONOMOUS_TEST_ROOT/planning/STATE.md"
+mkdir -p "$AUTONOMOUS_TEST_ROOT/planning/artifacts/verify/T-900-fixture-task/20260808T000000Z"
 if [[ "${AUTONOMOUS_TEST_ACTION:-}" == "forged-report" ]]; then
-  extra=',"unexpected":"pass for T-900"'
+  extra=',"unexpected":"pass for T-900-fixture-task"'
 else
   extra=''
 fi
-printf '%s\n' "{\"schema_version\":1,\"task_id\":\"T-900\",\"task_title\":\"Fixture\",\"result\":\"$result\",\"summary\":\"fixture\",\"generated_at\":\"2026-08-08T00:00:00Z\",\"spec_ref\":\"specs/v0.5.0.md#test-area\",\"artifacts\":[]$extra}" >"$AUTONOMOUS_TEST_ROOT/planning/artifacts/verify/T-900/20260808T000000Z/report.json"
+printf '%s\n' "{\"schema_version\":1,\"task_id\":\"T-900-fixture-task\",\"task_title\":\"Fixture\",\"result\":\"$result\",\"summary\":\"fixture\",\"generated_at\":\"2026-08-08T00:00:00Z\",\"spec_ref\":\"specs/v0.5.0.md#test-area\",\"artifacts\":[]$extra}" >"$AUTONOMOUS_TEST_ROOT/planning/artifacts/verify/T-900-fixture-task/20260808T000000Z/report.json"
 if [[ "${AUTONOMOUS_TEST_ACTION:-}" == "followup" ]]; then
   printf '%s\n' 'id: T-902' 'status: todo' 'spec_ref: specs/v0.5.0.md#test-area' 'dependencies: []' >"$AUTONOMOUS_TEST_ROOT/planning/tasks/T-902.md"
 fi
@@ -167,6 +172,15 @@ fi
 
 bash -n "$RUNNER" || fail "runner syntax"
 bash -n "$0" || fail "test syntax"
+valid_message="$TMP_ROOT/valid-commit-message"
+slugged_message="$TMP_ROOT/slugged-commit-message"
+printf '%s\n' 'test: accept short task key (T-900)' >"$valid_message"
+printf '%s\n' 'test: reject slugged task id (T-900-fixture-task)' >"$slugged_message"
+"$SCRIPT_DIR/../check-commit-msg.sh" "$valid_message" || fail "short task key commit message was rejected"
+slugged_output="$("$SCRIPT_DIR/../check-commit-msg.sh" "$slugged_message" 2>&1)"
+slugged_rc=$?
+[[ $slugged_rc -ne 0 ]] || fail "slugged task id commit message was accepted"
+assert_contains "slugged task id guidance" "$slugged_output" "short task key"
 queue_output="$("$RUNNER" --check-queue 2>&1)"
 queue_rc=$?
 [[ $queue_rc -eq 0 ]] || fail "repository queue validation exited $queue_rc: $queue_output"
@@ -177,7 +191,7 @@ before_status="$(git -C "$root" status --porcelain=v1 --untracked-files=all)"
 output="$(run_fixture "$root" --dry-run)"
 rc=$?
 [[ $rc -eq 0 ]] || fail "dry-run exited $rc: $output"
-assert_contains "dry-run selection" "$output" "selected: T-900"
+assert_contains "dry-run selection" "$output" "selected: T-900-fixture-task"
 assert_contains "dry-run default backend" "$output" "backend: claude"
 assert_contains "dry-run prompt digest" "$output" "prompt sha256:"
 [[ ! -e "$root/captures/agent-invocations" ]] || fail "dry-run invoked an agent"
@@ -188,12 +202,18 @@ root="$(create_fixture successful-run)"
 output="$(run_fixture "$root" --max-iterations 1)"
 rc=$?
 [[ $rc -eq 0 ]] || fail "successful run exited $rc: $output"
-assert_contains "successful task" "$output" "completed and pushed: T-900"
+assert_contains "successful task" "$output" "completed and pushed: T-900-fixture-task"
 claude_prompt="$(<"$root/captures/prompt")"
-assert_contains "rendered task" "$claude_prompt" "T-900"
+assert_contains "rendered task" "$claude_prompt" "T-900-fixture-task"
+assert_contains "rendered short task key" "$claude_prompt" "(T-900)"
+assert_not_contains "redundant freshness command" "$claude_prompt" 'TASKRAIL="$AUTONOMOUS_TASKRAIL_BINARY" task taskrail:check'
 assert_review_prompt "shared backend prompt" "$claude_prompt"
 [[ "$(<"$root/captures/backend")" == "claude" ]] || fail "default backend did not invoke Claude"
-assert_contains "default Claude arguments" "$(<"$root/captures/agent-args")" "-p --permission-mode acceptEdits"
+claude_args="$(<"$root/captures/agent-args")"
+assert_contains "default Claude arguments" "$claude_args" "-p --permission-mode acceptEdits"
+assert_contains "Claude temporary directory access" "$claude_args" "--add-dir "
+assert_contains "Claude wrapper permission" "$claude_args" "--allowedTools Bash("
+assert_contains "Claude wrapper path" "$claude_args" "taskrail-writer *)"
 [[ "$(git -C "$root" rev-list --count HEAD~1..HEAD)" == "1" ]] || fail "successful run did not create one commit"
 [[ "$(git -C "$root" rev-parse HEAD)" == "$(git --git-dir="$TMP_ROOT/successful-run.git" rev-parse refs/heads/main)" ]] || fail "successful run did not push main"
 [[ -z "$(git -C "$root" status --porcelain=v1 --untracked-files=all)" ]] || fail "successful run left a dirty tree"
@@ -246,7 +266,7 @@ assert_contains "conflicting backends" "$output" "conflicting --backend values"
 [[ ! -e "$root/captures/agent-invocations" ]] || fail "conflicting backends invoked an agent"
 
 root="$(create_fixture duplicate-row)"
-printf '%s\n' $'T-900\trun\t-' >>"$root/scripts/autonomous-loop/queue.tsv"
+printf '%s\n' $'T-900-fixture-task\trun\t-' >>"$root/scripts/autonomous-loop/queue.tsv"
 git -C "$root" add scripts/autonomous-loop/queue.tsv
 git -C "$root" commit -q -m 'test: add duplicate queue row'
 git -C "$root" push -q
@@ -256,7 +276,7 @@ rc=$?
 assert_contains "duplicate queue" "$output" "duplicate task id"
 
 root="$(create_fixture missing-row)"
-printf '%s\n' $'task_id\tmode\treason' $'T-900\trun\t-' >"$root/scripts/autonomous-loop/queue.tsv"
+printf '%s\n' $'task_id\tmode\treason' $'T-900-fixture-task\trun\t-' >"$root/scripts/autonomous-loop/queue.tsv"
 git -C "$root" add scripts/autonomous-loop/queue.tsv
 git -C "$root" commit -q -m 'test: omit open queue row'
 git -C "$root" push -q
@@ -266,14 +286,14 @@ rc=$?
 assert_contains "missing queue row" "$output" "open v0.5.0 task missing from queue: T-901"
 
 root="$(create_fixture held-row)"
-printf '%s\n' $'task_id\tmode\treason' $'T-900\thold-operator\toperator decision' $'T-901\thold-operator\ttest hold' >"$root/scripts/autonomous-loop/queue.tsv"
+printf '%s\n' $'task_id\tmode\treason' $'T-900-fixture-task\thold-operator\toperator decision' $'T-901\thold-operator\ttest hold' >"$root/scripts/autonomous-loop/queue.tsv"
 git -C "$root" add scripts/autonomous-loop/queue.tsv
 git -C "$root" commit -q -m 'test: hold first queue row'
 git -C "$root" push -q
 output="$(run_fixture "$root")"
 rc=$?
 [[ $rc -eq 20 ]] || fail "held row expected exit 20, got $rc: $output"
-assert_contains "held row" "$output" "held: T-900"
+assert_contains "held row" "$output" "held: T-900-fixture-task"
 [[ ! -e "$root/captures/agent-invocations" ]] || fail "held row invoked an agent"
 
 root="$(create_fixture dirty-tree)"
