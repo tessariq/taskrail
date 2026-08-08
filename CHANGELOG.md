@@ -6,6 +6,8 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ### Changed
 
+- Task operands now require the exact full persisted ID, and `taskrail validate`
+  rejects broken v0.5 completion and verification metadata chains.
 - `taskrail init --with-skills` now installs Agent Skills-compliant copies with
   `metadata.taskrail_version`; `--force` safely normalizes legacy markers.
 - `taskrail init` and `retrofit --apply` no longer seed generic continuation

@@ -35,6 +35,29 @@ func TestAutonomousContractNamesCurrentSkillAndBinarySources(t *testing.T) {
 	}
 }
 
+func TestAutonomousContractCitesCanonicalLifecycleRegistry(t *testing.T) {
+	path := filepath.Join("..", "..", "docs", "workflow", "autonomous-contract.md")
+	body := readWorkflowDoc(t, path)
+	if !strings.Contains(body, "`internal/taskrail/lifecycle_contract.go`") {
+		t.Fatalf("%s must cite the executable lifecycle contract", path)
+	}
+	for branch, suffix := range map[LifecycleBranch]string{
+		BranchCompletedPass: "validate -> start -> implement -> checks -> complete -> verify pass",
+		BranchBlockedFail:   "validate -> start -> block --reason -> verify fail -> stop",
+		BranchReworkFail:    "validate -> start -> verify fail -> stop (remains in_progress)",
+	} {
+		line := string(branch) + ": " + suffix
+		if !strings.Contains(body, line) {
+			t.Errorf("%s missing canonical branch %q", path, line)
+		}
+	}
+	for _, phrase := range []string{"exact full persisted task ID", "no `task_ref`", "Verification records lifecycle state but never"} {
+		if !strings.Contains(body, phrase) {
+			t.Errorf("%s missing lifecycle invariant %q", path, phrase)
+		}
+	}
+}
+
 func TestV04ShippedPrerequisitesAreDocumented(t *testing.T) {
 	agents := readWorkflowDoc(t, filepath.Join("..", "..", "AGENTS.md"))
 	if !strings.Contains(agents, "`specs/v0.4.0.md`") {

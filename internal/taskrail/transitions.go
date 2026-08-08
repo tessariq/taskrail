@@ -222,9 +222,9 @@ func (s *Service) Start(taskID string) (TransitionResult, error) {
 		return TransitionResult{}, fmt.Errorf("task %s is already active", state.Frontmatter.CurrentTask)
 	}
 
-	task, ok := taskByID(tasks, taskID)
-	if !ok {
-		return TransitionResult{}, fmt.Errorf("task %s not found", taskID)
+	task, err := exactTaskByID(tasks, taskID)
+	if err != nil {
+		return TransitionResult{}, err
 	}
 	if task.Frontmatter.Status != "todo" {
 		return TransitionResult{}, fmt.Errorf("task %s is not todo", taskID)
@@ -276,9 +276,9 @@ func (s *Service) Unblock(taskID, reason string) (UnblockResult, error) {
 	if err != nil {
 		return UnblockResult{}, err
 	}
-	task, ok := taskByID(tasks, taskID)
-	if !ok {
-		return UnblockResult{}, fmt.Errorf("task %s not found", taskID)
+	task, err := exactTaskByID(tasks, taskID)
+	if err != nil {
+		return UnblockResult{}, err
 	}
 	if task.Frontmatter.Status != "blocked" {
 		return UnblockResult{}, fmt.Errorf("task %s is not blocked", taskID)
@@ -335,9 +335,9 @@ func (s *Service) Verify(input VerifyInput) (VerifyResult, error) {
 	if err != nil {
 		return VerifyResult{}, err
 	}
-	task, ok := taskByID(tasks, input.TaskID)
-	if !ok {
-		return VerifyResult{}, fmt.Errorf("task %s not found", input.TaskID)
+	task, err := exactTaskByID(tasks, input.TaskID)
+	if err != nil {
+		return VerifyResult{}, err
 	}
 
 	now := s.now().UTC()
@@ -536,11 +536,11 @@ func (s *Service) CreateTask(input CreateTaskInput) (CreateTaskResult, error) {
 	}
 
 	deps := append([]string(nil), input.Dependencies...)
-	followUpOf := strings.TrimSpace(input.FollowUpOf)
+	followUpOf := input.FollowUpOf
 	if followUpOf != "" {
-		parent, ok := taskByID(tasks, followUpOf)
-		if !ok {
-			return CreateTaskResult{}, fmt.Errorf("follow-up parent %s does not exist", followUpOf)
+		parent, err := exactTaskByID(tasks, followUpOf)
+		if err != nil {
+			return CreateTaskResult{}, err
 		}
 		if specRef == "" {
 			specRef = parent.Frontmatter.SpecRef
@@ -649,9 +649,9 @@ func (s *Service) finishTask(taskID, status, note string) (TransitionResult, err
 	if err != nil {
 		return TransitionResult{}, err
 	}
-	task, ok := taskByID(tasks, taskID)
-	if !ok {
-		return TransitionResult{}, fmt.Errorf("task %s not found", taskID)
+	task, err := exactTaskByID(tasks, taskID)
+	if err != nil {
+		return TransitionResult{}, err
 	}
 	if task.Frontmatter.Status != "in_progress" && !(status == "blocked" && task.Frontmatter.Status == "todo") {
 		return TransitionResult{}, fmt.Errorf("task %s is not in a transitionable state", taskID)

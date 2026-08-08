@@ -1,11 +1,11 @@
 ---
 id: T-229-canonicalize-v0-5-lifecycle-and-task-identities
 title: Canonicalize v0.5 lifecycle and task identities
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#canonical-transition-order
 dependencies: []
-updated_at: "2026-08-08T08:40:49Z"
+updated_at: "2026-08-08T15:56:49Z"
 ---
 
 # T-229-canonicalize-v0-5-lifecycle-and-task-identities Canonicalize v0.5 lifecycle and task identities
@@ -38,3 +38,6 @@ implement their own behavior.
   T-173 applies it to the complete shipped cross-surface inventory.
 
 ## Implementation Notes
+
+- 2026-08-08T15:56:28Z: Implemented the canonical lifecycle, exact-ID, metadata-table, and predecessor-chain contract; go test ./..., go vet ./..., validation, parity/body checks, and sandbox manual evidence passed.
+- 2026-08-08T15:56:49Z: verification pass

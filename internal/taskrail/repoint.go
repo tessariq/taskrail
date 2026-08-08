@@ -36,7 +36,7 @@ type RepointTaskResult struct {
 // neither a status mutator nor a bulk migrator. An unresolvable target fails
 // before any write.
 func (s *Service) RepointTask(input RepointTaskInput) (RepointTaskResult, error) {
-	taskID := strings.TrimSpace(input.TaskID)
+	taskID := input.TaskID
 	if taskID == "" {
 		return RepointTaskResult{}, errors.New("task id is required")
 	}
@@ -49,9 +49,9 @@ func (s *Service) RepointTask(input RepointTaskInput) (RepointTaskResult, error)
 	if err != nil {
 		return RepointTaskResult{}, err
 	}
-	target, ok := taskByID(tasks, taskID)
-	if !ok {
-		return RepointTaskResult{}, fmt.Errorf("task %s not found", taskID)
+	target, err := exactTaskByID(tasks, taskID)
+	if err != nil {
+		return RepointTaskResult{}, err
 	}
 	// Completed and cancelled tasks are delivered history, excluded from drift by
 	// the coverage orphan rule; re-pointing them would rewrite the record of what

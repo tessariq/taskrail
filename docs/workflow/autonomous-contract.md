@@ -21,11 +21,25 @@ Deterministic tracked-work contract for Taskrail repository planning and impleme
 
 ## Lifecycle
 
-Recommended task status lifecycle:
+The executable registry and metadata validator in
+`internal/taskrail/lifecycle_contract.go` are the reusable v0.5 contract. Commands,
+prompts, skills, and tests cite that contract rather than defining another order.
+
+Task statuses are:
 
 - `todo`
 - `in_progress`
-- run-ending: `completed`, `blocked`, `cancelled`
+- `completed`
+- `blocked`
+- `cancelled`
+
+The only canonical tracked-work run branches are:
+
+```text
+completed-pass: validate -> start -> implement -> checks -> complete -> verify pass
+blocked-fail: validate -> start -> block --reason -> verify fail -> stop
+rework-fail: validate -> start -> verify fail -> stop (remains in_progress)
+```
 
 Rules:
 
@@ -36,6 +50,41 @@ Rules:
 - Success transitions to `completed` before recording a passing verification.
 - Cannot-proceed transitions to `blocked` with a reason before recording a failing verification. Blocked work remains reversible through `unblock`.
 - Deliberate rework may record a failing verification while remaining `in_progress`.
+- Each canonical branch terminates the current autonomous run. `blocked` is still
+  reversible through `unblock`; terminal-run does not mean immutable history.
+- A direct operator may create a follow-up before completion with `task new`, use
+  `verify --create-followup`, or release interrupted active work. A delegated child
+  may create follow-ups only through `verify --create-followup` and cannot release.
+
+## Task Identity
+
+In the v0.5 contract, every task operand, dependency, blocker identity, and
+task-valued result is the exact full persisted task ID, including a slug suffix.
+For example, `T-229-canonicalize-v0-5-lifecycle-and-task-identities` cannot be
+addressed as `T-229`. A bare ID such as `T-230` is valid only when that exact bare
+ID is persisted. v0.5 has no `task_ref` field, fuzzy resolver, or stable-reference
+semantics; those begin in v0.6.
+
+## Completion And Verification Metadata
+
+Legacy tasks with no v0.5 lifecycle metadata remain readable until a later writer
+adopts them. Once metadata is present, these are the only valid shapes:
+
+| Lifecycle shape | `completion_id` | Latest verification tuple | Completion binding |
+|---|---|---|---|
+| Non-completed before verification | absent | absent | absent |
+| Non-completed after verification | absent | complete | absent |
+| Newly completed | required | absent | absent |
+| Legacy completed before adoption | absent | absent or legacy-only | absent |
+| Completed after fail or unbound pass | required, except legacy pre-adoption fail | complete tuple | absent |
+| Completed with a current pass | required | complete pass tuple | equal to `completion_id` |
+
+A complete verification tuple has an ID, `pass` or `fail` result, and timestamp;
+its predecessor is absent for the first link and otherwise names the exact
+immediately preceding verification ID. Partial tuples, repeated IDs, broken
+predecessors, fail bindings, non-completed bindings, and bindings unequal to the
+current completion ID are invalid. Verification records lifecycle state but never
+performs a lifecycle transition.
 
 ## Deterministic Selection
 

@@ -314,6 +314,9 @@ func (s *Service) validateTasks(state *State, tasks []*Task) []string {
 		if _, ok := validPriorites[task.Frontmatter.Priority]; !ok {
 			violations = append(violations, fmt.Sprintf("task %s has invalid priority %q", task.Frontmatter.ID, task.Frontmatter.Priority))
 		}
+		for _, violation := range ValidateCompletionVerificationMetadata(task.Frontmatter.Status, task.Frontmatter.CompletionVerificationMetadata) {
+			violations = append(violations, fmt.Sprintf("task %s lifecycle metadata: %s", task.Frontmatter.ID, violation))
+		}
 		for _, dep := range task.Frontmatter.Dependencies {
 			if dep == task.Frontmatter.ID {
 				violations = append(violations, fmt.Sprintf("task %s cannot depend on itself", task.Frontmatter.ID))

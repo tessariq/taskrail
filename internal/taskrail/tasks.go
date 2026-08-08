@@ -51,6 +51,15 @@ func taskByID(tasks []*Task, id string) (*Task, bool) {
 	return nil, false
 }
 
+// exactTaskByID resolves only the complete persisted identifier. Numeric-prefix,
+// slug, and whitespace normalization are deliberately not identity semantics.
+func exactTaskByID(tasks []*Task, id string) (*Task, error) {
+	if task, ok := taskByID(tasks, id); ok {
+		return task, nil
+	}
+	return nil, fmt.Errorf("task %q not found: identity must be an exact full persisted task ID", id)
+}
+
 func eligibleTasks(tasks []*Task) []*Task {
 	eligible := make([]*Task, 0)
 	for _, task := range tasks {

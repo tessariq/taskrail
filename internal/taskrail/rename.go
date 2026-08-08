@@ -62,7 +62,7 @@ type RenameTaskResult struct {
 // renamed. It only re-encodes an identifier and the edges that name it — it never
 // advances a status or fabricates work.
 func (s *Service) RenameTask(input RenameTaskInput) (RenameTaskResult, error) {
-	oldID := strings.TrimSpace(input.OldID)
+	oldID := input.OldID
 	if oldID == "" {
 		return RenameTaskResult{}, errors.New("task id is required")
 	}
@@ -75,9 +75,9 @@ func (s *Service) RenameTask(input RenameTaskInput) (RenameTaskResult, error) {
 	if err != nil {
 		return RenameTaskResult{}, err
 	}
-	target, ok := taskByID(tasks, oldID)
-	if !ok {
-		return RenameTaskResult{}, fmt.Errorf("task %s not found", oldID)
+	target, err := exactTaskByID(tasks, oldID)
+	if err != nil {
+		return RenameTaskResult{}, err
 	}
 	prefix, ok := taskIDPrefix(oldID)
 	if !ok {

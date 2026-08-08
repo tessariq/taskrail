@@ -99,13 +99,14 @@ type State struct {
 }
 
 type TaskFrontmatter struct {
-	ID           string   `yaml:"id" json:"id"`
-	Title        string   `yaml:"title" json:"title"`
-	Status       string   `yaml:"status" json:"status"`
-	Priority     string   `yaml:"priority" json:"priority"`
-	SpecRef      string   `yaml:"spec_ref" json:"spec_ref"`
-	Dependencies []string `yaml:"dependencies" json:"dependencies"`
-	UpdatedAt    string   `yaml:"updated_at" json:"updated_at"`
+	ID                             string   `yaml:"id" json:"id"`
+	Title                          string   `yaml:"title" json:"title"`
+	Status                         string   `yaml:"status" json:"status"`
+	Priority                       string   `yaml:"priority" json:"priority"`
+	SpecRef                        string   `yaml:"spec_ref" json:"spec_ref"`
+	Dependencies                   []string `yaml:"dependencies" json:"dependencies"`
+	UpdatedAt                      string   `yaml:"updated_at" json:"updated_at"`
+	CompletionVerificationMetadata `yaml:",inline"`
 }
 
 type Task struct {
