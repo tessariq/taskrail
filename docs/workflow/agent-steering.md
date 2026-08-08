@@ -18,6 +18,22 @@ Prompt guidance for deterministic tracked-work execution in Taskrail.
 - Keep product scope anchored to the Taskrail specs.
 - Run manual testing and persist artifacts when the change affects visible Taskrail workflow behavior.
 
+## Review Cadence
+
+Review is a bounded workflow with an explicit trigger, not a default loop after
+every planning edit.
+
+| Situation | Required review cadence |
+|---|---|
+| Ordinary spec or task-file edit | Run the applicable deterministic checks once on settled bytes. Do not start semantic review unless explicitly requested. |
+| Requested advisory review | Run one review wave over one frozen snapshot, batch dispositions and accepted fixes, then stop. |
+| Formal post-spec publication | Run the four required lenses and only the exact-byte reruns required by the active spec contract. |
+| Reviewed decomposition | Run at most two passes in one explicitly initiated session. A later change invalidates that session and stops; another session requires explicit human initiation. |
+| Release gate | Run at the named release boundary. Restart only after a concrete blocker is remediated and the gate is explicitly resumed. |
+
+"Fresh context" means isolation for one required lens or pass, not repeated review
+of unchanged bytes. Confidence-seeking alone is not a trigger for another wave.
+
 ## Autonomous Backlog
 
 1. Validate state.

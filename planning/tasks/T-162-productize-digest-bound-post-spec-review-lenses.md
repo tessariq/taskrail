@@ -34,10 +34,12 @@ disposition manifest.
   accepted/rejected/deferred decisions and rationale. Accepted findings name
   resulting headings, deferred findings name a future version, and unresolved
   high/medium findings forbid decomposition.
-- Any spec byte edit stales all four lens reports and requires all four rerun
-  against the final digest. Prompt-template drift stales the affected unpublished
-  session and requires fresh lens observations rather than metadata repair;
-  additions cannot silently expand scope.
+- Accepted spec edits are batched before any required rerun. Any spec byte edit
+  stales all four lens reports and requires all four rerun against the final
+  digest, while unchanged exact bytes never justify an additional lens round.
+  Prompt-template drift stales the affected unpublished session and requires fresh
+  lens observations rather than metadata repair; additions cannot silently expand
+  scope.
 - Final outputs publish through the generic review command with canonical
   no-follow, no-alias, absent-destination, same-directory atomic no-clobber
   behavior; lenses remain advisory and cannot invoke semantic writers or gate

@@ -30,6 +30,9 @@ without duplicating the four post-spec lenses or mutating task state directly.
 - Final artifacts publish only while task/spec and prompt-template snapshots remain
   current. Accepted body changes route through `task author`; dependency edges use
   exact-ID add/remove; new outcomes use reviewed implicit-hold follow-ups.
+- A later authored-body change requires another task review only when an explicitly
+  invoked consuming workflow or the human requires final-byte review; unchanged
+  bytes and confidence-seeking alone do not start another session.
 - Todo tasks can continue into authoring; active, blocked, completed, and cancelled tasks remain reviewable but are not rewritten through the skill.
 - Packaged/committed copies remain Agent Skills-compliant, provider-neutral, version-aware, and byte-identical.
 
@@ -37,7 +40,8 @@ without duplicating the four post-spec lenses or mutating task state directly.
 
 - Use aligned, overlapping, cyclic, shallow-acceptance, unverifiable,
   over-prescribed, operator-gated, non-todo, stale-subject, wrong-role, and
-  stale-replacement fixtures.
+  stale-replacement fixtures, plus unchanged-byte and explicit final-byte-review
+  session decisions.
 - Prove independent advisory output, generic publication, forbidden direct writers, package parity, and a reviewed `task author` handoff.
 
 ## Implementation Notes

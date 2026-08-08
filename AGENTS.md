@@ -137,6 +137,27 @@ Guidance for coding agents working in the Taskrail repository.
 - Verification artifacts belong under `planning/artifacts/verify/`.
 - Follow-up work discovered during verification should become new task files.
 
+### Review Scope And Stop Conditions
+
+- Unshipped active-spec review workflows describe future product behavior. They
+  are not current contributor checks unless a task or maintainer explicitly
+  invokes them.
+- For ordinary spec and task-file edits, run the applicable deterministic checks
+  once after the change set settles. Do not launch semantic review agents unless
+  explicitly requested or required by a named release or publication workflow.
+- A request for review authorizes one bounded review wave over one frozen
+  snapshot. Batch findings, dispositions, and accepted fixes. Do not recursively
+  launch another wave solely because the first wave changed files or to obtain
+  additional confidence.
+- Another review wave requires one concrete trigger: explicit maintainer
+  instruction, a contract-mandated rerun for a formal artifact, or unresolved
+  release-blocking findings in an explicitly authorized release gate.
+- "Fresh context" specifies reviewer isolation, not repetition. One fresh context
+  per required lens or pass satisfies that requirement.
+- Bootstrap-review staleness does not trigger automatic replacement. Keep one
+  candidate mutable, batch related changes, and publish a new immutable revision
+  only at an explicit review boundary.
+
 ## Coding Style Guidelines
 
 - Always run `gofmt` on changed Go files.
@@ -207,7 +228,7 @@ Guidance for coding agents working in the Taskrail repository.
 
 Intentional, non-obvious decisions — do not "fix" these:
 
-- `planning/bootstrap-reviews/` holds hand-produced v0.5 spec-review evidence: one immutable `<version>[-rN].md` report plus a sibling `<version>[-rN]-task-manifest.sha256` in plain `sha256sum -c` format. The report records the manifest's own digest, so one digest transitively binds the exact bytes of every task file that revision reviewed. No command, skill, or script generates these — the v0.5 publisher (T-215) and review lenses (T-162) do not exist yet, which is the whole reason they are hand-made. Do not add a `Taskfile.yml`/CI check for them: superseded revisions verify *partially* on purpose (each is frozen to its own snapshot, and later task edits are expected to break it), so a green/red gate would be meaningless. They are committed because they are evidence, not build output — unreproducible once task files move on, and worthless outside the git history they annotate. Never gitignore them, never edit a published revision's digests, and never place them under the real durable review roots (`<planning-dir>/reviews/...`, per `specs/v0.5.0.md`) — the separate directory name is deliberate quarantine so hand-made evidence cannot be mistaken for a schema-v1 artifact. T-256 retires the directory once real publication ships.
+- `planning/bootstrap-reviews/` holds hand-produced v0.5 spec-review evidence: one immutable `<version>[-rN].md` report plus a sibling `<version>[-rN]-task-manifest.sha256` in plain `sha256sum -c` format. The report records the manifest's own digest, so one digest transitively binds the exact bytes of every task file that revision reviewed. No command, skill, or script generates these — the v0.5 publisher (T-215) and review lenses (T-162) do not exist yet, which is the whole reason they are hand-made. Do not add a `Taskfile.yml`/CI check for them: superseded revisions verify *partially* on purpose (each is frozen to its own snapshot, and later task edits are expected to break it), so a green/red gate would be meaningless. They are committed because they are evidence, not build output — unreproducible once task files move on, and worthless outside the git history they annotate. A stale revision needs a successor only when current bootstrap evidence is explicitly requested at a new review boundary; ordinary spec or task edits do not trigger one. Never gitignore them, never edit a published revision's digests, and never place them under the real durable review roots (`<planning-dir>/reviews/...`, per `specs/v0.5.0.md`) — the separate directory name is deliberate quarantine so hand-made evidence cannot be mistaken for a schema-v1 artifact. T-256 retires the directory once real publication ships.
 - `planning/STATE.md` still carries a stale `continuation_notes` entry naming Taskrail v0.1.0. It is byte-preserved on purpose: T-200 stopped *seeding* such notes but requires existing ones to survive until the state schema-v2 migration (T-157) exposes and explicitly drops them. No migration silently discards authored text, so do not hand-clear it.
 - `validate` is read-only. It never writes `planning/STATE.md` or task files.
 - `coverage` is read-only (side-effect-free like `validate`): it reports advisory spec-coverage/orphan/drift signals and never writes `planning/STATE.md` or task files, so it needs no post-run `git status`/staging follow-up. Its signals never make `validate` fail.

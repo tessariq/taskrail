@@ -31,8 +31,9 @@ two-pass bound, and hand an approved manifest to the v2 writer.
 - Reviews record fresh-process/context or explicitly accepted same-context mode
   and exact prompt/spec/draft/trace bindings; high/medium cannot defer and final
   bytes receive review.
-- Material changes require pass 2; material changes after pass 2 start a new
-  session instead of applying unreviewed bytes. Prompt drift between a pass and
+- Material changes require pass 2; material changes after pass 2 invalidate the
+  session and stop instead of applying unreviewed bytes. Another session starts
+  only when the human explicitly initiates it. Prompt drift between a pass and
   publication likewise abandons the stale session rather than editing metadata.
 - Human approval binds all final files; apply is followed by validate and the
   relevant coverage report. Final session artifacts publish through the generic
@@ -43,7 +44,8 @@ two-pass bound, and hand an approved manifest to the v2 writer.
 - Map criteria to active/inactive fixture sessions, requirement coverage oracles,
   duplicate-task detection, loop-policy escalation rejection, context metadata,
   subject/template digest mutations, prompt changes between passes, pass-limit
-  restarts, post-apply validation, coverage, and tracked handoff diffs.
+  stops and explicitly initiated restarts, post-apply validation, coverage, and
+  tracked handoff diffs.
 - Run one first-pass-clean and one materially revised two-pass sandbox
   decomposition end to end.
 
