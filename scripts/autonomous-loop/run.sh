@@ -9,6 +9,8 @@ RUNS_DIR="$ROOT/planning/artifacts/runs"
 MAX_ITERATIONS=1
 DRY_RUN=0
 CHECK_QUEUE=0
+BACKEND=claude
+BACKEND_SET=0
 TMP_DIR=""
 LOCK_DIR=""
 LOCK_TOKEN=""
@@ -36,7 +38,7 @@ trap cleanup EXIT
 
 usage() {
   printf '%s\n' \
-    'Usage: scripts/autonomous-loop/run.sh [--dry-run] [--max-iterations <n>]' \
+    'Usage: scripts/autonomous-loop/run.sh [--backend <claude|opencode>] [--dry-run] [--max-iterations <n>]' \
     '       scripts/autonomous-loop/run.sh --check-queue' \
     '' \
     'Run a finite source-checkout task loop from scripts/autonomous-loop/queue.tsv.'
@@ -51,6 +53,19 @@ while (($#)); do
     --check-queue)
       CHECK_QUEUE=1
       shift
+      ;;
+    --backend)
+      (($# >= 2)) || die "--backend requires claude or opencode" 2
+      case "$2" in
+        claude|opencode) ;;
+        *) die "invalid backend '$2': expected claude or opencode" 2 ;;
+      esac
+      if [[ $BACKEND_SET -eq 1 && "$BACKEND" != "$2" ]]; then
+        die "conflicting --backend values: $BACKEND and $2" 2
+      fi
+      BACKEND="$2"
+      BACKEND_SET=1
+      shift 2
       ;;
     -n|--max-iterations)
       (($# >= 2)) || die "$1 requires a positive integer" 2
@@ -98,41 +113,37 @@ task_dependencies() {
 }
 
 declare -a QUEUE_IDS=()
-declare -A QUEUE_AGENT=()
 declare -A QUEUE_MODE=()
 declare -A QUEUE_REASON=()
 declare -A QUEUE_INDEX=()
 
 validate_queue() {
-  local header line line_no=1 id agent mode reason extra status spec_ref dep dep_status file open_count=0
+  local header line line_no=1 id mode reason extra status spec_ref dep dep_status file open_count=0
   QUEUE_IDS=()
-  QUEUE_AGENT=()
   QUEUE_MODE=()
   QUEUE_REASON=()
   QUEUE_INDEX=()
 
   [[ -f "$QUEUE" ]] || die "queue missing: ${QUEUE#$ROOT/}" 2
   IFS= read -r header <"$QUEUE" || die "queue is empty" 2
-  [[ "$header" == $'task_id\tagent\tmode\treason' ]] || die "invalid queue header" 2
+  [[ "$header" == $'task_id\tmode\treason' ]] || die "invalid queue header" 2
 
   while IFS= read -r line || [[ -n "$line" ]]; do
     line_no=$((line_no + 1))
     [[ -z "$line" || "$line" == \#* ]] && continue
     [[ "$line" != *$'\r'* ]] || die "queue line $line_no contains CR bytes" 2
-    IFS=$'\t' read -r id agent mode reason extra <<<"$line"
-    [[ -n "$id" && -n "$agent" && -n "$mode" && -n "$reason" && -z "${extra:-}" ]] || \
-      die "queue line $line_no must contain exactly four non-empty tab-separated fields" 2
+    IFS=$'\t' read -r id mode reason extra <<<"$line"
+    [[ -n "$id" && -n "$mode" && -n "$reason" && -z "${extra:-}" ]] || \
+      die "queue line $line_no must contain exactly three non-empty tab-separated fields" 2
     [[ -z "${QUEUE_INDEX[$id]+x}" ]] || die "duplicate task id in queue: $id" 2
     [[ -f "$(task_file "$id")" ]] || die "queue task is missing: $id" 2
     spec_ref="$(task_field "$id" spec_ref)"
     [[ "${spec_ref%%#*}" == "specs/v0.5.0.md" ]] || die "queue task is off v0.5.0: $id" 2
     case "$mode" in
       run)
-        [[ "$agent" == "claude" || "$agent" == "opencode" ]] || die "run row $id requires claude or opencode" 2
         [[ "$reason" == "-" ]] || die "run row $id must use '-' reason" 2
         ;;
       hold-operator|hold-self-removal)
-        [[ "$agent" == "none" ]] || die "held row $id must use agent none" 2
         [[ "$reason" != "-" ]] || die "held row $id requires a reason" 2
         ;;
       *)
@@ -141,7 +152,6 @@ validate_queue() {
     esac
     QUEUE_INDEX["$id"]="${#QUEUE_IDS[@]}"
     QUEUE_IDS+=("$id")
-    QUEUE_AGENT["$id"]="$agent"
     QUEUE_MODE["$id"]="$mode"
     QUEUE_REASON["$id"]="$reason"
   done < <(sed '1d' "$QUEUE")
@@ -333,7 +343,7 @@ EOF
 }
 
 run_iteration() {
-  local id="$1" agent="${QUEUE_AGENT[$1]}" before_head before_remote before_index before_reports
+  local id="$1" before_head before_remote before_index before_reports
   local before_git_control after_git_control reports_before_manifest
   local stamp log_file child_rc tee_rc after_status verification report report_bytes result
   local commit_message commit_subject parent count after_head after_remote generated_at
@@ -354,14 +364,13 @@ run_iteration() {
   stamp="$(date -u +%Y%m%dT%H%M%SZ)"
   log_file="$RUNS_DIR/$stamp-$id.log"
 
-  case "$agent" in
+  case "$BACKEND" in
     claude) agent_command=(claude -p --permission-mode acceptEdits) ;;
     opencode) agent_command=(opencode run --auto) ;;
-    *) die "unsupported agent for $id: $agent" ;;
   esac
-  command -v "${agent_command[0]}" >/dev/null 2>&1 || die "$agent CLI not found"
+  command -v "${agent_command[0]}" >/dev/null 2>&1 || die "$BACKEND CLI not found"
 
-  log "starting $id with $agent"
+  log "starting $id with $BACKEND"
   TASKRAIL="$TMP_DIR/taskrail-writer" AUTONOMOUS_TASKRAIL_BINARY="$ROOT/bin/taskrail" AUTONOMOUS_TASK_ID="$id" \
     AUTONOMOUS_COMMIT_MESSAGE_FILE="$commit_message" \
     "${agent_command[@]}" <"$TMP_DIR/rendered-prompt.md" 2>&1 | tee "$log_file"
@@ -369,7 +378,7 @@ run_iteration() {
   child_rc="${pipeline_status[0]}"
   tee_rc="${pipeline_status[1]}"
   [[ $tee_rc -eq 0 ]] || die "$id log streaming failed"
-  [[ $child_rc -eq 0 ]] || die "$id agent exited $child_rc; inspect ${log_file#$ROOT/}"
+  [[ $child_rc -eq 0 ]] || die "$id $BACKEND exited $child_rc; inspect ${log_file#$ROOT/}"
 
   [[ "$(git symbolic-ref --quiet --short HEAD 2>/dev/null)" == "main" ]] || die "$id changed the attached branch"
   [[ "$(git rev-parse HEAD)" == "$before_head" ]] || die "$id created or changed commits; the runner owns Git delivery"
@@ -451,7 +460,7 @@ validate_selected "$SELECTED_ID"
 render_prompt "$SELECTED_ID"
 if [[ $DRY_RUN -eq 1 ]]; then
   log "selected: $SELECTED_ID"
-  log "agent: ${QUEUE_AGENT[$SELECTED_ID]}"
+  log "backend: $BACKEND"
   log "head: $(git rev-parse HEAD)"
   log "origin/main: $(remote_main)"
   log "binary sha256: $(sha256sum "$ROOT/bin/taskrail" | awk '{print $1}')"

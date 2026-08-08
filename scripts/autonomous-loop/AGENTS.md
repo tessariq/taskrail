@@ -4,7 +4,10 @@
   product behavior or adopter guidance.
 - Ordinary queued tasks must not modify this directory.
 - `queue.tsv` is reviewed source policy, remains immutable during a child run,
-  and is never runtime state.
+  and is never runtime state. It owns task order and run/hold policy, not agent
+  selection.
+- The runner uses Claude by default. Select one backend for the complete invocation
+  with `--backend claude` or `--backend opencode`; dry-run reports that selection.
 - Do not add logs, results, session data, credentials, or generated files here.
   Runtime output belongs under ignored `planning/artifacts/runs/` or external
   temporary storage.

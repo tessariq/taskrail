@@ -1,63 +1,64 @@
-task_id	agent	mode	reason
-T-257-add-the-temporary-source-checkout-autonomous-loop	opencode	run	-
-T-265-accept-rendered-empty-current-task-in-loop	opencode	run	-
-T-155-add-the-repository-mutation-lock-protocol	claude	run	-
-T-201-make-packaged-skills-agent-skills-compliant	opencode	run	-
-T-229-canonicalize-v0-5-lifecycle-and-task-identities	claude	run	-
-T-230-enforce-the-normative-v0-5-machine-schema	opencode	run	-
-T-213-define-the-uniform-agent-machine-api	claude	run	-
-T-240-implement-the-normative-review-schema-decoders	opencode	run	-
-T-156-protect-existing-semantic-writers-with-snapshot	claude	run	-
-T-168-parse-and-validate-an-optional-autonomous-run	opencode	run	-
-T-231-inspect-and-clear-stale-repository-locks-safely	claude	run	-
-T-232-recover-v0-5-transactions-through-one-command	opencode	run	-
-T-214-bootstrap-and-migrate-human-owned-repository-notes	claude	run	-
-T-157-upgrade-repositories-transactionally-to-layout-2	opencode	run	-
-T-233-protect-lifecycle-and-task-writers-transactionally	claude	run	-
-T-234-protect-repository-and-planning-writers	opencode	run	-
-T-158-bind-completion-and-verification-with-stable	claude	run	-
-T-222-initialize-and-discover-ignored-local-taskrail	opencode	run	-
-T-223-run-every-v0-5-command-against-local-storage	claude	run	-
-T-159-add-a-versioned-workflow-prompt-catalog	opencode	run	-
-T-236-resolve-local-prompt-replacements-through-the	claude	run	-
-T-235-show-a-task-by-exact-id-through-active-storage	opencode	run	-
-T-215-add-the-generic-review-artifact-publisher	claude	run	-
-T-250-render-prompts-from-storage-neutral-context	opencode	run	-
-T-255-bind-review-artifacts-to-resolved-prompt-templates	claude	run	-
-T-241-warn-on-passing-verification-before-completion	opencode	run	-
-T-217-release-interrupted-active-work-safely	claude	run	-
-T-237-report-task-local-loop-policy-deterministically	opencode	run	-
-T-169-select-autonomous-work-through-policy-barriers	claude	run	-
-T-238-mutate-task-local-loop-policy-safely	opencode	run	-
-T-239-edit-exact-id-dependencies-safely	claude	run	-
-T-247-install-packaged-skills-safely-in-local-mode	opencode	run	-
-T-251-ship-the-outcome-focused-task-authoring-prompt	claude	run	-
-T-161-apply-reviewed-task-bodies-with-compare-and-swap	opencode	run	-
-T-160-ship-the-lifecycle-complete-task-implementation	claude	run	-
-T-242-align-full-task-skills-with-the-canonical	opencode	run	-
-T-165-maintain-bounded-workflow-adversarial-review	claude	run	-
-T-162-productize-digest-bound-post-spec-review-lenses	opencode	run	-
-T-252-validate-reviewed-decomposition-bundles	claude	run	-
-T-163-validate-and-apply-importdraft-v2-transactionally	opencode	run	-
-T-164-orchestrate-adversarial-spec-to-task-decomposition	claude	run	-
-T-202-ship-the-lightweight-sdd-handoff-skill	opencode	run	-
-T-216-ship-digest-bound-existing-task-review	claude	run	-
-T-254-make-every-packaged-skill-storage-neutral	opencode	run	-
-T-166-publish-workflow-review-index-and-reports-with-cas	claude	run	-
-T-218-add-maintainer-skill-release-evaluations	opencode	run	-
-T-249-allow-explicit-skill-evaluation-release-waivers	claude	run	-
-T-170-add-deterministic-autonomous-loop-preflight-and	opencode	run	-
-T-171-contain-and-pin-autonomous-loop-child-processes	claude	run	-
-T-243-contain-autonomous-loop-process-trees	opencode	run	-
-T-172-enforce-autonomous-loop-lifecycle-and-delivery	claude	run	-
-T-244-publish-streamed-loop-results-out-of-band	opencode	run	-
-T-245-cover-the-complete-implicit-local-bootstrap-matrix	claude	run	-
-T-225-prove-local-autonomous-delivery-across-git	opencode	run	-
-T-258-retire-the-temporary-source-checkout-autonomous	none	hold-self-removal	Remove this complete directory after product loop delivery is proven
-T-224-promote-local-taskrail-state-into-committed	claude	run	-
-T-246-classify-every-v0-5-writer-transaction-and	opencode	run	-
-T-167-add-active-spec-scoped-statistics	claude	run	-
-T-256-retire-bootstrap-planning-reviews	none	hold-operator	Requires deliberate bootstrap-evidence disposition
-T-173-check-cross-surface-workflow-contract-integrity	claude	run	-
-T-248-run-cross-platform-workflow-contract-tests-in-ci	opencode	run	-
-T-174-run-the-v0-5-0-gap-and-drift-release-gate	none	hold-operator	Maintainer-owned final release gate
+task_id	mode	reason
+T-257-add-the-temporary-source-checkout-autonomous-loop	run	-
+T-265-accept-rendered-empty-current-task-in-loop	run	-
+T-266-select-temporary-loop-backend-per-invocation	hold-operator	Operator-owned temporary-loop maintenance
+T-155-add-the-repository-mutation-lock-protocol	run	-
+T-201-make-packaged-skills-agent-skills-compliant	run	-
+T-229-canonicalize-v0-5-lifecycle-and-task-identities	run	-
+T-230-enforce-the-normative-v0-5-machine-schema	run	-
+T-213-define-the-uniform-agent-machine-api	run	-
+T-240-implement-the-normative-review-schema-decoders	run	-
+T-156-protect-existing-semantic-writers-with-snapshot	run	-
+T-168-parse-and-validate-an-optional-autonomous-run	run	-
+T-231-inspect-and-clear-stale-repository-locks-safely	run	-
+T-232-recover-v0-5-transactions-through-one-command	run	-
+T-214-bootstrap-and-migrate-human-owned-repository-notes	run	-
+T-157-upgrade-repositories-transactionally-to-layout-2	run	-
+T-233-protect-lifecycle-and-task-writers-transactionally	run	-
+T-234-protect-repository-and-planning-writers	run	-
+T-158-bind-completion-and-verification-with-stable	run	-
+T-222-initialize-and-discover-ignored-local-taskrail	run	-
+T-223-run-every-v0-5-command-against-local-storage	run	-
+T-159-add-a-versioned-workflow-prompt-catalog	run	-
+T-236-resolve-local-prompt-replacements-through-the	run	-
+T-235-show-a-task-by-exact-id-through-active-storage	run	-
+T-215-add-the-generic-review-artifact-publisher	run	-
+T-250-render-prompts-from-storage-neutral-context	run	-
+T-255-bind-review-artifacts-to-resolved-prompt-templates	run	-
+T-241-warn-on-passing-verification-before-completion	run	-
+T-217-release-interrupted-active-work-safely	run	-
+T-237-report-task-local-loop-policy-deterministically	run	-
+T-169-select-autonomous-work-through-policy-barriers	run	-
+T-238-mutate-task-local-loop-policy-safely	run	-
+T-239-edit-exact-id-dependencies-safely	run	-
+T-247-install-packaged-skills-safely-in-local-mode	run	-
+T-251-ship-the-outcome-focused-task-authoring-prompt	run	-
+T-161-apply-reviewed-task-bodies-with-compare-and-swap	run	-
+T-160-ship-the-lifecycle-complete-task-implementation	run	-
+T-242-align-full-task-skills-with-the-canonical	run	-
+T-165-maintain-bounded-workflow-adversarial-review	run	-
+T-162-productize-digest-bound-post-spec-review-lenses	run	-
+T-252-validate-reviewed-decomposition-bundles	run	-
+T-163-validate-and-apply-importdraft-v2-transactionally	run	-
+T-164-orchestrate-adversarial-spec-to-task-decomposition	run	-
+T-202-ship-the-lightweight-sdd-handoff-skill	run	-
+T-216-ship-digest-bound-existing-task-review	run	-
+T-254-make-every-packaged-skill-storage-neutral	run	-
+T-166-publish-workflow-review-index-and-reports-with-cas	run	-
+T-218-add-maintainer-skill-release-evaluations	run	-
+T-249-allow-explicit-skill-evaluation-release-waivers	run	-
+T-170-add-deterministic-autonomous-loop-preflight-and	run	-
+T-171-contain-and-pin-autonomous-loop-child-processes	run	-
+T-243-contain-autonomous-loop-process-trees	run	-
+T-172-enforce-autonomous-loop-lifecycle-and-delivery	run	-
+T-244-publish-streamed-loop-results-out-of-band	run	-
+T-245-cover-the-complete-implicit-local-bootstrap-matrix	run	-
+T-225-prove-local-autonomous-delivery-across-git	run	-
+T-258-retire-the-temporary-source-checkout-autonomous	hold-self-removal	Remove this complete directory after product loop delivery is proven
+T-224-promote-local-taskrail-state-into-committed	run	-
+T-246-classify-every-v0-5-writer-transaction-and	run	-
+T-167-add-active-spec-scoped-statistics	run	-
+T-256-retire-bootstrap-planning-reviews	hold-operator	Requires deliberate bootstrap-evidence disposition
+T-173-check-cross-surface-workflow-contract-integrity	run	-
+T-248-run-cross-platform-workflow-contract-tests-in-ci	run	-
+T-174-run-the-v0-5-0-gap-and-drift-release-gate	hold-operator	Maintainer-owned final release gate

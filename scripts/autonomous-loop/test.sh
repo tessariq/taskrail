@@ -35,7 +35,7 @@ create_fixture() {
   printf '%s\n' 'id: T-900' 'status: todo' 'spec_ref: specs/v0.5.0.md#test-area' 'dependencies: []' >"$root/planning/tasks/T-900.md"
   printf '%s\n' 'id: T-901' 'status: todo' 'spec_ref: specs/v0.5.0.md#test-area' 'dependencies:' '    - T-900' >"$root/planning/tasks/T-901.md"
   printf '%s\n' 'active_spec_path: specs/v0.5.0.md' 'current_task: ""' 'last_verification_result: none' >"$root/planning/STATE.md"
-  printf '%s\n' $'task_id\tagent\tmode\treason' $'T-900\topencode\trun\t-' $'T-901\tnone\thold-operator\ttest hold' >"$root/scripts/autonomous-loop/queue.tsv"
+  printf '%s\n' $'task_id\tmode\treason' $'T-900\trun\t-' $'T-901\thold-operator\ttest hold' >"$root/scripts/autonomous-loop/queue.tsv"
 
   cat >"$root/bin/taskrail" <<'EOF'
 #!/usr/bin/env bash
@@ -77,6 +77,8 @@ EOF
 
   cat >"$root/fake-bin/opencode" <<'EOF'
 #!/usr/bin/env bash
+printf '%s\n' "${AUTONOMOUS_TEST_BACKEND:-opencode}" >"$AUTONOMOUS_TEST_ROOT/captures/backend"
+printf '%s\n' "$*" >"$AUTONOMOUS_TEST_ROOT/captures/agent-args"
 cat >"$AUTONOMOUS_TEST_ROOT/captures/prompt"
 printf '%s\n' invoked >>"$AUTONOMOUS_TEST_ROOT/captures/agent-invocations"
 if [[ "${AUTONOMOUS_TEST_AGENT_EXIT:-0}" != "0" ]]; then
@@ -109,7 +111,7 @@ EOF
 
   cat >"$root/fake-bin/claude" <<'EOF'
 #!/usr/bin/env bash
-exec opencode "$@"
+AUTONOMOUS_TEST_BACKEND=claude exec opencode "$@"
 EOF
 
   chmod +x "$root/bin/taskrail" "$root/fake-bin/mise" "$root/fake-bin/task" "$root/fake-bin/opencode" \
@@ -127,9 +129,10 @@ EOF
 }
 
 run_fixture() {
-  local root="$1"
+  local root="$1" fixture_path
   shift
-  PATH="$root/fake-bin:$PATH" AUTONOMOUS_TEST_ROOT="$root" \
+  fixture_path="${AUTONOMOUS_TEST_PATH:-$root/fake-bin:$PATH}"
+  PATH="$fixture_path" AUTONOMOUS_TEST_ROOT="$root" \
     AUTONOMOUS_TEST_BINARY="$root/bin/taskrail" AUTONOMOUS_TEST_AGENT_EXIT="${AUTONOMOUS_TEST_AGENT_EXIT:-0}" \
     AUTONOMOUS_TEST_OUTCOME="${AUTONOMOUS_TEST_OUTCOME:-completed}" \
     AUTONOMOUS_TEST_ACTION="${AUTONOMOUS_TEST_ACTION:-}" \
@@ -154,6 +157,7 @@ output="$(run_fixture "$root" --dry-run)"
 rc=$?
 [[ $rc -eq 0 ]] || fail "dry-run exited $rc: $output"
 assert_contains "dry-run selection" "$output" "selected: T-900"
+assert_contains "dry-run default backend" "$output" "backend: claude"
 assert_contains "dry-run prompt digest" "$output" "prompt sha256:"
 [[ ! -e "$root/captures/agent-invocations" ]] || fail "dry-run invoked an agent"
 [[ "$(git -C "$root" rev-parse HEAD)" == "$before_head" ]] || fail "dry-run moved HEAD"
@@ -165,12 +169,59 @@ rc=$?
 [[ $rc -eq 0 ]] || fail "successful run exited $rc: $output"
 assert_contains "successful task" "$output" "completed and pushed: T-900"
 assert_contains "rendered task" "$(<"$root/captures/prompt")" "T-900"
+[[ "$(<"$root/captures/backend")" == "claude" ]] || fail "default backend did not invoke Claude"
+assert_contains "default Claude arguments" "$(<"$root/captures/agent-args")" "-p --permission-mode acceptEdits"
 [[ "$(git -C "$root" rev-list --count HEAD~1..HEAD)" == "1" ]] || fail "successful run did not create one commit"
 [[ "$(git -C "$root" rev-parse HEAD)" == "$(git --git-dir="$TMP_ROOT/successful-run.git" rev-parse refs/heads/main)" ]] || fail "successful run did not push main"
 [[ -z "$(git -C "$root" status --porcelain=v1 --untracked-files=all)" ]] || fail "successful run left a dirty tree"
 
+root="$(create_fixture explicit-claude)"
+output="$(run_fixture "$root" --backend claude --max-iterations 1)"
+rc=$?
+[[ $rc -eq 0 ]] || fail "explicit Claude run exited $rc: $output"
+[[ "$(<"$root/captures/backend")" == "claude" ]] || fail "explicit Claude backend invoked the wrong CLI"
+
+root="$(create_fixture explicit-opencode)"
+output="$(run_fixture "$root" --backend opencode --max-iterations 1)"
+rc=$?
+[[ $rc -eq 0 ]] || fail "explicit OpenCode run exited $rc: $output"
+[[ "$(<"$root/captures/backend")" == "opencode" ]] || fail "explicit OpenCode backend invoked the wrong CLI"
+assert_contains "explicit OpenCode arguments" "$(<"$root/captures/agent-args")" "run --auto"
+
+root="$(create_fixture invalid-backend)"
+output="$(run_fixture "$root" --backend unknown)"
+rc=$?
+[[ $rc -eq 2 ]] || fail "invalid backend expected exit 2, got $rc"
+assert_contains "invalid backend" "$output" "expected claude or opencode"
+[[ ! -e "$root/captures/agent-invocations" ]] || fail "invalid backend invoked an agent"
+
+root="$(create_fixture missing-backend)"
+output="$(run_fixture "$root" --backend)"
+rc=$?
+[[ $rc -eq 2 ]] || fail "missing backend expected exit 2, got $rc"
+assert_contains "missing backend" "$output" "--backend requires claude or opencode"
+[[ ! -e "$root/captures/agent-invocations" ]] || fail "missing backend invoked an agent"
+
+root="$(create_fixture missing-backend-cli)"
+rm "$root/fake-bin/opencode"
+git -C "$root" add fake-bin/opencode
+git -C "$root" commit -q -m 'test: remove OpenCode CLI'
+git -C "$root" push -q
+output="$(AUTONOMOUS_TEST_PATH="$root/fake-bin:/usr/bin:/bin" run_fixture "$root" --backend opencode --max-iterations 1)"
+rc=$?
+[[ $rc -eq 1 ]] || fail "missing backend CLI expected exit 1, got $rc"
+assert_contains "missing backend CLI" "$output" "opencode CLI not found"
+[[ ! -e "$root/captures/agent-invocations" ]] || fail "missing backend CLI invoked an agent"
+
+root="$(create_fixture conflicting-backends)"
+output="$(run_fixture "$root" --backend claude --backend opencode)"
+rc=$?
+[[ $rc -eq 2 ]] || fail "conflicting backends expected exit 2, got $rc"
+assert_contains "conflicting backends" "$output" "conflicting --backend values"
+[[ ! -e "$root/captures/agent-invocations" ]] || fail "conflicting backends invoked an agent"
+
 root="$(create_fixture duplicate-row)"
-printf '%s\n' $'T-900\topencode\trun\t-' >>"$root/scripts/autonomous-loop/queue.tsv"
+printf '%s\n' $'T-900\trun\t-' >>"$root/scripts/autonomous-loop/queue.tsv"
 git -C "$root" add scripts/autonomous-loop/queue.tsv
 git -C "$root" commit -q -m 'test: add duplicate queue row'
 git -C "$root" push -q
@@ -180,7 +231,7 @@ rc=$?
 assert_contains "duplicate queue" "$output" "duplicate task id"
 
 root="$(create_fixture missing-row)"
-printf '%s\n' $'task_id\tagent\tmode\treason' $'T-900\topencode\trun\t-' >"$root/scripts/autonomous-loop/queue.tsv"
+printf '%s\n' $'task_id\tmode\treason' $'T-900\trun\t-' >"$root/scripts/autonomous-loop/queue.tsv"
 git -C "$root" add scripts/autonomous-loop/queue.tsv
 git -C "$root" commit -q -m 'test: omit open queue row'
 git -C "$root" push -q
@@ -190,7 +241,7 @@ rc=$?
 assert_contains "missing queue row" "$output" "open v0.5.0 task missing from queue: T-901"
 
 root="$(create_fixture held-row)"
-printf '%s\n' $'task_id\tagent\tmode\treason' $'T-900\tnone\thold-operator\toperator decision' $'T-901\tnone\thold-operator\ttest hold' >"$root/scripts/autonomous-loop/queue.tsv"
+printf '%s\n' $'task_id\tmode\treason' $'T-900\thold-operator\toperator decision' $'T-901\thold-operator\ttest hold' >"$root/scripts/autonomous-loop/queue.tsv"
 git -C "$root" add scripts/autonomous-loop/queue.tsv
 git -C "$root" commit -q -m 'test: hold first queue row'
 git -C "$root" push -q
@@ -264,7 +315,7 @@ before_head="$(git -C "$root" rev-parse HEAD)"
 output="$(AUTONOMOUS_TEST_AGENT_EXIT=7 run_fixture "$root")"
 rc=$?
 [[ $rc -eq 1 ]] || fail "child failure expected exit 1, got $rc"
-assert_contains "child failure" "$output" "agent exited 7"
+assert_contains "child failure backend" "$output" "claude exited 7"
 [[ "$(git -C "$root" rev-parse HEAD)" == "$before_head" ]] || fail "child failure created a commit"
 
 if ((failures)); then
