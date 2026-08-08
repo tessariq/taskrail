@@ -330,9 +330,11 @@ git_control_snapshot() {
   [[ "$git_dir" == /* ]] || git_dir="$ROOT/$git_dir"
   {
     git config --show-origin --list
+    git ls-files --stage -v
     for root in "$common" "$git_dir"; do
       find "$root" -type f -print0
     done | sort -zu | while IFS= read -r -d '' file; do
+      [[ "$file" == "$git_dir/index" ]] && continue
       printf 'file\t%s\t' "$file"
       sha256sum "$file"
     done

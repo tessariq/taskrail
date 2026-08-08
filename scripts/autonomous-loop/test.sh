@@ -122,6 +122,13 @@ else
 fi
 printf '%s\n' 'id: T-900-fixture-task' "status: $status" 'spec_ref: specs/v0.5.0.md#test-area' 'dependencies: []' >"$AUTONOMOUS_TEST_ROOT/planning/tasks/T-900-fixture-task.md"
 printf '%s\n' 'active_spec_path: specs/v0.5.0.md' 'current_task:' "last_verification_result: $result for T-900-fixture-task at 2026-08-08T00:00:00Z" >"$AUTONOMOUS_TEST_ROOT/planning/STATE.md"
+if [[ "${AUTONOMOUS_TEST_ACTION:-}" == "index-refresh" ]]; then
+  touch -d '@1' "$AUTONOMOUS_TEST_ROOT/.gitignore"
+  git status --short >/dev/null
+fi
+if [[ "${AUTONOMOUS_TEST_ACTION:-}" == "index-flag" ]]; then
+  git update-index --assume-unchanged .gitignore
+fi
 mkdir -p "$AUTONOMOUS_TEST_ROOT/planning/artifacts/verify/T-900-fixture-task/20260808T000000Z"
 if [[ "${AUTONOMOUS_TEST_ACTION:-}" == "forged-report" ]]; then
   extra=',"unexpected":"pass for T-900-fixture-task"'
@@ -338,6 +345,20 @@ rc=$?
 [[ $rc -eq 1 ]] || fail "Git control mutation expected exit 1, got $rc"
 assert_contains "Git control mutation" "$output" "changed Git control state"
 [[ "$(git -C "$root" rev-parse HEAD)" == "$before_head" ]] || fail "Git control mutation created a commit"
+
+root="$(create_fixture index-refresh)"
+output="$(AUTONOMOUS_TEST_ACTION=index-refresh run_fixture "$root" --max-iterations 1)"
+rc=$?
+[[ $rc -eq 0 ]] || fail "index refresh exited $rc: $output"
+assert_contains "index refresh" "$output" "completed and pushed: T-900-fixture-task"
+
+root="$(create_fixture index-flag-mutation)"
+before_head="$(git -C "$root" rev-parse HEAD)"
+output="$(AUTONOMOUS_TEST_ACTION=index-flag run_fixture "$root")"
+rc=$?
+[[ $rc -eq 1 ]] || fail "index flag mutation expected exit 1, got $rc"
+assert_contains "index flag mutation" "$output" "changed Git control state"
+[[ "$(git -C "$root" rev-parse HEAD)" == "$before_head" ]] || fail "index flag mutation created a commit"
 
 root="$(create_fixture forged-report)"
 before_head="$(git -C "$root" rev-parse HEAD)"
