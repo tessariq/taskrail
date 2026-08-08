@@ -7,7 +7,7 @@ spec_ref: specs/v0.5.0.md#adversarial-spec-to-task-decomposition
 dependencies:
     - T-162-productize-digest-bound-post-spec-review-lenses
     - T-251-ship-the-outcome-focused-task-authoring-prompt
-    - T-240-implement-the-normative-review-schema-decoders
+    - T-274-decode-reviewed-decomposition-bundles-strictly
 updated_at: "2026-08-06T13:46:30Z"
 ---
 
@@ -28,6 +28,9 @@ ImportDraft v2 writer performs any repository mutation.
 - A3. Any stale digest, unknown/missing field, unreviewed change, bad pass sequence,
   wrong prompt role/contract/source shape, deferred high/medium finding, or 1 MiB
   violation fails before writes.
+- A4. Validation mechanically proves schema, binding, graph, trace, and review
+  completeness only. A structurally valid bundle is not certified as semantically
+  well-sized; that judgment belongs to T-251 and the reviewed decomposition flow.
 
 ## Verification Notes
 
@@ -36,5 +39,7 @@ ImportDraft v2 writer performs any repository mutation.
   and changed-final-byte fixtures prove each relation.
 - A3: mutation corpus includes missing/malformed prompt bindings, snapshots the
   repository before every refusal, and confirms no task/state/review publication.
+- A4: a shape-valid but semantically oversized fixture passes mechanical
+  validation without emitting any semantic-size certification.
 
 ## Implementation Notes

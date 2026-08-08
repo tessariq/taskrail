@@ -18,8 +18,11 @@ from the later CAS writer that applies a reviewed proposal.
 
 ## Acceptance
 
-- A1. The prompt requires one independently meaningful outcome and invariant,
-  observable actor/precondition/success/failure boundaries, and no file-layer dump.
+- A1. The prompt owns the semantic sizing rubric: require one independently
+  meaningful outcome and invariant, observable actor/precondition/success/failure
+  boundaries, and explicit integration ownership; split bundled outcomes and
+  merge fragments that are not independently valuable, without using file count,
+  criterion count, or implementation layers as size proxies.
 - A2. Every criterion maps setup/action/expected observation to the cheapest
   sufficient evidence and a public or durable oracle, with regression proof where relevant.
 - A3. It rejects non-todo authoring, vague suite-pass evidence, unnecessary internal
@@ -27,8 +30,9 @@ from the later CAS writer that applies a reviewed proposal.
 
 ## Verification Notes
 
-- A1/A2: aligned, broad, fragmented, shallow-oracle, boundary, and regression
-  fixtures receive expected rubric decisions in prompt contract tests.
+- A1/A2: aligned, oversized, fragmented, integration-owner, shallow-oracle,
+  boundary, and regression fixtures receive expected rubric decisions in prompt
+  contract tests, including rejection of mechanical size proxies.
 - A3: non-todo and over-prescribed proposals demonstrate refusal while prompt
   rendering remains read-only.
 

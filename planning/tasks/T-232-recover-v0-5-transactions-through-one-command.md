@@ -5,7 +5,7 @@ status: todo
 priority: high
 spec_ref: specs/v0.5.0.md#repository-discovery-locking-and-recovery
 dependencies:
-    - T-156-protect-existing-semantic-writers-with-snapshot
+    - T-277-add-durable-transaction-journals-and-recovery
     - T-213-define-the-uniform-agent-machine-api
 updated_at: "2026-08-06T13:46:30Z"
 ---

@@ -1,36 +1,35 @@
 ---
 id: T-224-promote-local-taskrail-state-into-committed
-title: Promote local Taskrail state into committed planning
+title: Promote local semantic state into committed planning
 status: todo
 priority: high
 spec_ref: specs/v0.5.0.md#local-planning-mode
 dependencies:
-    - T-166-publish-workflow-review-index-and-reports-with-cas
+    - T-305-publish-workflow-review-reports-and-memory
     - T-247-install-packaged-skills-safely-in-local-mode
 updated_at: "2026-08-08T08:40:49Z"
 ---
 
-# T-224-promote-local-taskrail-state-into-committed Promote local Taskrail state into committed planning
+# T-224-promote-local-taskrail-state-into-committed Promote local semantic state into committed planning
 
 ## Description
 
-Provide a dry-run-first adoption boundary that converts one valid ignored local
-Taskrail ledger into reviewable committed planning without losing task identity,
-rewriting human bodies, publishing local artifacts, or exposing data before the
-committed candidate validates.
+Provide the dry-run-first transactional boundary that converts one valid ignored
+local semantic store into reviewable committed planning. Preserve installed skill
+bytes and exclusions as an explicit pending-skill state; T-315 owns all consented
+skill visibility changes, including the combined path.
 
 ## Acceptance
 
-- `local promote` preview reports every source/destination/reference/exclusion
-  change, linked-worktree consequence, collision, and committed validation result
-  with zero writes. Spec/state/task/note/review/prompt entries use managed logical
-  paths; config/artifact/runtime entries use repository-root physical paths, with
-  physical local artifact/runtime values confined to the transient result.
-  Writes/preserved reject artifact/runtime kinds, and excluded rejects every
-  published semantic/config kind.
+- `local promote` preview reports every semantic source/destination/reference/
+  exclusion change, linked-worktree consequence, collision, and committed
+  validation result with zero writes. Managed semantic entries use logical paths;
+  config/artifact/runtime entries use repository-root physical paths, with local
+  artifact/runtime values confined to the transient result.
 - Apply rejects mixed state, destination/index conflicts, unsafe paths, source
-  changes during the transaction, affected sibling installations, and ambiguous
-  skill promotion. Historical origin drift alone is an advisory, not refusal.
+  changes during the transaction, affected sibling installations, and any skill
+  state that cannot be preserved exactly. Historical origin drift alone is an
+  advisory, not refusal.
 - The transactional candidate switches config mode while preserving the logical
   path namespace plus task IDs/statuses/timestamps/bodies, excludes local
   artifacts/runtime data, and publishes specs/tasks/state/config plus durable
@@ -40,18 +39,17 @@ committed candidate validates.
   failure retains shared recovery so committed and local semantic stores are not
   simultaneously accepted.
 - Success leaves committed planning visible for operator review/staging but makes
-  no Git commit. Installed local skills already occupy normal assistant paths;
-  `--with-skills` is the only consent to validate their unchanged bytes and remove
-  exact exclusions, while promotion without it leaves skill bytes and exclusions
-  untouched. Exact text/JSON candidate/result fields agree between preview and
-  apply.
-- Semantic promotion without skills leaves an explicit pending-skill state. In
-  that state only, a later `local promote --with-skills` preview/apply is valid
-  against committed storage, reports empty semantic arrays, and removes exact
-  skill exclusions without changing file bytes; omission of the flag, no pending
-  exclusions, or a repeated call is `unsupported`.
-- Preview `promote` actions describe candidates only; apply plus top-level
-  `applied:true` is the sole claim that visibility changed.
+  no Git commit. Installed local skills at normal assistant paths and all their
+  managed exclusions remain byte-identical, leaving the sole valid committed-mode
+  pending-skill state for T-315. Repositories without installed managed skills
+  leave no pending state.
+- Result `writes`, `preserved`, and `excluded` kinds obey the closed v0.5 semantic
+  contract: writes/preserved never classify artifact/runtime as published, and
+  excluded never classifies published semantic/config content. Skill actions are
+  `preserve_local` or `absent`; this task never reports `promote`.
+- Preview actions describe candidates only; apply plus top-level `applied:true`
+  is the sole claim that semantic visibility changed. Exact
+  text/JSON candidate fields and validation agree between preview and apply.
 
 ## Verification Notes
 
@@ -59,10 +57,10 @@ committed candidate validates.
   collision, source races, publication faults, exclusion-removal faults, rollback,
   and successful validation in temporary Git repositories.
 - Compare exact semantic task/spec/state snapshots before and after promotion and
-  prove artifacts plus unconsented skills remain local; consented skill promotion
-  changes visibility without changing destination bytes.
-- Exercise immediate combined promotion and deferred skill-only promotion,
-  including preview, apply, second-call refusal, and interruption recovery over
-  typed semantic/worktree/Git snapshots.
+  prove artifacts/runtime and installed skill bytes/exclusions remain local while
+  committed semantic files become visible without a Git commit.
+- Exercise absent, valid installed, and ambiguous skill states to prove semantic
+  promotion either preserves an exact T-315-compatible pending state or refuses
+  atomically; consented combined/deferred visibility is tested by T-315.
 
 ## Implementation Notes

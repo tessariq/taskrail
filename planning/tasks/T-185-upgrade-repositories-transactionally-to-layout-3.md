@@ -14,7 +14,7 @@ dependencies:
     - T-181-detect-durable-physical-task-path-references
     - T-184-recover-retained-semantic-transactions-explicitly
     - T-182-define-exact-v0-6-machine-result-schemas
-    - T-157-upgrade-repositories-transactionally-to-layout-2
+    - T-280-publish-layout-2-through-the-durable-migration
     - T-219-prepare-inherited-writers-for-layout-3
     - T-226-bootstrap-a-configurable-human-owned-ideas-sidecar
 updated_at: "2026-08-04T23:06:23Z"

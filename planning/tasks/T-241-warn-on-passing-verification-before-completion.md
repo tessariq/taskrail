@@ -5,7 +5,7 @@ status: todo
 priority: medium
 spec_ref: specs/v0.5.0.md#verify-lifecycle-advisory
 dependencies:
-    - T-158-bind-completion-and-verification-with-stable
+    - T-286-bind-verification-to-completion-and-adopt-legacy
 updated_at: "2026-08-06T13:46:30Z"
 ---
 

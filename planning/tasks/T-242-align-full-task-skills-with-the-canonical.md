@@ -35,6 +35,11 @@ lifecycle transition.
   conventions, but only caller-owned instruction outside managed planning
   authorizes exposing a local Taskrail identity/path in commit metadata;
   outcome-required product bytes do not independently authorize them.
+- A5. Before invoking `start`, every full-task skill applies the T-251 sizing
+  rubric and stops for reviewed replanning on bundled outcomes, non-valuable
+  fragments, or unclear integration ownership. Follow-ups remain limited to newly
+  discovered independently meaningful out-of-scope outcomes, never unfinished
+  pieces of the selected outcome.
 
 ## Verification Notes
 
@@ -45,5 +50,8 @@ lifecycle transition.
   prove subject-command reads, exact Git tree/commit provenance, unchanged Git
   identity/configuration, trusted public-reference authorization, product-byte
   exceptions, and current-run self-authorization refusal.
+- A5: executable oversized, fragmented, unclear-integration, in-scope-discovery,
+  and valid-follow-up fixtures prove no lifecycle writer runs before replanning
+  and no required selected-task scope escapes into a follow-up.
 
 ## Implementation Notes

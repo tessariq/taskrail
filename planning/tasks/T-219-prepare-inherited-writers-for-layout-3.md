@@ -5,7 +5,7 @@ status: todo
 priority: high
 spec_ref: specs/v0.6.0.md#layout-3-migration-and-compatibility
 dependencies:
-    - T-157-upgrade-repositories-transactionally-to-layout-2
+    - T-280-publish-layout-2-through-the-durable-migration
     - T-178-load-live-and-archived-tasks-as-one-immutable
     - T-179-resolve-stable-task-references-across-every
     - T-182-define-exact-v0-6-machine-result-schemas

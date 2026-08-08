@@ -5,7 +5,6 @@ status: todo
 priority: medium
 spec_ref: specs/v0.5.0.md#safe-review-artifact-publication
 dependencies:
-    - T-215-add-the-generic-review-artifact-publisher
     - T-162-productize-digest-bound-post-spec-review-lenses
 updated_at: "2026-08-08T08:40:49Z"
 ---

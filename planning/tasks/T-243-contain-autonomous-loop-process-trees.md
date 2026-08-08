@@ -1,35 +1,47 @@
 ---
 id: T-243-contain-autonomous-loop-process-trees
-title: Contain autonomous loop process trees
+title: Contain autonomous loop process trees on Unix
 status: todo
 priority: high
 spec_ref: specs/v0.5.0.md#cross-platform-autonomous-loop
 dependencies:
-    - T-171-contain-and-pin-autonomous-loop-child-processes
+    - T-309-launch-loop-children-with-exact-prompt-transport
 updated_at: "2026-08-06T13:46:30Z"
 ---
 
-# T-243-contain-autonomous-loop-process-trees Contain autonomous loop process trees
+# T-243-contain-autonomous-loop-process-trees Contain autonomous loop process trees on Unix
 
 ## Description
 
-Establish honest cross-platform containment and optional per-child timeout behavior
-after direct child launch is available, without claiming control over undetectable
-privileged escape.
+Contain each loop child and its detectable descendants in an isolated Unix
+process group established before untrusted code runs. Provide bounded termination
+and survivor evidence for the later portable integration without claiming control
+over privileged or undetectable `setsid` escape.
 
 ## Acceptance
 
-- A1. Unix process groups and Windows kill-on-close jobs are established before
-  untrusted child code runs or launch refuses.
-- A2. Leader exit, stream failure, signal, timeout, and interruption drain assigned
-  descendants, request termination, wait ten seconds, then force survivors.
-- A3. Detected escape/unassignable/surviving processes and timeout report exact
-  process violations and `child_failed`; omission of timeout remains unlimited.
+- On supported Unix platforms, launch establishes a new process group before the
+  child can execute untrusted code; inability to establish or verify that group
+  refuses launch.
+- Leader exit, launch/stream failure, signal, timeout request, and operator
+  interruption all enter cleanup: drain assigned descendants, request group
+  termination, wait up to ten seconds, force remaining members, and reap what the
+  platform exposes.
+- Cleanup returns deterministic evidence for normal drain, requested termination,
+  forced termination, detected escape/unassignable members, and survivors. It
+  never reports containment success while an assigned process is known alive.
+- The Unix result states the honest boundary: deliberate privileged or
+  undetectable session escape may evade observation and is not certified as
+  contained.
 
 ## Verification Notes
 
-- A1: native Linux/macOS/Windows helpers prove containment exists before child action.
-- A2: normal/signal/hang/descendant trees provide observable cleanup and timing evidence.
-- A3: supported escape/survivor probes and dry-run/result goldens prove honest bounds.
+- Native Linux and macOS helpers prove the process group exists before the first
+  child action and launch refusal occurs when setup cannot be guaranteed.
+- Normal exit, leader-first exit, signal, hanging streams, nested descendants,
+  ten-second escalation, interruption, and supported escape/survivor probes
+  record PIDs/groups and demonstrate no known assigned process survives return.
+- Platform-specific tests assert stable evidence consumed by T-311 without
+  asserting control over undetectable or privileged escape.
 
 ## Implementation Notes

@@ -1,6 +1,6 @@
 ---
 id: T-158-bind-completion-and-verification-with-stable
-title: Bind completion and verification with stable identities
+title: Persist stable completion identities legally
 status: todo
 priority: high
 spec_ref: specs/v0.5.0.md#canonical-transition-order
@@ -10,42 +10,39 @@ dependencies:
 updated_at: "2026-08-04T21:32:13Z"
 ---
 
-# T-158-bind-completion-and-verification-with-stable Bind completion and verification with stable identities
+# T-158-bind-completion-and-verification-with-stable Persist stable completion identities legally
 
 ## Description
 
-Implement completion and chained verification identities from the canonical
-contract, persisting exact current evidence across task, state, JSON, report,
-notes, and artifact names. Lifecycle prose ownership and pass-before-complete
-warning are separate tasks.
+Implement completion identity creation and the closed legal persisted metadata
+shapes consumed by lifecycle writers and validation. Verification IDs, chains,
+artifacts, completion binding, legacy adoption, and advisory warnings are separate
+dependent outcomes.
 
 ## Acceptance
 
-- Complete creates a random lower-case 32-hex completion ID and clears all prior
-  task-level verification fields while preserving repository-level history.
-- Every verify creates a preflight-absent random lower-case 32-hex verification ID,
-  records the exact prior task verification ID or null, and writes the artifact,
-  note, task tuple, state tuple, command result, and report consistently.
-- First passing verification of a legacy completed task atomically adopts a
-  completion ID before binding; failure never adopts one, and fault leaves all
-  surfaces unchanged.
-- Pass before completion remains unbound evidence without status change; T-241
-  owns its advisory representation.
-- Task, state, command JSON, canonical summary, task note, complete artifact
-  path/report, and report fields agree after fresh/stale pass, completed audit
-  fail, repeated complete, and recovery-only verify.
-- Follow-ups created by verification carry no unattended authorization and
-  therefore omit `loop_policy` and `loop_reason` and remain on implicit hold until
-  a direct operator action allows them.
+- Each successful `complete` creates a preflight-absent random lower-case 32-hex
+  `completion_id`, returns it in the exact complete result, and persists it on the
+  selected completed task in the same transaction.
+- Complete clears every prior task-level verification field while preserving the
+  repository-level latest verification tuple and unrelated task history exactly.
+- Shared strict decoding and validation accept only the closed lifecycle metadata
+  combinations: optional keys are omitted rather than null/empty, IDs have the
+  required form, and partial or status-incompatible completion/verification shapes
+  are invalid.
+- `start`, `block`, `unblock`, and task release preserve any existing completion
+  and verification fields exactly; repeating complete creates a new completion ID
+  and again clears task-level verification evidence.
+- This task exposes completion primitives used by later verification binding but
+  does not create verification IDs, reports, notes, artifact names, or adoption.
 
 ## Verification Notes
 
-- Map each criterion to setup/action/public observation/evidence across focused
-  transition tests, exact golden outputs, filesystem snapshots, and a manual
-  lifecycle matrix.
-- Use fault injection and frozen clocks to prove atomic legacy adoption, direct
-  predecessor chaining, and ID/set-based freshness rather than timestamps.
-- Confirm verification-created follow-ups remain implicitly held without changing
-  any existing task's `loop_policy` or `loop_reason`.
+- Use deterministic ID injection to assert complete JSON/task persistence, fresh ID
+  replacement, task-level verification clearing, and repository-history retention.
+- Run a table over every allowed and forbidden persisted metadata combination,
+  including omitted/null/empty fields and all lifecycle statuses.
+- Snapshot tasks/state across start, block, unblock, release, and repeated complete;
+  inject complete publication failures to prove no ID is partially persisted.
 
 ## Implementation Notes

@@ -14,35 +14,33 @@ updated_at: "2026-08-04T21:32:13Z"
 
 ## Description
 
-Implement only the guarded `task author` writer and make existing task-producing
-surfaces consume the reviewed body contract delivered by T-251.
+Implement only the guarded `task author` writer that applies one reviewed body
+proposal to an existing todo task. Producer alignment remains T-303 and T-304.
 
 ## Acceptance
 
-- Task author requires the expected exact digest, layout 2 and writer lock,
+- A1. `task author` requires the expected exact digest, layout 2 and writer lock,
   rechecks todo status/bytes, and atomically changes only Description, Acceptance,
   and Verification Notes.
-- Proposals contain exactly the three non-empty ordered level-2 sections with no
+- A2. Proposals contain exactly the three non-empty ordered level-2 sections with no
   frontmatter, H1, Implementation Notes, or other level-2 heading; successful
   text/JSON preserves proposal section bytes and reports the exact before/after
   digests, canonical unified-diff string, validation, and applied state.
-- Frontmatter, H1, identity, lifecycle fields, and Implementation Notes remain
+- A3. Frontmatter, H1, identity, lifecycle fields, and Implementation Notes remain
   byte-equivalent, including `loop_policy` and `loop_reason`; conflict, validation
-  failure, interruption, or non-todo prompt rendering writes nothing.
-- Task-new scaffolding and every task-producing built-in, prompt, and skill cite
-  or emit that contract, including legacy v1 import/follow-up paths and reviewed
-  v2 decomposition.
-- Body text and body proposals cannot authorize unattended execution; only the
+  failure, interruption, or non-todo target writes nothing.
+- A4. Body text and body proposals cannot authorize unattended execution; only the
   dedicated direct loop-policy commands may change the paired frontmatter fields.
-- Dry-run and JSON report a deterministic selected-task-only diff; malformed
+- A5. Dry-run and JSON report a deterministic selected-task-only diff; malformed
   headings, frontmatter/H1, ignored artifact paths, and forbidden changes are
   rejected.
 
 ## Verification Notes
 
-- Map criteria to digest/status races, forbidden changes, duplicate headings,
-  rollback, loop-policy escalation attempts, successful byte preservation, and
-  golden normal/follow-up/v1/v2 task fixtures.
-- Manually apply a reviewed proposal and confirm exact machine-managed-byte preservation.
+- A1-A5: digest/status races, malformed proposals, forbidden-field and loop-policy
+  escalation attempts, rollback faults, and a successful dry-run/apply pair prove
+  exact diff/digest and managed-byte preservation.
+- CLI sandbox evidence applies one reviewed proposal and observes only the three
+  authorized body sections change.
 
 ## Implementation Notes

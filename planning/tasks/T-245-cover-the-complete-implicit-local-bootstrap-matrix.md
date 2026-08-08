@@ -7,7 +7,8 @@ spec_ref: specs/v0.5.0.md#local-planning-mode
 dependencies:
     - T-161-apply-reviewed-task-bodies-with-compare-and-swap
     - T-163-validate-and-apply-importdraft-v2-transactionally
-    - T-172-enforce-autonomous-loop-lifecycle-and-delivery
+    - T-287-initialize-ignored-local-planning-storage-durably
+    - T-314-integrate-loop-continuation-and-terminal
     - T-238-mutate-task-local-loop-policy-safely
     - T-239-edit-exact-id-dependencies-safely
 updated_at: "2026-08-06T13:46:30Z"

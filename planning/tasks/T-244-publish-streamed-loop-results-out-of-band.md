@@ -5,7 +5,7 @@ status: todo
 priority: high
 spec_ref: specs/v0.5.0.md#cross-platform-autonomous-loop
 dependencies:
-    - T-172-enforce-autonomous-loop-lifecycle-and-delivery
+    - T-314-integrate-loop-continuation-and-terminal
 updated_at: "2026-08-06T13:46:30Z"
 ---
 

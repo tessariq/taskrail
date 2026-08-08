@@ -7,7 +7,7 @@ spec_ref: specs/v0.6.0.md#archive-eligibility-and-verification-metadata
 dependencies:
     - T-175-implement-arbitrary-width-generated-task-keys
     - T-182-define-exact-v0-6-machine-result-schemas
-    - T-158-bind-completion-and-verification-with-stable
+    - T-286-bind-verification-to-completion-and-adopt-legacy
 updated_at: "2026-08-04T23:06:23Z"
 ---
 

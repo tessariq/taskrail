@@ -7,7 +7,9 @@ spec_ref: specs/v0.5.0.md#task-implementation-prompt
 dependencies:
     - T-217-release-interrupted-active-work-safely
     - T-241-warn-on-passing-verification-before-completion
-    - T-250-render-prompts-from-storage-neutral-context
+    - T-297-ship-complete-storage-neutral-prompt-rendering
+    - T-251-ship-the-outcome-focused-task-authoring-prompt
+    - T-303-align-native-task-producers-with-the-body-contract
 updated_at: "2026-08-08T08:40:49Z"
 ---
 
@@ -53,6 +55,13 @@ guidance. Packaged full-task skill command execution is owned by T-242.
 - Prompt guidance inventories existing repository primitives, stops on material
   ambiguity, and traces requirements to observable executable evidence before
   implementation.
+- Before `start`, the workflow applies the T-251 semantic sizing rubric and stops
+  for reviewed replanning when the selected task bundles independent outcomes,
+  fragments one outcome, or leaves integration ownership unclear. It does not
+  rewrite scope after lifecycle work begins.
+- Follow-ups are limited to newly discovered, independently meaningful out-of-scope
+  outcomes; they cannot carry fragments required to complete, integrate, or verify
+  the selected outcome.
 - Committed mode delivers implementation plus generated planning bytes; local
   mode commits visible product changes only and leaves a valid ignored Taskrail
   lifecycle/verification outcome.
@@ -75,5 +84,8 @@ guidance. Packaged full-task skill command execution is owned by T-242.
   and unchanged Git identity/configuration.
 - Manually render path-valued context and exercise success, blocked, rework, and
   partial-completion instructions without provider invocation by Taskrail.
+- Exercise oversized, fragmented, and unclear-integration selections to prove the
+  pre-start stop/replan branch, plus in-scope and independently meaningful
+  out-of-scope discoveries to prove follow-up routing.
 
 ## Implementation Notes

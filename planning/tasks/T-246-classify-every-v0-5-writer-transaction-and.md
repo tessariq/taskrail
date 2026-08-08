@@ -5,11 +5,14 @@ status: todo
 priority: high
 spec_ref: specs/v0.5.0.md#repository-discovery-locking-and-recovery
 dependencies:
-    - T-224-promote-local-taskrail-state-into-committed
+    - T-291-prove-inherited-command-parity-in-local-storage
     - T-231-inspect-and-clear-stale-repository-locks-safely
     - T-244-publish-streamed-loop-results-out-of-band
-    - T-245-cover-the-complete-implicit-local-bootstrap-matrix
-    - T-255-bind-review-artifacts-to-resolved-prompt-templates
+    - T-298-bind-task-review-publication-to-resolved-prompts
+    - T-299-bind-spec-review-publication-to-resolved-prompts
+    - T-300-bind-decomposition-publication-to-resolved-prompts
+    - T-305-publish-workflow-review-reports-and-memory
+    - T-315-promote-local-packaged-skills-with-explicit
 updated_at: "2026-08-08T08:40:49Z"
 ---
 

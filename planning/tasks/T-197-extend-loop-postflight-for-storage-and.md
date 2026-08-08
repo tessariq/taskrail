@@ -8,7 +8,7 @@ dependencies:
     - T-194-add-explicit-archive-and-restore-commands
     - T-188-add-cancellation-provenance-and-dependency
     - T-196-integrate-stable-references-with-rename-prompts
-    - T-172-enforce-autonomous-loop-lifecycle-and-delivery
+    - T-314-integrate-loop-continuation-and-terminal
 updated_at: "2026-08-04T23:06:23Z"
 ---
 

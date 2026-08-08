@@ -24,6 +24,13 @@ and remediation task is complete. Do not tag or claim current until it passes.
   lightweight SDD handoff, task-local loop policy, docs, and release notes.
 - Coverage is 100 percent, every structural signal has a disposition, and
   independent semantic/adversarial review leaves no blocker.
+- Representative decomposition, existing-task review, pre-start replan, and
+  follow-up-routing evidence demonstrates the T-251 sizing behavior for aligned,
+  oversized, fragmented, and integration-owner cases. Sampling supports the
+  release judgment but does not claim exhaustive semantic proof.
+- Every structural sizing-adjacent signal is dispositioned as evidence for review,
+  not as proof of semantic size; counts, graph shape, coverage, and successful
+  mechanical bundle validation cannot by themselves satisfy the semantic gate.
 - Final task, spec, decomposition, and workflow review evidence carries valid
   role-mandated prompt-template bindings; built-in and replacement publication
   pass, stale replacement publication fails, and final planning reviews bind the
@@ -68,6 +75,9 @@ and remediation task is complete. Do not tag or claim current until it passes.
 - Map each criterion to the semantic matrix, command logs, remote URLs,
   Agent Skills/SDD/loop-policy/prompt-binding evidence, native/manual reports,
   Git/task dependency observations, and final fresh verification.
+- Record representative sizing fixtures and explicit dispositions for each
+  structural signal, including the semantic evidence used or the reason it does
+  not establish task size.
 - In a sandbox create a standalone blocker, add only the gate-to-remediation
   dependency, prove no cycle and gate ineligibility, complete it, then restart
   review.

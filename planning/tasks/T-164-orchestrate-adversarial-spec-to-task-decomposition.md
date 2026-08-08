@@ -6,7 +6,8 @@ priority: high
 spec_ref: specs/v0.5.0.md#adversarial-spec-to-task-decomposition
 dependencies:
     - T-163-validate-and-apply-importdraft-v2-transactionally
-    - T-255-bind-review-artifacts-to-resolved-prompt-templates
+    - T-300-bind-decomposition-publication-to-resolved-prompts
+    - T-304-align-imported-and-decomposed-task-bodies
 updated_at: "2026-08-04T21:32:13Z"
 ---
 
@@ -26,6 +27,10 @@ two-pass bound, and hand an approved manifest to the v2 writer.
 - Every normative requirement has one quote-or-lines trace source and task/no-task
   disposition; every trace/draft key is bidirectionally valid and every task body
   follows the shared authoring contract.
+- Decomposition applies the T-251 rubric across the bundle: split independently
+  valuable outcomes, merge fragments that cannot deliver value alone, preserve
+  coherent acceptance boundaries, and assign integration behavior and ownership
+  explicitly rather than leaving cross-task assembly implicit.
 - Decomposition and review artifacts cannot authorize unattended execution;
   proposed tasks omit `loop_policy` and `loop_reason` and arrive implicitly held.
 - Reviews record fresh-process/context or explicitly accepted same-context mode
@@ -42,7 +47,8 @@ two-pass bound, and hand an approved manifest to the v2 writer.
 ## Verification Notes
 
 - Map criteria to active/inactive fixture sessions, requirement coverage oracles,
-  duplicate-task detection, loop-policy escalation rejection, context metadata,
+  duplicate-task detection, oversized/fragmented bundle findings, explicit
+  integration ownership, loop-policy escalation rejection, context metadata,
   subject/template digest mutations, prompt changes between passes, pass-limit
   stops and explicitly initiated restarts, post-apply validation, coverage, and
   tracked handoff diffs.

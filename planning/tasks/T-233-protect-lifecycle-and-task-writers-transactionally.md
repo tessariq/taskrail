@@ -1,6 +1,6 @@
 ---
 id: T-233-protect-lifecycle-and-task-writers-transactionally
-title: Protect lifecycle and task writers transactionally
+title: Protect lifecycle and state-selection writers transactionally
 status: todo
 priority: high
 spec_ref: specs/v0.5.0.md#repository-discovery-locking-and-recovery
@@ -10,28 +10,35 @@ dependencies:
 updated_at: "2026-08-06T13:46:30Z"
 ---
 
-# T-233-protect-lifecycle-and-task-writers-transactionally Protect lifecycle and task writers transactionally
+# T-233-protect-lifecycle-and-task-writers-transactionally Protect lifecycle and state-selection writers transactionally
 
 ## Description
 
-Retrofit existing lifecycle, verification, task, dependency, and state writers to
-the shared normal transaction substrate with explicit write sets and capabilities.
+Route `next`, `start`, `complete`, `block`, and `unblock` through the shared normal
+transaction substrate. This task owns lifecycle and state-selection publication;
+verification/follow-up and inherited task mutation writers are separate slices.
 
 ## Acceptance
 
-- A1. Each writer locks the correct repository, snapshots the complete consumed
-  set, validates candidates before publication, and rewrites only declared files.
-- A2. Every handled write/post-validation failure compare-and-swap rolls back to
-  the original coherent task/state result or reports retained recovery evidence.
-- A3. Non-selected tasks remain byte-identical and delegated writers cannot exceed
-  the selected command/task/field capability.
+- `next`, `start`, `complete`, `block`, and `unblock` acquire the discovered
+  repository lock, snapshot their complete task/state read and write sets, and
+  validate the full candidate ledger before publication.
+- Each command publishes only its declared task and/or state files; non-selected
+  task bytes and unrelated state history remain unchanged.
+- Handled publication or post-validation failure compare-and-swap restores the
+  original coherent bytes, while a concurrent-byte conflict returns the common
+  partial-write/rollback evidence without overwriting the external edit.
+- Direct and delegated execution enforce the selected command, task, and field
+  capability before mutation; verification, follow-up creation, and other task
+  mutations are not implemented by this slice.
 
 ## Verification Notes
 
-- A1: writer-matrix integration tests assert lock root, read/write sets, and
-  candidate validation for committed, local, and non-Git applicable cases.
-- A2: inject failure at each publication/rollback boundary and compare all bytes.
-- A3: sentinel tasks and delegated capability negatives prove no broad save-all or
-  unrelated mutation remains.
+- Run a table-driven command matrix in committed and applicable non-Git fixtures,
+  asserting lock identity, consumed paths, candidate validation, and exact writes.
+- Inject faults at every task/state publication and rollback boundary and compare
+  original, candidate, and retained bytes plus schema-1 error snapshots.
+- Use sentinel tasks and delegated-capability negatives to prove no save-all or
+  cross-task mutation remains.
 
 ## Implementation Notes

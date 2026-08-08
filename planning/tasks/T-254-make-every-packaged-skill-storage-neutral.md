@@ -6,14 +6,17 @@ priority: high
 spec_ref: specs/v0.5.0.md#storage-neutral-packaged-skills
 dependencies:
     - T-162-productize-digest-bound-post-spec-review-lenses
-    - T-165-maintain-bounded-workflow-adversarial-review
+    - T-306-ship-the-sandboxed-workflow-adversarial-review
     - T-202-ship-the-lightweight-sdd-handoff-skill
-    - T-213-define-the-uniform-agent-machine-api
+    - T-273-complete-machine-api-consumer-compatibility
     - T-216-ship-digest-bound-existing-task-review
-    - T-223-run-every-v0-5-command-against-local-storage
+    - T-291-prove-inherited-command-parity-in-local-storage
     - T-235-show-a-task-by-exact-id-through-active-storage
+    - T-294-show-durable-review-artifacts-through-active
     - T-242-align-full-task-skills-with-the-canonical
-    - T-247-install-packaged-skills-safely-in-local-mode
+    - T-302-refresh-local-packaged-skills-safely
+    - T-303-align-native-task-producers-with-the-body-contract
+    - T-304-align-imported-and-decomposed-task-bodies
 updated_at: "2026-08-08T08:40:49Z"
 ---
 

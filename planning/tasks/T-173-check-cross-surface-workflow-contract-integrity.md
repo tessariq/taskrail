@@ -6,7 +6,7 @@ priority: high
 spec_ref: specs/v0.5.0.md#skill-and-prompt-behavioral-contract-tests
 dependencies:
     - T-167-add-active-spec-scoped-statistics
-    - T-224-promote-local-taskrail-state-into-committed
+    - T-315-promote-local-packaged-skills-with-explicit
     - T-225-prove-local-autonomous-delivery-across-git
     - T-246-classify-every-v0-5-writer-transaction-and
     - T-249-allow-explicit-skill-evaluation-release-waivers

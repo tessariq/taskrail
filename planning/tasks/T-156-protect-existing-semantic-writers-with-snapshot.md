@@ -1,6 +1,6 @@
 ---
 id: T-156-protect-existing-semantic-writers-with-snapshot
-title: Build the shared snapshot transaction substrate
+title: Protect normal writes with snapshot transactions
 status: todo
 priority: high
 spec_ref: specs/v0.5.0.md#repository-discovery-locking-and-recovery
@@ -10,34 +10,38 @@ dependencies:
 updated_at: "2026-08-06T13:52:16Z"
 ---
 
-# T-156-protect-existing-semantic-writers-with-snapshot Build the shared snapshot transaction substrate
+# T-156-protect-existing-semantic-writers-with-snapshot Protect normal writes with snapshot transactions
 
 ## Description
 
-Build reusable normal and durable transaction primitives over the shared lock:
-complete read/write snapshots, candidate staging and validation, atomic file and
-directory publication, compare-and-swap rollback, retained recovery metadata, and
-scoped capabilities. Writer-family integration is owned by T-233 and T-234.
+Provide the normal transaction contract used by v0.5 semantic writers: under the
+shared lock, protect the complete consumed and published snapshot, validate the
+candidate before publication, and preserve concurrent external edits on handled
+failure. Delegated work receives only an explicitly narrowed write capability.
 
 ## Acceptance
 
-- Normal transactions snapshot the complete consumed/published set, validate
-  candidates before writes, and roll back handled failures without claiming crash
-  atomicity.
-- Durable transactions persist exact originals, candidates, path identities, and
-  phases before publication so shared recovery can restore, accept, or clear
-  without inference.
-- File replacement, absent-directory commit, fsync boundaries, external-edit
-  preservation, and rollback failure produce the normative snapshots and recovery
-  reference.
-- Capability objects bind repository, storage, command, selected task, executable,
-  and field/write set and cannot be widened by a delegated join.
+- A1. A normal transaction snapshots the complete consumed/published set, validates
+  the complete candidate before the first write, and commits atomically replaced
+  files while holding the repository mutation lock.
+- A2. A handled multi-file failure restores only paths still equal to this
+  transaction's candidates and reports conflicts or rollback failure without
+  claiming crash atomicity.
+- A3. Error observations expose deterministic typed snapshots for managed,
+  worktree, and Git paths with exact original, candidate, and current digests.
+- A4. A delegated capability remains bound to its repository, storage, command,
+  selected task, executable, and permitted field/write set and cannot be widened
+  by joining or nesting work.
 
 ## Verification Notes
 
-- Exercise normal and durable transaction helpers against changed bytes, absent
-  paths, no-clobber directories, interruption, rollback races, and fsync faults.
-- Prove capability narrowing and exact snapshots independently of command-specific
-  writer semantics.
+- A1: exercise successful single- and multi-file writes plus candidate-validation
+  failure and observe all-or-none managed bytes under the lock.
+- A2: induce handled publication failure and rollback races, then inspect preserved
+  external edits and exact conflict/rollback outcomes.
+- A3: compare mixed managed/worktree/Git error snapshots and deterministic digest
+  ordering against exact preflight/candidate/current bytes.
+- A4: attempt delegated widening across each bound dimension and observe refusal
+  while permitted narrowed work succeeds.
 
 ## Implementation Notes

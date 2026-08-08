@@ -6,7 +6,7 @@ priority: high
 spec_ref: specs/v0.5.0.md#task-local-loop-policy
 dependencies:
     - T-168-parse-and-validate-an-optional-autonomous-run
-    - T-233-protect-lifecycle-and-task-writers-transactionally
+    - T-282-protect-inherited-task-mutation-writers
 updated_at: "2026-08-06T13:46:30Z"
 ---
 

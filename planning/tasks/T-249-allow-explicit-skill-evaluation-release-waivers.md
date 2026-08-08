@@ -5,7 +5,7 @@ status: todo
 priority: high
 spec_ref: specs/v0.5.0.md#maintainer-skill-release-evaluations
 dependencies:
-    - T-218-add-maintainer-skill-release-evaluations
+    - T-307-run-paired-maintainer-skill-evaluations
 updated_at: "2026-08-08T08:40:49Z"
 ---
 

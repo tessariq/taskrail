@@ -1,6 +1,6 @@
 ---
 id: T-170-add-deterministic-autonomous-loop-preflight-and
-title: Add deterministic autonomous loop preflight and dry-run
+title: Add autonomous loop invocation and repository preflight
 status: todo
 priority: high
 spec_ref: specs/v0.5.0.md#cross-platform-autonomous-loop
@@ -11,57 +11,51 @@ dependencies:
 updated_at: "2026-08-08T08:40:49Z"
 ---
 
-# T-170-add-deterministic-autonomous-loop-preflight-and Add deterministic autonomous loop preflight and dry-run
+# T-170-add-deterministic-autonomous-loop-preflight-and Add autonomous loop invocation and repository preflight
 
 ## Description
 
-Implement the loop CLI contract, read-only task-local-policy selection, preflight,
-override authorization, committed/local storage selection, implementation-review
-budget resolution, and exact dry-run reporting before child execution. Exclude
-the Taskrail source checkout explicitly while supporting installed adopters.
+Establish the loop invocation parser and immutable repository-preflight snapshot
+used by dry-run and execution. Resolve invocation budgets, Git and storage context,
+and the complete control-input read set without selecting work, authorizing a
+replacement prompt, launching a child, or writing managed state.
 
 ## Acceptance
 
-- Parsing requires a child for execution, forbids one for dry-run, defaults max
-  iterations to one, accepts only positive bounds, rejects execution JSON,
-  accepts an optional positive per-child timeout, rejects retry/background
-  options, and rejects ambiguous delimiter/flag forms.
-- `--max-review-iterations` accepts only `1..5`, overrides the configured maximum
-  without changing it, remains distinct from child `--max-iterations`, and is
-  frozen in the rendered task prompt and diagnostics.
-- Preflight requires a valid clean non-bare attached worktree, equal root,
-  attached non-unborn HEAD, no in-progress task, layout 2, one valid committed or
-  local storage context, and available shared lock. Local metadata must be
-  effectively ignored, untracked, unstaged, and valid.
-- Preflight snapshots the complete local `refs/*` namespace and dynamically
-  enumerated uppercase root ref candidates in the worktree/common Git directories,
-  excluding only `COMMIT_EDITMSG`. Repository policy and
-  caller-owned provenance authorization remain semantic prompt/manual-evaluation
-  context rather than a new parsed or mechanically frozen loop input.
-- Selection matches read-only active ranking plus the exact task-local loop-policy
-  semantics; held tasks are transparent unless they block an allowed candidate,
-  and no candidate launches nothing with a clean `none` result.
-- Dry-run emits the common envelope with exact result `action`, `reason`, nullable
-  `selected_task`, non-null `tasks` and `violations`, nullable `prompt`, `git`,
-  `lock`, `storage`, `review`, `execution`, and mode-specific `delivery`; warnings remain the
-  envelope's non-null top-level array. Selected/task rows use
-  only `task_id`, `status`, `active_spec`, `source`, `effective_policy`, `reason`,
-  `eligible`, `held_dependencies`, and `disposition`; dry-run never mutates task
-  or state bytes.
-- Built-ins are inherently authorized. Replacements execute only with frozen exact
-  template SHA authorization; absent/mismatch makes dry-run invalid and a supplied
-  digest without a replacement is an argument error. Source-checkout execution is
-  rejected by the exact repository predicate.
+- Execution requires exactly one child argument vector after `--`; dry-run rejects
+  a child; execution rejects `--json`; and omitted, duplicate, misplaced, or
+  ambiguous delimiter/flag forms fail before repository access. Unsupported
+  retry or background forms are rejected rather than ignored.
+- `--max-iterations` defaults to `1` and accepts only positive integers.
+  `--max-review-iterations` accepts only `1..5` and resolves independently from
+  the child count without changing configuration. `--timeout` accepts only a
+  positive Go duration and omission remains an unlimited per-child deadline.
+- Repository preflight requires Git, a valid clean non-bare worktree with attached
+  non-unborn HEAD, equal Taskrail/worktree logical roots, layout 2, no existing
+  `in_progress` task, an available shared lock, and exactly one valid committed or
+  local storage context. Local managed paths are proven ignored, untracked,
+  unstaged, valid, and unmixed; source-checkout execution is rejected by the exact
+  `Taskfile.yml` plus `internal/toolchain/cmd/freshcheck` predicate.
+- The resulting immutable snapshot records all task/state/spec/config/layout and
+  prompt inputs, storage mode/root, configured/effective review budget and source,
+  timeout, attached ref/HEAD, index/status, complete local `refs/*`, verification
+  IDs/artifact set, and direct regular uppercase root-ref candidates from the
+  worktree and common Git directories. Enumeration is no-follow, rejects aliases
+  and special files, and excludes only `COMMIT_EDITMSG`.
+- Repository policy and caller-owned provenance authorization remain opaque
+  semantic context: preflight does not invent parsed policy fields or claim that
+  before/after snapshots can detect transient ref or reflog movement.
 
 ## Verification Notes
 
-- Map criteria to CLI table tests including omitted/valid/invalid timeout, exact dry-run goldens,
-  no-launch helper evidence, dirty/detached/unborn/bare/root/task/lock/task-policy
-  cases, and override/source boundaries.
-- Snapshot the complete managed semantic store plus visible Git index/status before
-  and after every committed/local dry-run and refused execution branch; execution
-  fixtures also snapshot all local refs and standard, arbitrary-name, and custom
-  uppercase root ref candidates, including absent/present transitions, `EVIL_REV`,
-  and alias refusal.
+- Map parser criteria to table tests proving accepted argv and every rejected
+  arity, delimiter, bound, timeout, JSON, retry, and background form without
+  repository reads or writes.
+- In temporary committed/local repositories, assert exact preflight facts for
+  clean, dirty, detached, unborn, bare, unequal-root, in-progress, lock-held,
+  mixed-storage, invalid-local, and source-checkout cases.
+- Snapshot managed bytes, index/status, all local refs, and standard, arbitrary,
+  custom, absent, aliased, and special uppercase root candidates such as
+  `EVIL_REV`; prove this foundation performs no child launch or managed write.
 
 ## Implementation Notes

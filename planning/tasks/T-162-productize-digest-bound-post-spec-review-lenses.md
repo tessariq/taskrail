@@ -6,9 +6,7 @@ priority: high
 spec_ref: specs/v0.5.0.md#post-spec-review-lenses
 dependencies:
     - T-201-make-packaged-skills-agent-skills-compliant
-    - T-215-add-the-generic-review-artifact-publisher
-    - T-250-render-prompts-from-storage-neutral-context
-    - T-255-bind-review-artifacts-to-resolved-prompt-templates
+    - T-299-bind-spec-review-publication-to-resolved-prompts
 updated_at: "2026-08-04T21:32:13Z"
 ---
 
@@ -34,6 +32,10 @@ disposition manifest.
   accepted/rejected/deferred decisions and rationale. Accepted findings name
   resulting headings, deferred findings name a future version, and unresolved
   high/medium findings forbid decomposition.
+- Lenses flag sizing only when spec prose itself prevents coherent decomposition,
+  such as inseparable outcomes, contradictory boundaries, or missing integration
+  ownership. They do not size proposed or existing tasks or duplicate the T-251,
+  decomposition, or task-review judgments.
 - Accepted spec edits are batched before any required rerun. Any spec byte edit
   stales all four lens reports and requires all four rerun against the final
   digest, while unchanged exact bytes never justify an additional lens round.
@@ -54,6 +56,8 @@ disposition manifest.
   built-in/replacement prompt bindings, publication race/alias cases, stale
   subject/template detection, complete dispositions, and forbidden-writer prompt
   mutations.
+- Include ambiguous spec-boundary and already-decomposable fixtures proving the
+  lenses report only prose-level decomposition blockers, not task-size findings.
 - Run all four lenses, edit one spec byte, prove the mixed snapshot cannot
   manifest, then rerun all four and approve final bytes.
 - Run Agent Skills conformance and package-parity checks against the installed and

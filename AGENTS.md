@@ -126,6 +126,12 @@ Guidance for coding agents working in the Taskrail repository.
   continuation prose; use task `## Implementation Notes`, blocker reasons,
   portable verification summaries/reports, or follow-up tasks.
 - Tasks under `planning/tasks/` must declare spec references and dependencies.
+- Before starting a task, require one independently meaningful outcome with a
+  bounded implementation/review/verification surface. Split independently useful
+  outcomes, preserve atomic safety and integration boundaries, and never split by
+  file, layer, discipline, phase, or numeric estimate. Re-plan oversized or
+  ambiguous work before `start`; do not defer unfinished current scope because an
+  agent exhausted context or review budget.
 - In this source checkout, run `task taskrail:check` immediately before every
   `${TASKRAIL:-taskrail}` state writer (`next`, `start`, `verify`, `complete`,
   `block`, and other commands that write tracked files). Stop on failure and

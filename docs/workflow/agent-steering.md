@@ -34,26 +34,42 @@ every planning edit.
 "Fresh context" means isolation for one required lens or pass, not repeated review
 of unchanged bytes. Confidence-seeking alone is not a trigger for another wave.
 
+## Task Readiness
+
+Before starting a task, confirm it establishes one independently meaningful
+outcome that can be implemented, reviewed, and verified as one bounded lifecycle
+attempt. Split independently useful outcomes with distinct acceptance or operator
+decisions, but keep coupled code, tests, documentation, migration, and recovery
+together when they establish value only as one observable result.
+
+Do not split by file, layer, discipline, implementation phase, or numeric effort
+estimate. When several tasks compose, one integration-capable task must own the
+end-to-end criterion and evidence. If scope is oversized or materially ambiguous,
+stop before `start` and re-plan; context or review-budget exhaustion never turns
+unfinished current scope into a follow-up.
+
 ## Autonomous Backlog
 
 1. Validate state.
 2. Select the next eligible task deterministically.
-3. Start the selected task.
-4. Implement it in a TDD loop.
-5. Run the appropriate test tiers.
-6. Run manual testing when the task changes user-visible Taskrail behavior.
-7. Create a follow-up task for unresolved backlog-worthy findings.
-8. On success, run `complete` and then `verify --result pass`.
-9. If the task cannot safely proceed, run `block --reason` and then `verify --result fail`; deliberate rework may verify fail while remaining `in_progress`.
+3. Confirm the task is ready and right-sized before starting it.
+4. Start the selected task.
+5. Implement it in a TDD loop.
+6. Run the appropriate test tiers.
+7. Run manual testing when the task changes user-visible Taskrail behavior.
+8. Create a follow-up task only for a separate, backlog-worthy outcome.
+9. On success, run `complete` and then `verify --result pass`.
+10. If the task cannot safely proceed, run `block --reason` and then `verify --result fail`; deliberate rework may verify fail while remaining `in_progress`.
 
 ## Directed Task
 
 1. Validate state.
 2. Read the requested task file.
-3. Start that task only.
-4. Implement only the requested scope.
-5. Run manual testing when the task changes visible Taskrail behavior.
-6. Finish the lifecycle branch first, then verify it through the Taskrail CLI.
+3. Confirm it is ready and right-sized before starting it.
+4. Start that task only.
+5. Implement only the requested scope.
+6. Run manual testing when the task changes visible Taskrail behavior.
+7. Finish the lifecycle branch first, then verify it through the Taskrail CLI.
 
 ## Verification Runs
 

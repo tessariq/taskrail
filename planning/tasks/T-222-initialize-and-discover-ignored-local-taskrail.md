@@ -1,44 +1,47 @@
 ---
 id: T-222-initialize-and-discover-ignored-local-taskrail
-title: Initialize and discover ignored local Taskrail storage
+title: Discover repository and active storage context
 status: todo
 priority: high
 spec_ref: specs/v0.5.0.md#local-planning-mode
 dependencies:
-    - T-234-protect-repository-and-planning-writers
+    - T-157-upgrade-repositories-transactionally-to-layout-2
 updated_at: "2026-08-05T22:04:16Z"
 ---
 
-# T-222-initialize-and-discover-ignored-local-taskrail Initialize and discover ignored local Taskrail storage
+# T-222-initialize-and-discover-ignored-local-taskrail Discover repository and active storage context
 
 ## Description
 
-Initialize and inspect personal Taskrail planning beneath `.taskrail/local/`
-without making a non-adopting repository appear dirty. Implicit writer bootstrap
-is owned by T-245.
+Discover one managed repository and construct an explicit committed/local storage
+context from any supported invocation directory. This task owns root identity,
+layout classification, logical-to-physical mapping, and mixed-state refusal;
+durable local initialization and inspection commands are separate slices.
 
 ## Acceptance
 
-- Explicit local init durably writes layout-2 local config, specs, planning,
-  notes, and strict runtime origin only after managed Git exclusions are effective;
-  T-247 owns optional local skills.
-- Plain `init --local` leaves `.agents/`, `.claude/`, and skill exclusions
-  byte-for-byte unchanged; no assistant content is part of the default scaffold.
-- Discovery preserves distinct worktree, Git/common-directory, storage-root, and
-  logical-path identities from any descendant invocation and linked worktree.
-- Tracked, staged, mixed-mode, aliased, symlink/reparse, special, conflicting, or
-  ineffectively ignored destinations refuse without partial scaffold/exclusion
-  changes.
-- Text/JSON inspection reports origin/current Git snapshots, drift, logical and
-  physical roots including prompts/runtime, exclusion scope, promotion readiness,
-  and `git clean -x/-X` risk without exposing lock secrets.
+- Discovery preserves distinct managed root, worktree root, Git directory/common
+  directory, storage root, lock root, and logical repository path identities from
+  descendant invocations and linked worktrees.
+- Layout-2 `storage_mode` selects committed physical roots or the fixed
+  `.taskrail/local/{specs,planning,prompts}` overlay while persisted and reported
+  semantic identities remain in configured logical namespaces.
+- The context exposes canonical physical config, specs, planning, prompts,
+  artifacts, and runtime paths plus repository identity needed by lock and
+  transaction callers; callers never prepend the local overlay themselves.
+- Missing/ambiguous roots, worktree/config mismatch, incompatible layout, aliases,
+  symlink/reparse or special traversal, and mixed committed/local state refuse with
+  no writes and never fall back to committed paths.
+- Applicable non-Git ancestor discovery remains supported for committed mode;
+  Git-required local behavior returns a classified capability refusal.
 
 ## Verification Notes
 
-- Use temporary ordinary/linked Git worktrees for explicit/read-only,
-  collision, exclusion, descendant-cwd, branch-drift, and rollback observations.
-- Snapshot both assistant roots and effective exclusions around plain local init.
-- Snapshot worktree/index/exclude bytes before each refusal and retain CLI golden
-  output proving visible `git status` remains clean after success.
+- Use table-driven ordinary Git, linked-worktree, custom-directory, descendant-cwd,
+  and non-Git fixtures to assert every context identity and mapping.
+- Add decoy committed/local roots, aliases, case collisions, and traversal entries
+  to prove deterministic refusal and no physical fallback.
+- Snapshot the worktree, index, and Git metadata around discovery-only success and
+  refusal to prove this foundation is read-only.
 
 ## Implementation Notes

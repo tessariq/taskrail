@@ -1,6 +1,6 @@
 ---
 id: T-240-implement-the-normative-review-schema-decoders
-title: Implement the normative review schema decoders
+title: Decode common task and spec review schemas strictly
 status: todo
 priority: high
 spec_ref: specs/v0.5.0.md#safe-review-artifact-publication
@@ -9,39 +9,37 @@ dependencies:
 updated_at: "2026-08-08T08:40:49Z"
 ---
 
-# T-240-implement-the-normative-review-schema-decoders Implement the normative review schema decoders
+# T-240-implement-the-normative-review-schema-decoders Decode common task and spec review schemas strictly
 
 ## Description
 
-Implement the single strict decoder set for every v0.5 task, spec, decomposition,
-and workflow review object before publication commands consume untrusted proposals.
+Provide the shared strict review decoding rules plus complete task-review and
+post-spec lens/manifest decoding, giving publication a trustworthy boundary for
+the first independently publishable review bundle types.
 
 ## Acceptance
 
-- A1. Decoders enforce exact fields, enums, nullability, canonical times/paths,
-  unique IDs/references, role-mandated v1 prompt IDs, lower-case template digests,
-  `builtin|replacement` source, and the 1 MiB per-file cap without normalizing bytes.
-- A2. Spec lens findings remain open observations and manifests are the only final
-  disposition authority; terminal workflow evidence cannot form reference cycles.
-  Base file evidence accepts only durable repository-relative logical product/final-
-  review paths and lexically rejects physical local-overlay paths. A contextual
-  publication validator rejects frozen artifact/proposal/runtime roots from
-  structured final-review path fields; historical reads do not re-evaluate
-  published bytes against a new active root. Free-form summary/command portability
-  remains an explicit human-review boundary. File evidence resolves to a matching
-  regular blob in the bound Git tree or immutable published review file; lexical
-  path validity alone is insufficient.
-- A3. The decoder inventory is shared by preview, apply, validation, review show,
-  workflow index derivation, and golden schema tests. Contextual path checks are
-  shared by preview/apply publication but not historical `review show`.
+- A1. Common review decoding rejects invalid framing, exact-field violations,
+  wrong nullability, malformed canonical values, unsupported schema versions, and
+  files over 1 MiB without normalizing accepted bytes.
+- A2. Task-review documents enforce exact task/spec bindings, role-mandated prompt
+  identity, portable session identity, unique findings, and the closed
+  severity/disposition vocabulary.
+- A3. Spec lens files enforce their role-specific prompt identity, common subject
+  snapshot, open observation shape, and session-wide unique finding identities.
+- A4. Spec manifests bind the fixed ordered lenses by exact digest and are the sole
+  complete disposition authority, rejecting missing, unknown, conflicting, or
+  unresolved required decisions.
 
 ## Verification Notes
 
-- A1: positive goldens plus unknown/missing/duplicate/null/oversize, wrong-role,
-  wrong-contract, malformed-digest, and invalid-source mutation cases provide
-  strict boundary evidence.
-- A2: conflicting disposition, circular evidence, physical proposal/local paths,
-  and transient-root file evidence fixtures fail deterministically.
-- A3: registry tests prove every consumer points to the same decoder/version.
+- A1: accepted-byte goldens plus unknown/missing/duplicate/null/trailing/oversize
+  and malformed canonical-value mutations demonstrate the common boundary.
+- A2: task-review positive and wrong-role, wrong-contract, duplicate-ID, enum, and
+  subject-binding cases demonstrate exact decoding.
+- A3: decode four aligned lens goldens and reject role, snapshot, session, and
+  cross-lens identity conflicts.
+- A4: exercise complete disposition coverage and digest/order bindings plus missing,
+  duplicate, unknown, and unresolved high/medium finding cases.
 
 ## Implementation Notes
