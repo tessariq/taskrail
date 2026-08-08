@@ -15,33 +15,56 @@ var nonMachineCommands = map[string]bool{
 	"help":       true,
 }
 
-// leafCommandPaths returns the canonical path of every command the CLI currently
-// constructs, so the inventory's constructed/planned split is checked against the
-// binary instead of a hand-maintained list.
-func leafCommandPaths(cmd *cobra.Command, prefix string) []string {
-	var paths []string
+// constructedCommand pairs one command the CLI builds with its canonical path.
+type constructedCommand struct {
+	path string
+	cmd  *cobra.Command
+}
+
+// constructedCommands walks the command tree once, so both the inventory's
+// constructed/planned split and the set of documents it says the binary
+// publishes are checked against the binary instead of a hand-maintained list.
+func constructedCommands(cmd *cobra.Command, prefix string) []constructedCommand {
+	var found []constructedCommand
 	for _, child := range cmd.Commands() {
-		name := child.Name()
-		if nonMachineCommands[name] {
+		if nonMachineCommands[child.Name()] {
 			continue
 		}
-		path := name
+		path := child.Name()
 		if prefix != "" {
-			path = prefix + " " + name
+			path = prefix + " " + child.Name()
 		}
-		if len(child.Commands()) == 0 {
-			paths = append(paths, path)
+		found = append(found, constructedCommand{path: path, cmd: child})
+		found = append(found, constructedCommands(child, path)...)
+	}
+	return found
+}
+
+func TestMachineRegistrationsMatchJSONCapableCommands(t *testing.T) {
+	var registrations []taskrail.MachineRegistration
+	for _, constructed := range constructedCommands(newRootCmd(), "") {
+		if constructed.cmd.Flags().Lookup("json") == nil {
 			continue
 		}
-		paths = append(paths, leafCommandPaths(child, path)...)
+		registrations = append(registrations, taskrail.MachineRegistration{
+			Command: constructed.path,
+			Surface: taskrail.MachineSurfaceStdout,
+		})
 	}
-	return paths
+	if len(registrations) == 0 {
+		t.Fatal("the CLI publishes no --json command")
+	}
+	if err := taskrail.CheckMachineRegistrations(registrations); err != nil {
+		t.Fatalf("the CLI's --json commands drifted from the v0.5 inventory:\n%v", err)
+	}
 }
 
 func TestMachineInventoryOriginMatchesConstructedCommands(t *testing.T) {
 	constructed := map[string]bool{}
-	for _, path := range leafCommandPaths(newRootCmd(), "") {
-		constructed[path] = true
+	for _, leaf := range constructedCommands(newRootCmd(), "") {
+		if len(leaf.cmd.Commands()) == 0 {
+			constructed[leaf.path] = true
+		}
 	}
 	if len(constructed) == 0 {
 		t.Fatal("the CLI constructs no commands")

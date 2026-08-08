@@ -36,14 +36,36 @@ const (
 	MachineOriginPlanned     MachineCommandOrigin = "planned"
 )
 
+// MachineJSONState records which machine document the current binary publishes
+// for an entry. It exists so the migration to the common envelope cannot be
+// claimed before it happens: only `envelope` is schema-1 coverage.
+type MachineJSONState string
+
+const (
+	// MachineJSONEnvelope publishes the schema-version-1 common document.
+	MachineJSONEnvelope MachineJSONState = "envelope"
+	// MachineJSONInherited accepts `--json` but still emits the pre-v0.5
+	// command-specific shape, which the v0.5 migration replaces.
+	MachineJSONInherited MachineJSONState = "inherited"
+	// MachineJSONAbsent publishes no machine document at all, either because the
+	// command has no `--json` yet or because the CLI does not construct it.
+	MachineJSONAbsent MachineJSONState = "absent"
+)
+
 // MachineCommandEntry is one schema-version-1 inventory entry.
 type MachineCommandEntry struct {
 	// CompanionRow is the companion registry's command cell verbatim, so a loop
 	// row that qualifies one canonical path stays distinguishable.
-	CompanionRow  string
-	Command       string
-	Surface       MachineSurface
-	Origin        MachineCommandOrigin
+	CompanionRow string
+	Command      string
+	Surface      MachineSurface
+	Origin       MachineCommandOrigin
+	// JSONState records how far the binary has taken this document, which is
+	// narrower than Origin: `start`, `complete`, and `block` are constructed
+	// commands that gain `--json` only with the v0.5 migration, and the commands
+	// that already accept `--json` still emit their inherited pre-v0.5 shape.
+	// Neither may be counted as schema-1 coverage.
+	JSONState     MachineJSONState
 	Results       []string
 	NonzeroResult string
 	Warnings      []string
@@ -171,12 +193,13 @@ func mergeCodes(groups ...[]string) []string {
 // machineEntry keeps the inventory table readable: the companion owns row,
 // results, and the nonzero-result exception, so those three stay verbatim at the
 // call site.
-func machineEntry(row, command string, origin MachineCommandOrigin, results []string, nonzero string, warnings, errors []string) MachineCommandEntry {
+func machineEntry(row, command string, origin MachineCommandOrigin, json MachineJSONState, results []string, nonzero string, warnings, errors []string) MachineCommandEntry {
 	return MachineCommandEntry{
 		CompanionRow:  row,
 		Command:       command,
 		Surface:       MachineSurfaceStdout,
 		Origin:        origin,
+		JSONState:     json,
 		Results:       results,
 		NonzeroResult: nonzero,
 		Warnings:      warnings,
@@ -184,12 +207,20 @@ func machineEntry(row, command string, origin MachineCommandOrigin, results []st
 	}
 }
 
+// built is a constructed command that accepts `--json` today and still emits its
+// inherited pre-v0.5 shape. It becomes an envelope entry when its migration ships.
 func built(row, command string, results []string, nonzero string, warnings, errors []string) MachineCommandEntry {
-	return machineEntry(row, command, MachineOriginConstructed, results, nonzero, warnings, errors)
+	return machineEntry(row, command, MachineOriginConstructed, MachineJSONInherited, results, nonzero, warnings, errors)
+}
+
+// pendingJSON is a constructed command whose `--json` surface the v0.5 migration
+// still owes.
+func pendingJSON(row, command string, results []string, nonzero string, warnings, errors []string) MachineCommandEntry {
+	return machineEntry(row, command, MachineOriginConstructed, MachineJSONAbsent, results, nonzero, warnings, errors)
 }
 
 func planned(row, command string, results []string, nonzero string, warnings, errors []string) MachineCommandEntry {
-	return machineEntry(row, command, MachineOriginPlanned, results, nonzero, warnings, errors)
+	return machineEntry(row, command, MachineOriginPlanned, MachineJSONAbsent, results, nonzero, warnings, errors)
 }
 
 // machineInventory follows the companion registry's order, which is the one
@@ -211,11 +242,11 @@ var machineInventory = []MachineCommandEntry{
 		warns(), errs(readErrors)),
 	built("`next`", "next", []string{"NextResult"}, "never",
 		warns(warnsBootstrap, warnsSelection), errs(writerErrors, "destination_exists", "path_blocked")),
-	built("`start`", "start", []string{"StartResult"}, "never",
+	pendingJSON("`start`", "start", []string{"StartResult"}, "never",
 		warns(warnsBootstrap), errs(lifecycleErrors)),
-	built("`complete`", "complete", []string{"CompleteResult"}, "never",
+	pendingJSON("`complete`", "complete", []string{"CompleteResult"}, "never",
 		warns(warnsBootstrap), errs(lifecycleErrors)),
-	built("`block`", "block", []string{"BlockResult"}, "never",
+	pendingJSON("`block`", "block", []string{"BlockResult"}, "never",
 		warns(warnsBootstrap), errs(reasonedLifecycleErrors)),
 	built("`unblock`", "unblock", []string{"UnblockResult"}, "never",
 		warns(warnsBootstrap), errs(lifecycleErrors)),
@@ -367,6 +398,9 @@ func ValidateMachineInventory() error {
 		}
 		if e.NonzeroResult == "" {
 			return fmt.Errorf("command %q does not state its report-result exit exception", e.Command)
+		}
+		if err := checkMachineEntryPolicy(e); err != nil {
+			return err
 		}
 		if err := checkCodes(e.Command, "warning", e.Warnings, warningCodes); err != nil {
 			return err

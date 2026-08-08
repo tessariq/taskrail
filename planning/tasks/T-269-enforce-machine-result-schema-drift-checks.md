@@ -1,12 +1,12 @@
 ---
 id: T-269-enforce-machine-result-schema-drift-checks
 title: Enforce machine result schema drift checks
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#uniform-agent-machine-results
 dependencies:
     - T-268-decode-the-strict-common-machine-envelope
-updated_at: "2026-08-08T14:23:08Z"
+updated_at: "2026-08-08T18:20:30Z"
 ---
 
 # T-269-enforce-machine-result-schema-drift-checks Enforce machine result schema drift checks
@@ -37,3 +37,6 @@ normative v0.5 inventory and strict common decoder.
   and ordering.
 
 ## Implementation Notes
+
+- 2026-08-08T18:20:11Z: Added a deterministic v0.5 machine-contract drift check: MachineJSONState records whether an inventory entry publishes the common envelope, the inherited pre-v0.5 shape, or nothing; CheckMachineRegistrations holds the CLI's --json command set to that inventory; CheckMachinePublication holds one document to the strict decoder plus its entry's result shape, warning subset, error subset, and report-result exit policy. Runs in go test ./... .
+- 2026-08-08T18:20:30Z: verification pass
