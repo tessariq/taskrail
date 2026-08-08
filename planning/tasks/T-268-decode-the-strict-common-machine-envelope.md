@@ -1,12 +1,12 @@
 ---
 id: T-268-decode-the-strict-common-machine-envelope
 title: Decode the strict common machine envelope
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#uniform-agent-machine-results
 dependencies:
     - T-230-enforce-the-normative-v0-5-machine-schema
-updated_at: "2026-08-08T14:23:08Z"
+updated_at: "2026-08-08T17:45:32Z"
 ---
 
 # T-268-decode-the-strict-common-machine-envelope Decode the strict common machine envelope
@@ -41,3 +41,6 @@ defined by the uniform agent machine-result contract.
 - A4: exercise each warning variant plus unknown codes and cross-variant fields.
 
 ## Implementation Notes
+
+- 2026-08-08T17:45:11Z: Added a strict schema-version-1 decoder for the common machine document: envelope framing, closed warning union, and common error details (violations, paths, typed snapshots, nullable recovery). Command result payloads stay raw bytes; loop postflight codes are rejected as loop-diagnostic carriers.
+- 2026-08-08T17:45:32Z: verification pass
