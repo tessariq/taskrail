@@ -14,7 +14,8 @@ Guidance for coding agents working in the Taskrail repository.
 
 ## Source-Of-Truth Files
 
-- Product specifications: `specs/v0.1.0.md` through `specs/v0.7.0.md` (released: v0.1.0-v0.4.0; active: the `active_spec_version` in `planning/STATE.md`)
+- Product specifications, released: `specs/v0.1.0.md`, `specs/v0.2.0.md`, `specs/v0.3.0.md`, `specs/v0.4.0.md`
+- Product specifications, unreleased: `specs/v0.5.0.md`, `specs/v0.6.0.md`, `specs/v0.7.0.md` (the active one is `active_spec_version` in `planning/STATE.md`)
 - Spec reading order and versioning: `specs/README.md`
 - Active planning state: `planning/STATE.md`
 - Tracked tasks: `planning/tasks/`
