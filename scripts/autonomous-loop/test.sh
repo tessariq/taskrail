@@ -24,6 +24,25 @@ assert_not_contains() {
   [[ "$value" != *"$unexpected"* ]] || fail "$name: did not expect '$unexpected' in '$value'"
 }
 
+extract_bundle() {
+  local line
+  while IFS= read -r line; do
+    case "$line" in
+      *"recovery bundle: "*) printf '%s\n' "${line##*recovery bundle: }"; return ;;
+    esac
+  done <<<"$1"
+}
+
+assert_pids_dead() {
+  local name="$1" file="$2" pid
+  [[ -f "$file" ]] || { fail "$name: missing pid capture"; return; }
+  while IFS=' ' read -r -a pids; do
+    for pid in "${pids[@]}"; do
+      kill -0 "$pid" 2>/dev/null && fail "$name: process $pid survived"
+    done
+  done <"$file"
+}
+
 assert_review_prompt() {
   local name="$1" value
   value="$(printf '%s\n' "$2" | tr -s '[:space:]' ' ')"
@@ -37,21 +56,31 @@ assert_review_prompt() {
   assert_contains "$name frozen snapshot" "$value" "frozen current implementation snapshot"
   assert_contains "$name parent applies fixes" "$value" "the parent applies fixes"
   assert_contains "$name self-review rejection" "$value" "Parent-context self-review does not satisfy either pass"
-  assert_contains "$name high-medium policy" "$value" "Fix high- and medium-severity current-scope findings"
-  assert_contains "$name low policy" "$value" "Leave low-severity observations report-only unless"
-  assert_contains "$name material re-review" "$value" "After any material correctness fix"
-  assert_contains "$name fresh re-review" "$value" "obtain another fresh correctness review while the budget remains"
-  assert_contains "$name delegation failure" "$value" "If fresh subagent delegation is unavailable or fails, block"
-  assert_contains "$name unresolved finding" "$value" "If any required finding remains unresolved or final bytes requiring re-review cannot be reviewed within budget, block"
+  assert_contains "$name checkpoints" "$value" "Track these concise checkpoints"
+  assert_contains "$name observable outcome" "$value" "independently meaningful observable outcome"
+  assert_contains "$name invariants" "$value" "affected invariants"
+  assert_contains "$name fix disposition" "$value" "fix-now"
+  assert_contains "$name follow-up disposition" "$value" "separate-followup"
+  assert_contains "$name blocked disposition" "$value" "blocked"
+  assert_contains "$name rejected disposition" "$value" "rejected"
+  assert_contains "$name high-medium scope" "$value" "Fix high- and medium-severity current-scope findings"
+  assert_contains "$name mandatory low" "$value" "a mandatory low is current scope"
+  assert_contains "$name mutation proof" "$value" "temporarily introduce the specific regression"
+  assert_contains "$name held follow-up" "$value" "parent runner always queues it as held"
+  assert_contains "$name parent Git ownership" "$value" "The parent runner owns Git delivery"
+  assert_contains "$name no timeout retry" "$value" "Timeout never retries"
 }
 
 create_fixture() {
   local name="$1" root="$TMP_ROOT/$1" remote="$TMP_ROOT/$1.git"
   mkdir -p "$root/scripts/autonomous-loop" "$root/scripts" "$root/planning/tasks" \
-    "$root/planning/artifacts/verify" "$root/specs" "$root/bin" "$root/fake-bin" "$root/captures"
+    "$root/planning/artifacts/verify" "$root/specs" "$root/bin" "$root/fake-bin" "$root/captures" \
+    "$TMP_ROOT/xdg-$name"
+  chmod 700 "$TMP_ROOT/xdg-$name"
   cp "$RUNNER" "$root/scripts/autonomous-loop/run.sh"
   cp "$PROMPT" "$root/scripts/autonomous-loop/prompt.md"
   cp "$SCRIPT_DIR/check-report.go" "$root/scripts/autonomous-loop/check-report.go"
+  cp "$SCRIPT_DIR/recovery.sh" "$root/scripts/autonomous-loop/recovery.sh"
   cp "$SCRIPT_DIR/AGENTS.md" "$root/scripts/autonomous-loop/AGENTS.md"
   cp "$SCRIPT_DIR/CLAUDE.md" "$root/scripts/autonomous-loop/CLAUDE.md"
   cp "$SCRIPT_DIR/../check-commit-msg.sh" "$root/scripts/check-commit-msg.sh"
@@ -106,7 +135,7 @@ EOF
 printf '%s\n' "${AUTONOMOUS_TEST_BACKEND:-opencode}" >"$AUTONOMOUS_TEST_ROOT/captures/backend"
 printf '%s\n' "$*" >"$AUTONOMOUS_TEST_ROOT/captures/agent-args"
 cat >"$AUTONOMOUS_TEST_ROOT/captures/prompt"
-printf '%s\n' invoked >>"$AUTONOMOUS_TEST_ROOT/captures/agent-invocations"
+printf '%s\n' "$AUTONOMOUS_TASK_ID" >>"$AUTONOMOUS_TEST_ROOT/captures/agent-invocations"
 if [[ "${AUTONOMOUS_TEST_AGENT_EXIT:-0}" != "0" ]]; then
   exit "$AUTONOMOUS_TEST_AGENT_EXIT"
 fi
@@ -120,6 +149,14 @@ else
   status=completed
   result=pass
 fi
+if [[ "${AUTONOMOUS_TEST_ACTION:-}" == "in-progress-hang" ]]; then
+  printf '%s\n' 'id: T-900-fixture-task' 'status: in_progress' 'spec_ref: specs/v0.5.0.md#test-area' 'dependencies: []' >"$AUTONOMOUS_TEST_ROOT/planning/tasks/T-900-fixture-task.md"
+  printf '%s\n' 'active_spec_path: specs/v0.5.0.md' 'current_task: T-900-fixture-task' 'last_verification_result: none' >"$AUTONOMOUS_TEST_ROOT/planning/STATE.md"
+  sleep 300 &
+  printf '%s\n' "$$ $!" >"$AUTONOMOUS_TEST_ROOT/captures/hang-pids"
+  touch "$AUTONOMOUS_TEST_ROOT/captures/hang-ready"
+  wait
+fi
 printf '%s\n' 'id: T-900-fixture-task' "status: $status" 'spec_ref: specs/v0.5.0.md#test-area' 'dependencies: []' >"$AUTONOMOUS_TEST_ROOT/planning/tasks/T-900-fixture-task.md"
 printf '%s\n' 'active_spec_path: specs/v0.5.0.md' 'current_task:' "last_verification_result: $result for T-900-fixture-task at 2026-08-08T00:00:00Z" >"$AUTONOMOUS_TEST_ROOT/planning/STATE.md"
 if [[ "${AUTONOMOUS_TEST_ACTION:-}" == "index-refresh" ]]; then
@@ -129,17 +166,28 @@ fi
 if [[ "${AUTONOMOUS_TEST_ACTION:-}" == "index-flag" ]]; then
   git update-index --assume-unchanged .gitignore
 fi
+if [[ "${AUTONOMOUS_TEST_ACTION:-}" == "unrelated-task" || "${AUTONOMOUS_TEST_ACTION:-}" == "unrelated-terminal-hang" ]]; then
+  printf '%s\n' 'id: T-901' 'status: todo' 'spec_ref: specs/v0.5.0.md#test-area' 'dependencies: []' >"$AUTONOMOUS_TEST_ROOT/planning/tasks/T-901.md"
+fi
 mkdir -p "$AUTONOMOUS_TEST_ROOT/planning/artifacts/verify/T-900-fixture-task/20260808T000000Z"
 if [[ "${AUTONOMOUS_TEST_ACTION:-}" == "forged-report" ]]; then
   extra=',"unexpected":"pass for T-900-fixture-task"'
+elif [[ "${AUTONOMOUS_TEST_ACTION:-}" == "followup" ]]; then
+  extra=',"details":"follow-up recommendation: run - independently useful fixture remediation","followup_task_id":"T-902"'
 else
   extra=''
 fi
 printf '%s\n' "{\"schema_version\":1,\"task_id\":\"T-900-fixture-task\",\"task_title\":\"Fixture\",\"result\":\"$result\",\"summary\":\"fixture\",\"generated_at\":\"2026-08-08T00:00:00Z\",\"spec_ref\":\"specs/v0.5.0.md#test-area\",\"artifacts\":[]$extra}" >"$AUTONOMOUS_TEST_ROOT/planning/artifacts/verify/T-900-fixture-task/20260808T000000Z/report.json"
-if [[ "${AUTONOMOUS_TEST_ACTION:-}" == "followup" ]]; then
-  printf '%s\n' 'id: T-902' 'status: todo' 'spec_ref: specs/v0.5.0.md#test-area' 'dependencies: []' >"$AUTONOMOUS_TEST_ROOT/planning/tasks/T-902.md"
+if [[ "${AUTONOMOUS_TEST_ACTION:-}" == "followup" || "${AUTONOMOUS_TEST_ACTION:-}" == "unreported-followup" ]]; then
+  printf '%s\n' 'id: T-902' 'status: todo' 'spec_ref: specs/v0.5.0.md#test-area' 'dependencies:' '    - T-900-fixture-task' >"$AUTONOMOUS_TEST_ROOT/planning/tasks/T-902.md"
 fi
 printf '%s\n' "test: deliver $status fixture task (T-900)" >"$AUTONOMOUS_COMMIT_MESSAGE_FILE"
+if [[ "${AUTONOMOUS_TEST_ACTION:-}" == "final-outcome-hang" || "${AUTONOMOUS_TEST_ACTION:-}" == "unrelated-terminal-hang" ]]; then
+  sleep 300 &
+  printf '%s\n' "$$ $!" >"$AUTONOMOUS_TEST_ROOT/captures/hang-pids"
+  touch "$AUTONOMOUS_TEST_ROOT/captures/hang-ready"
+  wait
+fi
 EOF
 
   cat >"$root/fake-bin/claude" <<'EOF'
@@ -165,7 +213,7 @@ run_fixture() {
   local root="$1" fixture_path
   shift
   fixture_path="${AUTONOMOUS_TEST_PATH:-$root/fake-bin:$PATH}"
-  PATH="$fixture_path" AUTONOMOUS_TEST_ROOT="$root" \
+  PATH="$fixture_path" AUTONOMOUS_TEST_ROOT="$root" XDG_STATE_HOME="$TMP_ROOT/xdg-${root##*/}" \
     AUTONOMOUS_TEST_BINARY="$root/bin/taskrail" AUTONOMOUS_TEST_AGENT_EXIT="${AUTONOMOUS_TEST_AGENT_EXIT:-0}" \
     AUTONOMOUS_TEST_OUTCOME="${AUTONOMOUS_TEST_OUTCOME:-completed}" \
     AUTONOMOUS_TEST_ACTION="${AUTONOMOUS_TEST_ACTION:-}" \
@@ -223,7 +271,8 @@ assert_contains "Claude wrapper permission" "$claude_args" "--allowedTools Bash(
 assert_contains "Claude wrapper path" "$claude_args" "taskrail-writer *)"
 [[ "$(git -C "$root" rev-list --count HEAD~1..HEAD)" == "1" ]] || fail "successful run did not create one commit"
 [[ "$(git -C "$root" rev-parse HEAD)" == "$(git --git-dir="$TMP_ROOT/successful-run.git" rev-parse refs/heads/main)" ]] || fail "successful run did not push main"
-[[ -z "$(git -C "$root" status --porcelain=v1 --untracked-files=all)" ]] || fail "successful run left a dirty tree"
+dirty="$(git -C "$root" status --porcelain=v1 --untracked-files=all)"
+[[ -z "$dirty" ]] || fail "successful run left a dirty tree: $dirty"
 
 root="$(create_fixture explicit-claude)"
 output="$(run_fixture "$root" --backend claude --max-iterations 1)"
@@ -264,6 +313,13 @@ rc=$?
 [[ $rc -eq 1 ]] || fail "missing backend CLI expected exit 1, got $rc"
 assert_contains "missing backend CLI" "$output" "opencode CLI not found"
 [[ ! -e "$root/captures/agent-invocations" ]] || fail "missing backend CLI invoked an agent"
+
+root="$(create_fixture invalid-timeout)"
+output="$(run_fixture "$root" --timeout 0s)"
+rc=$?
+[[ $rc -eq 2 ]] || fail "zero timeout expected exit 2, got $rc"
+assert_contains "zero timeout" "$output" "positive duration"
+[[ ! -e "$root/captures/agent-invocations" ]] || fail "invalid timeout invoked an agent"
 
 root="$(create_fixture conflicting-backends)"
 output="$(run_fixture "$root" --backend claude --backend opencode)"
@@ -365,16 +421,163 @@ before_head="$(git -C "$root" rev-parse HEAD)"
 output="$(AUTONOMOUS_TEST_ACTION=forged-report run_fixture "$root")"
 rc=$?
 [[ $rc -eq 1 ]] || fail "forged report expected exit 1, got $rc"
-assert_contains "forged report" "$output" "invalid passing verification report"
+assert_contains "forged report" "$output" "invalid pass verification report"
 [[ "$(git -C "$root" rev-parse HEAD)" == "$before_head" ]] || fail "forged report created a commit"
 
-root="$(create_fixture followup-drift)"
+root="$(create_fixture followup-held)"
 before_head="$(git -C "$root" rev-parse HEAD)"
 output="$(AUTONOMOUS_TEST_ACTION=followup run_fixture "$root")"
 rc=$?
-[[ $rc -eq 2 ]] || fail "follow-up queue drift expected exit 2, got $rc"
-assert_contains "follow-up queue drift" "$output" "open v0.5.0 task missing from queue: T-902"
-[[ "$(git -C "$root" rev-parse HEAD)" == "$before_head" ]] || fail "follow-up queue drift created a commit"
+[[ $rc -eq 0 ]] || fail "held follow-up expected success, got $rc: $output"
+assert_contains "held follow-up queue row" "$(<"$root/scripts/autonomous-loop/queue.tsv")" $'T-902\thold-operator\tVerification follow-up from T-900-fixture-task; operator review required'
+[[ "$(wc -l <"$root/captures/agent-invocations")" == "1" ]] || fail "held follow-up launched another child"
+[[ "$(git -C "$root" rev-parse HEAD^)" == "$before_head" ]] || fail "held follow-up did not share the parent commit"
+
+root="$(create_fixture unreported-followup)"
+before_head="$(git -C "$root" rev-parse HEAD)"
+output="$(AUTONOMOUS_TEST_ACTION=unreported-followup run_fixture "$root")"
+rc=$?
+[[ $rc -ne 0 ]] || fail "unreported follow-up unexpectedly succeeded"
+assert_contains "unreported follow-up" "$output" "unreported follow-up"
+[[ "$(git -C "$root" rev-parse HEAD)" == "$before_head" ]] || fail "unreported follow-up created a commit"
+
+root="$(create_fixture unrelated-task-mutation)"
+before_head="$(git -C "$root" rev-parse HEAD)"
+output="$(AUTONOMOUS_TEST_ACTION=unrelated-task run_fixture "$root")"
+rc=$?
+[[ $rc -ne 0 ]] || fail "unrelated task mutation unexpectedly succeeded"
+assert_contains "unrelated task mutation" "$output" "modified or removed unrelated task"
+[[ "$(git -C "$root" rev-parse HEAD)" == "$before_head" ]] || fail "unrelated task mutation created a commit"
+
+root="$(create_fixture unrelated-terminal-timeout)"
+before_head="$(git -C "$root" rev-parse HEAD)"
+output="$(AUTONOMOUS_TEST_ACTION=unrelated-terminal-hang run_fixture "$root" --timeout 1s)"
+rc=$?
+[[ $rc -ne 0 ]] || fail "unrelated terminal timeout unexpectedly succeeded"
+assert_contains "unrelated terminal timeout" "$output" "modified or removed unrelated task"
+[[ -z "$(extract_bundle "$output")" ]] || fail "unrelated terminal timeout published a bundle"
+[[ "$(git -C "$root" rev-parse HEAD)" == "$before_head" ]] || fail "unrelated terminal timeout created a commit"
+
+root="$(create_fixture in-progress-timeout)"
+before_head="$(git -C "$root" rev-parse HEAD)"
+output="$(AUTONOMOUS_TEST_ACTION=in-progress-hang run_fixture "$root" --timeout 1s --max-iterations 2)"
+rc=$?
+[[ $rc -ne 0 ]] || fail "in-progress timeout unexpectedly succeeded"
+assert_contains "in-progress timeout" "$output" "exceeded timeout 1s"
+[[ "$(wc -l <"$root/captures/agent-invocations")" == "1" ]] || fail "timeout retried the child"
+assert_pids_dead "in-progress timeout" "$root/captures/hang-pids"
+[[ "$(git -C "$root" rev-parse HEAD)" == "$before_head" ]] || fail "in-progress timeout created a commit"
+
+root="$(create_fixture final-outcome-timeout)"
+before_head="$(git -C "$root" rev-parse HEAD)"
+output="$(AUTONOMOUS_TEST_ACTION=final-outcome-hang run_fixture "$root" --timeout 1s)"
+rc=$?
+[[ $rc -ne 0 ]] || fail "final-outcome timeout unexpectedly delivered"
+bundle="$(extract_bundle "$output")"
+[[ -n "$bundle" && -f "$bundle/COMPLETE" ]] || fail "final-outcome timeout did not publish a complete bundle"
+assert_contains "final-outcome timeout guidance" "$output" "--resume-delivery"
+assert_pids_dead "final-outcome timeout" "$root/captures/hang-pids"
+[[ "$(git -C "$root" rev-parse HEAD)" == "$before_head" ]] || fail "final-outcome timeout committed automatically"
+output="$(run_fixture "$root" --resume-delivery "$bundle")"
+rc=$?
+[[ $rc -eq 0 ]] || fail "delivery resume exited $rc: $output"
+assert_contains "delivery resume" "$output" "resumed and pushed: T-900-fixture-task"
+[[ "$(git -C "$root" rev-parse HEAD^)" == "$before_head" ]] || fail "delivery resume did not create one direct child"
+[[ "$(git -C "$root" rev-parse HEAD)" == "$(git --git-dir="$TMP_ROOT/final-outcome-timeout.git" rev-parse refs/heads/main)" ]] || fail "delivery resume did not push"
+[[ "$(wc -l <"$root/captures/agent-invocations")" == "1" ]] || fail "delivery resume invoked an agent"
+
+root="$(create_fixture interrupted-child)"
+before_head="$(git -C "$root" rev-parse HEAD)"
+fixture_path="$root/fake-bin:$PATH"
+PATH="$fixture_path" AUTONOMOUS_TEST_ROOT="$root" XDG_STATE_HOME="$TMP_ROOT/xdg-interrupted-child" \
+  AUTONOMOUS_TEST_BINARY="$root/bin/taskrail" AUTONOMOUS_TEST_AGENT_EXIT=0 \
+  AUTONOMOUS_TEST_OUTCOME=completed AUTONOMOUS_TEST_ACTION=in-progress-hang \
+  "$root/scripts/autonomous-loop/run.sh" --timeout 30s >"$TMP_ROOT/interruption-output" 2>&1 &
+runner_pid=$!
+for _ in {1..100}; do
+  [[ -e "$root/captures/hang-ready" ]] && break
+  sleep 0.05
+done
+[[ -e "$root/captures/hang-ready" ]] || fail "interruption fixture did not become ready"
+kill -TERM "$runner_pid" 2>/dev/null || true
+wait "$runner_pid"
+rc=$?
+[[ $rc -ne 0 ]] || fail "interrupted child unexpectedly succeeded"
+output="$(<"$TMP_ROOT/interruption-output")"
+assert_contains "interrupted child" "$output" "interrupted by TERM"
+assert_pids_dead "interrupted child" "$root/captures/hang-pids"
+[[ "$(wc -l <"$root/captures/agent-invocations")" == "1" ]] || fail "interruption retried the child"
+[[ "$(git -C "$root" rev-parse HEAD)" == "$before_head" ]] || fail "interruption created a commit"
+
+root="$(create_fixture incomplete-recovery)"
+output="$(AUTONOMOUS_TEST_ACTION=final-outcome-hang run_fixture "$root" --timeout 1s)"
+bundle="$(extract_bundle "$output")"
+rm -f "$bundle/COMPLETE"
+before_head="$(git -C "$root" rev-parse HEAD)"
+output="$(run_fixture "$root" --resume-delivery "$bundle")"
+rc=$?
+[[ $rc -eq 2 ]] || fail "incomplete recovery expected exit 2, got $rc"
+assert_contains "incomplete recovery" "$output" "incomplete recovery bundle"
+[[ "$(git -C "$root" rev-parse HEAD)" == "$before_head" ]] || fail "incomplete recovery changed HEAD"
+
+root="$(create_fixture tampered-recovery)"
+output="$(AUTONOMOUS_TEST_ACTION=final-outcome-hang run_fixture "$root" --timeout 1s)"
+bundle="$(extract_bundle "$output")"
+printf '%s\n' tampered >>"$bundle/commit-message"
+before_head="$(git -C "$root" rev-parse HEAD)"
+output="$(run_fixture "$root" --resume-delivery "$bundle")"
+rc=$?
+[[ $rc -eq 2 ]] || fail "tampered recovery expected exit 2, got $rc"
+assert_contains "tampered recovery" "$output" "commit message was tampered"
+[[ "$(git -C "$root" rev-parse HEAD)" == "$before_head" ]] || fail "tampered recovery changed HEAD"
+
+root="$(create_fixture dirty-committed-recovery)"
+output="$(AUTONOMOUS_TEST_ACTION=final-outcome-hang run_fixture "$root" --timeout 1s)"
+bundle="$(extract_bundle "$output")"
+before_head="$(git -C "$root" rev-parse HEAD)"
+git -C "$root" add -A
+git -C "$root" commit -q -F "$bundle/commit-message"
+printf '%s\n' dirty >"$root/unrelated.txt"
+output="$(run_fixture "$root" --resume-delivery "$bundle")"
+rc=$?
+[[ $rc -ne 0 ]] || fail "dirty committed recovery unexpectedly pushed"
+assert_contains "dirty committed recovery" "$output" "worktree changed before push"
+[[ "$(git --git-dir="$TMP_ROOT/dirty-committed-recovery.git" rev-parse refs/heads/main)" == "$before_head" ]] || fail "dirty committed recovery moved remote main"
+
+root="$(create_fixture wrong-message-recovery)"
+output="$(AUTONOMOUS_TEST_ACTION=final-outcome-hang run_fixture "$root" --timeout 1s)"
+bundle="$(extract_bundle "$output")"
+before_head="$(git -C "$root" rev-parse HEAD)"
+git -C "$root" add -A
+git -C "$root" commit -q -m 'test: wrong same-tree message (T-900)'
+output="$(run_fixture "$root" --resume-delivery "$bundle")"
+rc=$?
+[[ $rc -ne 0 ]] || fail "wrong-message recovery unexpectedly pushed"
+assert_contains "wrong-message recovery" "$output" "commit message changed"
+[[ "$(git --git-dir="$TMP_ROOT/wrong-message-recovery.git" rev-parse refs/heads/main)" == "$before_head" ]] || fail "wrong-message recovery moved remote main"
+
+root="$(create_fixture clean-committed-recovery)"
+output="$(AUTONOMOUS_TEST_ACTION=final-outcome-hang run_fixture "$root" --timeout 1s)"
+bundle="$(extract_bundle "$output")"
+before_head="$(git -C "$root" rev-parse HEAD)"
+git -C "$root" add -A
+git -C "$root" commit -q -F "$bundle/commit-message"
+output="$(run_fixture "$root" --resume-delivery "$bundle")"
+rc=$?
+[[ $rc -eq 0 ]] || fail "clean committed recovery exited $rc: $output"
+[[ "$(git --git-dir="$TMP_ROOT/clean-committed-recovery.git" rev-parse refs/heads/main)" == "$(git -C "$root" rev-parse HEAD)" ]] || fail "clean committed recovery did not push expected HEAD"
+
+root="$(create_fixture hidden-entry-recovery)"
+output="$(AUTONOMOUS_TEST_ACTION=final-outcome-hang run_fixture "$root" --timeout 1s)"
+bundle="$(extract_bundle "$output")"
+printf '%s\n' unsafe >"$bundle/.unexpected"
+chmod 600 "$bundle/.unexpected"
+before_head="$(git -C "$root" rev-parse HEAD)"
+output="$(run_fixture "$root" --resume-delivery "$bundle")"
+rc=$?
+[[ $rc -eq 2 ]] || fail "hidden-entry recovery expected exit 2, got $rc"
+assert_contains "hidden-entry recovery" "$output" "unexpected entry"
+[[ "$(git -C "$root" rev-parse HEAD)" == "$before_head" ]] || fail "hidden-entry recovery changed HEAD"
 
 root="$(create_fixture child-failure)"
 before_head="$(git -C "$root" rev-parse HEAD)"

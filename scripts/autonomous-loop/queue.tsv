@@ -111,3 +111,4 @@ T-256-retire-bootstrap-planning-reviews	hold-operator	Requires deliberate bootst
 T-173-check-cross-surface-workflow-contract-integrity	run	-
 T-248-run-cross-platform-workflow-contract-tests-in-ci	run	-
 T-174-run-the-v0-5-0-gap-and-drift-release-gate	hold-operator	Maintainer-owned final release gate
+T-316-harden-temporary-autonomous-loop-timeout-and	hold-operator	Operator-owned temporary loop timeout and recovery hardening

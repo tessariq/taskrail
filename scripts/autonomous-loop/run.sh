@@ -9,11 +9,19 @@ RUNS_DIR="$ROOT/planning/artifacts/runs"
 MAX_ITERATIONS=1
 DRY_RUN=0
 CHECK_QUEUE=0
+TIMEOUT=2h
+TIMEOUT_SECONDS=7200
+KILL_GRACE_SECONDS=10
+RESUME_BUNDLE=""
 BACKEND=claude
 BACKEND_SET=0
 TMP_DIR=""
 LOCK_DIR=""
 LOCK_TOKEN=""
+ACTIVE_PGID=""
+ACTIVE_WATCHDOG=""
+RUN_LOG=""
+INTERRUPTED=""
 
 log() {
   printf '[autonomous-loop] %s\n' "$*"
@@ -36,9 +44,28 @@ cleanup() {
 }
 trap cleanup EXIT
 
+handle_interrupt() {
+  INTERRUPTED="$1"
+  [[ -z "$RUN_LOG" ]] || printf '[autonomous-loop] interrupted by %s\n' "$1" >>"$RUN_LOG"
+  if [[ -n "$ACTIVE_PGID" ]]; then
+    terminate_process_group "$ACTIVE_PGID"
+    return
+  fi
+  case "$1" in
+    HUP) exit 129 ;;
+    INT) exit 130 ;;
+    TERM) exit 143 ;;
+  esac
+}
+
+trap 'handle_interrupt INT' INT
+trap 'handle_interrupt TERM' TERM
+trap 'handle_interrupt HUP' HUP
+
 usage() {
   printf '%s\n' \
-    'Usage: scripts/autonomous-loop/run.sh [--backend <claude|opencode>] [--dry-run] [--max-iterations <n>]' \
+    'Usage: scripts/autonomous-loop/run.sh [--backend <claude|opencode>] [--timeout <duration>] [--dry-run] [--max-iterations <n>]' \
+    '       scripts/autonomous-loop/run.sh --resume-delivery <bundle-path>' \
     '       scripts/autonomous-loop/run.sh --check-queue' \
     '' \
     'Run a finite source-checkout task loop from scripts/autonomous-loop/queue.tsv.'
@@ -53,6 +80,16 @@ while (($#)); do
     --check-queue)
       CHECK_QUEUE=1
       shift
+      ;;
+    --timeout)
+      (($# >= 2)) || die "--timeout requires a positive duration such as 30m or 2h" 2
+      TIMEOUT="$2"
+      shift 2
+      ;;
+    --resume-delivery)
+      (($# >= 2)) || die "--resume-delivery requires a bundle path" 2
+      RESUME_BUNDLE="$2"
+      shift 2
       ;;
     --backend)
       (($# >= 2)) || die "--backend requires claude or opencode" 2
@@ -84,6 +121,27 @@ done
 
 [[ "$MAX_ITERATIONS" =~ ^[1-9][0-9]*$ ]] || die "--max-iterations must be a positive integer" 2
 [[ $CHECK_QUEUE -eq 0 || $DRY_RUN -eq 0 ]] || die "--check-queue and --dry-run are mutually exclusive" 2
+
+parse_duration() {
+  local value="$1" digits amount unit multiplier
+  [[ "$value" =~ ^([1-9][0-9]*)(s|m|h)$ ]] || return 1
+  digits="${BASH_REMATCH[1]}"
+  ((${#digits} <= 6)) || return 1
+  amount=$((10#$digits))
+  unit="${BASH_REMATCH[2]}"
+  case "$unit" in
+    s) multiplier=1 ;;
+    m) multiplier=60 ;;
+    h) multiplier=3600 ;;
+  esac
+  TIMEOUT_SECONDS=$((amount * multiplier))
+  ((TIMEOUT_SECONDS > 0 && TIMEOUT_SECONDS <= 604800))
+}
+
+parse_duration "$TIMEOUT" || die "--timeout must be a positive duration using s, m, or h" 2
+if [[ -n "$RESUME_BUNDLE" && ($DRY_RUN -eq 1 || $CHECK_QUEUE -eq 1 || $BACKEND_SET -eq 1 || "$MAX_ITERATIONS" != "1" || "$TIMEOUT" != "2h") ]]; then
+  die "--resume-delivery cannot be combined with execution options" 2
+fi
 
 task_file() {
   printf '%s/planning/tasks/%s.md\n' "$ROOT" "$1"
@@ -352,11 +410,129 @@ EOF
   chmod +x "$TMP_DIR/taskrail-writer"
 }
 
+runner_log() {
+  local message="$*"
+  printf '[autonomous-loop] %s\n' "$message" >&2
+  [[ -z "$RUN_LOG" ]] || printf '[autonomous-loop] %s\n' "$message" >>"$RUN_LOG"
+}
+
+process_group_alive() {
+  kill -0 -- "-$1" 2>/dev/null
+}
+
+terminate_process_group() {
+  local pgid="$1"
+  process_group_alive "$pgid" || return 0
+  runner_log "terminating process group $pgid"
+  kill -TERM -- "-$pgid" 2>/dev/null || true
+  local waited=0
+  while process_group_alive "$pgid" && ((waited < KILL_GRACE_SECONDS)); do
+    sleep 1
+    waited=$((waited + 1))
+  done
+  if process_group_alive "$pgid"; then
+    runner_log "forcing process group $pgid after ${KILL_GRACE_SECONDS}s"
+    kill -KILL -- "-$pgid" 2>/dev/null || true
+  fi
+}
+
+run_agent() {
+  local prompt="$1" output_fifo="$TMP_DIR/agent-output" timeout_marker="$TMP_DIR/timed-out"
+  local child_pid tee_pid child_rc tee_rc
+  rm -f "$output_fifo" "$timeout_marker"
+  mkfifo "$output_fifo" || return 1
+  tee "$RUN_LOG" <"$output_fifo" &
+  tee_pid=$!
+  setsid env TASKRAIL="$TMP_DIR/taskrail-writer" AUTONOMOUS_TASKRAIL_BINARY="$ROOT/bin/taskrail" \
+    AUTONOMOUS_TASK_ID="$SELECTED_ID" AUTONOMOUS_COMMIT_MESSAGE_FILE="$COMMIT_MESSAGE" \
+    "${agent_command[@]}" <"$prompt" >"$output_fifo" 2>&1 &
+  child_pid=$!
+  ACTIVE_PGID="$child_pid"
+  runner_log "child pid=$child_pid backend=$BACKEND timeout=$TIMEOUT"
+  setsid bash -c '
+    sleep "$1"
+    touch "$2"
+    kill -TERM -- "-$3" 2>/dev/null || true
+    sleep "$4"
+    kill -KILL -- "-$3" 2>/dev/null || true
+  ' _ "$TIMEOUT_SECONDS" "$timeout_marker" "$child_pid" "$KILL_GRACE_SECONDS" </dev/null >/dev/null 2>&1 &
+  ACTIVE_WATCHDOG=$!
+
+  wait "$child_pid"
+  child_rc=$?
+  kill -TERM -- "-$ACTIVE_WATCHDOG" 2>/dev/null || true
+  wait "$ACTIVE_WATCHDOG" 2>/dev/null || true
+  ACTIVE_WATCHDOG=""
+  if process_group_alive "$child_pid"; then
+    terminate_process_group "$child_pid"
+  fi
+  ACTIVE_PGID=""
+  wait "$tee_pid"
+  tee_rc=$?
+  AGENT_RC="$child_rc"
+  TEE_RC="$tee_rc"
+  AGENT_TIMED_OUT=0
+  [[ ! -e "$timeout_marker" ]] || AGENT_TIMED_OUT=1
+  [[ -z "$INTERRUPTED" ]] || runner_log "child interrupted by $INTERRUPTED"
+  ((AGENT_TIMED_OUT == 0)) || runner_log "child exceeded timeout $TIMEOUT"
+}
+
+candidate_tree() {
+  local index="$TMP_DIR/candidate-index-$RANDOM"
+  cp "$(git rev-parse --git-path index)" "$index" || return 1
+  GIT_INDEX_FILE="$index" git add -A || return 1
+  GIT_INDEX_FILE="$index" git write-tree
+  rm -f "$index"
+}
+
+source "$LOOP_DIR/recovery.sh"
+
+task_manifest() {
+  local path
+  for path in planning/tasks/*.md; do
+    printf '%s\t%s\n' "$path" "$(sha256sum "$path" | awk '{print $1}')"
+  done | sort
+}
+
+assert_other_tasks_unchanged() {
+  local selected="$1" manifest="$2" path digest
+  while IFS=$'\t' read -r path digest; do
+    [[ -n "$path" ]] || continue
+    [[ "$path" == "planning/tasks/$selected.md" ]] && continue
+    [[ -f "$path" && "$(sha256sum "$path" | awk '{print $1}')" == "$digest" ]] || \
+      die "$selected modified or removed unrelated task $path"
+  done <"$manifest"
+}
+
+accept_followup() {
+  local parent="$1" followup="$2" before_manifest="$3" path new_paths parent_spec before_paths
+  local -a dependencies=()
+  before_paths="$TMP_DIR/task-paths-before"
+  cut -f1 "$before_manifest" >"$before_paths"
+  assert_other_tasks_unchanged "$parent" "$before_manifest"
+  new_paths="$(comm -13 "$before_paths" <(task_manifest | cut -f1))"
+  if [[ -z "$followup" ]]; then
+    [[ -z "$new_paths" ]] || die "$parent created an unreported follow-up task"
+    return 0
+  fi
+  path="planning/tasks/$followup.md"
+  [[ "$new_paths" == "$path" && -f "$path" ]] || die "$parent follow-up report does not name the only new task"
+  [[ "$(task_field "$followup" status)" == "todo" ]] || die "$parent follow-up must have todo status"
+  parent_spec="$(task_field "$parent" spec_ref)"
+  [[ "$(task_field "$followup" spec_ref)" == "$parent_spec" ]] || die "$parent follow-up must inherit spec_ref"
+  mapfile -t dependencies < <(task_dependencies "$followup")
+  [[ ${#dependencies[@]} -eq 1 && "${dependencies[0]}" == "$parent" ]] || die "$parent follow-up must depend only on its parent"
+  ! grep -qE '^loop_(policy|reason):' "$path" || die "$parent follow-up must remain implicitly held"
+  printf '%s\t%s\t%s\n' "$followup" "hold-operator" "Verification follow-up from $parent; operator review required" >>"$QUEUE"
+  validate_queue
+  runner_log "queued held follow-up: $followup"
+}
+
 run_iteration() {
   local id="$1" before_head before_remote before_index before_reports
   local before_git_control after_git_control reports_before_manifest
-  local stamp log_file child_rc tee_rc after_status verification report report_bytes result
-  local commit_message commit_subject key parent count after_head after_remote generated_at
+  local stamp after_status verification report result report_result followup recommendation
+  local commit_subject key generated_at before_manifest
 
   validate_selected "$id"
   key="$(task_key "$id")"
@@ -369,11 +545,13 @@ run_iteration() {
   reports_before_manifest="$TMP_DIR/reports-before"
   reports_manifest "$id" >"$reports_before_manifest"
   before_git_control="$(git_control_snapshot)" || die "cannot snapshot Git control state"
-  commit_message="$TMP_DIR/commit-message"
-  rm -f "$commit_message"
+  before_manifest="$TMP_DIR/tasks-before"
+  task_manifest >"$before_manifest"
+  COMMIT_MESSAGE="$TMP_DIR/commit-message"
+  rm -f "$COMMIT_MESSAGE"
   mkdir -p "$RUNS_DIR"
   stamp="$(date -u +%Y%m%dT%H%M%SZ)"
-  log_file="$RUNS_DIR/$stamp-$id.log"
+  RUN_LOG="$RUNS_DIR/$stamp-$id-$$.log"
 
   case "$BACKEND" in
     claude)
@@ -385,16 +563,11 @@ run_iteration() {
     opencode) agent_command=(opencode run --auto) ;;
   esac
   command -v "${agent_command[0]}" >/dev/null 2>&1 || die "$BACKEND CLI not found"
+  command -v setsid >/dev/null 2>&1 || die "setsid is required for bounded child execution" 2
 
   log "starting $id with $BACKEND"
-  TASKRAIL="$TMP_DIR/taskrail-writer" AUTONOMOUS_TASKRAIL_BINARY="$ROOT/bin/taskrail" AUTONOMOUS_TASK_ID="$id" \
-    AUTONOMOUS_COMMIT_MESSAGE_FILE="$commit_message" \
-    "${agent_command[@]}" <"$TMP_DIR/rendered-prompt.md" 2>&1 | tee "$log_file"
-  pipeline_status=("${PIPESTATUS[@]}")
-  child_rc="${pipeline_status[0]}"
-  tee_rc="${pipeline_status[1]}"
-  [[ $tee_rc -eq 0 ]] || die "$id log streaming failed"
-  [[ $child_rc -eq 0 ]] || die "$id $BACKEND exited $child_rc; inspect ${log_file#$ROOT/}"
+  run_agent "$TMP_DIR/rendered-prompt.md" || die "$id could not launch bounded child execution"
+  [[ $TEE_RC -eq 0 ]] || die "$id log streaming failed"
 
   [[ "$(git symbolic-ref --quiet --short HEAD 2>/dev/null)" == "main" ]] || die "$id changed the attached branch"
   [[ "$(git rev-parse HEAD)" == "$before_head" ]] || die "$id created or changed commits; the runner owns Git delivery"
@@ -404,61 +577,79 @@ run_iteration() {
   [[ "$after_git_control" == "$before_git_control" ]] || die "$id changed Git control state"
   [[ -z "$(git status --porcelain=v1 --untracked-files=all -- scripts/autonomous-loop)" ]] || \
     die "$id modified temporary loop control files"
-  [[ ! -e "$commit_message" || -f "$commit_message" ]] || die "$id wrote an invalid commit-message entry"
+  [[ ! -e "$COMMIT_MESSAGE" || -f "$COMMIT_MESSAGE" ]] || die "$id wrote an invalid commit-message entry"
+  if [[ $AGENT_RC -ne 0 && $AGENT_TIMED_OUT -eq 0 && -z "$INTERRUPTED" ]]; then
+    die "$id $BACKEND exited $AGENT_RC; inspect ${RUN_LOG#$ROOT/}"
+  fi
 
   assert_fresh_binary
   TASKRAIL="$ROOT/bin/taskrail" "$ROOT/bin/taskrail" validate >/dev/null || die "$id left invalid Taskrail state"
   after_status="$(task_field "$id" status)"
   verification="$(awk '$1 == "last_verification_result:" { sub(/^[^:]+:[[:space:]]*/, ""); print; exit }' planning/STATE.md)"
-  report="$(new_report_path "$before_reports" "$id")" || die "$id did not create exactly one new verification report"
+  if ! report="$(new_report_path "$before_reports" "$id")"; then
+    if ((AGENT_TIMED_OUT == 1)) || [[ -n "$INTERRUPTED" ]]; then
+      die "$id stopped before a recoverable terminal verification; inspect ${RUN_LOG#$ROOT/}"
+    fi
+    die "$id did not create exactly one new verification report"
+  fi
   assert_existing_reports_unchanged "$reports_before_manifest" || die "$id changed existing verification evidence"
 
   result=""
   if [[ "$after_status" == "completed" ]]; then
-    generated_at="$(CGO_ENABLED=0 GOCACHE="$TMP_DIR/gocache" mise exec -- go run "$LOOP_DIR/check-report.go" "$report" "$id" pass)" || \
-      die "$id produced an invalid passing verification report"
-    [[ "$verification" == "pass for $id at $generated_at" ]] || die "$id state/report verification binding does not match"
+    report_result=pass
     result="completed_pass"
   elif [[ "$after_status" == "blocked" ]]; then
-    generated_at="$(CGO_ENABLED=0 GOCACHE="$TMP_DIR/gocache" mise exec -- go run "$LOOP_DIR/check-report.go" "$report" "$id" fail)" || \
-      die "$id produced an invalid failing verification report"
-    [[ "$verification" == "fail for $id at $generated_at" ]] || die "$id state/report verification binding does not match"
+    report_result=fail
     result="blocked_fail"
   else
     die "$id has invalid lifecycle/verification outcome: status=$after_status verification=$verification"
   fi
+  check_report "$report" "$id" "$report_result" || \
+    die "$id produced an invalid $report_result verification report"
+  generated_at="${REPORT_FIELDS[0]:-}"
+  followup="${REPORT_FIELDS[1]:-}"
+  recommendation="${REPORT_FIELDS[2]:-}"
+  if [[ "$report_result" == "pass" ]]; then
+    [[ "$verification" == "pass for $id at $generated_at" ]] || die "$id state/report verification binding does not match"
+  else
+    [[ "$verification" == "fail for $id at $generated_at" ]] || die "$id state/report verification binding does not match"
+  fi
 
-  [[ -s "$commit_message" ]] || die "$id did not publish a commit message"
-  validate_queue
-  "$ROOT/scripts/check-commit-msg.sh" "$commit_message" || die "$id published an invalid commit message"
-  commit_subject="$(grep -vE '^[[:space:]]*#' "$commit_message" | sed '/^[[:space:]]*$/d' | head -n 1)"
+  [[ -s "$COMMIT_MESSAGE" ]] || die "$id did not publish a commit message"
+  "$ROOT/scripts/check-commit-msg.sh" "$COMMIT_MESSAGE" || die "$id published an invalid commit message"
+  commit_subject="$(grep -vE '^[[:space:]]*#' "$COMMIT_MESSAGE" | sed '/^[[:space:]]*$/d' | head -n 1)"
   [[ "$commit_subject" =~ \($key\)$ ]] || die "$id commit subject must end with ($key)"
   git diff --cached --quiet || die "$id left staged changes"
 
-  git add -A || die "$id changes could not be staged"
-  git commit -F "$commit_message" || die "$id commit failed"
-  after_head="$(git rev-parse HEAD)"
-  parent="$(git rev-parse HEAD^)" || die "$id commit has no single parent"
-  [[ "$parent" == "$before_head" ]] || die "$id commit is not a direct child of preflight HEAD"
-  count="$(git rev-list --count "$before_head..$after_head")"
-  [[ "$count" == "1" ]] || die "$id produced $count commits instead of one"
-  [[ -z "$(git status --porcelain=v1 --untracked-files=all --ignore-submodules=none)" ]] || die "$id commit left a dirty tree"
-  git push origin HEAD:main || die "$id push to origin/main failed"
-  after_remote="$(remote_main)" || die "$id cannot resolve origin/main after push"
-  [[ "$after_remote" == "$after_head" ]] || die "$id push did not publish the new HEAD"
-  assert_fresh_binary
-  TASKRAIL="$ROOT/bin/taskrail" "$ROOT/bin/taskrail" validate >/dev/null || die "$id post-push validation failed"
+  if ((AGENT_TIMED_OUT == 1)) || [[ -n "$INTERRUPTED" ]]; then
+    [[ -z "$followup" ]] || die "$id timed out with a follow-up that requires operator inspection"
+    accept_followup "$id" "" "$before_manifest"
+    create_recovery_bundle "$id" "$result" "$report" "$generated_at" "$before_head" "$before_remote" "$before_index"
+    die "$id reached $result but the child did not exit cleanly; resume explicitly with --resume-delivery $RECOVERY_BUNDLE"
+  fi
+  [[ $AGENT_RC -eq 0 ]] || die "$id $BACKEND exited $AGENT_RC; inspect ${RUN_LOG#$ROOT/}"
+
+  accept_followup "$id" "$followup" "$before_manifest"
+  [[ -z "$recommendation" ]] || runner_log "$recommendation"
+  create_recovery_bundle "$id" "$result" "$report" "$generated_at" "$before_head" "$before_remote" "$before_index"
+  resume_delivery "$RECOVERY_BUNDLE" normal
 
   if [[ "$result" == "blocked_fail" ]]; then
     die "$id was blocked and its failing verification was committed and pushed"
   fi
-  log "completed and pushed: $id ($after_head)"
 }
 
 TMP_DIR="$(mktemp -d)" || die "cannot create external temporary directory" 2
 if [[ $CHECK_QUEUE -eq 1 ]]; then
   validate_queue
   exit 0
+fi
+if [[ -n "$RESUME_BUNDLE" ]]; then
+  cd "$ROOT" || die "cannot enter repository root" 2
+  [[ "$(git rev-parse --show-toplevel 2>/dev/null)" == "$ROOT" ]] || die "not at repository root" 2
+  acquire_lock
+  resume_delivery "$RESUME_BUNDLE"
+  exit $?
 fi
 preflight
 select_task
@@ -477,6 +668,7 @@ render_prompt "$SELECTED_ID"
 if [[ $DRY_RUN -eq 1 ]]; then
   log "selected: $SELECTED_ID"
   log "backend: $BACKEND"
+  log "timeout: $TIMEOUT"
   log "head: $(git rev-parse HEAD)"
   log "origin/main: $(remote_main)"
   log "binary sha256: $(sha256sum "$ROOT/bin/taskrail" | awk '{print $1}')"
