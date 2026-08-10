@@ -110,7 +110,7 @@ func (s *Service) CoverageForArea(anchor string) (CoverageReport, error) {
 	// slugs to "" and a bare --area "" would otherwise bind to that degenerate
 	// parse. Reject it before the match scan so no empty-slug area is reachable.
 	if anchor == "" {
-		return CoverageReport{}, fmt.Errorf("--area %q is empty and cannot name an area of %s; run spec show --anchors to list the spec's anchors", anchor, activePath)
+		return CoverageReport{}, emptyAreaError(anchor, activePath)
 	}
 	// Count matches so two ### areas that slug to the same anchor are rejected as
 	// ambiguous rather than silently resolving to the first-scanned one.
@@ -126,8 +126,19 @@ func (s *Service) CoverageForArea(anchor string) (CoverageReport, error) {
 	case 1:
 		return narrowToArea(report, matches[0]), nil
 	default:
-		return CoverageReport{}, fmt.Errorf("--area %q is ambiguous in %s: %d ### areas slug to the same anchor; rename the colliding headings so each area has a unique anchor", anchor, activePath, len(matches))
+		return CoverageReport{}, ambiguousAreaError(anchor, activePath, len(matches))
 	}
+}
+
+// emptyAreaError and ambiguousAreaError are the two `--area` rejections that
+// areaRejectionError does not cover. All three name an operand the caller chose,
+// so they carry the argument error code the envelope publishes.
+func emptyAreaError(anchor, specPath string) error {
+	return invalidArgumentsf("--area %q is empty and cannot name an area of %s; run spec show --anchors to list the spec's anchors", anchor, specPath)
+}
+
+func ambiguousAreaError(anchor, specPath string, matches int) error {
+	return invalidArgumentsf("--area %q is ambiguous in %s: %d ### areas slug to the same anchor; rename the colliding headings so each area has a unique anchor", anchor, specPath, matches)
 }
 
 // areaRejectionError explains why anchor is not a coverable area, tailoring the
@@ -140,16 +151,16 @@ func areaRejectionError(areas []parsedArea, deferred []string, anchor, specPath 
 	for _, a := range areas {
 		for _, sub := range a.subAnchors {
 			if sub == anchor {
-				return fmt.Errorf("--area %q is a #### sub-area of %s that only rolls up into its ### parent; run coverage --area %s to score the parent area", anchor, specPath, a.anchor)
+				return invalidArgumentsf("--area %q is a #### sub-area of %s that only rolls up into its ### parent; run coverage --area %s to score the parent area", anchor, specPath, a.anchor)
 			}
 		}
 	}
 	for _, d := range deferred {
 		if d == anchor {
-			return fmt.Errorf("--area %q is a deferred or subsumed area of %s, intentionally excluded from the coverage denominator", anchor, specPath)
+			return invalidArgumentsf("--area %q is a deferred or subsumed area of %s, intentionally excluded from the coverage denominator", anchor, specPath)
 		}
 	}
-	return fmt.Errorf("--area %q is not an area of %s; run spec show --anchors to list the spec's anchors", anchor, specPath)
+	return invalidArgumentsf("--area %q is not an area of %s; run spec show --anchors to list the spec's anchors", anchor, specPath)
 }
 
 // narrowToArea narrows a full coverage report to the one coverable area. Spec-

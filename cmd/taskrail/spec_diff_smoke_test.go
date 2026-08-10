@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"maps"
 	"os"
 	"path/filepath"
@@ -75,9 +74,7 @@ func TestSpecDiffJSONOutput(t *testing.T) {
 			} `json:"to"`
 		} `json:"renamed"`
 	}
-	if err := json.Unmarshal([]byte(out), &payload); err != nil {
-		t.Fatalf("decode diff json: %v (output %q)", err, out)
-	}
+	decodeMachineResult(t, out, &payload)
 	if payload.FromVersion != "v0.2.0" || payload.ToVersion != "v0.3.0" {
 		t.Fatalf("version fields wrong: %+v", payload)
 	}

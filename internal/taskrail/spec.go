@@ -55,7 +55,8 @@ func (s *Service) SpecList() (SpecListResult, error) {
 
 	entries, err := os.ReadDir(s.paths.SpecsDir)
 	if err != nil {
-		return SpecListResult{}, fmt.Errorf("read specs dir %s: %w", relPath(s.paths.RepoRoot, s.paths.SpecsDir), fsCause(err))
+		return SpecListResult{}, WithMachineErrorCode(missingOrInvalidCode(err, MachineCodeNotInitialized),
+			fmt.Errorf("read specs dir %s: %w", relPath(s.paths.RepoRoot, s.paths.SpecsDir), fsCause(err)))
 	}
 
 	specs := make([]SpecEntry, 0, len(entries))
@@ -95,12 +96,15 @@ func sortSpecVersions(versions []string) {
 // output and is strictly read-only.
 func (s *Service) SpecShow(version string, anchorsOnly bool) (SpecShowResult, error) {
 	if !specVersionPattern.MatchString(version) {
-		return SpecShowResult{}, fmt.Errorf("invalid spec version %q: expected a versioned name like v0.3.0", version)
+		return SpecShowResult{}, invalidArgumentsf("invalid spec version %q: expected a versioned name like v0.3.0", version)
 	}
 	specFile := filepath.Join(s.paths.SpecsDir, version+".md")
 	data, err := os.ReadFile(specFile)
 	if err != nil {
-		return SpecShowResult{}, fmt.Errorf("read spec file %s: %w", relPath(s.paths.RepoRoot, specFile), fsCause(err))
+		// A version operand naming no spec is an argument failure, not a broken
+		// repository: the read-only spec commands have no not-found code.
+		return SpecShowResult{}, WithMachineErrorCode(missingOrInvalidCode(err, MachineCodeInvalidArguments),
+			fmt.Errorf("read spec file %s: %w", relPath(s.paths.RepoRoot, specFile), fsCause(err)))
 	}
 	active, err := s.activeSpecVersion()
 	if err != nil {

@@ -31,25 +31,22 @@ func newSpecCmd() *cobra.Command {
 // specs. It is strictly read-only: it never writes STATE.md or task files and
 // never gates validation.
 func newSpecDiffCmd() *cobra.Command {
-	var opt jsonOption
 	cmd := &cobra.Command{
 		Use:               "diff <from-version> <to-version>",
 		Short:             "Show the anchor-set delta between two specs (read-only)",
-		Args:              cobra.ExactArgs(2),
+		Args:              machineArgs(cobra.ExactArgs(2)),
 		ValidArgsFunction: completeSpecDiffVersions,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			svc, err := serviceFromCmd(cmd)
-			if err != nil {
-				return err
-			}
-			result, err := svc.SpecDiff(args[0], args[1])
-			if err != nil {
-				return err
-			}
-			return printResult(cmd, opt.json, result, renderSpecDiffText(result))
+			return runReport(cmd, func(svc *taskrail.Service) (report, error) {
+				result, err := svc.SpecDiff(args[0], args[1])
+				if err != nil {
+					return report{}, err
+				}
+				return report{shape: "SpecDiffResult", value: result, text: renderSpecDiffText(result)}, nil
+			})
 		},
 	}
-	cmd.Flags().BoolVar(&opt.json, "json", false, "print machine-readable output")
+	addMachineJSONFlag(cmd)
 	return cmd
 }
 
@@ -123,51 +120,45 @@ func renderSpecAddText(r taskrail.SpecAddResult) string {
 // newSpecListCmd lists the versioned specs under specs/ and marks the active one.
 // It is strictly read-only.
 func newSpecListCmd() *cobra.Command {
-	var opt jsonOption
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List versioned specs and mark the active one (read-only)",
-		Args:  cobra.NoArgs,
+		Args:  machineArgs(cobra.NoArgs),
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			svc, err := serviceFromCmd(cmd)
-			if err != nil {
-				return err
-			}
-			result, err := svc.SpecList()
-			if err != nil {
-				return err
-			}
-			return printResult(cmd, opt.json, result, renderSpecListText(result))
+			return runReport(cmd, func(svc *taskrail.Service) (report, error) {
+				result, err := svc.SpecList()
+				if err != nil {
+					return report{}, err
+				}
+				return report{shape: "SpecListResult", value: result, text: renderSpecListText(result)}, nil
+			})
 		},
 	}
-	cmd.Flags().BoolVar(&opt.json, "json", false, "print machine-readable output")
+	addMachineJSONFlag(cmd)
 	return cmd
 }
 
 // newSpecShowCmd prints a versioned spec, or with --anchors its stable spec_ref
 // anchor list. It is strictly read-only.
 func newSpecShowCmd() *cobra.Command {
-	var opt jsonOption
 	var anchors bool
 	cmd := &cobra.Command{
 		Use:               "show <version>",
 		Short:             "Print a spec, or with --anchors its spec_ref anchors (read-only)",
-		Args:              cobra.ExactArgs(1),
+		Args:              machineArgs(cobra.ExactArgs(1)),
 		ValidArgsFunction: completeSpecVersion,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			svc, err := serviceFromCmd(cmd)
-			if err != nil {
-				return err
-			}
-			result, err := svc.SpecShow(args[0], anchors)
-			if err != nil {
-				return err
-			}
-			return printResult(cmd, opt.json, result, renderSpecShowText(result))
+			return runReport(cmd, func(svc *taskrail.Service) (report, error) {
+				result, err := svc.SpecShow(args[0], anchors)
+				if err != nil {
+					return report{}, err
+				}
+				return report{shape: "SpecShowResult", value: result, text: renderSpecShowText(result)}, nil
+			})
 		},
 	}
 	cmd.Flags().BoolVar(&anchors, "anchors", false, "list the spec's spec_ref heading anchors instead of its body")
-	cmd.Flags().BoolVar(&opt.json, "json", false, "print machine-readable output")
+	addMachineJSONFlag(cmd)
 	return cmd
 }
 

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -69,9 +68,7 @@ func TestSkillSkewWarningGoesToStderrAndKeepsJSONParseable(t *testing.T) {
 		t.Fatalf("status --json: %v (stderr %q)", err, stderr)
 	}
 	var parsed map[string]any
-	if jsonErr := json.Unmarshal([]byte(stdout), &parsed); jsonErr != nil {
-		t.Fatalf("stdout is not parseable json: %v\n%s", jsonErr, stdout)
-	}
+	decodeMachineResult(t, stdout, &parsed)
 	for _, want := range []string{"v0.0.1-stale", version, "taskrail-repair", "taskrail init --with-skills --force"} {
 		if !strings.Contains(stderr, want) {
 			t.Errorf("stderr %q missing %q", stderr, want)
@@ -157,9 +154,7 @@ func TestNoSkillSkewWarningForAdopterOwnedSkills(t *testing.T) {
 		t.Fatalf("status --json: %v (stderr %q)", err, stderr)
 	}
 	var parsed map[string]any
-	if jsonErr := json.Unmarshal([]byte(stdout), &parsed); jsonErr != nil {
-		t.Fatalf("stdout is not parseable json: %v\n%s", jsonErr, stdout)
-	}
+	decodeMachineResult(t, stdout, &parsed)
 	if strings.TrimSpace(stderr) != "" {
 		t.Errorf("adopter-owned skills produced stderr output: %q", stderr)
 	}

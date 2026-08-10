@@ -116,8 +116,9 @@ func ensureSupportedLayoutVersion(cfg LayoutConfig) error {
 	if cfg.LayoutVersion <= currentLayoutVersion {
 		return nil
 	}
-	return fmt.Errorf("repository layout_version %d is newer than supported %d; upgrade taskrail",
-		cfg.LayoutVersion, currentLayoutVersion)
+	return WithMachineErrorCode(MachineCodeIncompatibleLayout,
+		fmt.Errorf("repository layout_version %d is newer than supported %d; upgrade taskrail",
+			cfg.LayoutVersion, currentLayoutVersion))
 }
 
 // writeMarker persists the layout marker, creating `.taskrail/` if needed.
@@ -175,7 +176,8 @@ func findRepoRoot(start string) (string, error) {
 
 		parent := filepath.Dir(current)
 		if parent == current {
-			return "", fmt.Errorf("repository root not found from %s", start)
+			return "", WithMachineErrorCode(MachineCodeNotInitialized,
+				fmt.Errorf("repository root not found from %s", start))
 		}
 		current = parent
 	}

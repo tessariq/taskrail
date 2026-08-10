@@ -25,7 +25,8 @@ func (s *Service) loadStateAndTasks() (*State, []*Task, error) {
 func (s *Service) loadState() (*State, error) {
 	data, err := os.ReadFile(s.paths.StateFile)
 	if err != nil {
-		return nil, fmt.Errorf("read state file %s: %w", relPath(s.paths.RepoRoot, s.paths.StateFile), fsCause(err))
+		return nil, WithMachineErrorCode(missingOrInvalidCode(err, MachineCodeNotInitialized),
+			fmt.Errorf("read state file %s: %w", relPath(s.paths.RepoRoot, s.paths.StateFile), fsCause(err)))
 	}
 	frontmatter, body, err := parseFrontmatter[StateFrontmatter](data)
 	if err != nil {
@@ -37,7 +38,8 @@ func (s *Service) loadState() (*State, error) {
 func (s *Service) loadTasks() ([]*Task, error) {
 	entries, err := os.ReadDir(s.paths.TasksDir)
 	if err != nil {
-		return nil, fmt.Errorf("read tasks dir %s: %w", relPath(s.paths.RepoRoot, s.paths.TasksDir), fsCause(err))
+		return nil, WithMachineErrorCode(missingOrInvalidCode(err, MachineCodeNotInitialized),
+			fmt.Errorf("read tasks dir %s: %w", relPath(s.paths.RepoRoot, s.paths.TasksDir), fsCause(err)))
 	}
 	tasks := make([]*Task, 0, len(entries))
 	for _, entry := range entries {

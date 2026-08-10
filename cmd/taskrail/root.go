@@ -15,6 +15,9 @@ func newRootCmd() *cobra.Command {
 		PersistentPreRun: warnOnSkillSkew,
 	}
 	cmd.SetVersionTemplate("{{.Version}}\n")
+	// A rejected flag is an argument failure of an already-selected command, so
+	// a machine invocation gets its error envelope rather than prose-only stderr.
+	cmd.SetFlagErrorFunc(publishSelectionError)
 
 	cmd.AddCommand(
 		newInitCmd(),

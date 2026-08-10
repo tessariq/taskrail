@@ -213,6 +213,12 @@ func built(row, command string, results []string, nonzero string, warnings, erro
 	return machineEntry(row, command, MachineOriginConstructed, MachineJSONInherited, results, nonzero, warnings, errors)
 }
 
+// migrated is a constructed command whose `--json` surface publishes the common
+// schema-version-1 envelope.
+func migrated(row, command string, results []string, nonzero string, warnings, errors []string) MachineCommandEntry {
+	return machineEntry(row, command, MachineOriginConstructed, MachineJSONEnvelope, results, nonzero, warnings, errors)
+}
+
 // pendingJSON is a constructed command whose `--json` surface the v0.5 migration
 // still owes.
 func pendingJSON(row, command string, results []string, nonzero string, warnings, errors []string) MachineCommandEntry {
@@ -230,15 +236,15 @@ var machineInventory = []MachineCommandEntry{
 		warns(), errs(contentWriterErrors)),
 	built("`retrofit`", "retrofit", []string{"RetrofitResult", "EmitPromptResult"}, "never",
 		warns(), errs(contentWriterErrors)),
-	built("`validate`", "validate", []string{"ValidateResult"}, "`valid:false`",
+	migrated("`validate`", "validate", []string{"ValidateResult"}, "`valid:false`",
 		warns(), errs(readErrors)),
 	built("`repair`", "repair", []string{"RepairResult"}, "never",
 		warns(warnsBootstrap), errs(writerErrors, "destination_exists", "path_blocked")),
-	built("`coverage`", "coverage", []string{"CoverageReport", "GapReport"}, "selected `--min`/`--fail-on` gate",
+	migrated("`coverage`", "coverage", []string{"CoverageReport", "GapReport"}, "selected `--min`/`--fail-on` gate",
 		warns(), errs(readErrors)),
-	built("`status`", "status", []string{"StatusResult"}, "never",
+	migrated("`status`", "status", []string{"StatusResult"}, "never",
 		warns(warnsSelection), errs(readErrors)),
-	built("`stats`", "stats", []string{"StatsResult"}, "never",
+	migrated("`stats`", "stats", []string{"StatsResult"}, "never",
 		warns(), errs(readErrors)),
 	built("`next`", "next", []string{"NextResult"}, "never",
 		warns(warnsBootstrap, warnsSelection), errs(writerErrors, "destination_exists", "path_blocked")),
@@ -278,13 +284,13 @@ var machineInventory = []MachineCommandEntry{
 		warns(warnsBootstrap), errs(lifecycleErrors, "invalid_reason", "policy_invalid")),
 	planned("`task loop clear`", "task loop clear", []string{"LoopPolicyMutationResult"}, "never",
 		warns(warnsBootstrap), errs(lifecycleErrors, "invalid_reason", "policy_invalid")),
-	built("`spec list`", "spec list", []string{"SpecListResult"}, "never",
+	migrated("`spec list`", "spec list", []string{"SpecListResult"}, "never",
 		warns(), errs(readErrors)),
-	built("`spec show`", "spec show", []string{"SpecShowResult"}, "never",
+	migrated("`spec show`", "spec show", []string{"SpecShowResult"}, "never",
 		warns(), errs(readErrors, "path_blocked")),
 	built("`spec add`", "spec add", []string{"SpecAddResult"}, "never",
 		warns(warnsBootstrap), errs(writerErrors, "destination_exists", "path_blocked")),
-	built("`spec diff`", "spec diff", []string{"SpecDiffResult"}, "never",
+	migrated("`spec diff`", "spec diff", []string{"SpecDiffResult"}, "never",
 		warns(), errs(readErrors)),
 	built("`spec activate`", "spec activate", []string{"SpecActivateResult"}, "never",
 		warns(warnsBootstrap), errs(writerErrors, "destination_exists", "path_blocked")),

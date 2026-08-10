@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -127,9 +126,7 @@ func TestStatsJSONMirrorsMetricsOnSeededDAG(t *testing.T) {
 		t.Fatalf("stats --json: %v (output %q)", err, out)
 	}
 	var report statsJSON
-	if err := json.Unmarshal([]byte(out), &report); err != nil {
-		t.Fatalf("parse json: %v (output %q)", err, out)
-	}
+	decodeMachineResult(t, out, &report)
 	if report.TotalTasks != 4 {
 		t.Errorf("total = %d, want 4", report.TotalTasks)
 	}
@@ -183,9 +180,7 @@ func TestStatsCoverageNAWhenNoCoverableAreas(t *testing.T) {
 		t.Fatalf("stats --json: %v (output %q)", err, out)
 	}
 	var report statsJSON
-	if err := json.Unmarshal([]byte(out), &report); err != nil {
-		t.Fatalf("parse json: %v (output %q)", err, out)
-	}
+	decodeMachineResult(t, out, &report)
 	if report.Coverage.DecompositionPercent != nil {
 		t.Errorf("decomposition_percent = %v, want nil", *report.Coverage.DecompositionPercent)
 	}

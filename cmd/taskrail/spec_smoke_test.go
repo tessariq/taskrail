@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -282,9 +281,7 @@ func TestSpecListJSON(t *testing.T) {
 			Active  bool   `json:"active"`
 		} `json:"specs"`
 	}
-	if err := json.Unmarshal([]byte(out), &payload); err != nil {
-		t.Fatalf("decode json: %v (output %q)", err, out)
-	}
+	decodeMachineResult(t, out, &payload)
 	if payload.ActiveSpecVersion != "v0.1.0" || len(payload.Specs) != 1 || !payload.Specs[0].Active {
 		t.Fatalf("unexpected spec list payload: %+v", payload)
 	}
@@ -322,9 +319,7 @@ func TestSpecShowAnchorsAuthorable(t *testing.T) {
 			Anchor string `json:"anchor"`
 		} `json:"anchors"`
 	}
-	if err := json.Unmarshal([]byte(out), &payload); err != nil {
-		t.Fatalf("decode anchors json: %v (output %q)", err, out)
-	}
+	decodeMachineResult(t, out, &payload)
 	if len(payload.Anchors) == 0 {
 		t.Fatalf("expected at least one anchor: %q", out)
 	}

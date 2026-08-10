@@ -10,7 +10,6 @@ import (
 )
 
 func newCoverageCmd() *cobra.Command {
-	var opt jsonOption
 	var minPct float64
 	var area string
 	var gaps bool
@@ -33,46 +32,32 @@ func newCoverageCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			minSet := cmd.Flags().Changed("min")
 			areaSet := cmd.Flags().Changed("area")
-			failOnSet := cmd.Flags().Changed("fail-on")
-			if gaps && minSet {
-				return fmt.Errorf("--gaps analyses structural gaps and does not gate; --min cannot be combined with it")
+			if err := validateCoverageFlags(cmd, gaps, minPct, failOn); err != nil {
+				return publishMachineError(cmd, err)
 			}
-			if failOnSet && !gaps {
-				return fmt.Errorf("--fail-on gates gap analysis and requires --gaps")
-			}
-			if failOnSet {
-				if err := validateFailOn(failOn); err != nil {
-					return err
+			return runReport(cmd, func(svc *taskrail.Service) (report, error) {
+				if gaps {
+					gr, err := gapReport(svc, areaSet, area)
+					if err != nil {
+						return report{}, err
+					}
+					return report{
+						shape: "GapReport", value: gr,
+						text: renderGapText(gr), gate: gapGate(gr, failOn),
+					}, nil
 				}
-			}
-			if minSet && (minPct < 0 || minPct > 100) {
-				return fmt.Errorf("--min must be a percentage between 0 and 100, got %s", formatPercent(minPct))
-			}
-			svc, err := serviceFromCmd(cmd)
-			if err != nil {
-				return err
-			}
-			if gaps {
-				gr, err := gapReport(svc, areaSet, area)
+				cr, err := coverageReport(svc, areaSet, area)
 				if err != nil {
-					return err
+					return report{}, err
 				}
-				if err := printResult(cmd, opt.json, gr, renderGapText(gr)); err != nil {
-					return err
-				}
-				return gapGate(gr, failOn)
-			}
-			report, err := coverageReport(svc, areaSet, area)
-			if err != nil {
-				return err
-			}
-			if err := printResult(cmd, opt.json, report, renderCoverageText(report)); err != nil {
-				return err
-			}
-			return coverageGate(report, minSet, minPct)
+				return report{
+					shape: "CoverageReport", value: cr,
+					text: renderCoverageText(cr), gate: coverageGate(cr, minSet, minPct),
+				}, nil
+			})
 		},
 	}
-	cmd.Flags().BoolVar(&opt.json, "json", false, "print machine-readable output")
+	addMachineJSONFlag(cmd)
 	cmd.Flags().Float64Var(&minPct, "min", 0, "fail (non-zero exit) when decomposition coverage is below this percentage (0–100); report stays unchanged")
 	cmd.Flags().StringVar(&area, "area", "", "narrow the report to a single coverable spec area (its anchor); rejects a non-coverable anchor")
 	cmd.Flags().BoolVar(&gaps, "gaps", false, "report advisory structural gap candidates over covered areas instead of coverage; composes with --area; advisory unless --fail-on is set")
@@ -88,13 +73,26 @@ var gapGateCategories = map[string]bool{
 	"under-decomposed-area": true,
 }
 
-// validateFailOn rejects an unknown --fail-on category before any work, so a
-// typo'd selector fails fast rather than silently gating on nothing.
-func validateFailOn(categories []string) error {
-	for _, c := range categories {
+// validateCoverageFlags rejects a flag combination coverage cannot honour,
+// before any repository work: the two gates each belong to one report and cannot
+// be combined, and a typo'd --fail-on selector fails fast rather than silently
+// gating on nothing.
+func validateCoverageFlags(cmd *cobra.Command, gaps bool, minPct float64, failOn []string) error {
+	minSet := cmd.Flags().Changed("min")
+	failOnSet := cmd.Flags().Changed("fail-on")
+	if gaps && minSet {
+		return invalidArgumentsf("--gaps analyses structural gaps and does not gate; --min cannot be combined with it")
+	}
+	if failOnSet && !gaps {
+		return invalidArgumentsf("--fail-on gates gap analysis and requires --gaps")
+	}
+	for _, c := range failOn {
 		if !gapGateCategories[c] {
-			return fmt.Errorf("--fail-on category %q is not a gap category (missing-verification, dependency-anomaly, under-decomposed-area)", c)
+			return invalidArgumentsf("--fail-on category %q is not a gap category (missing-verification, dependency-anomaly, under-decomposed-area)", c)
 		}
+	}
+	if minSet && (minPct < 0 || minPct > 100) {
+		return invalidArgumentsf("--min must be a percentage between 0 and 100, got %s", formatPercent(minPct))
 	}
 	return nil
 }

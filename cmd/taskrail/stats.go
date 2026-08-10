@@ -9,7 +9,6 @@ import (
 )
 
 func newStatsCmd() *cobra.Command {
-	var opt jsonOption
 	var format string
 	cmd := &cobra.Command{
 		Use:   "stats",
@@ -23,13 +22,16 @@ func newStatsCmd() *cobra.Command {
 			"task dependency DAG as Graphviz DOT or Mermaid text for external " +
 			"rendering. Never writes STATE.md or task files.",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			svc, err := serviceFromCmd(cmd)
-			if err != nil {
-				return err
-			}
+			// The graph export is exact text for an external renderer, not a
+			// machine document, so the flag conflict is settled before any
+			// repository work rather than after a discovery failure.
 			if format != "" {
-				if opt.json {
-					return fmt.Errorf("--format and --json are mutually exclusive")
+				if machineJSONRequested(cmd) {
+					return publishMachineError(cmd, invalidArgumentsf("--format and --json are mutually exclusive"))
+				}
+				svc, err := serviceFromCmd(cmd)
+				if err != nil {
+					return err
 				}
 				graph, err := svc.DependencyGraph(format)
 				if err != nil {
@@ -38,14 +40,16 @@ func newStatsCmd() *cobra.Command {
 				_, err = fmt.Fprint(cmd.OutOrStdout(), graph)
 				return err
 			}
-			report, err := svc.Stats()
-			if err != nil {
-				return err
-			}
-			return printResult(cmd, opt.json, report, renderStatsText(report))
+			return runReport(cmd, func(svc *taskrail.Service) (report, error) {
+				stats, err := svc.Stats()
+				if err != nil {
+					return report{}, err
+				}
+				return report{shape: "StatsResult", value: stats, text: renderStatsText(stats)}, nil
+			})
 		},
 	}
-	cmd.Flags().BoolVar(&opt.json, "json", false, "print machine-readable output")
+	addMachineJSONFlag(cmd)
 	cmd.Flags().StringVar(&format, "format", "", "export the dependency DAG instead of stats: dot or mermaid")
 	return cmd
 }

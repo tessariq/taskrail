@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -148,9 +147,7 @@ func TestStatusJSONMirrorsHumanView(t *testing.T) {
 	}
 
 	var report statusJSON
-	if err := json.Unmarshal([]byte(out), &report); err != nil {
-		t.Fatalf("parse json: %v (output %q)", err, out)
-	}
+	decodeMachineResult(t, out, &report)
 	if report.ActiveSpecVersion != "v0.1.0" || report.ActiveSpecPath != "specs/v0.1.0.md" {
 		t.Errorf("spec = %q/%q, want v0.1.0/specs/v0.1.0.md", report.ActiveSpecVersion, report.ActiveSpecPath)
 	}
@@ -210,9 +207,7 @@ func TestStatusActiveSpecDriftBreakdown(t *testing.T) {
 		t.Fatalf("status --json: %v (output %q)", err, out)
 	}
 	var report statusJSON
-	if err := json.Unmarshal([]byte(out), &report); err != nil {
-		t.Fatalf("parse json: %v (output %q)", err, out)
-	}
+	decodeMachineResult(t, out, &report)
 	if report.ActiveSpecDrift.ActiveOpenCount != 2 {
 		t.Errorf("active_open_count = %d, want 2", report.ActiveSpecDrift.ActiveOpenCount)
 	}
@@ -283,9 +278,7 @@ func TestStatusActiveSpecDriftNoAwayWork(t *testing.T) {
 		t.Fatalf("status --json: %v", err)
 	}
 	var report statusJSON
-	if err := json.Unmarshal([]byte(out), &report); err != nil {
-		t.Fatalf("parse json: %v (output %q)", err, out)
-	}
+	decodeMachineResult(t, out, &report)
 	if report.ActiveSpecDrift.AwayOpenCount != 0 || len(report.ActiveSpecDrift.Away) != 0 {
 		t.Errorf("away = %+v, want empty", report.ActiveSpecDrift)
 	}
@@ -309,9 +302,7 @@ func TestStatusMultipleBlockedTasksShowAllReasons(t *testing.T) {
 		t.Fatalf("status --json: %v (output %q)", err, out)
 	}
 	var report statusJSON
-	if err := json.Unmarshal([]byte(out), &report); err != nil {
-		t.Fatalf("parse json: %v (output %q)", err, out)
-	}
+	decodeMachineResult(t, out, &report)
 	if len(report.Blocked) != 2 {
 		t.Fatalf("blocked = %+v, want 2 entries", report.Blocked)
 	}
@@ -360,9 +351,7 @@ func TestStatusCoverageNAWhenNoCoverableAreas(t *testing.T) {
 		t.Fatalf("status --json: %v (output %q)", err, out)
 	}
 	var report statusJSON
-	if err := json.Unmarshal([]byte(out), &report); err != nil {
-		t.Fatalf("parse json: %v (output %q)", err, out)
-	}
+	decodeMachineResult(t, out, &report)
 	if report.Coverage.DecompositionPercent != nil {
 		t.Errorf("decomposition_percent = %v, want nil", *report.Coverage.DecompositionPercent)
 	}

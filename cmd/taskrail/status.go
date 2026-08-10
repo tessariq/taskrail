@@ -9,7 +9,6 @@ import (
 )
 
 func newStatusCmd() *cobra.Command {
-	var opt jsonOption
 	cmd := &cobra.Command{
 		Use:   "status",
 		Short: "Report the current tracked-work snapshot (read-only)",
@@ -23,18 +22,16 @@ func newStatusCmd() *cobra.Command {
 			"active-spec filter next uses for idle selection. Never writes STATE.md " +
 			"or task files.",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			svc, err := serviceFromCmd(cmd)
-			if err != nil {
-				return err
-			}
-			report, err := svc.Status()
-			if err != nil {
-				return err
-			}
-			return printResult(cmd, opt.json, report, renderStatusText(report))
+			return runReport(cmd, func(svc *taskrail.Service) (report, error) {
+				snapshot, err := svc.Status()
+				if err != nil {
+					return report{}, err
+				}
+				return report{shape: "StatusResult", value: snapshot, text: renderStatusText(snapshot)}, nil
+			})
 		},
 	}
-	cmd.Flags().BoolVar(&opt.json, "json", false, "print machine-readable output")
+	addMachineJSONFlag(cmd)
 	return cmd
 }
 

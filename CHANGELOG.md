@@ -6,6 +6,9 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ### Changed
 
+- Read-only `--json` reports (`validate`, `coverage`, `status`, `stats`,
+  `spec list|show|diff`) now emit the v0.5 machine envelope — `schema_version`,
+  `command`, `warnings`, and one of `result`/`error` — instead of the bare report.
 - Task operands now require the exact full persisted ID, and `taskrail validate`
   rejects broken v0.5 completion and verification metadata chains.
 - `taskrail init --with-skills` now installs Agent Skills-compliant copies with

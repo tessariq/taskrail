@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -134,9 +133,7 @@ func TestCoverageJSONMirrorsReport(t *testing.T) {
 			AwayTaskCount      int `json:"away_task_count"`
 		} `json:"drift"`
 	}
-	if err := json.Unmarshal([]byte(out), &report); err != nil {
-		t.Fatalf("parse json: %v (output %q)", err, out)
-	}
+	decodeMachineResult(t, out, &report)
 	// An uncovered area must emit linked_tasks: [] (not null), consistent with
 	// the other report slices. json.Unmarshal maps both [] and null to a nil
 	// slice, so assert on the raw payload.
@@ -281,9 +278,7 @@ func TestCoverageReverseMapShowsCoveringTasks(t *testing.T) {
 			LinkedTasks []string `json:"linked_tasks"`
 		} `json:"areas"`
 	}
-	if err := json.Unmarshal([]byte(jsonOut), &report); err != nil {
-		t.Fatalf("parse json: %v (output %q)", err, jsonOut)
-	}
+	decodeMachineResult(t, jsonOut, &report)
 	byAnchor := map[string][]string{}
 	for _, a := range report.Areas {
 		byAnchor[a.Anchor] = a.LinkedTasks
@@ -480,9 +475,7 @@ func TestCoverageAreaFiltersReportAndStaysReadOnly(t *testing.T) {
 		} `json:"areas"`
 		Orphans []struct{} `json:"orphans"`
 	}
-	if err := json.Unmarshal([]byte(jsonOut), &report); err != nil {
-		t.Fatalf("parse json: %v (output %q)", err, jsonOut)
-	}
+	decodeMachineResult(t, jsonOut, &report)
 	if report.CoverableAreas != 1 || len(report.Areas) != 1 || report.Areas[0].Anchor != "alpha" {
 		t.Errorf("--json area view not narrowed to alpha: %+v", report)
 	}
@@ -675,9 +668,7 @@ func TestCoverageSurfacesDegenerateAreaHeadings(t *testing.T) {
 			Titles []string `json:"titles"`
 		} `json:"area_anchor_issues"`
 	}
-	if err := json.Unmarshal([]byte(jsonOut), &report); err != nil {
-		t.Fatalf("parse json: %v (output %q)", err, jsonOut)
-	}
+	decodeMachineResult(t, jsonOut, &report)
 	if len(report.AreaAnchorIssues) != 2 {
 		t.Fatalf("area_anchor_issues = %+v, want 2", report.AreaAnchorIssues)
 	}
@@ -839,9 +830,7 @@ func TestCoverageGapsJSONMirrorsReport(t *testing.T) {
 			Detail string `json:"detail"`
 		} `json:"signals"`
 	}
-	if err := json.Unmarshal([]byte(out), &report); err != nil {
-		t.Fatalf("parse json: %v (output %q)", err, out)
-	}
+	decodeMachineResult(t, out, &report)
 	if report.ActiveSpecPath != "specs/v0.1.0.md" {
 		t.Errorf("active_spec_path = %q", report.ActiveSpecPath)
 	}
@@ -885,9 +874,7 @@ func TestCoverageGapsAreaJSONIdentifiesSelectedArea(t *testing.T) {
 			Anchor string `json:"anchor"`
 		} `json:"signals"`
 	}
-	if err := json.Unmarshal([]byte(out), &report); err != nil {
-		t.Fatalf("parse json: %v (output %q)", err, out)
-	}
+	decodeMachineResult(t, out, &report)
 	if report.ActiveSpecPath != "specs/v0.1.0.md" {
 		t.Errorf("active_spec_path = %q", report.ActiveSpecPath)
 	}
@@ -923,9 +910,7 @@ func TestCoverageGapsAreaEmptyExitsZeroAndNamesArea(t *testing.T) {
 		SelectedArea string     `json:"selected_area"`
 		Signals      []struct{} `json:"signals"`
 	}
-	if err := json.Unmarshal([]byte(jsonOut), &report); err != nil {
-		t.Fatalf("parse json: %v (output %q)", err, jsonOut)
-	}
+	decodeMachineResult(t, jsonOut, &report)
 	if report.SelectedArea != "clean-area" {
 		t.Errorf("empty narrowed json must name selected_area, got %q", report.SelectedArea)
 	}

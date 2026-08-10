@@ -3,6 +3,7 @@ package taskrail
 import (
 	"fmt"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -126,14 +127,21 @@ func TestCheckMachineEntryPolicyRejectsPerturbedEntries(t *testing.T) {
 	}
 }
 
-// TestNoCommandPublishesTheCommonEnvelopeYet pins the migration boundary. Every
-// command that accepts `--json` today still emits its inherited pre-v0.5 shape,
-// so no entry may be counted as schema-1 coverage until a migration moves one
+// migratedCommands is the exact set of commands whose producer publishes the
+// common envelope today: the inherited read-only reports. Every other
+// constructed `--json` command still emits its inherited pre-v0.5 shape.
+var migratedCommands = []string{
+	"coverage", "spec diff", "spec list", "spec show", "stats", "status", "validate",
+}
+
+// TestOnlyMigratedCommandsPublishTheCommonEnvelope pins the migration boundary,
+// so no entry can be counted as schema-1 coverage until a migration moves its
 // producer onto the common envelope and flips its inventory constructor.
-func TestNoCommandPublishesTheCommonEnvelopeYet(t *testing.T) {
+func TestOnlyMigratedCommandsPublishTheCommonEnvelope(t *testing.T) {
 	for _, entry := range MachineCommandInventory() {
-		if entry.JSONState == MachineJSONEnvelope {
-			t.Errorf("%s claims the common envelope; route its producer through CheckMachinePublication and update this test", entry.CompanionRow)
+		want := slices.Contains(migratedCommands, entry.Command) && entry.Surface == MachineSurfaceStdout
+		if got := entry.JSONState == MachineJSONEnvelope; got != want {
+			t.Errorf("%s publishes the common envelope = %v, want %v", entry.CompanionRow, got, want)
 		}
 	}
 }

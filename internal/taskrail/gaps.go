@@ -96,7 +96,7 @@ func (s *Service) CoverageGapsForArea(anchor string) (GapReport, error) {
 // ambiguous anchor is rejected on the same terms as CoverageForArea.
 func validateGapAnchor(areas []parsedArea, deferred []string, anchor, specPath string) error {
 	if anchor == "" {
-		return fmt.Errorf("--area %q is empty and cannot name an area of %s; run spec show --anchors to list the spec's anchors", anchor, specPath)
+		return emptyAreaError(anchor, specPath)
 	}
 	matches := 0
 	for _, a := range areas {
@@ -110,7 +110,7 @@ func validateGapAnchor(areas []parsedArea, deferred []string, anchor, specPath s
 	case matches == 0:
 		return areaRejectionError(areas, deferred, anchor, specPath)
 	default:
-		return fmt.Errorf("--area %q is ambiguous in %s: %d ### areas slug to the same anchor; rename the colliding headings so each area has a unique anchor", anchor, specPath, matches)
+		return ambiguousAreaError(anchor, specPath, matches)
 	}
 }
 
