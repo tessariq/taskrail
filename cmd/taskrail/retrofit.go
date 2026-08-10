@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 
@@ -10,7 +9,6 @@ import (
 )
 
 func newRetrofitCmd() *cobra.Command {
-	var opt jsonOption
 	var apply bool
 	var emitPrompt bool
 	cmd := &cobra.Command{
@@ -32,44 +30,38 @@ func newRetrofitCmd() *cobra.Command {
 			"so retrofit is the single guided entry point for detect -> scaffold -> " +
 			"import -> adopt. Without --emit-prompt, refuses an already-managed " +
 			"repository (use `taskrail init` there instead).",
-		Args: cobra.MaximumNArgs(1),
+		Args: machineArgs(cobra.MaximumNArgs(1)),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// Validate flag combinations before any service I/O (path discovery,
 			// config load), so a misuse fails fast without touching the filesystem.
 			if emitPrompt {
 				if apply {
-					return errors.New("--emit-prompt prints a read-only prompt; do not combine it with --apply")
+					return publishMachineError(cmd, invalidArgumentsf("--emit-prompt prints a read-only prompt; do not combine it with --apply"))
 				}
 				if len(args) == 0 {
-					return errors.New("retrofit --emit-prompt requires a notes source")
+					return publishMachineError(cmd, invalidArgumentsf("retrofit --emit-prompt requires a notes source"))
 				}
 			}
 
-			svc, err := serviceFromCmd(cmd)
-			if err != nil {
-				return err
-			}
-
-			if emitPrompt {
-				result, err := svc.EmitImportPrompt(taskrail.EmitPromptInput{SourcePath: args[0], Target: "planning"})
+			return runCommand(cmd, func(svc *taskrail.Service) (commandResult, error) {
+				if emitPrompt {
+					return emitPromptResult(svc, args[0], "planning")
+				}
+				input := taskrail.RetrofitInput{Apply: apply}
+				if len(args) > 0 {
+					input.NotesPath = args[0]
+				}
+				result, err := svc.Retrofit(input)
 				if err != nil {
-					return err
+					return commandResult{}, err
 				}
-				return printPromptResult(cmd, opt.json, result)
-			}
-
-			input := taskrail.RetrofitInput{Apply: apply}
-			if len(args) > 0 {
-				input.NotesPath = args[0]
-			}
-			result, err := svc.Retrofit(input)
-			if err != nil {
-				return err
-			}
-			return printResult(cmd, opt.json, result, retrofitSummary(result))
+				return commandResult{
+					shape: "RetrofitResult", value: result, text: retrofitSummary(result),
+				}, nil
+			})
 		},
 	}
-	cmd.Flags().BoolVar(&opt.json, "json", false, "print machine-readable output")
+	addMachineJSONFlag(cmd)
 	cmd.Flags().BoolVar(&apply, "apply", false, "apply the scaffold instead of a dry run")
 	cmd.Flags().BoolVar(&emitPrompt, "emit-prompt", false, "print the planning-target import agent prompt instead of scaffolding")
 	return cmd

@@ -8,28 +8,25 @@ import (
 )
 
 func newUnblockCmd() *cobra.Command {
-	var (
-		reason string
-		opt    jsonOption
-	)
+	var reason string
 	cmd := &cobra.Command{
 		Use:   "unblock <task-id>",
 		Short: "Return a blocked task to todo and re-validate",
-		Args:  cobra.ExactArgs(1),
+		Args:  machineArgs(cobra.ExactArgs(1)),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			svc, err := serviceFromCmd(cmd)
-			if err != nil {
-				return err
-			}
-			result, err := svc.Unblock(args[0], reason)
-			if err != nil {
-				return err
-			}
-			return printResult(cmd, opt.json, result, renderUnblockText(result))
+			return runCommand(cmd, func(svc *taskrail.Service) (commandResult, error) {
+				result, err := svc.Unblock(args[0], reason)
+				if err != nil {
+					return commandResult{}, err
+				}
+				return commandResult{
+					shape: "UnblockResult", value: result, text: renderUnblockText(result),
+				}, nil
+			})
 		},
 	}
 	cmd.Flags().StringVar(&reason, "reason", "", "optional note appended to the task's Implementation Notes")
-	cmd.Flags().BoolVar(&opt.json, "json", false, "print machine-readable output")
+	addMachineJSONFlag(cmd)
 	return cmd
 }
 

@@ -1,12 +1,12 @@
 ---
 id: T-271-migrate-inherited-semantic-writer-machine-results
 title: Migrate inherited semantic writer machine results
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#uniform-agent-machine-results
 dependencies:
     - T-213-define-the-uniform-agent-machine-api
-updated_at: "2026-08-08T14:23:08Z"
+updated_at: "2026-08-10T09:46:06Z"
 ---
 
 # T-271-migrate-inherited-semantic-writer-machine-results Migrate inherited semantic writer machine results
@@ -41,3 +41,6 @@ or treating refusals and partial outcomes as successful results.
   and JSON modes.
 
 ## Implementation Notes
+
+- 2026-08-10T09:45:41Z: Moved every constructed --json writer onto the v0.5 common envelope and gave start/complete/block their exact lifecycle results; writer failures now publish registered error codes with applied/paths.
+- 2026-08-10T09:46:06Z: verification pass

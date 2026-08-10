@@ -38,7 +38,8 @@ type RepointTaskResult struct {
 func (s *Service) RepointTask(input RepointTaskInput) (RepointTaskResult, error) {
 	taskID := input.TaskID
 	if taskID == "" {
-		return RepointTaskResult{}, errors.New("task id is required")
+		return RepointTaskResult{}, WithMachineErrorCode(MachineCodeInvalidArguments,
+			errors.New("task id is required"))
 	}
 	area, specRef, err := repointSelector(input)
 	if err != nil {
@@ -57,7 +58,8 @@ func (s *Service) RepointTask(input RepointTaskInput) (RepointTaskResult, error)
 	// the coverage orphan rule; re-pointing them would rewrite the record of what
 	// was actually delivered.
 	if !isOpenStatus(target.Frontmatter.Status) {
-		return RepointTaskResult{}, fmt.Errorf("task %s is %s: re-pointing targets open work, and terminal tasks are delivered history", taskID, target.Frontmatter.Status)
+		return RepointTaskResult{}, WithMachineErrorCode(MachineCodeInvalidStatus,
+			fmt.Errorf("task %s is %s: re-pointing targets open work, and terminal tasks are delivered history", taskID, target.Frontmatter.Status))
 	}
 
 	if area != "" {
@@ -66,7 +68,7 @@ func (s *Service) RepointTask(input RepointTaskInput) (RepointTaskResult, error)
 			return RepointTaskResult{}, err
 		}
 	} else if specRef, err = s.validateSpecRef(specRef); err != nil {
-		return RepointTaskResult{}, fmt.Errorf("invalid spec_ref: %w", err)
+		return RepointTaskResult{}, invalidArgumentsf("invalid spec_ref: %w", err)
 	}
 
 	oldSpecRef := target.Frontmatter.SpecRef
@@ -76,7 +78,7 @@ func (s *Service) RepointTask(input RepointTaskInput) (RepointTaskResult, error)
 	// stored ref is caught as the no-op it is; a legacy stored ref still differs and
 	// is rewritten, which is the sanctioned way to canonicalize one.
 	if specRef == oldSpecRef {
-		return RepointTaskResult{}, fmt.Errorf("task %s already points at %s", taskID, specRef)
+		return RepointTaskResult{}, invalidArgumentsf("task %s already points at %s", taskID, specRef)
 	}
 
 	// Both branches report the post-apply state: an apply re-validates what
@@ -91,7 +93,7 @@ func (s *Service) RepointTask(input RepointTaskInput) (RepointTaskResult, error)
 		if err := s.applyRepoint(state, tasks, target, specRef); err != nil {
 			return RepointTaskResult{}, err
 		}
-		validation, err = s.Validate()
+		validation, err = s.validateAfterWrite()
 		if err != nil {
 			return RepointTaskResult{}, err
 		}
@@ -113,10 +115,12 @@ func repointSelector(input RepointTaskInput) (area, specRef string, err error) {
 	area = strings.TrimSpace(input.Area)
 	specRef = strings.TrimSpace(input.SpecRef)
 	if area != "" && specRef != "" {
-		return "", "", errors.New("--area and --spec-ref are mutually exclusive")
+		return "", "", WithMachineErrorCode(MachineCodeInvalidArguments,
+			errors.New("--area and --spec-ref are mutually exclusive"))
 	}
 	if area == "" && specRef == "" {
-		return "", "", errors.New("one of --area or --spec-ref is required")
+		return "", "", WithMachineErrorCode(MachineCodeInvalidArguments,
+			errors.New("one of --area or --spec-ref is required"))
 	}
 	return area, specRef, nil
 }
@@ -153,5 +157,8 @@ func (s *Service) applyRepoint(state *State, tasks []*Task, target *Task, specRe
 	}
 	state.Frontmatter.UpdatedAt = now
 	state.Body = renderStateBody(state.Frontmatter, tasks)
-	return s.saveState(state)
+	if err := s.saveState(state); err != nil {
+		return s.withWrittenPaths(err, target.Filename)
+	}
+	return nil
 }

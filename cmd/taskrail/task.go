@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 
@@ -29,48 +28,45 @@ func newTaskNewCmd() *cobra.Command {
 		priority string
 		deps     []string
 		followUp string
-		opt      jsonOption
 	)
 
 	cmd := &cobra.Command{
 		Use:   "new",
 		Short: "Scaffold a new task file with the next free id",
-		Args:  cobra.NoArgs,
+		Args:  machineArgs(cobra.NoArgs),
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			// A follow-up inherits its parent's spec_ref, and --area resolves one
 			// from the active spec, so an explicit --spec-ref is only required when
 			// neither is given.
 			if strings.TrimSpace(followUp) == "" && strings.TrimSpace(specRef) == "" && strings.TrimSpace(area) == "" {
-				return errors.New("one of --spec-ref, --area, or --follow-up is required")
+				return publishMachineError(cmd, invalidArgumentsf("one of --spec-ref, --area, or --follow-up is required"))
 			}
-			svc, err := serviceFromCmd(cmd)
-			if err != nil {
-				return err
-			}
-			// An explicit --slug wins; otherwise the title is the slug source, so a
-			// plain `task new --title "X"` still yields a slugged, scannable id. The
-			// explicit slug is written verbatim; the title fallback is length-capped.
-			slugSource := slug
-			slugExplicit := cmd.Flags().Changed("slug")
-			if !slugExplicit {
-				slugSource = title
-			}
-			result, err := svc.CreateTask(taskrail.CreateTaskInput{
-				Title:              title,
-				Slug:               slugSource,
-				SlugExplicit:       slugExplicit,
-				SlugSourceSupplied: cmd.Flags().Changed("slug") || cmd.Flags().Changed("title"),
-				SpecRef:            specRef,
-				Area:               area,
-				Priority:           priority,
-				Dependencies:       deps,
-				FollowUpOf:         followUp,
+			return runCommand(cmd, func(svc *taskrail.Service) (commandResult, error) {
+				// An explicit --slug wins; otherwise the title is the slug source, so a
+				// plain `task new --title "X"` still yields a slugged, scannable id. The
+				// explicit slug is written verbatim; the title fallback is length-capped.
+				slugSource := slug
+				slugExplicit := cmd.Flags().Changed("slug")
+				if !slugExplicit {
+					slugSource = title
+				}
+				result, err := svc.CreateTask(taskrail.CreateTaskInput{
+					Title:              title,
+					Slug:               slugSource,
+					SlugExplicit:       slugExplicit,
+					SlugSourceSupplied: cmd.Flags().Changed("slug") || cmd.Flags().Changed("title"),
+					SpecRef:            specRef,
+					Area:               area,
+					Priority:           priority,
+					Dependencies:       deps,
+					FollowUpOf:         followUp,
+				})
+				if err != nil {
+					return commandResult{}, err
+				}
+				printWarnings(cmd, result.Warnings)
+				return commandResult{shape: "TaskNewResult", value: result, text: result.Path}, nil
 			})
-			if err != nil {
-				return err
-			}
-			printWarnings(cmd, result.Warnings)
-			return printResult(cmd, opt.json, result, result.Path)
 		},
 	}
 
@@ -81,7 +77,7 @@ func newTaskNewCmd() *cobra.Command {
 	cmd.Flags().StringVar(&priority, "priority", "medium", "task priority: high, medium, or low")
 	cmd.Flags().StringArrayVar(&deps, "dep", nil, "dependency task id (repeatable)")
 	cmd.Flags().StringVar(&followUp, "follow-up", "", "parent task id: inherit its spec_ref and depend on it")
-	cmd.Flags().BoolVar(&opt.json, "json", false, "print machine-readable output")
+	addMachineJSONFlag(cmd)
 	// --area is the active-spec shorthand for --spec-ref; a task has one resolved ref.
 	cmd.MarkFlagsMutuallyExclusive("spec-ref", "area")
 	_ = cmd.RegisterFlagCompletionFunc("spec-ref", completeSpecRef)
@@ -94,7 +90,6 @@ func newTaskRenameCmd() *cobra.Command {
 		slug   string
 		title  string
 		dryRun bool
-		opt    jsonOption
 	)
 
 	cmd := &cobra.Command{
@@ -113,32 +108,32 @@ func newTaskRenameCmd() *cobra.Command {
 			"the bare T-<n> id and warns on stderr. A target id that collides with an " +
 			"existing task fails before any write. --dry-run reports the change set " +
 			"without writing. Rename never advances a task's status.",
-		Args: cobra.ExactArgs(1),
+		Args: machineArgs(cobra.ExactArgs(1)),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			svc, err := serviceFromCmd(cmd)
-			if err != nil {
-				return err
-			}
-			result, err := svc.RenameTask(taskrail.RenameTaskInput{
-				OldID:         args[0],
-				Slug:          slug,
-				SlugExplicit:  cmd.Flags().Changed("slug"),
-				Title:         title,
-				TitleExplicit: cmd.Flags().Changed("title"),
-				DryRun:        dryRun,
+			return runCommand(cmd, func(svc *taskrail.Service) (commandResult, error) {
+				result, err := svc.RenameTask(taskrail.RenameTaskInput{
+					OldID:         args[0],
+					Slug:          slug,
+					SlugExplicit:  cmd.Flags().Changed("slug"),
+					Title:         title,
+					TitleExplicit: cmd.Flags().Changed("title"),
+					DryRun:        dryRun,
+				})
+				if err != nil {
+					return commandResult{}, err
+				}
+				printWarnings(cmd, result.Warnings)
+				return commandResult{
+					shape: "TaskRenameResult", value: result, text: renameSummary(result),
+				}, nil
 			})
-			if err != nil {
-				return err
-			}
-			printWarnings(cmd, result.Warnings)
-			return printResult(cmd, opt.json, result, renameSummary(result))
 		},
 	}
 
 	cmd.Flags().StringVar(&slug, "slug", "", "new slug for the id suffix")
 	cmd.Flags().StringVar(&title, "title", "", "title-like source for the new slug (derived via slugify); does not rewrite the task title")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "report the planned change set without writing")
-	cmd.Flags().BoolVar(&opt.json, "json", false, "print machine-readable output")
+	addMachineJSONFlag(cmd)
 	return cmd
 }
 
@@ -167,7 +162,6 @@ func newTaskRepointCmd() *cobra.Command {
 		area    string
 		specRef string
 		dryRun  bool
-		opt     jsonOption
 	)
 
 	cmd := &cobra.Command{
@@ -184,29 +178,29 @@ func newTaskRepointCmd() *cobra.Command {
 			"dependencies are untouched, and no other task file is modified. " +
 			"Completed and cancelled tasks are delivered history and are rejected. " +
 			"--dry-run reports the change without writing.",
-		Args: cobra.ExactArgs(1),
+		Args: machineArgs(cobra.ExactArgs(1)),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			svc, err := serviceFromCmd(cmd)
-			if err != nil {
-				return err
-			}
-			result, err := svc.RepointTask(taskrail.RepointTaskInput{
-				TaskID:  args[0],
-				Area:    area,
-				SpecRef: specRef,
-				DryRun:  dryRun,
+			return runCommand(cmd, func(svc *taskrail.Service) (commandResult, error) {
+				result, err := svc.RepointTask(taskrail.RepointTaskInput{
+					TaskID:  args[0],
+					Area:    area,
+					SpecRef: specRef,
+					DryRun:  dryRun,
+				})
+				if err != nil {
+					return commandResult{}, err
+				}
+				return commandResult{
+					shape: "TaskRepointResult", value: result, text: repointSummary(result),
+				}, nil
 			})
-			if err != nil {
-				return err
-			}
-			return printResult(cmd, opt.json, result, repointSummary(result))
 		},
 	}
 
 	cmd.Flags().StringVar(&area, "area", "", "active-spec anchor shorthand; resolves spec_ref to the active spec path plus this anchor (see `spec show <active-version> --anchors`)")
 	cmd.Flags().StringVar(&specRef, "spec-ref", "", "explicit spec reference as path#anchor, for the cross-spec case")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "report the planned change without writing")
-	cmd.Flags().BoolVar(&opt.json, "json", false, "print machine-readable output")
+	addMachineJSONFlag(cmd)
 	// --area is the active-spec shorthand for --spec-ref; a task has one resolved ref.
 	cmd.MarkFlagsMutuallyExclusive("spec-ref", "area")
 	_ = cmd.RegisterFlagCompletionFunc("spec-ref", completeSpecRef)

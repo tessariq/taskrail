@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -265,17 +264,23 @@ func TestRetrofitEmitPromptMatchesImport(t *testing.T) {
 		t.Fatalf("emit-prompt output missing prompt header: %q", retro)
 	}
 
-	// The JSON envelope must match too, guarding the machine-readable path.
-	retroJSON, err := runRoot(t, "retrofit", "notes/ideas.md", "--emit-prompt", "--json")
+	// The machine result must match too, guarding the machine-readable path. The
+	// envelopes themselves differ by exactly one field — each names its own
+	// command — so the comparison is of the shared result payload.
+	retroJSON, _, err := runRootSplit(t, "retrofit", "notes/ideas.md", "--emit-prompt", "--json")
 	if err != nil {
 		t.Fatalf("retrofit emit-prompt --json: %v (output %q)", err, retroJSON)
 	}
-	impJSON, err := runRoot(t, "import", "notes/ideas.md", "--to", "planning", "--emit-prompt", "--json")
+	impJSON, _, err := runRootSplit(t, "import", "notes/ideas.md", "--to", "planning", "--emit-prompt", "--json")
 	if err != nil {
 		t.Fatalf("import emit-prompt --json: %v (output %q)", err, impJSON)
 	}
-	if retroJSON != impJSON {
-		t.Fatalf("retrofit emit-prompt --json diverged from import:\nretrofit=%q\nimport=%q", retroJSON, impJSON)
+	retroResult, impResult := decodeEnvelope(t, retroJSON), decodeEnvelope(t, impJSON)
+	if string(retroResult.Result) != string(impResult.Result) {
+		t.Fatalf("retrofit emit-prompt --json diverged from import:\nretrofit=%s\nimport=%s", retroResult.Result, impResult.Result)
+	}
+	if retroResult.Command != "retrofit" || impResult.Command != "import" {
+		t.Fatalf("each envelope must name its own command, got %q and %q", retroResult.Command, impResult.Command)
 	}
 
 	// Emit-prompt never scaffolds.
@@ -823,9 +828,7 @@ func TestTaskNewWarnsOnEmptyDerivedSlugToStderr(t *testing.T) {
 	var decoded struct {
 		TaskID string `json:"task_id"`
 	}
-	if err := json.Unmarshal([]byte(stdout), &decoded); err != nil {
-		t.Fatalf("stdout is not clean json (%v): %q", err, stdout)
-	}
+	decodeMachineResult(t, stdout, &decoded)
 	if decoded.TaskID != "T-001" {
 		t.Fatalf("expected bare id T-001, got %q", decoded.TaskID)
 	}
@@ -850,9 +853,7 @@ func TestTaskNewExplicitEmptySlugOverridesTitle(t *testing.T) {
 	var decoded struct {
 		TaskID string `json:"task_id"`
 	}
-	if err := json.Unmarshal([]byte(stdout), &decoded); err != nil {
-		t.Fatalf("stdout is not clean json (%v): %q", err, stdout)
-	}
+	decodeMachineResult(t, stdout, &decoded)
 	if decoded.TaskID != "T-001" {
 		t.Fatalf("expected explicit empty slug to override title with bare id T-001, got %q", decoded.TaskID)
 	}
@@ -874,9 +875,7 @@ func TestTaskNewExplicitEmptyTitleWarns(t *testing.T) {
 	var decoded struct {
 		TaskID string `json:"task_id"`
 	}
-	if err := json.Unmarshal([]byte(stdout), &decoded); err != nil {
-		t.Fatalf("stdout is not clean json (%v): %q", err, stdout)
-	}
+	decodeMachineResult(t, stdout, &decoded)
 	if decoded.TaskID != "T-001" {
 		t.Fatalf("expected bare id T-001, got %q", decoded.TaskID)
 	}
@@ -910,9 +909,7 @@ func TestVerifyFollowupEmptyTitleSlugWarnsWithoutCorruptingJSON(t *testing.T) {
 	var payload struct {
 		FollowupTaskID string `json:"followup_task_id"`
 	}
-	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
-		t.Fatalf("stdout is not clean json (%v): %q", err, stdout)
-	}
+	decodeMachineResult(t, stdout, &payload)
 	if payload.FollowupTaskID != "T-002" {
 		t.Fatalf("expected bare follow-up id T-002, got %q", payload.FollowupTaskID)
 	}
@@ -964,9 +961,7 @@ func TestTaskRenameDeSlugsWithWarningToStderr(t *testing.T) {
 	var decoded struct {
 		NewID string `json:"new_id"`
 	}
-	if err := json.Unmarshal([]byte(stdout), &decoded); err != nil {
-		t.Fatalf("stdout is not clean json (%v): %q", err, stdout)
-	}
+	decodeMachineResult(t, stdout, &decoded)
 	if decoded.NewID != "T-001" {
 		t.Fatalf("expected de-slug to T-001, got %q", decoded.NewID)
 	}
@@ -992,9 +987,7 @@ func TestTaskRenameExplicitEmptySlugDeSlugs(t *testing.T) {
 	var decoded struct {
 		NewID string `json:"new_id"`
 	}
-	if err := json.Unmarshal([]byte(stdout), &decoded); err != nil {
-		t.Fatalf("stdout is not clean json (%v): %q", err, stdout)
-	}
+	decodeMachineResult(t, stdout, &decoded)
 	if decoded.NewID != "T-001" {
 		t.Fatalf("expected de-slug to T-001, got %q", decoded.NewID)
 	}

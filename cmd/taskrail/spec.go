@@ -37,12 +37,12 @@ func newSpecDiffCmd() *cobra.Command {
 		Args:              machineArgs(cobra.ExactArgs(2)),
 		ValidArgsFunction: completeSpecDiffVersions,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runReport(cmd, func(svc *taskrail.Service) (report, error) {
+			return runCommand(cmd, func(svc *taskrail.Service) (commandResult, error) {
 				result, err := svc.SpecDiff(args[0], args[1])
 				if err != nil {
-					return report{}, err
+					return commandResult{}, err
 				}
-				return report{shape: "SpecDiffResult", value: result, text: renderSpecDiffText(result)}, nil
+				return commandResult{shape: "SpecDiffResult", value: result, text: renderSpecDiffText(result)}, nil
 			})
 		},
 	}
@@ -90,24 +90,23 @@ func appendAnchorLines(b *strings.Builder, anchors []taskrail.SpecAnchor) {
 // reading order. It is the one writer in the spec family that authors a spec
 // file; it never writes STATE.md and never activates the new spec.
 func newSpecAddCmd() *cobra.Command {
-	var opt jsonOption
 	cmd := &cobra.Command{
 		Use:   "add <version>",
 		Short: "Scaffold specs/<version>.md and add it to the reading order (does not activate)",
-		Args:  cobra.ExactArgs(1),
+		Args:  machineArgs(cobra.ExactArgs(1)),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			svc, err := serviceFromCmd(cmd)
-			if err != nil {
-				return err
-			}
-			result, err := svc.AddSpec(args[0])
-			if err != nil {
-				return err
-			}
-			return printResult(cmd, opt.json, result, renderSpecAddText(result))
+			return runCommand(cmd, func(svc *taskrail.Service) (commandResult, error) {
+				result, err := svc.AddSpec(args[0])
+				if err != nil {
+					return commandResult{}, err
+				}
+				return commandResult{
+					shape: "SpecAddResult", value: result, text: renderSpecAddText(result),
+				}, nil
+			})
 		},
 	}
-	cmd.Flags().BoolVar(&opt.json, "json", false, "print machine-readable output")
+	addMachineJSONFlag(cmd)
 	return cmd
 }
 
@@ -125,12 +124,12 @@ func newSpecListCmd() *cobra.Command {
 		Short: "List versioned specs and mark the active one (read-only)",
 		Args:  machineArgs(cobra.NoArgs),
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return runReport(cmd, func(svc *taskrail.Service) (report, error) {
+			return runCommand(cmd, func(svc *taskrail.Service) (commandResult, error) {
 				result, err := svc.SpecList()
 				if err != nil {
-					return report{}, err
+					return commandResult{}, err
 				}
-				return report{shape: "SpecListResult", value: result, text: renderSpecListText(result)}, nil
+				return commandResult{shape: "SpecListResult", value: result, text: renderSpecListText(result)}, nil
 			})
 		},
 	}
@@ -148,12 +147,12 @@ func newSpecShowCmd() *cobra.Command {
 		Args:              machineArgs(cobra.ExactArgs(1)),
 		ValidArgsFunction: completeSpecVersion,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runReport(cmd, func(svc *taskrail.Service) (report, error) {
+			return runCommand(cmd, func(svc *taskrail.Service) (commandResult, error) {
 				result, err := svc.SpecShow(args[0], anchors)
 				if err != nil {
-					return report{}, err
+					return commandResult{}, err
 				}
-				return report{shape: "SpecShowResult", value: result, text: renderSpecShowText(result)}, nil
+				return commandResult{shape: "SpecShowResult", value: result, text: renderSpecShowText(result)}, nil
 			})
 		},
 	}
@@ -198,25 +197,24 @@ func renderSpecShowText(r taskrail.SpecShowResult) string {
 // is the CLI-only writer of active_spec_version/active_spec_path and the
 // sanctioned replacement for hand-editing that state.
 func newSpecActivateCmd() *cobra.Command {
-	var opt jsonOption
 	cmd := &cobra.Command{
 		Use:               "activate <version>",
 		Short:             "Repoint STATE.md's active spec to <version> and re-validate",
-		Args:              cobra.ExactArgs(1),
+		Args:              machineArgs(cobra.ExactArgs(1)),
 		ValidArgsFunction: completeSpecVersion,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			svc, err := serviceFromCmd(cmd)
-			if err != nil {
-				return err
-			}
-			result, err := svc.ActivateSpec(args[0])
-			if err != nil {
-				return err
-			}
-			return printResult(cmd, opt.json, result, renderSpecActivateText(result))
+			return runCommand(cmd, func(svc *taskrail.Service) (commandResult, error) {
+				result, err := svc.ActivateSpec(args[0])
+				if err != nil {
+					return commandResult{}, err
+				}
+				return commandResult{
+					shape: "SpecActivateResult", value: result, text: renderSpecActivateText(result),
+				}, nil
+			})
 		},
 	}
-	cmd.Flags().BoolVar(&opt.json, "json", false, "print machine-readable output")
+	addMachineJSONFlag(cmd)
 	return cmd
 }
 

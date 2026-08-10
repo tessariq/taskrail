@@ -35,22 +35,22 @@ func newCoverageCmd() *cobra.Command {
 			if err := validateCoverageFlags(cmd, gaps, minPct, failOn); err != nil {
 				return publishMachineError(cmd, err)
 			}
-			return runReport(cmd, func(svc *taskrail.Service) (report, error) {
+			return runCommand(cmd, func(svc *taskrail.Service) (commandResult, error) {
 				if gaps {
 					gr, err := gapReport(svc, areaSet, area)
 					if err != nil {
-						return report{}, err
+						return commandResult{}, err
 					}
-					return report{
+					return commandResult{
 						shape: "GapReport", value: gr,
 						text: renderGapText(gr), gate: gapGate(gr, failOn),
 					}, nil
 				}
 				cr, err := coverageReport(svc, areaSet, area)
 				if err != nil {
-					return report{}, err
+					return commandResult{}, err
 				}
-				return report{
+				return commandResult{
 					shape: "CoverageReport", value: cr,
 					text: renderCoverageText(cr), gate: coverageGate(cr, minSet, minPct),
 				}, nil

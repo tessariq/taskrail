@@ -57,7 +57,8 @@ func exactTaskByID(tasks []*Task, id string) (*Task, error) {
 	if task, ok := taskByID(tasks, id); ok {
 		return task, nil
 	}
-	return nil, fmt.Errorf("task %q not found: identity must be an exact full persisted task ID", id)
+	return nil, WithMachineErrorCode(MachineCodeTaskNotFound,
+		fmt.Errorf("task %q not found: identity must be an exact full persisted task ID", id))
 }
 
 func eligibleTasks(tasks []*Task) []*Task {

@@ -15,9 +15,10 @@ import (
 // validation) and would otherwise fail with prose-only stderr after the command
 // was already selected.
 
-// report is one read-only command's finished work: the payload an agent reads,
-// the text a human reads, and whether the completed report gates.
-type report struct {
+// commandResult is one command's finished work — a produced report or a
+// completed write: the payload an agent reads, the text a human reads, and
+// whether the completed report gates.
+type commandResult struct {
 	// shape is the companion result shape, such as "StatusResult". The boundary
 	// holds it to the command's inventory entry.
 	shape string
@@ -25,61 +26,68 @@ type report struct {
 	text  string
 	// gate is set when the command contract makes this completed report's
 	// findings gating. The document stays a result envelope and the process
-	// exits non-zero, identically in text and JSON mode.
+	// exits non-zero, identically in text and JSON mode. No writer sets it: a
+	// write either commits and returns a result, or fails as an error envelope.
 	gate error
 }
 
-// runReport runs one read-only report command: it discovers the repository,
-// produces the report, and publishes it in the mode the invocation asked for.
-// Failures on either path become the command's registered error envelope, and
-// every path returns the same error human mode would, so the two modes classify
-// one outcome identically.
-func runReport(cmd *cobra.Command, produce func(*taskrail.Service) (report, error)) error {
+// runCommand runs one command: it discovers the repository, does the work, and
+// publishes the outcome in the mode the invocation asked for. Failures on either
+// path become the command's registered error envelope, and every path returns
+// the same error human mode would, so the two modes classify one outcome
+// identically. Because produce runs before the mode is consulted, a writer
+// persists exactly the same bytes either way.
+func runCommand(cmd *cobra.Command, produce func(*taskrail.Service) (commandResult, error)) error {
 	svc, err := serviceFromCmd(cmd)
 	if err != nil {
 		return publishMachineError(cmd, err)
 	}
-	rep, err := produce(svc)
+	result, err := produce(svc)
 	if err != nil {
 		return publishMachineError(cmd, err)
 	}
 	if !machineJSONRequested(cmd) {
-		if _, err := fmt.Fprintln(cmd.OutOrStdout(), rep.text); err != nil {
+		if _, err := fmt.Fprintln(cmd.OutOrStdout(), result.text); err != nil {
 			return err
 		}
-		return rep.gate
+		return result.gate
 	}
 	outcome := taskrail.MachineOutcome{
 		Command:  machineCommandPath(cmd),
 		Surface:  taskrail.MachineSurfaceStdout,
 		Warnings: []taskrail.MachineWarning{},
-		Result:   &taskrail.MachineResult{Shape: rep.shape, Value: rep.value, Gated: rep.gate != nil},
+		Result:   &taskrail.MachineResult{Shape: result.shape, Value: result.value, Gated: result.gate != nil},
 	}
 	if err := taskrail.EmitMachineDocument(cmd.OutOrStdout(), outcome); err != nil {
 		return err
 	}
-	return rep.gate
+	return result.gate
 }
 
 // publishMachineError writes cause as this command's error envelope when the
 // invocation asked for machine output, and always returns cause so the process
-// exit stays the one human mode would use. Read-only commands publish nothing,
-// so `applied` is false and the detail collections stay empty.
+// exit stays the one human mode would use. The failure itself carries the facts
+// the details report: the registered code, whether the complete semantic
+// operation committed, and the managed paths a partial write left behind.
 func publishMachineError(cmd *cobra.Command, cause error) error {
 	if !machineJSONRequested(cmd) {
 		return cause
 	}
+	failure := taskrail.MachineFailureFor(cause)
 	outcome := taskrail.MachineOutcome{
 		Command:  machineCommandPath(cmd),
 		Surface:  taskrail.MachineSurfaceStdout,
 		Warnings: []taskrail.MachineWarning{},
 		Error: &taskrail.MachineError{
-			Code:    taskrail.MachineErrorCodeFor(cause),
+			Code:    failure.Code,
 			Message: cause.Error(),
 			Details: taskrail.MachineErrorDetails{
+				Applied:    failure.Applied,
 				Violations: []taskrail.MachineViolation{},
-				Paths:      []string{},
-				Snapshots:  []taskrail.MachineSnapshot{},
+				// append onto an empty slice, not slices.Clone: a required array
+				// is `[]` on the wire, and cloning nil would leave it null.
+				Paths:     append([]string{}, failure.Paths...),
+				Snapshots: []taskrail.MachineSnapshot{},
 			},
 		},
 	}
@@ -106,13 +114,27 @@ func publishSelectionError(cmd *cobra.Command, cause error) error {
 	return publishMachineError(cmd, taskrail.WithMachineErrorCode(taskrail.MachineCodeInvalidArguments, cause))
 }
 
-// machineArgs publishes a positional-argument rejection through the envelope.
+// machineArgs publishes cobra's own argument rejections through the envelope.
 // Cobra validates positionals after flag parsing, so `--json` is already known
-// here.
+// here — but it validates required flags and flag groups only after this hook
+// has passed, and reports those failures with no hook of their own. Running
+// cobra's validators here keeps their exact messages while making them reachable
+// as envelopes; returning the failure aborts the run before cobra repeats it.
+//
+// Failing here also pre-empts the PersistentPreRun that reports skill skew, so
+// the skew is reported first: a rejected invocation is exactly when a skill
+// written by a newer binary is the explanation (root.go).
 func machineArgs(validate cobra.PositionalArgs) cobra.PositionalArgs {
 	return func(cmd *cobra.Command, args []string) error {
-		if err := validate(cmd, args); err != nil {
-			return publishSelectionError(cmd, err)
+		for _, check := range []func() error{
+			func() error { return validate(cmd, args) },
+			cmd.ValidateRequiredFlags,
+			cmd.ValidateFlagGroups,
+		} {
+			if err := check(); err != nil {
+				warnOnSkillSkew(cmd, args)
+				return publishSelectionError(cmd, err)
+			}
 		}
 		return nil
 	}

@@ -112,9 +112,11 @@ taskrail complete T-001 --note "implemented"         # mark implementation done
 taskrail verify T-001 --result pass --summary "acceptance met"
 ```
 
-`next` and `verify` expose structured results today; `start`, `complete`, and
-`block` remain human-text lifecycle writers in v0.4. The active v0.5 roadmap adds
-their JSON forms and moves every agent-consumed result to one versioned envelope.
+Every `--json` command — including the `start`, `complete`, and `block`
+lifecycle writers — emits one versioned envelope: `schema_version`, the canonical
+`command`, `warnings`, and exactly one of `result` or `error`. A failure carries a
+registered `error.code` plus `details` recording whether the operation committed
+and which paths it touched. Text output stays human-oriented and unchanged.
 Idle `next` selection is anchored to the active spec: it considers only `todo`
 tasks whose `spec_ref` points at the active spec, so higher-priority older-spec
 work is skipped rather than selected. When only older-spec work is runnable,
@@ -393,10 +395,11 @@ taskrail import --apply draft.json                 # validate an agent draft and
 ```
 
 An apply that fails during writing exits non-zero and still reports what it wrote
-or may have touched — the spec and task paths in text mode, the same envelope
-marked `"partial": true` with `--json`. Review those paths before retrying: a
-failed spec write may leave an empty or truncated file, and re-applying the same
-draft creates any already-written tasks a second time under new ids.
+or may have touched — the spec and task paths in text mode, and with `--json` a
+`partial_write` error whose `details.paths` name them. Review those paths before
+retrying: a failed spec write may leave an empty or truncated file, and
+re-applying the same draft creates any already-written tasks a second time under
+new ids.
 
 Typical flow:
 

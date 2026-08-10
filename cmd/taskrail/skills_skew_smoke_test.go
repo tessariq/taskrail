@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/tessariq/taskrail/internal/taskrail"
 )
 
 // stageSkillSkew installs the embedded skills into a fresh repo and rewrites one
@@ -73,6 +75,28 @@ func TestSkillSkewWarningGoesToStderrAndKeepsJSONParseable(t *testing.T) {
 		if !strings.Contains(stderr, want) {
 			t.Errorf("stderr %q missing %q", stderr, want)
 		}
+	}
+}
+
+// A rejected invocation is exactly when a skill written by a newer binary is the
+// explanation, so the skew warning must survive the argument checks the machine
+// boundary runs before cobra's own PersistentPreRun would report it.
+func TestSkillSkewWarningSurvivesAnArgumentRejection(t *testing.T) {
+	root := setupRepo(t)
+	stageSkillSkew(t, root)
+	writeTask(t, root, "T-100", "todo", "")
+
+	// A missing required flag is validated by cobra after this hook, so it is the
+	// rejection most likely to lose the warning.
+	stdout, stderr, err := runRootSplit(t, "block", "T-100", "--json")
+	if err == nil {
+		t.Fatalf("expected a missing --reason to fail, got %q", stdout)
+	}
+	if failure := decodeMachineError(t, stdout); failure.Code != taskrail.MachineCodeInvalidArguments {
+		t.Errorf("code = %q, want %q", failure.Code, taskrail.MachineCodeInvalidArguments)
+	}
+	if !strings.Contains(stderr, "v0.0.1-stale") {
+		t.Errorf("stderr %q lost the skew warning", stderr)
 	}
 }
 

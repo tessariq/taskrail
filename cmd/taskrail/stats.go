@@ -40,12 +40,12 @@ func newStatsCmd() *cobra.Command {
 				_, err = fmt.Fprint(cmd.OutOrStdout(), graph)
 				return err
 			}
-			return runReport(cmd, func(svc *taskrail.Service) (report, error) {
+			return runCommand(cmd, func(svc *taskrail.Service) (commandResult, error) {
 				stats, err := svc.Stats()
 				if err != nil {
-					return report{}, err
+					return commandResult{}, err
 				}
-				return report{shape: "StatsResult", value: stats, text: renderStatsText(stats)}, nil
+				return commandResult{shape: "StatsResult", value: stats, text: renderStatsText(stats)}, nil
 			})
 		},
 	}

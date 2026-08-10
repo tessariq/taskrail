@@ -1,7 +1,7 @@
 package main
 
 import (
-	"errors"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -14,7 +14,6 @@ func newImportCmd() *cobra.Command {
 		to         string
 		emitPrompt bool
 		apply      string
-		opt        jsonOption
 	)
 
 	cmd := &cobra.Command{
@@ -29,109 +28,105 @@ func newImportCmd() *cobra.Command {
 			"provider-agnostic. The thin --llm adapter (the binary calling a model directly) " +
 			"is deferred to v0.3 and is intentionally not implemented here. The source file " +
 			"is never modified.",
-		Args: cobra.MaximumNArgs(1),
+		Args: machineArgs(cobra.MaximumNArgs(1)),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			svc, err := serviceFromCmd(cmd)
-			if err != nil {
-				return err
+			if err := validateImportArgs(args, to, emitPrompt, apply); err != nil {
+				return publishMachineError(cmd, err)
 			}
-
-			if applyPath := strings.TrimSpace(apply); applyPath != "" {
-				if len(args) > 0 || to != "" || emitPrompt {
-					return errors.New("--apply ingests a draft file; do not combine it with a source, --to, or --emit-prompt")
+			return runCommand(cmd, func(svc *taskrail.Service) (commandResult, error) {
+				if applyPath := strings.TrimSpace(apply); applyPath != "" {
+					return applyDraftResult(cmd, svc, applyPath)
 				}
-				result, err := svc.ApplyImportDraft(taskrail.ApplyDraftInput{DraftPath: applyPath})
+				if emitPrompt {
+					return emitPromptResult(svc, args[0], to)
+				}
+				result, err := svc.Import(taskrail.ImportInput{SourcePath: args[0], Target: to})
 				if err != nil {
-					// A partial apply already moved the repository, so report the artifacts
-					// before surfacing the failure: without them --json emits nothing at
-					// all and the operator has no paths to review before retrying. The
-					// envelope carries partial:true and the exit stays non-zero, so the
-					// output can never be read as a clean apply.
-					if result.Partial {
-						printWarnings(cmd, result.Warnings)
-						if printErr := printApplyResult(cmd, opt.json, result); printErr != nil {
-							return errors.Join(err, printErr)
-						}
-					}
-					return err
+					return commandResult{}, err
 				}
-				printWarnings(cmd, result.Warnings)
-				return printApplyResult(cmd, opt.json, result)
-			}
-
-			if len(args) == 0 {
-				return errors.New("import requires a source file, or --apply <draft.json>")
-			}
-			if to == "" {
-				return errors.New("import requires --to (tasks, spec, or planning)")
-			}
-
-			if emitPrompt {
-				result, err := svc.EmitImportPrompt(taskrail.EmitPromptInput{SourcePath: args[0], Target: to})
+				// Text mode prints the draft alone: it is the reviewable artifact a
+				// caller redirects to a file and later feeds to --apply.
+				draft, err := json.MarshalIndent(result.Draft, "", "  ")
 				if err != nil {
-					return err
+					return commandResult{}, fmt.Errorf("marshal draft: %w", err)
 				}
-				return printPromptResult(cmd, opt.json, result)
-			}
-
-			result, err := svc.Import(taskrail.ImportInput{SourcePath: args[0], Target: to})
-			if err != nil {
-				return err
-			}
-			return printImportResult(cmd, opt.json, result)
+				return commandResult{shape: "ImportPreviewResult", value: result, text: string(draft)}, nil
+			})
 		},
 	}
 
 	cmd.Flags().StringVar(&to, "to", "", "import target: tasks, spec, or planning (preview and --emit-prompt)")
 	cmd.Flags().BoolVar(&emitPrompt, "emit-prompt", false, "print an agent prompt instead of a structural draft")
 	cmd.Flags().StringVar(&apply, "apply", "", "write real spec/task files from an agent-produced draft JSON file")
-	cmd.Flags().BoolVar(&opt.json, "json", false, "print machine-readable output")
+	addMachineJSONFlag(cmd)
 	return cmd
 }
 
-// printImportResult renders a structural preview. In JSON mode it emits the full
-// result envelope; otherwise it prints the draft, which is the reviewable artifact
-// a caller redirects to a file and later feeds to --apply.
-func printImportResult(cmd *cobra.Command, asJSON bool, result taskrail.ImportResult) error {
-	// Both modes emit JSON: the full envelope, or just the draft (the reviewable
-	// artifact a caller redirects to a file and later feeds to --apply).
-	payload := any(result)
-	if !asJSON {
-		payload = result.Draft
+// validateImportArgs rejects a mode combination import cannot honour, before any
+// repository work.
+func validateImportArgs(args []string, to string, emitPrompt bool, apply string) error {
+	if strings.TrimSpace(apply) != "" {
+		if len(args) > 0 || to != "" || emitPrompt {
+			return invalidArgumentsf("--apply ingests a draft file; do not combine it with a source, --to, or --emit-prompt")
+		}
+		return nil
 	}
-	return printJSON(cmd, payload)
+	if len(args) == 0 {
+		return invalidArgumentsf("import requires a source file, or --apply <draft.json>")
+	}
+	if to == "" {
+		return invalidArgumentsf("import requires --to (tasks, spec, or planning)")
+	}
+	return nil
 }
 
-// printPromptResult renders the emit-prompt output: the raw prompt in text mode,
-// the full envelope (source, target, prompt) in JSON mode.
-func printPromptResult(cmd *cobra.Command, asJSON bool, result taskrail.EmitPromptResult) error {
-	if asJSON {
-		return printJSON(cmd, result)
+// applyDraftResult writes the draft and reports what landed. A failure after
+// artifacts were written is an error envelope carrying those paths, not a result:
+// a partial apply never committed the complete import, so it must not read back
+// as one. Text mode still lists the artifacts, which is the only place a human
+// sees them.
+func applyDraftResult(cmd *cobra.Command, svc *taskrail.Service, path string) (commandResult, error) {
+	result, err := svc.ApplyImportDraft(taskrail.ApplyDraftInput{DraftPath: path})
+	printWarnings(cmd, result.Warnings)
+	if err != nil {
+		if result.Partial && !machineJSONRequested(cmd) {
+			fmt.Fprint(cmd.OutOrStdout(), renderApplyArtifacts(result))
+		}
+		return commandResult{}, err
 	}
-	_, err := fmt.Fprint(cmd.OutOrStdout(), result.Prompt)
-	return err
+	return commandResult{
+		shape: "ImportV1ApplyResult", value: result,
+		text: strings.TrimSuffix(renderApplyArtifacts(result), "\n"),
+	}, nil
 }
 
-// printApplyResult reports what --apply wrote: the full envelope in JSON mode, or
-// one line per written artifact otherwise.
-func printApplyResult(cmd *cobra.Command, asJSON bool, result taskrail.ApplyDraftResult) error {
-	if asJSON {
-		return printJSON(cmd, result)
+// emitPromptResult renders the agent prompt shared by `import --emit-prompt` and
+// `retrofit --emit-prompt`. Text mode prints the prompt itself, which is content
+// for a human or another agent rather than a report about one.
+func emitPromptResult(svc *taskrail.Service, source, target string) (commandResult, error) {
+	result, err := svc.EmitImportPrompt(taskrail.EmitPromptInput{SourcePath: source, Target: target})
+	if err != nil {
+		return commandResult{}, err
 	}
-	out := cmd.OutOrStdout()
+	return commandResult{
+		shape: "EmitPromptResult", value: result,
+		text: strings.TrimSuffix(result.Prompt, "\n"),
+	}, nil
+}
+
+// renderApplyArtifacts lists one line per artifact the apply wrote, marking a
+// partial apply's spec as one to review rather than one cleanly written.
+func renderApplyArtifacts(result taskrail.ApplyDraftResult) string {
+	var b strings.Builder
 	if result.SpecPath != "" {
 		verb := "wrote"
 		if result.Partial {
 			verb = "review"
 		}
-		if _, err := fmt.Fprintf(out, "%s spec %s\n", verb, result.SpecPath); err != nil {
-			return err
-		}
+		fmt.Fprintf(&b, "%s spec %s\n", verb, result.SpecPath)
 	}
 	for _, task := range result.Tasks {
-		if _, err := fmt.Fprintf(out, "created %s %s\n", task.TaskID, task.Path); err != nil {
-			return err
-		}
+		fmt.Fprintf(&b, "created %s %s\n", task.TaskID, task.Path)
 	}
-	return nil
+	return b.String()
 }

@@ -128,10 +128,13 @@ func TestCheckMachineEntryPolicyRejectsPerturbedEntries(t *testing.T) {
 }
 
 // migratedCommands is the exact set of commands whose producer publishes the
-// common envelope today: the inherited read-only reports. Every other
-// constructed `--json` command still emits its inherited pre-v0.5 shape.
+// common envelope today: every command the CLI constructs, since T-271 moved the
+// last of the inherited writers over. The planned commands publish nothing yet.
 var migratedCommands = []string{
-	"coverage", "spec diff", "spec list", "spec show", "stats", "status", "validate",
+	"block", "complete", "coverage", "import", "init", "next", "repair", "retrofit",
+	"spec activate", "spec add", "spec diff", "spec list", "spec show", "start",
+	"stats", "status", "task new", "task rename", "task repoint", "unblock",
+	"validate", "verify",
 }
 
 // TestOnlyMigratedCommandsPublishTheCommonEnvelope pins the migration boundary,
@@ -180,7 +183,7 @@ func TestCheckMachineRegistrationsRejectsDrift(t *testing.T) {
 			mutate: func(registrations []MachineRegistration) []MachineRegistration {
 				return registrations[1:]
 			},
-			wantErr: `is inventoried as publishing "inherited"`,
+			wantErr: `is inventoried as publishing "envelope"`,
 		},
 		{
 			name: "duplicate registration",
@@ -202,13 +205,6 @@ func TestCheckMachineRegistrationsRejectsDrift(t *testing.T) {
 				return append(registrations, MachineRegistration{Command: "prompt list", Surface: MachineSurfaceStdout})
 			},
 			wantErr: `"prompt list stdout" publishes no machine document yet`,
-		},
-		{
-			name: "lifecycle writer that has not gained --json yet",
-			mutate: func(registrations []MachineRegistration) []MachineRegistration {
-				return append(registrations, MachineRegistration{Command: "start", Surface: MachineSurfaceStdout})
-			},
-			wantErr: `"start stdout" publishes no machine document yet`,
 		},
 	}
 	for _, tc := range cases {

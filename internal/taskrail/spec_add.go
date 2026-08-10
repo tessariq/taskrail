@@ -34,11 +34,12 @@ type SpecAddResult struct {
 // rejected before any write.
 func (s *Service) AddSpec(version string) (SpecAddResult, error) {
 	if !specVersionPattern.MatchString(version) {
-		return SpecAddResult{}, fmt.Errorf("invalid spec version %q: expected a versioned name like v0.3.0", version)
+		return SpecAddResult{}, invalidArgumentsf("invalid spec version %q: expected a versioned name like v0.3.0", version)
 	}
 	specFile := filepath.Join(s.paths.SpecsDir, version+".md")
 	if fileExists(specFile) {
-		return SpecAddResult{}, fmt.Errorf("spec file %s already exists; refusing to overwrite", relPath(s.paths.RepoRoot, specFile))
+		return SpecAddResult{}, WithMachineErrorCode(MachineCodeDestinationExists,
+			fmt.Errorf("spec file %s already exists; refusing to overwrite", relPath(s.paths.RepoRoot, specFile)))
 	}
 
 	// Read the README before any write so a genuinely unreadable README fails the
@@ -51,10 +52,14 @@ func (s *Service) AddSpec(version string) (SpecAddResult, error) {
 	}
 
 	if err := os.WriteFile(specFile, []byte(scaffoldSpec(version)), 0o644); err != nil {
-		return SpecAddResult{}, fmt.Errorf("write spec file %s: %w", relPath(s.paths.RepoRoot, specFile), fsCause(err))
+		return SpecAddResult{}, s.managedWriteFailure(specFile,
+			fmt.Errorf("write spec file %s: %w", relPath(s.paths.RepoRoot, specFile), fsCause(err)))
 	}
 	if err := os.WriteFile(readmePath, []byte(updateReadingOrder(string(readme), version)), 0o644); err != nil {
-		return SpecAddResult{}, fmt.Errorf("update specs README %s: %w", relPath(s.paths.RepoRoot, readmePath), fsCause(err))
+		// The spec file is already scaffolded by here, so a failed reading-order
+		// update leaves it listed nowhere.
+		return SpecAddResult{}, s.withWrittenPaths(s.managedWriteFailure(readmePath,
+			fmt.Errorf("update specs README %s: %w", relPath(s.paths.RepoRoot, readmePath), fsCause(err))), specFile)
 	}
 
 	return SpecAddResult{

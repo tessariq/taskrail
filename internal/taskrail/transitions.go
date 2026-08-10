@@ -213,122 +213,13 @@ func nextAction(result NextResult) string {
 	}
 }
 
-func (s *Service) Start(taskID string) (TransitionResult, error) {
-	state, tasks, err := s.loadStateAndTasks()
-	if err != nil {
-		return TransitionResult{}, err
-	}
-	if state.Frontmatter.CurrentTask != "" {
-		return TransitionResult{}, fmt.Errorf("task %s is already active", state.Frontmatter.CurrentTask)
-	}
-
-	task, err := exactTaskByID(tasks, taskID)
-	if err != nil {
-		return TransitionResult{}, err
-	}
-	if task.Frontmatter.Status != "todo" {
-		return TransitionResult{}, fmt.Errorf("task %s is not todo", taskID)
-	}
-	if !dependenciesResolved(task, tasks) {
-		return TransitionResult{}, fmt.Errorf("task %s has unresolved dependencies", taskID)
-	}
-
-	now := timestamp(s.now())
-	task.Frontmatter.Status = "in_progress"
-	task.Frontmatter.UpdatedAt = now
-
-	state.Frontmatter.UpdatedAt = now
-	state.Frontmatter.CurrentTask = task.Frontmatter.ID
-	state.Frontmatter.CurrentTaskTitle = task.Frontmatter.Title
-	state.Frontmatter.StatusSummary = statusSummaryInProgress
-	// Starting a task clears only its own stale blocker entry (if any); other
-	// tasks may still be blocked and must keep their recorded reasons.
-	state.Frontmatter.Blockers = removeBlocker(state.Frontmatter.Blockers, task.Frontmatter.ID)
-	state.Frontmatter.NextAction = fmt.Sprintf("Implement %s and run targeted tests", task.Frontmatter.ID)
-	state.Body = renderStateBody(state.Frontmatter, tasks)
-
-	if err := s.saveAll(state, tasks); err != nil {
-		return TransitionResult{}, err
-	}
-
-	return TransitionResult{TaskID: taskID, Status: task.Frontmatter.Status, UpdatedAt: now}, nil
-}
-
-func (s *Service) Complete(taskID, note string) (TransitionResult, error) {
-	return s.finishTask(taskID, "completed", strings.TrimSpace(note))
-}
-
-func (s *Service) Block(taskID, reason string) (TransitionResult, error) {
-	if strings.TrimSpace(reason) == "" {
-		return TransitionResult{}, errors.New("block reason must not be empty")
-	}
-	return s.finishTask(taskID, "blocked", strings.TrimSpace(reason))
-}
-
-// Unblock is the inverse of Block: it returns a blocked task to todo so it
-// re-enters next selection, drops only that task's blockers entry (other blocked
-// tasks keep their reasons), and, when reason is non-empty, records a timestamped
-// Implementation Notes line — the reason is never re-added to the blockers list.
-// It then re-renders STATE.md and re-runs validation, reporting the result
-// (mirrors ActivateSpec per specs/v0.3.0.md#task-unblocking).
-func (s *Service) Unblock(taskID, reason string) (UnblockResult, error) {
-	state, tasks, err := s.loadStateAndTasks()
-	if err != nil {
-		return UnblockResult{}, err
-	}
-	task, err := exactTaskByID(tasks, taskID)
-	if err != nil {
-		return UnblockResult{}, err
-	}
-	if task.Frontmatter.Status != "blocked" {
-		return UnblockResult{}, fmt.Errorf("task %s is not blocked", taskID)
-	}
-
-	if err := ensurePortableNote("reason", strings.TrimSpace(reason)); err != nil {
-		return UnblockResult{}, err
-	}
-
-	now := timestamp(s.now())
-	task.Frontmatter.Status = "todo"
-	task.Frontmatter.UpdatedAt = now
-	if note := strings.TrimSpace(reason); note != "" {
-		appendTaskNote(task, fmt.Sprintf("- %s: %s", now, note))
-	}
-
-	state.Frontmatter.UpdatedAt = now
-	// Drop only this task's stale blocker entry; other tasks may still be blocked
-	// and must keep their recorded reasons (mirrors finishTask's drop-only path).
-	state.Frontmatter.Blockers = removeBlocker(state.Frontmatter.Blockers, taskID)
-	// An active task owns the summary/next_action pointers, so leave them; only with
-	// no active task does reconcileIdlePointers re-derive them from the ledger just
-	// updated above (never pointing at the task we unblocked, whose entry is gone).
-	if state.Frontmatter.CurrentTask == "" {
-		reconcileIdlePointers(&state.Frontmatter)
-	}
-	state.Body = renderStateBody(state.Frontmatter, tasks)
-
-	if err := s.saveAll(state, tasks); err != nil {
-		return UnblockResult{}, err
-	}
-
-	validation, err := s.Validate()
-	if err != nil {
-		return UnblockResult{}, err
-	}
-	return UnblockResult{
-		TaskID:     taskID,
-		Status:     task.Frontmatter.Status,
-		UpdatedAt:  now,
-		Validation: validation,
-	}, nil
-}
-
 func (s *Service) Verify(input VerifyInput) (VerifyResult, error) {
 	if input.Result != "pass" && input.Result != "fail" {
-		return VerifyResult{}, fmt.Errorf("invalid verify result %q", input.Result)
+		return VerifyResult{}, invalidArgumentsf("invalid verify result %q", input.Result)
 	}
 	if strings.TrimSpace(input.Summary) == "" {
-		return VerifyResult{}, errors.New("verify summary must not be empty")
+		return VerifyResult{}, WithMachineErrorCode(MachineCodeInvalidArguments,
+			errors.New("verify summary must not be empty"))
 	}
 
 	state, tasks, err := s.loadStateAndTasks()
@@ -457,21 +348,21 @@ type taskValidationOpts struct {
 func (s *Service) validateTaskCreatable(tasks []*Task, specRef, priority string, deps []string, opts taskValidationOpts) (normalizedSpecRef, normalizedPriority string, err error) {
 	specRef, err = s.validateSpecRefWithPending(specRef, opts.pending)
 	if err != nil {
-		return "", "", fmt.Errorf("invalid spec_ref: %w", err)
+		return "", "", invalidArgumentsf("invalid spec_ref: %w", err)
 	}
 	priority = strings.TrimSpace(priority)
 	if priority == "" {
 		priority = "medium"
 	}
 	if _, ok := validPriorites[priority]; !ok {
-		return "", "", fmt.Errorf("invalid priority %q", priority)
+		return "", "", invalidArgumentsf("invalid priority %q", priority)
 	}
 	for _, dep := range deps {
 		if _, ok := opts.draftKeys[dep]; ok {
 			continue // an in-draft key: a sibling draft task will create it
 		}
 		if _, ok := taskByID(tasks, dep); !ok {
-			return "", "", fmt.Errorf("dependency %s does not exist", dep)
+			return "", "", invalidArgumentsf("dependency %s does not exist", dep)
 		}
 	}
 	return specRef, priority, nil
@@ -484,11 +375,12 @@ func (s *Service) validateTaskCreatable(tasks []*Task, specRef, priority string,
 func (s *Service) resolveAreaSpecRef(state *State, area string) (string, error) {
 	activePath := strings.TrimSpace(state.Frontmatter.ActiveSpecPath)
 	if activePath == "" {
-		return "", errors.New("--area requires an active spec, but planning/STATE.md has none set")
+		return "", WithMachineErrorCode(MachineCodeInvalidArguments,
+			errors.New("--area requires an active spec, but planning/STATE.md has none set"))
 	}
 	specRef, err := s.validateSpecRef(activePath + "#" + area)
 	if err != nil {
-		return "", fmt.Errorf("unknown active-spec area %q: %w; run `taskrail spec show %s --anchors` to list valid anchors", area, err, state.Frontmatter.ActiveSpecVersion)
+		return "", invalidArgumentsf("unknown active-spec area %q: %w; run `taskrail spec show %s --anchors` to list valid anchors", area, err, state.Frontmatter.ActiveSpecVersion)
 	}
 	return specRef, nil
 }
@@ -507,7 +399,7 @@ func (s *Service) CreateTask(input CreateTaskInput) (CreateTaskResult, error) {
 	// input that reaches the file: the slug is normalized to [a-z0-9-] and the
 	// description/provenance lines are generated.
 	if err := ensurePortableNote("title", title); err != nil {
-		return CreateTaskResult{}, err
+		return CreateTaskResult{}, WithMachineErrorCode(MachineCodeInvalidArguments, err)
 	}
 
 	// A task has exactly one resolved spec reference: --area is the active-spec
@@ -516,7 +408,8 @@ func (s *Service) CreateTask(input CreateTaskInput) (CreateTaskResult, error) {
 	area := strings.TrimSpace(input.Area)
 	specRef := strings.TrimSpace(input.SpecRef)
 	if area != "" && specRef != "" {
-		return CreateTaskResult{}, errors.New("--area and --spec-ref are mutually exclusive")
+		return CreateTaskResult{}, WithMachineErrorCode(MachineCodeInvalidArguments,
+			errors.New("--area and --spec-ref are mutually exclusive"))
 	}
 
 	// Load first: a follow-up needs the parent task to inherit spec_ref and wire
@@ -540,7 +433,10 @@ func (s *Service) CreateTask(input CreateTaskInput) (CreateTaskResult, error) {
 	if followUpOf != "" {
 		parent, err := exactTaskByID(tasks, followUpOf)
 		if err != nil {
-			return CreateTaskResult{}, err
+			// `task new` creates a task rather than acting on one, so a --follow-up
+			// that names nothing is an invalid argument; its contract does not admit
+			// task_not_found.
+			return CreateTaskResult{}, WithMachineErrorCode(MachineCodeInvalidArguments, err)
 		}
 		if specRef == "" {
 			specRef = parent.Frontmatter.SpecRef
@@ -589,7 +485,7 @@ func (s *Service) CreateTask(input CreateTaskInput) (CreateTaskResult, error) {
 	state.Frontmatter.UpdatedAt = now
 	state.Body = renderStateBody(state.Frontmatter, append(tasks, newTask))
 	if err := s.saveState(state); err != nil {
-		return CreateTaskResult{}, err
+		return CreateTaskResult{}, s.withWrittenPaths(err, newTask.Filename)
 	}
 
 	return CreateTaskResult{
@@ -635,78 +531,13 @@ func ensurePortableNote(field, note string) error {
 	return nil
 }
 
-// noteField labels the note argument in a portability error the way the operator
-// typed it: complete takes a --note, block a --reason.
-func noteField(status string) string {
-	if status == "blocked" {
-		return "reason"
-	}
-	return "note"
-}
-
-func (s *Service) finishTask(taskID, status, note string) (TransitionResult, error) {
-	state, tasks, err := s.loadStateAndTasks()
-	if err != nil {
-		return TransitionResult{}, err
-	}
-	task, err := exactTaskByID(tasks, taskID)
-	if err != nil {
-		return TransitionResult{}, err
-	}
-	if task.Frontmatter.Status != "in_progress" && !(status == "blocked" && task.Frontmatter.Status == "todo") {
-		return TransitionResult{}, fmt.Errorf("task %s is not in a transitionable state", taskID)
-	}
-
-	if err := ensurePortableNote(noteField(status), note); err != nil {
-		return TransitionResult{}, err
-	}
-
-	now := timestamp(s.now())
-	task.Frontmatter.Status = status
-	task.Frontmatter.UpdatedAt = now
-	if note != "" {
-		appendTaskNote(task, fmt.Sprintf("- %s: %s", now, note))
-	}
-
-	if state.Frontmatter.CurrentTask == taskID {
-		state.Frontmatter.CurrentTask = ""
-		state.Frontmatter.CurrentTaskTitle = ""
-	}
-	state.Frontmatter.UpdatedAt = now
-	// The blockers ledger is per-task and must always reflect this transition,
-	// even when a different task stays active.
-	if status == "blocked" {
-		state.Frontmatter.Blockers = upsertBlocker(state.Frontmatter.Blockers, taskID, note)
-	} else {
-		// Completing one task must not erase reasons recorded for other tasks that
-		// are still blocked; drop only this task's own entry.
-		state.Frontmatter.Blockers = removeBlocker(state.Frontmatter.Blockers, taskID)
-	}
-
-	// status_summary/next_action belong to the active task, so only reconcile them
-	// when this transition left none in progress (current_task cleared above iff the
-	// finished task was itself active). Mirrors Unblock's guard so blocking a todo
-	// never clobbers a still-active task's summary; the ledger reconciliation itself
-	// lives in reconcileIdlePointers.
-	if state.Frontmatter.CurrentTask == "" {
-		reconcileIdlePointers(&state.Frontmatter)
-	}
-	state.Body = renderStateBody(state.Frontmatter, tasks)
-
-	if err := s.saveAll(state, tasks); err != nil {
-		return TransitionResult{}, err
-	}
-
-	return TransitionResult{TaskID: taskID, Status: status, UpdatedAt: now}, nil
-}
-
 func (s *Service) createFollowupTask(tasks []*Task, source *Task, input VerifyInput) (*Task, []Warning, error) {
 	priority := strings.TrimSpace(input.FollowupPriority)
 	if priority == "" {
 		priority = "medium"
 	}
 	if _, ok := validPriorites[priority]; !ok {
-		return nil, nil, fmt.Errorf("invalid follow-up priority %q", priority)
+		return nil, nil, invalidArgumentsf("invalid follow-up priority %q", priority)
 	}
 
 	title := strings.TrimSpace(input.FollowupTitle)
@@ -726,10 +557,10 @@ func (s *Service) createFollowupTask(tasks []*Task, source *Task, input VerifyIn
 	// its body to --details, either of which an operator may paste a gitignored
 	// evidence path into. Guard before Verify writes any artifact or task file.
 	if err := ensurePortableNote("follow-up title", title); err != nil {
-		return nil, nil, err
+		return nil, nil, WithMachineErrorCode(MachineCodeInvalidArguments, err)
 	}
 	if err := ensurePortableNote("follow-up description", description); err != nil {
-		return nil, nil, err
+		return nil, nil, WithMachineErrorCode(MachineCodeInvalidArguments, err)
 	}
 	nextID, warnings := nextTaskIDWithSlug(tasks, title, false, true)
 

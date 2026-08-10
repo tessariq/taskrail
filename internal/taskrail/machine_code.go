@@ -18,14 +18,37 @@ const (
 	MachineCodeNotInitialized     = "not_initialized"
 	MachineCodeIncompatibleLayout = "incompatible_layout"
 	MachineCodeRepositoryInvalid  = "repository_invalid"
+	MachineCodeValidationFailed   = "validation_failed"
+	MachineCodeTaskNotFound       = "task_not_found"
+	MachineCodeInvalidStatus      = "invalid_status"
+	MachineCodeInvalidReason      = "invalid_reason"
+	MachineCodeInvalidProposal    = "invalid_proposal"
+	MachineCodeDestinationExists  = "destination_exists"
+	MachineCodePartialWrite       = "partial_write"
+	MachineCodeRollbackFailed     = "rollback_failed"
 )
 
-// machineCodedError carries a registered error code without changing the
-// failure's message, so human mode keeps its exact wording and JSON mode gains
-// the code beside it.
+// MachineFailure is what a failing writer knows about its own outcome beyond the
+// message: which registered code names it, whether the complete semantic
+// operation still committed, and which managed paths the agent has to look at.
+type MachineFailure struct {
+	Code string
+	// Applied reports that the complete semantic operation committed. A refusal
+	// and a write that landed only partly are both false; only a failure after
+	// the operation itself committed — re-running validation, for instance — is
+	// true.
+	Applied bool
+	// Paths are the managed paths the failure implicates, such as the artifacts a
+	// partial write left behind.
+	Paths []string
+}
+
+// machineCodedError carries a failure's machine facts without changing its
+// message, so human mode keeps its exact wording and JSON mode gains the
+// registered code, `applied`, and paths beside it.
 type machineCodedError struct {
-	code string
-	err  error
+	failure MachineFailure
+	err     error
 }
 
 func (e machineCodedError) Error() string { return e.err.Error() }
@@ -36,28 +59,34 @@ func (e machineCodedError) Unwrap() error { return e.err }
 // command would publish for it. A nil error stays nil so call sites can tag
 // inline.
 func WithMachineErrorCode(code string, err error) error {
+	return WithMachineFailure(MachineFailure{Code: code}, err)
+}
+
+// WithMachineFailure tags err with everything its command's error envelope
+// reports about the outcome. A nil error stays nil so call sites can tag inline.
+func WithMachineFailure(failure MachineFailure, err error) error {
 	if err == nil {
 		return nil
 	}
-	return machineCodedError{code: code, err: err}
+	return machineCodedError{failure: failure, err: err}
+}
+
+// MachineFailureFor returns the machine facts a failure was tagged with. An
+// untagged failure is repository_invalid: the command discovered a repository and
+// then could not read it as Taskrail state, which is the one conclusion that
+// holds without knowing more, and which every command's error subset admits.
+func MachineFailureFor(err error) MachineFailure {
+	var coded machineCodedError
+	if errors.As(err, &coded) {
+		return coded.failure
+	}
+	return MachineFailure{Code: MachineCodeRepositoryInvalid}
 }
 
 // invalidArgumentsf builds a rejection of an operand the caller chose, already
 // carrying the code its command's envelope publishes for one.
 func invalidArgumentsf(format string, a ...any) error {
 	return WithMachineErrorCode(MachineCodeInvalidArguments, fmt.Errorf(format, a...))
-}
-
-// MachineErrorCodeFor returns the code a failure was tagged with. An untagged
-// failure is repository_invalid: the command discovered a repository and then
-// could not read it as Taskrail state, which is the one conclusion that holds
-// without knowing more, and which every command's error subset admits.
-func MachineErrorCodeFor(err error) string {
-	var coded machineCodedError
-	if errors.As(err, &coded) {
-		return coded.code
-	}
-	return MachineCodeRepositoryInvalid
 }
 
 // missingOrInvalidCode classifies a managed-file read failure: absence means the

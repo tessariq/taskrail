@@ -29,16 +29,17 @@ type CreatedTaskRef struct {
 }
 
 // ApplyDraftResult reports what apply wrote: an optional spec file and the tasks
-// it created, in dependency order. Partial marks a result that accompanies an
-// error — artifacts landed before the apply failed — so a caller may render it
-// without a script mistaking the envelope for a clean apply. It is absent from a
-// successful result, which keeps the pre-existing shape.
+// it created, in dependency order.
 type ApplyDraftResult struct {
 	Target   string           `json:"target"`
 	SpecPath string           `json:"spec_path,omitempty"`
 	Tasks    []CreatedTaskRef `json:"tasks,omitempty"`
-	Partial  bool             `json:"partial,omitempty"`
-	Warnings []Warning        `json:"warnings,omitempty"`
+	// Partial marks an apply that stopped with artifacts already on disk. It
+	// never reaches an envelope — that failure publishes partial_write naming the
+	// paths — and only selects the text-mode verb, so it stays out of the
+	// published shape.
+	Partial  bool      `json:"-"`
+	Warnings []Warning `json:"warnings,omitempty"`
 }
 
 // ApplyImportDraft validates a draft and writes real spec/task files. Structural
@@ -55,10 +56,13 @@ func (s *Service) ApplyImportDraft(input ApplyDraftInput) (ApplyDraftResult, err
 		return ApplyDraftResult{}, err
 	}
 	if violations := ValidateImportDraft(draft); len(violations) > 0 {
-		return ApplyDraftResult{}, fmt.Errorf("import draft is invalid: %s", strings.Join(violations, "; "))
+		return ApplyDraftResult{}, WithMachineErrorCode(MachineCodeInvalidProposal,
+			fmt.Errorf("import draft is invalid: %s", strings.Join(violations, "; ")))
 	}
 	if err := s.preflightImportDraft(draft); err != nil {
-		return ApplyDraftResult{}, err
+		// Pre-flight rejects the agent-supplied draft itself, so it is an invalid
+		// proposal rather than an invalid CLI argument.
+		return ApplyDraftResult{}, WithMachineErrorCode(MachineCodeInvalidProposal, err)
 	}
 
 	result := ApplyDraftResult{Target: draft.Target}
@@ -68,7 +72,8 @@ func (s *Service) ApplyImportDraft(input ApplyDraftInput) (ApplyDraftResult, err
 			if specPath != "" {
 				result.SpecPath = specPath
 				result.Partial = true
-				return result, fmt.Errorf("%w; partial apply may have written %s — review before retrying", err, specPath)
+				return result, partialApplyFailure(result,
+					fmt.Errorf("%w; partial apply may have written %s — review before retrying", err, specPath))
 			}
 			return ApplyDraftResult{}, err
 		}
@@ -81,7 +86,8 @@ func (s *Service) ApplyImportDraft(input ApplyDraftInput) (ApplyDraftResult, err
 	if err != nil {
 		if written := describeWrittenArtifacts(result); written != "" {
 			result.Partial = true
-			return result, fmt.Errorf("%w; partial apply already wrote %s — review before retrying", err, written)
+			return result, partialApplyFailure(result,
+				fmt.Errorf("%w; partial apply already wrote %s — review before retrying", err, written))
 		}
 		return result, err
 	}
@@ -189,19 +195,39 @@ func describeWrittenArtifacts(result ApplyDraftResult) string {
 	return strings.Join(parts, " and ")
 }
 
+// partialApplyFailure tags an apply that stopped with artifacts already on disk.
+// The complete semantic operation never committed, so `applied` stays false, and
+// the paths it did write are reported so an agent can review them before
+// retrying.
+func partialApplyFailure(result ApplyDraftResult, cause error) error {
+	paths := make([]string, 0, len(result.Tasks)+1)
+	if result.SpecPath != "" {
+		paths = append(paths, result.SpecPath)
+	}
+	for _, task := range result.Tasks {
+		paths = append(paths, task.Path)
+	}
+	return WithMachineFailure(MachineFailure{Code: MachineCodePartialWrite, Paths: paths}, cause)
+}
+
 // readImportDraft loads and parses a draft file, resolving a relative path
 // against the repo root. This is a read; an absolute path is honored as given.
 func (s *Service) readImportDraft(path string) (ImportDraft, error) {
 	p := strings.TrimSpace(path)
 	if p == "" {
-		return ImportDraft{}, errors.New("import draft path must not be empty")
+		return ImportDraft{}, WithMachineErrorCode(MachineCodeInvalidArguments,
+			errors.New("import draft path must not be empty"))
 	}
 	resolved := s.resolveRepoPath(p)
 	data, err := os.ReadFile(resolved)
 	if err != nil {
-		return ImportDraft{}, fmt.Errorf("read import draft %s: %w", relPath(s.paths.RepoRoot, resolved), fsCause(err))
+		return ImportDraft{}, invalidArgumentsf("read import draft %s: %w", relPath(s.paths.RepoRoot, resolved), fsCause(err))
 	}
-	return ParseImportDraft(data)
+	draft, err := ParseImportDraft(data)
+	if err != nil {
+		return ImportDraft{}, WithMachineErrorCode(MachineCodeInvalidProposal, err)
+	}
+	return draft, nil
 }
 
 // createDraftTasks scaffolds each task draft through CreateTask in dependency
@@ -320,7 +346,8 @@ const importedSpecMarker = "Imported by `taskrail import --apply`. Review before
 func (s *Service) writeImportedSpec(draft ImportDraft) (string, error) {
 	specPath := s.importedSpecPath(draft)
 	if fileExists(specPath) && !isImportedSpec(specPath) {
-		return "", fmt.Errorf("spec file %s already exists; refusing to overwrite", relPath(s.paths.RepoRoot, specPath))
+		return "", WithMachineErrorCode(MachineCodeDestinationExists,
+			fmt.Errorf("spec file %s already exists; refusing to overwrite", relPath(s.paths.RepoRoot, specPath)))
 	}
 	if err := ensureDir(s.paths.RepoRoot, filepath.Dir(specPath)); err != nil {
 		return "", err

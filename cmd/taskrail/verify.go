@@ -14,33 +14,32 @@ func newVerifyCmd() *cobra.Command {
 		followupTitle       string
 		followupDescription string
 		followupPriority    string
-		opt                 jsonOption
 	)
 
 	cmd := &cobra.Command{
 		Use:   "verify <task-id>",
 		Short: "Write verification artifacts for a task",
-		Args:  cobra.ExactArgs(1),
+		Args:  machineArgs(cobra.ExactArgs(1)),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			svc, err := serviceFromCmd(cmd)
-			if err != nil {
-				return err
-			}
-			verifyResult, err := svc.Verify(taskrail.VerifyInput{
-				TaskID:              args[0],
-				Result:              result,
-				Summary:             summary,
-				Details:             details,
-				CreateFollowup:      createFollowup,
-				FollowupTitle:       followupTitle,
-				FollowupDescription: followupDescription,
-				FollowupPriority:    followupPriority,
+			return runCommand(cmd, func(svc *taskrail.Service) (commandResult, error) {
+				verifyResult, err := svc.Verify(taskrail.VerifyInput{
+					TaskID:              args[0],
+					Result:              result,
+					Summary:             summary,
+					Details:             details,
+					CreateFollowup:      createFollowup,
+					FollowupTitle:       followupTitle,
+					FollowupDescription: followupDescription,
+					FollowupPriority:    followupPriority,
+				})
+				if err != nil {
+					return commandResult{}, err
+				}
+				printWarnings(cmd, verifyResult.Warnings)
+				return commandResult{
+					shape: "VerifyResult", value: verifyResult, text: verifyResult.ReportPath,
+				}, nil
 			})
-			if err != nil {
-				return err
-			}
-			printWarnings(cmd, verifyResult.Warnings)
-			return printResult(cmd, opt.json, verifyResult, verifyResult.ReportPath)
 		},
 	}
 
@@ -51,7 +50,7 @@ func newVerifyCmd() *cobra.Command {
 	cmd.Flags().StringVar(&followupTitle, "followup-title", "", "title for the follow-up task")
 	cmd.Flags().StringVar(&followupDescription, "followup-description", "", "description for the follow-up task")
 	cmd.Flags().StringVar(&followupPriority, "followup-priority", "medium", "priority for the follow-up task")
-	cmd.Flags().BoolVar(&opt.json, "json", false, "print machine-readable output")
+	addMachineJSONFlag(cmd)
 	_ = cmd.MarkFlagRequired("result")
 	_ = cmd.MarkFlagRequired("summary")
 	return cmd

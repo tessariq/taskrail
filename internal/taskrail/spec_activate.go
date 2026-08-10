@@ -1,7 +1,6 @@
 package taskrail
 
 import (
-	"fmt"
 	"path/filepath"
 	"regexp"
 )
@@ -38,11 +37,11 @@ type SpecActivateResult struct {
 // returns its result. Activation repoints the active spec and nothing else.
 func (s *Service) ActivateSpec(version string) (SpecActivateResult, error) {
 	if !specVersionPattern.MatchString(version) {
-		return SpecActivateResult{}, fmt.Errorf("invalid spec version %q: expected a versioned name like v0.3.0", version)
+		return SpecActivateResult{}, invalidArgumentsf("invalid spec version %q: expected a versioned name like v0.3.0", version)
 	}
 	specFile := filepath.Join(s.paths.SpecsDir, version+".md")
 	if !fileExists(specFile) {
-		return SpecActivateResult{}, fmt.Errorf("spec file %s does not exist", relPath(s.paths.RepoRoot, specFile))
+		return SpecActivateResult{}, invalidArgumentsf("spec file %s does not exist", relPath(s.paths.RepoRoot, specFile))
 	}
 
 	state, tasks, err := s.loadStateAndTasks()
@@ -61,7 +60,7 @@ func (s *Service) ActivateSpec(version string) (SpecActivateResult, error) {
 		return SpecActivateResult{}, err
 	}
 
-	validation, err := s.Validate()
+	validation, err := s.validateAfterWrite()
 	if err != nil {
 		return SpecActivateResult{}, err
 	}
@@ -70,7 +69,10 @@ func (s *Service) ActivateSpec(version string) (SpecActivateResult, error) {
 	// task files). Informational only: activation already succeeded above.
 	coverage, err := s.coverageFor(state, tasks)
 	if err != nil {
-		return SpecActivateResult{}, err
+		// The repoint is already on disk, so this reporting failure must not read
+		// back as a refusal that changed nothing.
+		return SpecActivateResult{}, WithMachineFailure(
+			MachineFailure{Code: MachineCodeRepositoryInvalid, Applied: true}, err)
 	}
 	return SpecActivateResult{
 		ActiveSpecVersion:   version,

@@ -64,7 +64,8 @@ type RenameTaskResult struct {
 func (s *Service) RenameTask(input RenameTaskInput) (RenameTaskResult, error) {
 	oldID := input.OldID
 	if oldID == "" {
-		return RenameTaskResult{}, errors.New("task id is required")
+		return RenameTaskResult{}, WithMachineErrorCode(MachineCodeInvalidArguments,
+			errors.New("task id is required"))
 	}
 	slug, slugSource, err := renameSlug(input)
 	if err != nil {
@@ -81,7 +82,7 @@ func (s *Service) RenameTask(input RenameTaskInput) (RenameTaskResult, error) {
 	}
 	prefix, ok := taskIDPrefix(oldID)
 	if !ok {
-		return RenameTaskResult{}, fmt.Errorf("task id %s has no T-<n> numeric prefix to preserve", oldID)
+		return RenameTaskResult{}, invalidArgumentsf("task id %s has no T-<n> numeric prefix to preserve", oldID)
 	}
 	newID := prefix
 	if slug != "" {
@@ -89,12 +90,13 @@ func (s *Service) RenameTask(input RenameTaskInput) (RenameTaskResult, error) {
 	}
 	if newID == oldID {
 		if slug == "" {
-			return RenameTaskResult{}, fmt.Errorf("task %s is already bare and %q produces no slug segment", oldID, slugSource)
+			return RenameTaskResult{}, invalidArgumentsf("task %s is already bare and %q produces no slug segment", oldID, slugSource)
 		}
-		return RenameTaskResult{}, fmt.Errorf("task %s already carries slug %q", oldID, slug)
+		return RenameTaskResult{}, invalidArgumentsf("task %s already carries slug %q", oldID, slug)
 	}
 	if _, exists := taskByID(tasks, newID); exists {
-		return RenameTaskResult{}, fmt.Errorf("target id %s already exists", newID)
+		return RenameTaskResult{}, WithMachineErrorCode(MachineCodeDestinationExists,
+			fmt.Errorf("target id %s already exists", newID))
 	}
 
 	oldPath := target.Filename
@@ -104,7 +106,8 @@ func (s *Service) RenameTask(input RenameTaskInput) (RenameTaskResult, error) {
 	// escapes the taskByID check, and the plain-rename fallback would silently
 	// clobber it. Refuse before any write, so the tree is never partially renamed.
 	if filepath.Clean(oldPath) != filepath.Clean(newPath) && fileExists(newPath) {
-		return RenameTaskResult{}, fmt.Errorf("target file %s already exists", relPath(s.paths.RepoRoot, newPath))
+		return RenameTaskResult{}, WithMachineErrorCode(MachineCodeDestinationExists,
+			fmt.Errorf("target file %s already exists", relPath(s.paths.RepoRoot, newPath)))
 	}
 	inbound := inboundDependents(tasks, oldID)
 	changes := renameChanges(s.paths.RepoRoot, oldID, newID, oldPath, newPath, target.Body, inbound)
@@ -117,12 +120,13 @@ func (s *Service) RenameTask(input RenameTaskInput) (RenameTaskResult, error) {
 	validation := s.validateInMemory(renamePreview(state, tasks, target, inbound, oldID, newID, newPath))
 	if !input.DryRun {
 		if !validation.Valid {
-			return RenameTaskResult{}, fmt.Errorf("rename would leave repository invalid: %s", strings.Join(validation.Violations, "; "))
+			return RenameTaskResult{}, WithMachineErrorCode(MachineCodeValidationFailed,
+				fmt.Errorf("rename would leave repository invalid: %s", strings.Join(validation.Violations, "; ")))
 		}
 		if err := s.applyRename(state, tasks, target, inbound, oldID, newID, oldPath, newPath); err != nil {
 			return RenameTaskResult{}, err
 		}
-		validation, err = s.Validate()
+		validation, err = s.validateAfterWrite()
 		if err != nil {
 			return RenameTaskResult{}, err
 		}
@@ -152,7 +156,8 @@ func renameSlug(input RenameTaskInput) (slug, source string, err error) {
 	hasSlug := input.SlugExplicit || strings.TrimSpace(input.Slug) != ""
 	hasTitle := input.TitleExplicit || strings.TrimSpace(input.Title) != ""
 	if hasSlug == hasTitle {
-		return "", "", errors.New("exactly one of --slug or --title is required")
+		return "", "", WithMachineErrorCode(MachineCodeInvalidArguments,
+			errors.New("exactly one of --slug or --title is required"))
 	}
 	if hasSlug {
 		return slugify(input.Slug), input.Slug, nil
@@ -384,8 +389,9 @@ func renameFailure(oldID, newID string, cause, undoErr error) error {
 	if undoErr == nil {
 		return fmt.Errorf("rename %s to %s failed, no changes were applied: %w", oldID, newID, cause)
 	}
-	return fmt.Errorf("rename %s to %s failed and the rollback failed (%v); the tree may be partially renamed — run `taskrail validate` then `taskrail repair --apply` to reconcile: %w",
-		oldID, newID, undoErr, cause)
+	return WithMachineErrorCode(MachineCodeRollbackFailed,
+		fmt.Errorf("rename %s to %s failed and the rollback failed (%v); the tree may be partially renamed — run `taskrail validate` then `taskrail repair --apply` to reconcile: %w",
+			oldID, newID, undoErr, cause))
 }
 
 // moveTaskFile renames the task file, preferring `git mv` when the repository is

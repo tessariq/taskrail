@@ -51,7 +51,7 @@ func importTargetList() string {
 func parseTarget(raw string) (Target, error) {
 	t := Target(strings.TrimSpace(raw))
 	if !t.valid() {
-		return "", fmt.Errorf("import target must be one of %s; got %q", importTargetList(), string(t))
+		return "", invalidArgumentsf("import target must be one of %s; got %q", importTargetList(), string(t))
 	}
 	return t, nil
 }

@@ -12,20 +12,20 @@ func newValidateCmd() *cobra.Command {
 		Use:   "validate",
 		Short: "Validate Taskrail structure, state, and tasks",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return runReport(cmd, func(svc *taskrail.Service) (report, error) {
+			return runCommand(cmd, func(svc *taskrail.Service) (commandResult, error) {
 				result, err := svc.Validate()
 				if err != nil {
-					return report{}, err
+					return commandResult{}, err
 				}
 				// An invalid repository is a completed report, not a failure to
 				// produce one, so it stays a result envelope and gates.
 				if !result.Valid {
-					return report{
+					return commandResult{
 						shape: "ValidateResult", value: result,
 						text: "state invalid", gate: errors.New("state invalid"),
 					}, nil
 				}
-				return report{shape: "ValidateResult", value: result, text: "state valid"}, nil
+				return commandResult{shape: "ValidateResult", value: result, text: "state valid"}, nil
 			})
 		},
 	}

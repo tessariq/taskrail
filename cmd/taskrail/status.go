@@ -22,12 +22,12 @@ func newStatusCmd() *cobra.Command {
 			"active-spec filter next uses for idle selection. Never writes STATE.md " +
 			"or task files.",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return runReport(cmd, func(svc *taskrail.Service) (report, error) {
+			return runCommand(cmd, func(svc *taskrail.Service) (commandResult, error) {
 				snapshot, err := svc.Status()
 				if err != nil {
-					return report{}, err
+					return commandResult{}, err
 				}
-				return report{shape: "StatusResult", value: snapshot, text: renderStatusText(snapshot)}, nil
+				return commandResult{shape: "StatusResult", value: snapshot, text: renderStatusText(snapshot)}, nil
 			})
 		},
 	}

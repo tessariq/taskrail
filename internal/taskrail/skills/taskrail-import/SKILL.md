@@ -37,10 +37,10 @@ do not contain the source helper and skip this source-only guard.
 
 If apply fails during writing (`partial apply already wrote ...` or `partial
 apply may have written ...`, non-zero exit), it still reports what landed or may
-have been touched: the spec and task paths in text mode, the same envelope marked
-`"partial": true` with `--json`. Review those paths first — a failed spec write
-may leave an empty or truncated file, and re-applying the same draft creates any
-already-written tasks a second time under new ids.
+have been touched: the spec and task paths in text mode, and with `--json` a
+`partial_write` error whose `details.paths` name them. Review those paths first —
+a failed spec write may leave an empty or truncated file, and re-applying the
+same draft creates any already-written tasks a second time under new ids.
 
 ## Rules
 

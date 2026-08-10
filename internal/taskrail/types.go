@@ -185,10 +185,34 @@ type CreateTaskResult struct {
 	Warnings []Warning `json:"warnings,omitempty"`
 }
 
-type TransitionResult struct {
+// The three lifecycle writers each report their own transition plus the
+// validation they re-ran afterward, so an agent learns from one document what
+// the transition did and whether the repository is still valid. Their field sets
+// are fixed by specs/v0.5.0.md#uniform-agent-machine-results.
+type StartResult struct {
+	TaskID     string           `json:"task_id"`
+	Status     string           `json:"status"`
+	UpdatedAt  string           `json:"updated_at"`
+	Validation ValidationResult `json:"validation"`
+}
+
+type CompleteResult struct {
 	TaskID    string `json:"task_id"`
 	Status    string `json:"status"`
 	UpdatedAt string `json:"updated_at"`
+	// CompletionID is the completed task's persisted completion identity. It is
+	// empty until T-158 creates one; complete reports whatever the task carries
+	// rather than inventing an identity here.
+	CompletionID string           `json:"completion_id"`
+	Validation   ValidationResult `json:"validation"`
+}
+
+type BlockResult struct {
+	TaskID     string           `json:"task_id"`
+	Status     string           `json:"status"`
+	Reason     string           `json:"reason"`
+	UpdatedAt  string           `json:"updated_at"`
+	Validation ValidationResult `json:"validation"`
 }
 
 // UnblockResult reports the blocked->todo transition Unblock performed plus the

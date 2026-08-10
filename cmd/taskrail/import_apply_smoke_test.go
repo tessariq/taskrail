@@ -1,11 +1,13 @@
 package main
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
+
+	"github.com/tessariq/taskrail/internal/taskrail"
 )
 
 // partialApplyDraft names two tasks and one spec section. Applied against a repo
@@ -61,28 +63,22 @@ func TestImportApplyPartialFailureEmitsWrittenArtifactsJSON(t *testing.T) {
 		t.Fatalf("error must carry the partial-apply wrapper, got %v", err)
 	}
 
-	var payload struct {
-		Partial  bool   `json:"partial"`
-		SpecPath string `json:"spec_path"`
-		Tasks    []struct {
-			TaskID string `json:"task_id"`
-			Path   string `json:"path"`
-		} `json:"tasks"`
+	failure := decodeMachineError(t, stdout)
+	if failure.Code != taskrail.MachineCodePartialWrite {
+		t.Fatalf("code = %q, want %q", failure.Code, taskrail.MachineCodePartialWrite)
 	}
-	if jsonErr := json.Unmarshal([]byte(stdout), &payload); jsonErr != nil {
-		t.Fatalf("partial apply --json must stay parseable: %v (stdout %q)", jsonErr, stdout)
+	// The complete import never committed, so it must not read back as applied.
+	if failure.Details.Applied {
+		t.Error("a partial apply reported applied = true")
 	}
-	if !payload.Partial {
-		t.Fatalf("envelope must be marked partial so a script cannot read it as a clean apply, got %q", stdout)
+	want := []string{"planning/tasks/T-001-alpha-task.md", "specs/notes.md"}
+	if !slices.Equal(failure.Details.Paths, want) {
+		t.Fatalf("paths = %v, want %v", failure.Details.Paths, want)
 	}
-	if payload.SpecPath != "specs/notes.md" {
-		t.Fatalf("envelope must name the written spec, got %q", payload.SpecPath)
-	}
-	if len(payload.Tasks) != 1 || payload.Tasks[0].TaskID != "T-001-alpha-task" || payload.Tasks[0].Path != "planning/tasks/T-001-alpha-task.md" {
-		t.Fatalf("envelope must name the task written before the failure, got %+v", payload.Tasks)
-	}
-	if _, statErr := os.Stat(filepath.Join(root, payload.Tasks[0].Path)); statErr != nil {
-		t.Fatalf("reported task path must exist on disk: %v", statErr)
+	for _, path := range failure.Details.Paths {
+		if _, statErr := os.Stat(filepath.Join(root, path)); statErr != nil {
+			t.Errorf("reported path must exist on disk: %v", statErr)
+		}
 	}
 }
 
@@ -127,14 +123,12 @@ func TestImportApplyPartialFailurePrintsEarlierEmptySlugWarning(t *testing.T) {
 	if !strings.Contains(stderr, `"!!!" produced no slug segment`) || !strings.Contains(stderr, "T-001") {
 		t.Fatalf("expected earlier empty-slug warning on stderr, got %q", stderr)
 	}
-	var payload struct {
-		Partial bool `json:"partial"`
+	failure := decodeMachineError(t, stdout)
+	if failure.Code != taskrail.MachineCodePartialWrite {
+		t.Fatalf("code = %q, want %q", failure.Code, taskrail.MachineCodePartialWrite)
 	}
-	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
-		t.Fatalf("partial stdout is not clean json (%v): %q", err, stdout)
-	}
-	if !payload.Partial {
-		t.Fatalf("expected partial result, got %q", stdout)
+	if !slices.Contains(failure.Details.Paths, "planning/tasks/T-001.md") {
+		t.Fatalf("paths must name the task written before the failure, got %v", failure.Details.Paths)
 	}
 }
 
@@ -167,10 +161,10 @@ func TestImportApplyFailedSpecWriteReportsPathWithoutClaimingSuccess(t *testing.
 	}
 }
 
-// A failure that writes nothing (pre-flight rejection) must stay silent on
-// stdout: there is no partial state to review, and an empty envelope would
-// invite a pointless cleanup pass.
-func TestImportApplyPreflightFailureEmitsNoEnvelope(t *testing.T) {
+// A failure that writes nothing (pre-flight rejection) publishes the draft's own
+// refusal with no paths: there is no partial state to review, so a cleanup pass
+// has nothing to act on.
+func TestImportApplyPreflightFailureReportsNoWrittenPaths(t *testing.T) {
 	seedDraftRepo(t, `{
   "schema_version": 1,
   "target": "planning",
@@ -182,8 +176,12 @@ func TestImportApplyPreflightFailureEmitsNoEnvelope(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected a non-zero exit for an unresolvable spec_ref, got %q", stdout)
 	}
-	if strings.TrimSpace(stdout) != "" {
-		t.Fatalf("a failure that wrote nothing must emit no envelope, got %q", stdout)
+	failure := decodeMachineError(t, stdout)
+	if failure.Code != taskrail.MachineCodeInvalidProposal {
+		t.Fatalf("code = %q, want %q", failure.Code, taskrail.MachineCodeInvalidProposal)
+	}
+	if len(failure.Details.Paths) != 0 || failure.Details.Applied {
+		t.Fatalf("a failure that wrote nothing must report no paths and applied = false, got %+v", failure.Details)
 	}
 }
 
@@ -228,9 +226,7 @@ func TestImportApplyEmptyTitleSlugWarnsWithoutCorruptingJSON(t *testing.T) {
 			Path   string `json:"path"`
 		} `json:"tasks"`
 	}
-	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
-		t.Fatalf("stdout is not clean json (%v): %q", err, stdout)
-	}
+	decodeMachineResult(t, stdout, &payload)
 	if len(payload.Tasks) != 1 || payload.Tasks[0].TaskID != "T-001" || payload.Tasks[0].Path != "planning/tasks/T-001.md" {
 		t.Fatalf("unexpected bare-id JSON result: %+v", payload.Tasks)
 	}

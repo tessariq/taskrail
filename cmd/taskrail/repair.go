@@ -9,7 +9,6 @@ import (
 )
 
 func newRepairCmd() *cobra.Command {
-	var opt jsonOption
 	var apply bool
 	cmd := &cobra.Command{
 		Use:   "repair",
@@ -24,20 +23,20 @@ func newRepairCmd() *cobra.Command {
 			"advance a status or fabricate work. Inconsistencies that need human " +
 			"judgement (a missing spec_ref, a dependency cycle, more than one " +
 			"in_progress task) are left untouched and reported through validation.",
-		Args: cobra.NoArgs,
+		Args: machineArgs(cobra.NoArgs),
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			svc, err := serviceFromCmd(cmd)
-			if err != nil {
-				return err
-			}
-			result, err := svc.Repair(taskrail.RepairInput{Apply: apply})
-			if err != nil {
-				return err
-			}
-			return printResult(cmd, opt.json, result, repairSummary(result))
+			return runCommand(cmd, func(svc *taskrail.Service) (commandResult, error) {
+				result, err := svc.Repair(taskrail.RepairInput{Apply: apply})
+				if err != nil {
+					return commandResult{}, err
+				}
+				return commandResult{
+					shape: "RepairResult", value: result, text: repairSummary(result),
+				}, nil
+			})
 		},
 	}
-	cmd.Flags().BoolVar(&opt.json, "json", false, "print machine-readable output")
+	addMachineJSONFlag(cmd)
 	cmd.Flags().BoolVar(&apply, "apply", false, "apply the repair instead of a dry run")
 	return cmd
 }

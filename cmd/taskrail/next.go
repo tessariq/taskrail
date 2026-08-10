@@ -9,28 +9,27 @@ import (
 )
 
 func newNextCmd() *cobra.Command {
-	var opt jsonOption
 	var includeOffSpec bool
 	cmd := &cobra.Command{
 		Use:   "next",
 		Short: "Select the next eligible task deterministically",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			svc, err := serviceFromCmd(cmd)
-			if err != nil {
-				return err
-			}
-			result, err := selectNext(svc, includeOffSpec)
-			if err != nil {
-				return err
-			}
-			fallback := result.TaskID
-			if fallback == "" {
-				fallback = "no eligible task"
-			}
-			return printResult(cmd, opt.json, result, renderNextText(result, fallback))
+			return runCommand(cmd, func(svc *taskrail.Service) (commandResult, error) {
+				result, err := selectNext(svc, includeOffSpec)
+				if err != nil {
+					return commandResult{}, err
+				}
+				fallback := result.TaskID
+				if fallback == "" {
+					fallback = "no eligible task"
+				}
+				return commandResult{
+					shape: "NextResult", value: result, text: renderNextText(result, fallback),
+				}, nil
+			})
 		},
 	}
-	cmd.Flags().BoolVar(&opt.json, "json", false, "print machine-readable output")
+	addMachineJSONFlag(cmd)
 	cmd.Flags().BoolVar(&includeOffSpec, "include-off-spec", false, "rank eligible todo tasks across all specs, flagging an off-spec pick")
 	return cmd
 }

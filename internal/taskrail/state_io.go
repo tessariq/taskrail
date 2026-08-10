@@ -70,7 +70,9 @@ func (s *Service) saveAll(state *State, tasks []*Task) error {
 	}
 	for _, task := range tasks {
 		if err := s.saveTask(task); err != nil {
-			return err
+			// STATE.md is already written by here, so it is part of what a failed
+			// task write leaves inconsistent.
+			return s.withWrittenPaths(err, s.paths.StateFile)
 		}
 	}
 	return nil
@@ -85,9 +87,36 @@ func (s *Service) saveState(state *State) error {
 		return err
 	}
 	if err := os.WriteFile(s.paths.StateFile, data, 0o644); err != nil {
-		return fmt.Errorf("write state file %s: %w", relPath(s.paths.RepoRoot, s.paths.StateFile), fsCause(err))
+		return s.managedWriteFailure(s.paths.StateFile,
+			fmt.Errorf("write state file %s: %w", relPath(s.paths.RepoRoot, s.paths.StateFile), fsCause(err)))
 	}
 	return nil
+}
+
+// managedWriteFailure classifies a failed write to one managed file. Taskrail
+// has no transaction protocol yet, so a semantic operation that writes more than
+// one file can stop here with earlier files already on disk: the operation never
+// committed (`applied` stays false) but the repository may be partly updated,
+// which is exactly what partial_write names. The failing path is reported
+// because it now holds content the rest of the operation disagrees with; a
+// caller that already landed other files adds them with withWrittenPaths.
+func (s *Service) managedWriteFailure(path string, cause error) error {
+	return WithMachineFailure(MachineFailure{
+		Code:  MachineCodePartialWrite,
+		Paths: []string{relPath(s.paths.RepoRoot, path)},
+	}, cause)
+}
+
+// withWrittenPaths adds files a failed operation had already written to its
+// report, so `paths` names everything an agent has to review rather than only
+// the write that failed. Only the writer knows what it landed before the
+// failure, so it adds them here rather than the boundary guessing.
+func (s *Service) withWrittenPaths(cause error, written ...string) error {
+	failure := MachineFailureFor(cause)
+	for _, path := range written {
+		failure.Paths = append(failure.Paths, relPath(s.paths.RepoRoot, path))
+	}
+	return WithMachineFailure(failure, cause)
 }
 
 func (s *Service) saveTask(task *Task) error {
@@ -96,7 +125,8 @@ func (s *Service) saveTask(task *Task) error {
 		return fmt.Errorf("marshal task file %s: %w", filepath.Base(task.Filename), err)
 	}
 	if err := os.WriteFile(task.Filename, data, 0o644); err != nil {
-		return fmt.Errorf("write task file %s: %w", filepath.Base(task.Filename), fsCause(err))
+		return s.managedWriteFailure(task.Filename,
+			fmt.Errorf("write task file %s: %w", filepath.Base(task.Filename), fsCause(err)))
 	}
 	return nil
 }

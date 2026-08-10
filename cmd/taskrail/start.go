@@ -1,22 +1,25 @@
 package main
 
-import "github.com/spf13/cobra"
+import (
+	"github.com/spf13/cobra"
+	"github.com/tessariq/taskrail/internal/taskrail"
+)
 
 func newStartCmd() *cobra.Command {
-	return &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   "start <task-id>",
 		Short: "Mark a task as active",
-		Args:  cobra.ExactArgs(1),
+		Args:  machineArgs(cobra.ExactArgs(1)),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			svc, err := serviceFromCmd(cmd)
-			if err != nil {
-				return err
-			}
-			result, err := svc.Start(args[0])
-			if err != nil {
-				return err
-			}
-			return printResult(cmd, false, result, result.TaskID)
+			return runCommand(cmd, func(svc *taskrail.Service) (commandResult, error) {
+				result, err := svc.Start(args[0])
+				if err != nil {
+					return commandResult{}, err
+				}
+				return commandResult{shape: "StartResult", value: result, text: result.TaskID}, nil
+			})
 		},
 	}
+	addMachineJSONFlag(cmd)
+	return cmd
 }

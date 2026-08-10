@@ -9,7 +9,6 @@ import (
 )
 
 func newInitCmd() *cobra.Command {
-	var opt jsonOption
 	var apply bool
 	var withSkills bool
 	var forceSkills bool
@@ -25,29 +24,29 @@ func newInitCmd() *cobra.Command {
 			"install the embedded repo-agnostic tracked-work skills; installing " +
 			"agent-tool directories is opt-in and never happens on a default init.",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			svc, err := serviceFromCmd(cmd)
-			if err != nil {
-				return err
-			}
-			result, err := svc.Init(apply)
-			if err != nil {
-				return err
-			}
-			summary := initSummary(result)
-			if withSkills {
-				res, wErr := svc.WriteShippableSkills(version, forceSkills)
-				if wErr != nil {
-					// Report what was installed before the failure so the user
-					// knows the partial state, then propagate the error.
-					fmt.Fprintln(cmd.ErrOrStderr(), skillsSummary(res))
-					return wErr
+			return runCommand(cmd, func(svc *taskrail.Service) (commandResult, error) {
+				result, err := svc.Init(apply)
+				if err != nil {
+					return commandResult{}, err
 				}
-				summary += "\n" + skillsSummary(res)
-			}
-			return printResult(cmd, opt.json, result, summary)
+				summary := initSummary(result)
+				if withSkills {
+					res, wErr := svc.WriteShippableSkills(version, forceSkills)
+					if wErr != nil {
+						// Report what was installed before the failure so the user
+						// knows the partial state, then propagate the error. The
+						// layout is already on disk and the skill set is not, so
+						// this is a partial write rather than a refusal.
+						fmt.Fprintln(cmd.ErrOrStderr(), skillsSummary(res))
+						return commandResult{}, taskrail.WithMachineErrorCode(taskrail.MachineCodePartialWrite, wErr)
+					}
+					summary += "\n" + skillsSummary(res)
+				}
+				return commandResult{shape: "InitResult", value: result, text: summary}, nil
+			})
 		},
 	}
-	cmd.Flags().BoolVar(&opt.json, "json", false, "print machine-readable output")
+	addMachineJSONFlag(cmd)
 	cmd.Flags().BoolVar(&apply, "apply", false, "apply a pending layout migration instead of a dry run")
 	cmd.Flags().BoolVar(&withSkills, "with-skills", false, "install the embedded repo-agnostic tracked-work skills (opt-in; installed paths are listed in text output only, not --json)")
 	cmd.Flags().BoolVar(&forceSkills, "force", false, "with --with-skills, reinstall embedded skills over existing copies, backing up locally-modified files first")

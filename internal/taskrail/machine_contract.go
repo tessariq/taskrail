@@ -61,10 +61,9 @@ type MachineCommandEntry struct {
 	Surface      MachineSurface
 	Origin       MachineCommandOrigin
 	// JSONState records how far the binary has taken this document, which is
-	// narrower than Origin: `start`, `complete`, and `block` are constructed
-	// commands that gain `--json` only with the v0.5 migration, and the commands
-	// that already accept `--json` still emit their inherited pre-v0.5 shape.
-	// Neither may be counted as schema-1 coverage.
+	// narrower than Origin: a command the CLI does not construct yet publishes
+	// nothing, and a command that accepts `--json` may still emit its inherited
+	// pre-v0.5 shape. Neither may be counted as schema-1 coverage.
 	JSONState     MachineJSONState
 	Results       []string
 	NonzeroResult string
@@ -207,22 +206,11 @@ func machineEntry(row, command string, origin MachineCommandOrigin, json Machine
 	}
 }
 
-// built is a constructed command that accepts `--json` today and still emits its
-// inherited pre-v0.5 shape. It becomes an envelope entry when its migration ships.
-func built(row, command string, results []string, nonzero string, warnings, errors []string) MachineCommandEntry {
-	return machineEntry(row, command, MachineOriginConstructed, MachineJSONInherited, results, nonzero, warnings, errors)
-}
-
 // migrated is a constructed command whose `--json` surface publishes the common
-// schema-version-1 envelope.
+// schema-version-1 envelope. Every constructed command is migrated as of T-271;
+// the remaining JSON states describe entries the CLI does not construct yet.
 func migrated(row, command string, results []string, nonzero string, warnings, errors []string) MachineCommandEntry {
 	return machineEntry(row, command, MachineOriginConstructed, MachineJSONEnvelope, results, nonzero, warnings, errors)
-}
-
-// pendingJSON is a constructed command whose `--json` surface the v0.5 migration
-// still owes.
-func pendingJSON(row, command string, results []string, nonzero string, warnings, errors []string) MachineCommandEntry {
-	return machineEntry(row, command, MachineOriginConstructed, MachineJSONAbsent, results, nonzero, warnings, errors)
 }
 
 func planned(row, command string, results []string, nonzero string, warnings, errors []string) MachineCommandEntry {
@@ -232,13 +220,13 @@ func planned(row, command string, results []string, nonzero string, warnings, er
 // machineInventory follows the companion registry's order, which is the one
 // deterministic ordering a consumer can re-derive from the normative source.
 var machineInventory = []MachineCommandEntry{
-	built("`init`", "init", []string{"InitResult"}, "never",
+	migrated("`init`", "init", []string{"InitResult"}, "never",
 		warns(), errs(contentWriterErrors)),
-	built("`retrofit`", "retrofit", []string{"RetrofitResult", "EmitPromptResult"}, "never",
+	migrated("`retrofit`", "retrofit", []string{"RetrofitResult", "EmitPromptResult"}, "never",
 		warns(), errs(contentWriterErrors)),
 	migrated("`validate`", "validate", []string{"ValidateResult"}, "`valid:false`",
 		warns(), errs(readErrors)),
-	built("`repair`", "repair", []string{"RepairResult"}, "never",
+	migrated("`repair`", "repair", []string{"RepairResult"}, "never",
 		warns(warnsBootstrap), errs(writerErrors, "destination_exists", "path_blocked")),
 	migrated("`coverage`", "coverage", []string{"CoverageReport", "GapReport"}, "selected `--min`/`--fail-on` gate",
 		warns(), errs(readErrors)),
@@ -246,25 +234,25 @@ var machineInventory = []MachineCommandEntry{
 		warns(warnsSelection), errs(readErrors)),
 	migrated("`stats`", "stats", []string{"StatsResult"}, "never",
 		warns(), errs(readErrors)),
-	built("`next`", "next", []string{"NextResult"}, "never",
+	migrated("`next`", "next", []string{"NextResult"}, "never",
 		warns(warnsBootstrap, warnsSelection), errs(writerErrors, "destination_exists", "path_blocked")),
-	pendingJSON("`start`", "start", []string{"StartResult"}, "never",
+	migrated("`start`", "start", []string{"StartResult"}, "never",
 		warns(warnsBootstrap), errs(lifecycleErrors)),
-	pendingJSON("`complete`", "complete", []string{"CompleteResult"}, "never",
+	migrated("`complete`", "complete", []string{"CompleteResult"}, "never",
 		warns(warnsBootstrap), errs(lifecycleErrors)),
-	pendingJSON("`block`", "block", []string{"BlockResult"}, "never",
+	migrated("`block`", "block", []string{"BlockResult"}, "never",
 		warns(warnsBootstrap), errs(reasonedLifecycleErrors)),
-	built("`unblock`", "unblock", []string{"UnblockResult"}, "never",
+	migrated("`unblock`", "unblock", []string{"UnblockResult"}, "never",
 		warns(warnsBootstrap), errs(lifecycleErrors)),
-	built("`verify`", "verify", []string{"VerifyResult"}, "never",
+	migrated("`verify`", "verify", []string{"VerifyResult"}, "never",
 		warns(warnsBootstrap, []string{"verify_pass_before_complete"}),
 		errs(reasonedLifecycleErrors, "destination_exists", "path_blocked")),
-	built("`task new`", "task new", []string{"TaskNewResult"}, "never",
+	migrated("`task new`", "task new", []string{"TaskNewResult"}, "never",
 		warns(warnsBootstrap, warnsSlug), errs(writerErrors, "destination_exists", "path_blocked")),
-	built("`task rename`", "task rename", []string{"TaskRenameResult"}, "never",
+	migrated("`task rename`", "task rename", []string{"TaskRenameResult"}, "never",
 		warns(warnsBootstrap, warnsSlug),
 		errs(lifecycleErrors, "source_changed", "destination_exists", "path_blocked")),
-	built("`task repoint`", "task repoint", []string{"TaskRepointResult"}, "never",
+	migrated("`task repoint`", "task repoint", []string{"TaskRepointResult"}, "never",
 		warns(warnsBootstrap), errs(lifecycleErrors, "path_blocked")),
 	planned("`task release`", "task release", []string{"TaskReleaseResult"}, "never",
 		warns(warnsBootstrap), errs(taskReleaseErrors)),
@@ -288,13 +276,13 @@ var machineInventory = []MachineCommandEntry{
 		warns(), errs(readErrors)),
 	migrated("`spec show`", "spec show", []string{"SpecShowResult"}, "never",
 		warns(), errs(readErrors, "path_blocked")),
-	built("`spec add`", "spec add", []string{"SpecAddResult"}, "never",
+	migrated("`spec add`", "spec add", []string{"SpecAddResult"}, "never",
 		warns(warnsBootstrap), errs(writerErrors, "destination_exists", "path_blocked")),
 	migrated("`spec diff`", "spec diff", []string{"SpecDiffResult"}, "never",
 		warns(), errs(readErrors)),
-	built("`spec activate`", "spec activate", []string{"SpecActivateResult"}, "never",
+	migrated("`spec activate`", "spec activate", []string{"SpecActivateResult"}, "never",
 		warns(warnsBootstrap), errs(writerErrors, "destination_exists", "path_blocked")),
-	built("`import`", "import", []string{"ImportPreviewResult", "EmitPromptResult", "ImportV1ApplyResult", "ImportV2ApplyResult"}, "never",
+	migrated("`import`", "import", []string{"ImportPreviewResult", "EmitPromptResult", "ImportV1ApplyResult", "ImportV2ApplyResult"}, "never",
 		warns(warnsBootstrap, warnsSlug), errs(contentWriterErrors, "invalid_proposal", "prompt_invalid")),
 	planned("`prompt list`", "prompt list", []string{"PromptListResult"}, "never",
 		warns(), errs(readErrors, "prompt_invalid")),

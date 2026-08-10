@@ -46,8 +46,10 @@ func (s *Service) Retrofit(input RetrofitInput) (RetrofitResult, error) {
 		return RetrofitResult{}, err
 	}
 	if hasMarker {
-		return RetrofitResult{}, fmt.Errorf(
-			"repository is already Taskrail-managed (%s exists); use `taskrail init`", markerRelPath())
+		// Retrofit bootstraps an unmanaged repository, so a managed one is a
+		// destination that already exists rather than a bad argument.
+		return RetrofitResult{}, WithMachineErrorCode(MachineCodeDestinationExists, fmt.Errorf(
+			"repository is already Taskrail-managed (%s exists); use `taskrail init`", markerRelPath()))
 	}
 
 	bootstrap, err := s.retrofitBootstrap(input.NotesPath)

@@ -83,12 +83,13 @@ func (s *Service) Import(input ImportInput) (ImportResult, error) {
 func (s *Service) readImportSource(sourcePath string) (string, string, error) {
 	source := strings.TrimSpace(sourcePath)
 	if source == "" {
-		return "", "", errors.New("import source path must not be empty")
+		return "", "", WithMachineErrorCode(MachineCodeInvalidArguments,
+			errors.New("import source path must not be empty"))
 	}
 	absSource := s.resolveRepoPath(source)
 	data, err := os.ReadFile(absSource)
 	if err != nil {
-		return "", "", fmt.Errorf("read import source %s: %w", relPath(s.paths.RepoRoot, absSource), fsCause(err))
+		return "", "", invalidArgumentsf("read import source %s: %w", relPath(s.paths.RepoRoot, absSource), fsCause(err))
 	}
 	label := relPath(s.paths.RepoRoot, absSource)
 	if strings.HasPrefix(label, "..") {
