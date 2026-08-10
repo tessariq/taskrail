@@ -1,12 +1,12 @@
 ---
 id: T-213-define-the-uniform-agent-machine-api
 title: Establish the uniform machine envelope and errors
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#uniform-agent-machine-results
 dependencies:
     - T-269-enforce-machine-result-schema-drift-checks
-updated_at: "2026-08-08T08:40:49Z"
+updated_at: "2026-08-10T08:10:31Z"
 ---
 
 # T-213-define-the-uniform-agent-machine-api Establish the uniform machine envelope and errors
@@ -42,3 +42,6 @@ common error, with clean stdout and the same exit classification as human mode.
   incompatible document is emitted.
 
 ## Implementation Notes
+
+- 2026-08-10T08:10:11Z: Added the v0.5 machine producer boundary: MachineOutcome (warnings plus exactly one registered result or common error), MachineOutcome.ExitCode as the one classifier human and JSON modes share, and EncodeMachineDocument/EmitMachineDocument, which assemble the schema-1 document in companion member order, sort warnings/violations/paths/snapshots by the decoder's own order keys, normalize required arrays to [], refuse producer text that is not valid UTF-8, and publish only after the assembled bytes pass DecodeMachineEnvelope plus CheckMachinePublication, so an unregistered command/result/error/warning combination is refused with nothing written. Wiring commands onto the boundary stays with T-270/T-271/T-272.
+- 2026-08-10T08:10:31Z: verification pass

@@ -1,6 +1,6 @@
 ---
 schema_version: 1
-updated_at: "2026-08-08T18:20:30Z"
+updated_at: "2026-08-10T08:10:31Z"
 active_spec_version: v0.5.0
 active_spec_path: specs/v0.5.0.md
 current_task: ""
@@ -8,7 +8,7 @@ current_task_title: ""
 status_summary: idle
 blockers: []
 next_action: Select the next eligible task
-last_verification_result: pass for T-269-enforce-machine-result-schema-drift-checks at 2026-08-08T18:20:30Z
+last_verification_result: pass for T-213-define-the-uniform-agent-machine-api at 2026-08-10T08:10:31Z
 relevant_artifacts: []
 continuation_notes:
     - This repository is temporarily dogfooding bootstrap workflow tooling until Taskrail v0.1.0 exists.
@@ -34,7 +34,7 @@ continuation_notes:
 
 ## Last Verification
 
-- pass for T-269-enforce-machine-result-schema-drift-checks at 2026-08-08T18:20:30Z
+- pass for T-213-define-the-uniform-agent-machine-api at 2026-08-10T08:10:31Z
 
 ## Next Action
 
@@ -50,8 +50,8 @@ continuation_notes:
 
 ## Task Counts
 
-- todo: 150
+- todo: 149
 - in_progress: 0
-- completed: 164
+- completed: 165
 - blocked: 0
 - cancelled: 0
