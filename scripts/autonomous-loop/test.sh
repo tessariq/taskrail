@@ -363,6 +363,41 @@ rc=$?
 [[ $rc -eq 2 ]] || fail "missing queue row expected exit 2, got $rc"
 assert_contains "missing queue row" "$output" "open v0.5.0 task missing from queue: T-901"
 
+root="$(create_fixture loop-scoped-run-row)"
+printf '%s\n' 'Acceptance lives in scripts/autonomous-loop/run.sh' >>"$root/planning/tasks/T-900-fixture-task.md"
+git -C "$root" add planning/tasks/T-900-fixture-task.md
+git -C "$root" commit -q -m 'test: scope the run row to the loop directory'
+git -C "$root" push -q
+output="$(run_fixture "$root" --dry-run)"
+rc=$?
+[[ $rc -eq 2 ]] || fail "loop-scoped run row expected exit 2, got $rc: $output"
+assert_contains "loop-scoped run row" "$output" "run row T-900-fixture-task is scoped to scripts/autonomous-loop"
+assert_contains "loop-scoped run row remedy" "$output" "hold-operator"
+[[ ! -e "$root/captures/agent-invocations" ]] || fail "loop-scoped run row invoked an agent"
+
+root="$(create_fixture loop-scoped-held-row)"
+printf '%s\n' 'Acceptance lives in scripts/autonomous-loop/run.sh' >>"$root/planning/tasks/T-901.md"
+git -C "$root" add planning/tasks/T-901.md
+git -C "$root" commit -q -m 'test: scope the held row to the loop directory'
+git -C "$root" push -q
+before_head="$(git -C "$root" rev-parse HEAD)"
+output="$(run_fixture "$root")"
+rc=$?
+[[ $rc -eq 0 ]] || fail "loop-scoped held row expected success, got $rc: $output"
+[[ "$(git -C "$root" rev-parse HEAD^)" == "$before_head" ]] || fail "loop-scoped held row did not deliver T-900"
+
+root="$(create_fixture loop-scoped-completed-row)"
+printf '%s\n' 'id: T-900-fixture-task' 'status: completed' 'spec_ref: specs/v0.5.0.md#test-area' 'dependencies: []' \
+  'Acceptance lived in scripts/autonomous-loop/run.sh' >"$root/planning/tasks/T-900-fixture-task.md"
+printf '%s\n' $'task_id\tmode\treason' $'T-900-fixture-task\trun\t-' $'T-901\trun\t-' >"$root/scripts/autonomous-loop/queue.tsv"
+git -C "$root" add planning/tasks/T-900-fixture-task.md scripts/autonomous-loop/queue.tsv
+git -C "$root" commit -q -m 'test: retain a completed loop-scoped run row'
+git -C "$root" push -q
+output="$(run_fixture "$root" --dry-run)"
+rc=$?
+[[ $rc -eq 0 ]] || fail "completed loop-scoped run row expected success, got $rc: $output"
+assert_contains "completed loop-scoped run row" "$output" "T-901"
+
 root="$(create_fixture held-row)"
 printf '%s\n' $'task_id\tmode\treason' $'T-900-fixture-task\thold-operator\toperator decision' $'T-901\thold-operator\ttest hold' >"$root/scripts/autonomous-loop/queue.tsv"
 git -C "$root" add scripts/autonomous-loop/queue.tsv

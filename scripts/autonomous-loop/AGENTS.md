@@ -2,7 +2,11 @@
 
 - These files are temporary operator-owned source-checkout controls, not Taskrail
   product behavior or adopter guidance.
-- Ordinary queued tasks must not modify this directory.
+- Ordinary queued tasks must not modify this directory. A `run` row whose open
+  task file names `scripts/autonomous-loop` is rejected by queue validation before
+  any agent launches, because such a task can only block; make it `hold-operator`
+  and execute it as operator. The check is a literal path match and exempts
+  completed and cancelled tasks.
 - `queue.tsv` is reviewed source policy and remains immutable during a child run.
   The parent may append only the exact fresh verification-created follow-up as
   `hold-operator`; no child recommendation authorizes execution and the new row

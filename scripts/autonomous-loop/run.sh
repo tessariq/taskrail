@@ -206,6 +206,14 @@ validate_queue() {
     case "$mode" in
       run)
         [[ "$reason" == "-" ]] || die "run row $id must use '-' reason" 2
+        # A child may not edit this directory, so a task scoped to it can only
+        # ever block. Catch it here instead of spending an agent attempt on it.
+        # Purely mechanical: the literal path in the task file, nothing inferred.
+        status="$(task_field "$id" status)"
+        if [[ "$status" != "completed" && "$status" != "cancelled" ]] &&
+          grep -qF 'scripts/autonomous-loop' "$(task_file "$id")"; then
+          die "run row $id is scoped to scripts/autonomous-loop, which a delegated child may not edit; make it hold-operator with a reason" 2
+        fi
         ;;
       hold-operator|hold-self-removal)
         [[ "$reason" != "-" ]] || die "held row $id requires a reason" 2
