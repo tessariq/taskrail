@@ -26,6 +26,10 @@ affected invariants, acceptance/spec boundaries, and intended evidence. If the
 task cannot reach one verified result without unresolved scope, stop for reviewed
 decomposition or clarification instead of implementing an arbitrary slice.
 
+Stopping always means the blocked path below: `${TASKRAIL:-taskrail} block` with
+a reason, then a failing verification that names what an operator must decide.
+Exiting without that pair is never a stop.
+
 ## Start And Implement
 
 Invoke Taskrail only through `${TASKRAIL:-taskrail}`. The runner supplies a
@@ -78,10 +82,10 @@ restore the correct implementation, demonstrate that it passes, and remove all
 deliberate regression code. Record both outcomes concisely.
 
 After a material fix, rerun affected checks, freeze the changed final bytes, and
-obtain another fresh correctness review while the configured budget remains. A
-clean review stops. If a required finding remains unresolved or changed final
-bytes cannot be reviewed within budget, keep the task in progress, verify fail,
-and stop.
+obtain another fresh correctness review. A clean review stops. Run at most three
+correctness reviews in total; if a required finding is still unresolved after the
+third, or changed final bytes remain unreviewed, keep the task in progress,
+verify fail, and stop.
 
 ## Follow-Up And Lifecycle
 
@@ -114,7 +118,9 @@ If implementation cannot safely proceed, run `${TASKRAIL:-taskrail} block
 {{TASK_ID}} --reason "..."`, then `${TASKRAIL:-taskrail} verify {{TASK_ID}}
 --result fail --summary "..." --details "..."`. For deliberate rework, verify
 fail while leaving the task in progress. Never complete a blocked or failing
-task. If completion succeeds but passing verification fails, stop without
+task. A blocked run may create one follow-up under the same single-follow-up
+rules, but only for a genuinely separate outcome; work this task still owns is
+never offloaded that way. If completion succeeds but passing verification fails, stop without
 repeating completion or compensating with block.
 
 Verification details concisely record acceptance/check/manual evidence, each
