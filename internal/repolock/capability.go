@@ -7,13 +7,24 @@ import (
 	"strings"
 )
 
-// Capability bounds one owner's authority: the canonical commands it may run and
-// the task fields it may write. Ownership is checked against it before every
-// mutation, and a delegated join can only narrow it — never widen it — so a
-// child cannot grant itself work its parent did not select.
+// Capability bounds one owner's authority: the canonical commands it may run,
+// the task fields it may write, the one task it may act on, and the paths it may
+// publish. Ownership is checked against it before every mutation, and a delegated
+// join can only narrow it — never widen it — so a child cannot grant itself work
+// its parent did not select.
+//
+// SelectedTask and Writes are unbounded when empty, because a direct operator's
+// own invocation is bounded by the command it typed rather than by a grant. A
+// delegate arrives already narrowed on both: repotx refuses a delegated write
+// that names no task or no write set, so "unbounded" is never reachable from a
+// join.
 type Capability struct {
 	Commands   []string
 	TaskFields []string
+	// SelectedTask is the single task ID this ownership may act on.
+	SelectedTask string
+	// Writes is the exact set of reported paths this ownership may publish.
+	Writes []string
 }
 
 // delegatedCommands is the exact command set a delegated child writer may join
@@ -45,7 +56,12 @@ func DelegatedCapability() Capability {
 // deduplicated, so comparison never depends on how a caller happened to spell a
 // set. An entry that trims to empty is dropped.
 func (c Capability) normalized() Capability {
-	return Capability{Commands: normalizeSet(c.Commands), TaskFields: normalizeSet(c.TaskFields)}
+	return Capability{
+		Commands:     normalizeSet(c.Commands),
+		TaskFields:   normalizeSet(c.TaskFields),
+		SelectedTask: strings.TrimSpace(c.SelectedTask),
+		Writes:       normalizeSet(c.Writes),
+	}
 }
 
 func normalizeSet(values []string) []string {
@@ -59,9 +75,21 @@ func normalizeSet(values []string) []string {
 	return slices.Compact(out)
 }
 
-// Includes reports whether other is entirely within c.
+// Includes reports whether other is entirely within c. A bound c leaves
+// unbounded stays unbounded for other, but a bound c set is one other can only
+// match exactly (selected task) or stay inside (writes); dropping such a bound is
+// widening, not narrowing.
 func (c Capability) Includes(other Capability) bool {
 	outer, inner := c.normalized(), other.normalized()
+	if outer.SelectedTask != "" && inner.SelectedTask != outer.SelectedTask {
+		return false
+	}
+	// A bounded outer write set demands a bounded inner one that stays inside it.
+	// The emptiness half matters on its own: `subset` alone would accept an
+	// unbounded inner set, because nothing is a subset of everything.
+	if len(outer.Writes) > 0 && (len(inner.Writes) == 0 || !subset(inner.Writes, outer.Writes)) {
+		return false
+	}
 	return subset(inner.Commands, outer.Commands) && subset(inner.TaskFields, outer.TaskFields)
 }
 
@@ -102,6 +130,33 @@ func (c Capability) Allows(command string, fields ...string) error {
 	return nil
 }
 
+// AllowsTask refuses a task outside this ownership's selected-task bound. An
+// unbounded capability allows any task, including none at all: the bound exists
+// to pin a delegate to the one task its parent launched it for, not to force a
+// direct operator's repository-wide command to name a task.
+func (c Capability) AllowsTask(taskID string) error {
+	bound := strings.TrimSpace(c.SelectedTask)
+	if bound == "" || bound == strings.TrimSpace(taskID) {
+		return nil
+	}
+	return fmt.Errorf("%w: task %q is outside %s", ErrRefused, taskID, c.describe())
+}
+
+// AllowsWrites refuses any reported path outside this ownership's write set,
+// before the caller publishes anything.
+func (c Capability) AllowsWrites(paths []string) error {
+	bound := normalizeSet(c.Writes)
+	if len(bound) == 0 {
+		return nil
+	}
+	for _, path := range paths {
+		if !slices.Contains(bound, strings.TrimSpace(path)) {
+			return fmt.Errorf("%w: path %q is outside %s", ErrRefused, path, c.describe())
+		}
+	}
+	return nil
+}
+
 // validate refuses a capability that cannot bound anything.
 func (c Capability) validate() error {
 	if len(c.normalized().Commands) == 0 {
@@ -112,6 +167,7 @@ func (c Capability) validate() error {
 
 func (c Capability) describe() string {
 	normalized := c.normalized()
-	return fmt.Sprintf("capability{commands: [%s], task_fields: [%s]}",
-		strings.Join(normalized.Commands, " "), strings.Join(normalized.TaskFields, " "))
+	return fmt.Sprintf("capability{commands: [%s], task_fields: [%s], selected_task: %q, writes: [%s]}",
+		strings.Join(normalized.Commands, " "), strings.Join(normalized.TaskFields, " "),
+		normalized.SelectedTask, strings.Join(normalized.Writes, " "))
 }

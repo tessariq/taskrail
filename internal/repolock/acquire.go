@@ -297,6 +297,11 @@ func (l *Lock) Owner() Owner { return l.owner }
 // Capability reports the bound this ownership was acquired under.
 func (l *Lock) Capability() Capability { return l.capability }
 
+// IsDelegate reports that this ownership belongs to a delegate rather than to
+// the writer that claimed the lock. A lock acquired for delegation is still the
+// owner's, so this is false even there.
+func (l *Lock) IsDelegate() bool { return false }
+
 // Authorize refuses a command or task field outside this ownership's capability.
 // Writers call it before mutating anything.
 func (l *Lock) Authorize(command string, fields ...string) error {

@@ -1,13 +1,13 @@
 ---
 id: T-156-protect-existing-semantic-writers-with-snapshot
 title: Protect normal writes with snapshot transactions
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#repository-discovery-locking-and-recovery
 dependencies:
     - T-155-add-the-repository-mutation-lock-protocol
     - T-230-enforce-the-normative-v0-5-machine-schema
-updated_at: "2026-08-06T13:52:16Z"
+updated_at: "2026-08-11T08:46:54Z"
 ---
 
 # T-156-protect-existing-semantic-writers-with-snapshot Protect normal writes with snapshot transactions
@@ -45,3 +45,6 @@ failure. Delegated work receives only an explicitly narrowed write capability.
   while permitted narrowed work succeeds.
 
 ## Implementation Notes
+
+- 2026-08-11T08:46:19Z: Added internal/repotx: the normal transaction contract v0.5 semantic writers publish through. One transaction snapshots the complete consumed/published set under the repository mutation lock, validates the complete candidate before the first write, compare-and-swaps the whole set and again per path immediately before each write, and atomically replaces each published file. A handled failure rolls back only paths still equal to this transaction's candidates, preserving and naming external edits as rollback failure without claiming crash atomicity. Failures are typed kinds carrying deterministic managed/worktree/Git snapshots with exact original/candidate/current digests, mapped to registered v0.5 error codes. repolock.Capability gained selected-task and write-set bounds that only ever narrow, and repotx refuses a delegated ownership that arrives unbounded on either.
+- 2026-08-11T08:46:54Z: verification pass

@@ -95,6 +95,10 @@ func (j *Joined) Owner() Owner { return j.owner }
 // Capability reports the bound this delegated ownership works within.
 func (j *Joined) Capability() Capability { return j.capability }
 
+// IsDelegate reports that this ownership was joined rather than claimed, so a
+// writer can require the narrower bounds a delegate must arrive with.
+func (j *Joined) IsDelegate() bool { return true }
+
 // Authorize refuses a command or task field outside the delegated bound, before
 // the caller mutates anything.
 func (j *Joined) Authorize(command string, fields ...string) error {
