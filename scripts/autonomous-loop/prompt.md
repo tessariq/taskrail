@@ -96,8 +96,11 @@ recommendation and rationale in verification details. The recommendation does
 not authorize execution: the parent runner always queues it as held, and the
 child never edits `queue.tsv`. If more than one follow-up is necessary, do not
 create an arbitrary subset; block, verify fail, describe the proposals, and stop.
-Write the advisory as one line in this exact form:
-`follow-up recommendation: run|hold - <rationale>`.
+Write the advisory exactly once, in this exact form:
+`follow-up recommendation: run|hold - <rationale>`. It may start its own line or
+follow other details prose; the rationale runs to the end of that line and must
+not be empty. A second marker, another mode word, or a missing rationale is
+rejected and stops delivery.
 
 If source changed after start, run `task taskrail:install`, then
 `task taskrail:check` before final lifecycle writers.

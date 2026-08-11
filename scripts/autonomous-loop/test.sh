@@ -174,11 +174,23 @@ if [[ "${AUTONOMOUS_TEST_ACTION:-}" == "forged-report" ]]; then
   extra=',"unexpected":"pass for T-900-fixture-task"'
 elif [[ "${AUTONOMOUS_TEST_ACTION:-}" == "followup" ]]; then
   extra=',"details":"follow-up recommendation: run - independently useful fixture remediation","followup_task_id":"T-902"'
+elif [[ "${AUTONOMOUS_TEST_ACTION:-}" == "inline-followup" ]]; then
+  extra=',"details":"Acceptance evidenced; one separate-followup finding. follow-up recommendation: hold - operator review required","followup_task_id":"T-902"'
+elif [[ "${AUTONOMOUS_TEST_ACTION:-}" == "duplicate-recommendation" ]]; then
+  extra=',"details":"follow-up recommendation: run - first. follow-up recommendation: hold - second","followup_task_id":"T-902"'
+elif [[ "${AUTONOMOUS_TEST_ACTION:-}" == "unsupported-recommendation" ]]; then
+  extra=',"details":"reviewed. follow-up recommendation: maybe - undecided mode","followup_task_id":"T-902"'
+elif [[ "${AUTONOMOUS_TEST_ACTION:-}" == "empty-recommendation" ]]; then
+  extra=',"details":"reviewed. follow-up recommendation: hold - ","followup_task_id":"T-902"'
 else
   extra=''
 fi
 printf '%s\n' "{\"schema_version\":1,\"task_id\":\"T-900-fixture-task\",\"task_title\":\"Fixture\",\"result\":\"$result\",\"summary\":\"fixture\",\"generated_at\":\"2026-08-08T00:00:00Z\",\"spec_ref\":\"specs/v0.5.0.md#test-area\",\"artifacts\":[]$extra}" >"$AUTONOMOUS_TEST_ROOT/planning/artifacts/verify/T-900-fixture-task/20260808T000000Z/report.json"
-if [[ "${AUTONOMOUS_TEST_ACTION:-}" == "followup" || "${AUTONOMOUS_TEST_ACTION:-}" == "unreported-followup" ]]; then
+case "${AUTONOMOUS_TEST_ACTION:-}" in
+  followup | unreported-followup | inline-followup | duplicate-recommendation | unsupported-recommendation | empty-recommendation) create_followup=1 ;;
+  *) create_followup=0 ;;
+esac
+if ((create_followup == 1)); then
   printf '%s\n' 'id: T-902' 'status: todo' 'spec_ref: specs/v0.5.0.md#test-area' 'dependencies:' '    - T-900-fixture-task' >"$AUTONOMOUS_TEST_ROOT/planning/tasks/T-902.md"
 fi
 printf '%s\n' "test: deliver $status fixture task (T-900)" >"$AUTONOMOUS_COMMIT_MESSAGE_FILE"
@@ -432,6 +444,29 @@ rc=$?
 assert_contains "held follow-up queue row" "$(<"$root/scripts/autonomous-loop/queue.tsv")" $'T-902\thold-operator\tVerification follow-up from T-900-fixture-task; operator review required'
 [[ "$(wc -l <"$root/captures/agent-invocations")" == "1" ]] || fail "held follow-up launched another child"
 [[ "$(git -C "$root" rev-parse HEAD^)" == "$before_head" ]] || fail "held follow-up did not share the parent commit"
+
+root="$(create_fixture inline-followup-held)"
+before_head="$(git -C "$root" rev-parse HEAD)"
+output="$(AUTONOMOUS_TEST_ACTION=inline-followup run_fixture "$root")"
+rc=$?
+[[ $rc -eq 0 ]] || fail "inline follow-up expected success, got $rc: $output"
+assert_contains "inline follow-up queue row" "$(<"$root/scripts/autonomous-loop/queue.tsv")" $'T-902\thold-operator\tVerification follow-up from T-900-fixture-task; operator review required'
+assert_contains "inline follow-up recommendation" "$output" "follow-up recommendation: hold - operator review required"
+[[ "$(wc -l <"$root/captures/agent-invocations")" == "1" ]] || fail "inline follow-up launched another child"
+[[ "$(git -C "$root" rev-parse HEAD^)" == "$before_head" ]] || fail "inline follow-up did not share the parent commit"
+[[ "$(git -C "$root" rev-parse origin/main)" == "$(git -C "$root" rev-parse HEAD)" ]] || fail "inline follow-up did not push the owning commit"
+
+for action in duplicate-recommendation unsupported-recommendation empty-recommendation; do
+  root="$(create_fixture "$action")"
+  before_head="$(git -C "$root" rev-parse HEAD)"
+  before_queue="$(<"$root/scripts/autonomous-loop/queue.tsv")"
+  output="$(AUTONOMOUS_TEST_ACTION="$action" run_fixture "$root")"
+  rc=$?
+  [[ $rc -ne 0 ]] || fail "$action unexpectedly succeeded"
+  assert_contains "$action" "$output" "invalid pass verification report"
+  [[ "$(<"$root/scripts/autonomous-loop/queue.tsv")" == "$before_queue" ]] || fail "$action mutated the queue"
+  [[ "$(git -C "$root" rev-parse HEAD)" == "$before_head" ]] || fail "$action created a commit"
+done
 
 root="$(create_fixture unreported-followup)"
 before_head="$(git -C "$root" rev-parse HEAD)"

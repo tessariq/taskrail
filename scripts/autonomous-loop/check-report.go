@@ -51,19 +51,43 @@ func main() {
 	}
 	recommendation := ""
 	if got.FollowupTaskID != "" {
-		for line := range strings.Lines(got.Details) {
-			line = strings.TrimSpace(line)
-			if strings.HasPrefix(line, "follow-up recommendation: ") {
-				recommendation = line
-				break
-			}
-		}
-		if !strings.HasPrefix(recommendation, "follow-up recommendation: run - ") &&
-			!strings.HasPrefix(recommendation, "follow-up recommendation: hold - ") {
-			fail(fmt.Errorf("follow-up report lacks a run/hold recommendation and rationale"))
+		var err error
+		if recommendation, err = parseRecommendation(got.Details); err != nil {
+			fail(err)
 		}
 	}
 	fmt.Printf("%s\n%s\n%s\n", got.GeneratedAt, got.FollowupTaskID, recommendation)
+}
+
+const recommendationMarker = "follow-up recommendation: "
+
+// parseRecommendation returns the single normalized advisory the loop prompt
+// requires. `taskrail verify --details` emits one paragraph, so the marker is
+// matched anywhere in the details rather than only at the start of a line, and
+// the rationale ends at the first line break so the runner keeps one field.
+func parseRecommendation(details string) (string, error) {
+	start := strings.Index(details, recommendationMarker)
+	if start < 0 {
+		return "", fmt.Errorf("follow-up report lacks a run/hold recommendation and rationale")
+	}
+	rest := details[start+len(recommendationMarker):]
+	if strings.Contains(rest, recommendationMarker) {
+		return "", fmt.Errorf("follow-up report carries more than one recommendation")
+	}
+	if end := strings.IndexAny(rest, "\r\n"); end >= 0 {
+		rest = rest[:end]
+	}
+	rest = strings.TrimSpace(rest)
+	for _, mode := range []string{"run", "hold"} {
+		rationale, ok := strings.CutPrefix(rest, mode+" - ")
+		if !ok {
+			continue
+		}
+		if rationale = strings.TrimSpace(rationale); rationale != "" {
+			return recommendationMarker + mode + " - " + rationale, nil
+		}
+	}
+	return "", fmt.Errorf("follow-up recommendation must be run or hold with a rationale")
 }
 
 func fail(err error) {
