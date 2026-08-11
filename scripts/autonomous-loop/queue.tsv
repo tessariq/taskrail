@@ -113,3 +113,4 @@ T-248-run-cross-platform-workflow-contract-tests-in-ci	run	-
 T-174-run-the-v0-5-0-gap-and-drift-release-gate	hold-operator	Maintainer-owned final release gate
 T-316-harden-temporary-autonomous-loop-timeout-and	hold-operator	Operator-owned temporary loop timeout and recovery hardening
 T-317-bind-delegated-grants-to-the-owner-s-declared-task	hold-operator	Verification follow-up from T-156-protect-existing-semantic-writers-with-snapshot; operator review required
+T-318-accept-inline-loop-follow-up-recommendations	hold-operator	Operator-selected next task; inline recommendation parser fix requires reviewed execution
