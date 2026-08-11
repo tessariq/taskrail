@@ -109,6 +109,17 @@ func TestWriteFileIfMissingWriteErrorOmitsAbsolutePath(t *testing.T) {
 	assertPortablePermissionError(t, repo, err)
 }
 
+func TestEnsureNotesTemplateWriteErrorOmitsAbsolutePath(t *testing.T) {
+	t.Parallel()
+	repo := t.TempDir()
+	planning := filepath.Join(repo, "planning")
+	if err := os.Mkdir(planning, 0o755); err != nil {
+		t.Fatalf("seed planning dir: %v", err)
+	}
+	requireReadOnlyDirBlocksWrites(t, planning)
+	assertPortablePermissionError(t, repo, ensureNotesTemplate(repo, planning))
+}
+
 func TestWriteFileIfMissingStatErrorOmitsAbsolutePath(t *testing.T) {
 	t.Parallel()
 	repo := t.TempDir()

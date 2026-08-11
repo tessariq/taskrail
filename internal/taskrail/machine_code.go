@@ -24,6 +24,7 @@ const (
 	MachineCodeInvalidReason      = "invalid_reason"
 	MachineCodeInvalidProposal    = "invalid_proposal"
 	MachineCodeDestinationExists  = "destination_exists"
+	MachineCodePathBlocked        = "path_blocked"
 	MachineCodePartialWrite       = "partial_write"
 	MachineCodeRollbackFailed     = "rollback_failed"
 )

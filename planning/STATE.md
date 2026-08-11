@@ -1,6 +1,6 @@
 ---
 schema_version: 1
-updated_at: "2026-08-11T19:01:23Z"
+updated_at: "2026-08-11T19:35:24Z"
 active_spec_version: v0.5.0
 active_spec_path: specs/v0.5.0.md
 current_task: ""
@@ -8,7 +8,7 @@ current_task_title: ""
 status_summary: idle
 blockers: []
 next_action: Select the next eligible task
-last_verification_result: pass for T-319-reject-run-mode-queue-rows-scoped-to-the-loop at 2026-08-11T19:01:23Z
+last_verification_result: pass for T-214-bootstrap-and-migrate-human-owned-repository-notes at 2026-08-11T19:35:24Z
 relevant_artifacts: []
 continuation_notes:
     - This repository is temporarily dogfooding bootstrap workflow tooling until Taskrail v0.1.0 exists.
@@ -34,7 +34,7 @@ continuation_notes:
 
 ## Last Verification
 
-- pass for T-319-reject-run-mode-queue-rows-scoped-to-the-loop at 2026-08-11T19:01:23Z
+- pass for T-214-bootstrap-and-migrate-human-owned-repository-notes at 2026-08-11T19:35:24Z
 
 ## Next Action
 
@@ -50,8 +50,8 @@ continuation_notes:
 
 ## Task Counts
 
-- todo: 147
+- todo: 146
 - in_progress: 0
-- completed: 172
+- completed: 173
 - blocked: 0
 - cancelled: 0

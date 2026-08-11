@@ -4,6 +4,12 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- `taskrail init` and `retrofit --apply` create `planning/NOTES.md` for
+  human-owned context when absent; an existing file is untouched, and an unsafe
+  path (symlink, directory, case alias) refuses with `path_blocked`.
+
 ### Changed
 
 - Every `--json` command now emits the v0.5 machine envelope — `schema_version`,

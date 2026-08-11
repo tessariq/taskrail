@@ -40,6 +40,8 @@ do not contain the source helper and skip this source-only guard.
 - treat `planning/STATE.md` as current state, never as a task/session log; put
   durable context in task implementation notes, blocker reasons, portable
   verification summaries/reports, or follow-up tasks
+- treat optional `planning/NOTES.md` as human-owned repository context: read it
+  when relevant, edit it only on explicit human request
 - never hand-edit task status fields
 - create follow-up tasks with `${TASKRAIL:-taskrail} task new`, never by hand-authoring markdown
 - keep concrete local artifact paths in ephemeral reports; committed task notes

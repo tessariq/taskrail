@@ -58,7 +58,11 @@ func (s *Service) Retrofit(input RetrofitInput) (RetrofitResult, error) {
 	}
 
 	mapping := s.detectRetrofit()
-	changes := append(s.pendingLayoutChanges(), markerWriteChange())
+	pending, err := s.pendingLayoutChanges()
+	if err != nil {
+		return RetrofitResult{}, err
+	}
+	changes := append(pending, markerWriteChange())
 
 	if !input.Apply {
 		return RetrofitResult{Mapping: mapping, Bootstrap: bootstrap, Changes: changes}, nil

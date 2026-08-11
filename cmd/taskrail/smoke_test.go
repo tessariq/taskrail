@@ -109,6 +109,29 @@ func TestInitCreatesStructure(t *testing.T) {
 	}
 }
 
+// TestInitCreatesNotesSidecarInBothModes pins the human-owned sidecar to the
+// layout itself rather than to a mode: opting into skills must not change which
+// planning files a fresh repository gets.
+func TestInitCreatesNotesSidecarInBothModes(t *testing.T) {
+	defaultRoot := setupRepo(t)
+	defaultNotes, err := os.ReadFile(filepath.Join(defaultRoot, "planning", "NOTES.md"))
+	if err != nil {
+		t.Fatalf("default init did not create the notes sidecar: %v", err)
+	}
+
+	skillsRoot := setupUnmarkedRepo(t)
+	if out, err := runRoot(t, "init", "--with-skills"); err != nil {
+		t.Fatalf("init --with-skills: %v (output %q)", err, out)
+	}
+	skillsNotes, err := os.ReadFile(filepath.Join(skillsRoot, "planning", "NOTES.md"))
+	if err != nil {
+		t.Fatalf("--with-skills init did not create the notes sidecar: %v", err)
+	}
+	if string(skillsNotes) != string(defaultNotes) {
+		t.Fatalf("--with-skills wrote a different sidecar:\n%q\nwant\n%q", string(skillsNotes), string(defaultNotes))
+	}
+}
+
 // TestInitWithSkillsInstallsOptIn verifies the opt-in flag installs the embedded
 // skills into the agent-tool directories, while a default init leaves them out.
 func TestInitWithSkillsInstallsOptIn(t *testing.T) {

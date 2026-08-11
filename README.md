@@ -436,7 +436,7 @@ placeholder is required or tracked.
 
 ## State Contract
 
-`planning/STATE.md` is the authoritative current execution projection. It carries the active spec, current task, status summary, blockers, the next action, and the last verification result, plus pointers to relevant artifacts. It is not a per-task or per-session log: keep durable task context in task `## Implementation Notes`, blocker reasons, portable verification summaries/reports, or follow-up tasks. Optional repository-wide human context may live in `planning/NOTES.md`; agents may read it but edit it only when explicitly asked. Do not hand-edit machine-managed state fields or append continuation prose; let the `taskrail` transitions update the file.
+`planning/STATE.md` is the authoritative current execution projection. It carries the active spec, current task, status summary, blockers, the next action, and the last verification result, plus pointers to relevant artifacts. It is not a per-task or per-session log: keep durable task context in task `## Implementation Notes`, blocker reasons, portable verification summaries/reports, or follow-up tasks. Repository-wide human context lives in `planning/NOTES.md`, a human-owned sidecar `init` and `retrofit --apply` create as a short commented template when that path is absent and never rewrite afterwards; agents may read it but edit it only when explicitly asked. Do not hand-edit machine-managed state fields or append continuation prose; let the `taskrail` transitions update the file.
 
 ## Repository Layout
 

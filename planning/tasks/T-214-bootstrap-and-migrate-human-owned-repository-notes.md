@@ -1,13 +1,13 @@
 ---
 id: T-214-bootstrap-and-migrate-human-owned-repository-notes
 title: Bootstrap and migrate human-owned repository notes
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#layout-compatibility-and-upgrade
 dependencies:
     - T-156-protect-existing-semantic-writers-with-snapshot
     - T-213-define-the-uniform-agent-machine-api
-updated_at: "2026-08-05T20:24:12Z"
+updated_at: "2026-08-11T19:35:24Z"
 ---
 
 # T-214-bootstrap-and-migrate-human-owned-repository-notes Bootstrap and migrate human-owned repository notes
@@ -34,3 +34,6 @@ no-clobber extraction candidate consumed by layout-upgrade tasks.
 - Unit-test empty/single/multiple/multiline legacy-note extraction candidates, exact text/order, existing-file refusal, aliases, and unsafe destinations. T-157/T-185 own transactional direct/multi-hop migration, rollback, schema removal, and old-binary refusal.
 
 ## Implementation Notes
+
+- 2026-08-11T19:35:01Z: init/retrofit now bootstrap a human-owned planning NOTES.md sidecar: applied runs create the short commented template only when the destination is absent, preview and JSON report it as a candidate without writing, an existing regular file is preserved byte-for-byte, and a symlink, non-regular entry, or case-alias sibling refuses with path_blocked. Destination classification and the write-free extraction-candidate helper both take the planning directory as an argument, so T-222 reuses them for local storage and T-157 wires extraction into layout-2 preview/apply. Packaged autonomous skills now tell agents to read the sidecar and edit it only on explicit human request.
+- 2026-08-11T19:35:24Z: verification pass

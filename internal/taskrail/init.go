@@ -83,7 +83,11 @@ func (s *Service) initWithMarker(cfg LayoutConfig, apply bool) (InitResult, erro
 // bumps the marker, and re-runs validation. It only ever creates missing content
 // and rewrites the machine marker, so human-authored files are left intact.
 func (s *Service) migrate(cfg LayoutConfig, apply bool) (InitResult, error) {
-	changes := append(s.pendingLayoutChanges(),
+	pending, err := s.pendingLayoutChanges()
+	if err != nil {
+		return InitResult{}, err
+	}
+	changes := append(pending,
 		fmt.Sprintf("update %s layout_version %d -> %d", markerRelPath(), cfg.LayoutVersion, currentLayoutVersion))
 
 	if !apply {
@@ -159,7 +163,11 @@ func (s *Service) detectRetrofit() []RetrofitMapping {
 // writeFileIfMissing semantics (never clobbering existing content), writes the
 // marker, and re-runs validation.
 func (s *Service) retrofit(mapping []RetrofitMapping, apply bool) (InitResult, error) {
-	changes := append(s.pendingLayoutChanges(), markerWriteChange())
+	pending, err := s.pendingLayoutChanges()
+	if err != nil {
+		return InitResult{}, err
+	}
+	changes := append(pending, markerWriteChange())
 
 	if !apply {
 		return InitResult{
@@ -229,6 +237,9 @@ func (s *Service) ensureLayout() error {
 	if err := writeFileIfMissing(s.paths.RepoRoot, filepath.Join(s.paths.SpecsDir, "v0.1.0.md"), []byte(starterSpecV010())); err != nil {
 		return err
 	}
+	if err := ensureNotesTemplate(s.paths.RepoRoot, s.paths.PlanningDir); err != nil {
+		return err
+	}
 	if _, err := os.Stat(s.paths.StateFile); errors.Is(err, os.ErrNotExist) {
 		if err := s.saveState(starterState(s.now())); err != nil {
 			return err
@@ -241,7 +252,10 @@ func (s *Service) ensureLayout() error {
 
 // pendingLayoutChanges lists the layout directories and files ensureLayout would
 // create, so a migration dry run can report exactly what applying it would add.
-func (s *Service) pendingLayoutChanges() []string {
+// It fails for the same unusable notes destination the apply path refuses:
+// previewing a write that could never happen would be a worse answer than
+// naming the entry blocking it, and classification itself writes nothing.
+func (s *Service) pendingLayoutChanges() ([]string, error) {
 	var changes []string
 	for _, dir := range []string{s.paths.SpecsDir, s.paths.TasksDir} {
 		if !dirExists(dir) {
@@ -257,7 +271,14 @@ func (s *Service) pendingLayoutChanges() []string {
 			changes = append(changes, "create "+relPath(s.paths.RepoRoot, file))
 		}
 	}
-	return changes
+	notesExists, err := classifyNotesDestination(s.paths.RepoRoot, s.paths.PlanningDir)
+	if err != nil {
+		return nil, err
+	}
+	if !notesExists {
+		changes = append(changes, "create "+relPath(s.paths.RepoRoot, notesPath(s.paths.PlanningDir)))
+	}
+	return changes, nil
 }
 
 func markerRelPath() string {
