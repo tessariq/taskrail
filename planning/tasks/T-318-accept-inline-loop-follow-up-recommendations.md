@@ -1,11 +1,11 @@
 ---
 id: T-318-accept-inline-loop-follow-up-recommendations
 title: Accept inline loop follow-up recommendations safely
-status: todo
+status: blocked
 priority: high
 spec_ref: specs/v0.5.0.md#source-checkout-bootstrap-loop-retirement
 dependencies: []
-updated_at: "2026-08-11T18:19:28Z"
+updated_at: "2026-08-11T18:30:59Z"
 ---
 
 # T-318-accept-inline-loop-follow-up-recommendations Accept inline loop follow-up recommendations safely
@@ -39,3 +39,6 @@ verified candidate uncommitted.
   disposable repository and confirm one held queue row plus one pushed commit.
 
 ## Implementation Notes
+
+- 2026-08-11T18:30:05Z: Blocked: every acceptance surface (A1/A2 parser check-report.go, A3 harness test.sh plus run.sh queue/delivery, A4 shared prompt.md) lives under scripts/autonomous-loop/, which the delegated runner forbids editing and which scripts/autonomous-loop/AGENTS.md reserves from ordinary queued tasks. Needs operator-owned execution, not a queued child.
+- 2026-08-11T18:30:59Z: verification fail
