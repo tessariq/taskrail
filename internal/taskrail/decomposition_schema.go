@@ -298,9 +298,10 @@ func decodeDecompositionTrace(data []byte, subjects DecompositionSubjects) (Deco
 		if req.SpecRef, err = stringMember(obj, what, "spec_ref"); err != nil {
 			return out, err
 		}
-		path, anchor, e := parseSpecRef(req.SpecRef)
+		_, anchor, e := parseSpecRef(req.SpecRef)
 		normalized, ne := normalizeSpecRef(req.SpecRef)
-		if e != nil || ne != nil || normalized != req.SpecRef || path != subjects.SpecPath {
+		normalizedPath, _, _ := strings.Cut(normalized, "#")
+		if e != nil || ne != nil || normalized != req.SpecRef || normalizedPath != subjects.SpecPath {
 			return out, fmt.Errorf("%s spec_ref is not a normalized selected-spec reference", what)
 		}
 		if _, ok := anchors[anchor]; !ok {
@@ -696,9 +697,9 @@ func validateReviewedBody(body, what string) error {
 	if len(lines) > 0 && lines[0] == "---" {
 		return fmt.Errorf("%s body contains frontmatter", what)
 	}
-	for _, line := range lines {
+	for i, line := range lines {
 		level, _ := markdownATXHeading(line)
-		if level == 1 {
+		if level == 1 || (i > 0 && strings.TrimSpace(lines[i-1]) != "" && markdownSetextH1Underline(line)) {
 			return fmt.Errorf("%s body contains top-level heading", what)
 		}
 	}
@@ -799,6 +800,18 @@ func markdownATXHeading(line string) (int, string) {
 		return 0, ""
 	}
 	text := strings.TrimSpace(line[level:])
-	text = strings.TrimSpace(strings.TrimRight(text, "#"))
+	closingStart := len(strings.TrimRight(text, "#"))
+	if closingStart < len(text) && (closingStart == 0 || text[closingStart-1] == ' ' || text[closingStart-1] == '\t') {
+		text = strings.TrimSpace(text[:closingStart])
+	}
 	return level, text
+}
+
+func markdownSetextH1Underline(line string) bool {
+	indent := len(line) - len(strings.TrimLeft(line, " "))
+	if indent > 3 {
+		return false
+	}
+	line = strings.TrimSpace(line[indent:])
+	return line != "" && strings.Trim(line, "=") == ""
 }

@@ -197,6 +197,7 @@ func TestDecodeDecompositionBundleRejectsMarkdownEquivalentBodyHeadings(t *testi
 	tests := []struct{ name, suffix, want string }{
 		{"indented h1", `\n\n   # Extra title`, "top-level heading"},
 		{"tab h1", `\n\n#\tExtra title`, "top-level heading"},
+		{"setext h1", `\n\nExtra title\n===========`, "top-level heading"},
 		{"trailing-space duplicate", `\n\n## Description   \n\nDuplicate.`, "exactly one ## Description"},
 		{"closing-hash duplicate", `\n\n## Description ##\n\nDuplicate.`, "exactly one ## Description"},
 	}
@@ -210,6 +211,15 @@ func TestDecodeDecompositionBundleRejectsMarkdownEquivalentBodyHeadings(t *testi
 				t.Fatalf("error = %v, want containing %q", err, tc.want)
 			}
 		})
+	}
+}
+
+func TestDecodeDecompositionBundlePreservesUnseparatedATXTrailingHashes(t *testing.T) {
+	files, subjects := decompositionGolden()
+	replaceDecomposition(files, "draft.json", `- Test it.`, `- Test it.\n\n## Description##\n\nNot a duplicate.`)
+	refreshDecompositionFinalDigests(files)
+	if _, err := DecodeDecompositionBundle(files, subjects); err != nil {
+		t.Fatalf("DecodeDecompositionBundle heading with unseparated trailing hashes: %v", err)
 	}
 }
 

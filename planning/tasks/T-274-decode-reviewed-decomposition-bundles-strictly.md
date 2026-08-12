@@ -1,12 +1,12 @@
 ---
 id: T-274-decode-reviewed-decomposition-bundles-strictly
 title: Decode reviewed decomposition bundles strictly
-status: blocked
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#safe-review-artifact-publication
 dependencies:
     - T-240-implement-the-normative-review-schema-decoders
-updated_at: "2026-08-12T12:35:05Z"
+updated_at: "2026-08-12T17:20:49Z"
 ---
 
 # T-274-decode-reviewed-decomposition-bundles-strictly Decode reviewed decomposition bundles strictly
@@ -45,3 +45,8 @@ publication and import boundaries.
 
 - 2026-08-12T12:34:54Z: Third and final correctness review found unresolved current-scope Markdown parsing defects: Setext H1 headings bypass the reviewed-body top-level-heading prohibition, and unseparated trailing # characters are incorrectly stripped as ATX closers. Fixing after review three would leave changed final bytes unreviewed. The standalone taskrail:check also cannot validate the mandated runner wrapper without bypassing it.
 - 2026-08-12T12:35:05Z: verification fail
+- 2026-08-12T12:47:55Z: Resolved the final review's Setext H1 and unseparated ATX closing-hash parser defects with focused regressions.
+- 2026-08-12T12:48:17Z: Reject Setext H1 headings and preserve unseparated trailing hashes in reviewed Markdown bodies; focused regressions and full Go checks pass.
+- 2026-08-12T12:48:22Z: verification pass
+- 2026-08-12T12:49:52Z: verification pass
+- 2026-08-12T17:20:49Z: verification pass
