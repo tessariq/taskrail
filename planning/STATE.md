@@ -1,14 +1,15 @@
 ---
 schema_version: 1
-updated_at: "2026-08-12T20:18:36Z"
+updated_at: "2026-08-12T20:37:59Z"
 active_spec_version: v0.5.0
 active_spec_path: specs/v0.5.0.md
 current_task: ""
 current_task_title: ""
-status_summary: idle
-blockers: []
-next_action: Select the next eligible task
-last_verification_result: pass for T-276-integrate-contextual-review-schema-validation at 2026-08-12T20:18:36Z
+status_summary: blocked
+blockers:
+    - 'T-277-add-durable-transaction-journals-and-recovery: Correctness review found the proposed portable path-based journal cannot satisfy A1-A4: preparation can strand an unrecoverable fence, recovery lacks lock-bound final CAS, path identity is not no-follow/handle-bound, retained fences do not block normal readers/writers, and post-rename fsync failure can lose recovery evidence. Operator must approve decomposition around a handle-bound filesystem primitive plus global fence integration, or revise the portability contract.'
+next_action: Resolve verification findings for T-277-add-durable-transaction-journals-and-recovery
+last_verification_result: fail for T-277-add-durable-transaction-journals-and-recovery at 2026-08-12T20:37:59Z
 relevant_artifacts: []
 continuation_notes:
     - This repository is temporarily dogfooding bootstrap workflow tooling until Taskrail v0.1.0 exists.
@@ -26,19 +27,19 @@ continuation_notes:
 
 ## Status
 
-- idle
+- blocked
 
 ## Blockers
 
-- None
+- T-277-add-durable-transaction-journals-and-recovery: Correctness review found the proposed portable path-based journal cannot satisfy A1-A4: preparation can strand an unrecoverable fence, recovery lacks lock-bound final CAS, path identity is not no-follow/handle-bound, retained fences do not block normal readers/writers, and post-rename fsync failure can lose recovery evidence. Operator must approve decomposition around a handle-bound filesystem primitive plus global fence integration, or revise the portability contract.
 
 ## Last Verification
 
-- pass for T-276-integrate-contextual-review-schema-validation at 2026-08-12T20:18:36Z
+- fail for T-277-add-durable-transaction-journals-and-recovery at 2026-08-12T20:37:59Z
 
 ## Next Action
 
-- Select the next eligible task
+- Resolve verification findings for T-277-add-durable-transaction-journals-and-recovery
 
 ## Relevant Artifacts
 
@@ -50,8 +51,8 @@ continuation_notes:
 
 ## Task Counts
 
-- todo: 140
+- todo: 139
 - in_progress: 0
 - completed: 180
-- blocked: 0
+- blocked: 1
 - cancelled: 0

@@ -1,12 +1,12 @@
 ---
 id: T-277-add-durable-transaction-journals-and-recovery
 title: Add durable transaction journals and recovery phases
-status: todo
+status: blocked
 priority: high
 spec_ref: specs/v0.5.0.md#repository-discovery-locking-and-recovery
 dependencies:
     - T-156-protect-existing-semantic-writers-with-snapshot
-updated_at: "2026-08-08T14:23:08Z"
+updated_at: "2026-08-12T20:37:59Z"
 ---
 
 # T-277-add-durable-transaction-journals-and-recovery Add durable transaction journals and recovery phases
@@ -42,3 +42,6 @@ which the shared recovery command can choose one mechanical safe action.
   action or a completed valid state with no lost external edits.
 
 ## Implementation Notes
+
+- 2026-08-12T20:37:45Z: Correctness review found the proposed portable path-based journal cannot satisfy A1-A4: preparation can strand an unrecoverable fence, recovery lacks lock-bound final CAS, path identity is not no-follow/handle-bound, retained fences do not block normal readers/writers, and post-rename fsync failure can lose recovery evidence. Operator must approve decomposition around a handle-bound filesystem primitive plus global fence integration, or revise the portability contract.
+- 2026-08-12T20:37:59Z: verification fail
