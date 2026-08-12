@@ -197,6 +197,13 @@ if ((create_followup == 1)); then
   printf '%s\n' 'id: T-902' 'status: todo' 'spec_ref: specs/v0.5.0.md#test-area' 'dependencies:' '    - T-900-fixture-task' >"$AUTONOMOUS_TEST_ROOT/planning/tasks/T-902.md"
 fi
 printf '%s\n' "test: deliver $status fixture task (T-900)" >"$AUTONOMOUS_COMMIT_MESSAGE_FILE"
+if [[ "${AUTONOMOUS_TEST_ACTION:-}" == "delete-exchange" ]]; then
+  rm -rf "$(dirname "$AUTONOMOUS_COMMIT_MESSAGE_FILE")"
+fi
+if [[ "${AUTONOMOUS_TEST_ACTION:-}" == "delete-exchange-fail" ]]; then
+  rm -rf "$(dirname "$AUTONOMOUS_COMMIT_MESSAGE_FILE")"
+  exit 7
+fi
 if [[ "${AUTONOMOUS_TEST_ACTION:-}" == "final-outcome-hang" || "${AUTONOMOUS_TEST_ACTION:-}" == "unrelated-terminal-hang" ]]; then
   sleep 300 &
   printf '%s\n' "$$ $!" >"$AUTONOMOUS_TEST_ROOT/captures/hang-pids"
@@ -443,6 +450,20 @@ rc=$?
 [[ $rc -eq 2 ]] || fail "blocked retry expected exit 2, got $rc"
 assert_contains "blocked retry" "$output" "has status blocked"
 [[ "$(wc -l <"$root/captures/agent-invocations")" == "$invocations_before" ]] || fail "blocked retry invoked the agent"
+
+root="$(create_fixture deleted-exchange)"
+output="$(AUTONOMOUS_TEST_ACTION=delete-exchange run_fixture "$root")"
+rc=$?
+[[ $rc -eq 2 ]] || fail "deleted exchange expected exit 2, got $rc: $output"
+assert_contains "deleted exchange diagnostic" "$output" "deleted runner child exchange directory"
+assert_not_contains "deleted exchange evidence diagnosis" "$output" "changed existing verification evidence"
+
+root="$(create_fixture deleted-exchange-fail)"
+output="$(AUTONOMOUS_TEST_ACTION=delete-exchange-fail run_fixture "$root")"
+rc=$?
+[[ $rc -eq 2 ]] || fail "deleted exchange failure expected exit 2, got $rc: $output"
+assert_contains "deleted exchange failure diagnostic" "$output" "deleted runner child exchange directory"
+assert_not_contains "deleted exchange backend diagnosis" "$output" "claude exited 7"
 
 root="$(create_fixture git-control-mutation)"
 before_head="$(git -C "$root" rev-parse HEAD)"

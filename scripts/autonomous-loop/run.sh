@@ -16,6 +16,7 @@ RESUME_BUNDLE=""
 BACKEND=claude
 BACKEND_SET=0
 TMP_DIR=""
+CHILD_DIR=""
 LOCK_DIR=""
 LOCK_TOKEN=""
 ACTIVE_PGID=""
@@ -40,6 +41,7 @@ cleanup() {
       rmdir "$LOCK_DIR" 2>/dev/null || true
     fi
   fi
+  [[ -z "$CHILD_DIR" ]] || rm -rf "$CHILD_DIR"
   [[ -z "$TMP_DIR" ]] || rm -rf "$TMP_DIR"
 }
 trap cleanup EXIT
@@ -408,14 +410,14 @@ git_control_snapshot() {
 }
 
 write_taskrail_wrapper() {
-  cat >"$TMP_DIR/taskrail-writer" <<'EOF'
+  cat >"$CHILD_DIR/taskrail-writer" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 : "${AUTONOMOUS_TASKRAIL_BINARY:?}"
 TASKRAIL="$AUTONOMOUS_TASKRAIL_BINARY" task taskrail:check >/dev/null
 exec "$AUTONOMOUS_TASKRAIL_BINARY" "$@"
 EOF
-  chmod +x "$TMP_DIR/taskrail-writer"
+  chmod +x "$CHILD_DIR/taskrail-writer"
 }
 
 runner_log() {
@@ -451,7 +453,7 @@ run_agent() {
   mkfifo "$output_fifo" || return 1
   tee "$RUN_LOG" <"$output_fifo" &
   tee_pid=$!
-  setsid env TASKRAIL="$TMP_DIR/taskrail-writer" AUTONOMOUS_TASKRAIL_BINARY="$ROOT/bin/taskrail" \
+  setsid env TASKRAIL="$CHILD_DIR/taskrail-writer" AUTONOMOUS_TASKRAIL_BINARY="$ROOT/bin/taskrail" \
     AUTONOMOUS_TASK_ID="$SELECTED_ID" AUTONOMOUS_COMMIT_MESSAGE_FILE="$COMMIT_MESSAGE" \
     "${agent_command[@]}" <"$prompt" >"$output_fifo" 2>&1 &
   child_pid=$!
@@ -543,6 +545,9 @@ run_iteration() {
   local commit_subject key generated_at before_manifest
 
   validate_selected "$id"
+  if [[ -z "$CHILD_DIR" ]]; then
+    CHILD_DIR="$(mktemp -d)" || die "cannot create child exchange directory" 2
+  fi
   key="$(task_key "$id")"
   render_prompt "$id"
   write_taskrail_wrapper
@@ -555,7 +560,7 @@ run_iteration() {
   before_git_control="$(git_control_snapshot)" || die "cannot snapshot Git control state"
   before_manifest="$TMP_DIR/tasks-before"
   task_manifest >"$before_manifest"
-  COMMIT_MESSAGE="$TMP_DIR/commit-message"
+  COMMIT_MESSAGE="$CHILD_DIR/commit-message"
   rm -f "$COMMIT_MESSAGE"
   mkdir -p "$RUNS_DIR"
   stamp="$(date -u +%Y%m%dT%H%M%SZ)"
@@ -564,8 +569,8 @@ run_iteration() {
   case "$BACKEND" in
     claude)
       agent_command=(
-        claude -p --permission-mode auto --add-dir "$TMP_DIR"
-        --allowedTools "Bash($TMP_DIR/taskrail-writer *)"
+        claude -p --permission-mode auto --add-dir "$CHILD_DIR"
+        --allowedTools "Bash($CHILD_DIR/taskrail-writer *)"
       )
       ;;
     opencode) agent_command=(opencode run --auto) ;;
@@ -586,6 +591,9 @@ run_iteration() {
   [[ -z "$(git status --porcelain=v1 --untracked-files=all -- scripts/autonomous-loop)" ]] || \
     die "$id modified temporary loop control files"
   [[ ! -e "$COMMIT_MESSAGE" || -f "$COMMIT_MESSAGE" ]] || die "$id wrote an invalid commit-message entry"
+  [[ -d "$CHILD_DIR" ]] || die "$id deleted runner child exchange directory" 2
+  [[ -f "$reports_before_manifest" && -f "$before_manifest" ]] || \
+    die "$id lost private runner control manifests" 2
   if [[ $AGENT_RC -ne 0 && $AGENT_TIMED_OUT -eq 0 && -z "$INTERRUPTED" ]]; then
     die "$id $BACKEND exited $AGENT_RC; inspect ${RUN_LOG#$ROOT/}"
   fi
@@ -647,17 +655,30 @@ run_iteration() {
   fi
 }
 
-TMP_DIR="$(mktemp -d)" || die "cannot create external temporary directory" 2
 if [[ $CHECK_QUEUE -eq 1 ]]; then
   validate_queue
   exit 0
 fi
 if [[ -n "$RESUME_BUNDLE" ]]; then
+  TMP_DIR="$(mktemp -d)" || die "cannot create external temporary directory" 2
   cd "$ROOT" || die "cannot enter repository root" 2
   [[ "$(git rev-parse --show-toplevel 2>/dev/null)" == "$ROOT" ]] || die "not at repository root" 2
   acquire_lock
   resume_delivery "$RESUME_BUNDLE"
   exit $?
+fi
+if [[ $DRY_RUN -eq 1 ]]; then
+  TMP_DIR="$(mktemp -d)" || die "cannot create external temporary directory" 2
+else
+  ensure_recovery_root
+  runtime_root="$(recovery_root)"
+  [[ -e "$runtime_root" ]] || mkdir "$runtime_root" || die "cannot create runtime root" 2
+  [[ -d "$runtime_root" && ! -L "$runtime_root" ]] || die "runtime root is not a private directory" 2
+  chmod 700 "$runtime_root" || die "cannot secure runtime root" 2
+  [[ "$(stat -c '%u' "$runtime_root")" == "$(id -u)" && "$(stat -c '%a' "$runtime_root")" == "700" ]] || \
+    die "runtime root permissions are unsafe" 2
+  TMP_DIR="$(mktemp -d "$runtime_root/.runtime.XXXXXX")" || die "cannot create private runtime directory" 2
+  chmod 700 "$TMP_DIR" || die "cannot secure private runtime directory" 2
 fi
 preflight
 select_task
