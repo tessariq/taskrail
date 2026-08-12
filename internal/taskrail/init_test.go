@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -49,7 +50,7 @@ func TestInitEmptyRepoWritesMarker(t *testing.T) {
 	repo := initGitRepo(t)
 	svc := newTestService(t, repo, time.Date(2026, 3, 31, 12, 0, 0, 0, time.UTC))
 
-	result, err := svc.Init(false)
+	result, err := svc.Init(InitInput{})
 	if err != nil {
 		t.Fatalf("init: %v", err)
 	}
@@ -83,7 +84,7 @@ func TestInitEmptyRepoDoesNotSeedContinuationNotes(t *testing.T) {
 	repo := initGitRepo(t)
 	svc := newTestService(t, repo, time.Date(2026, 3, 31, 12, 0, 0, 0, time.UTC))
 
-	if _, err := svc.Init(false); err != nil {
+	if _, err := svc.Init(InitInput{}); err != nil {
 		t.Fatalf("init: %v", err)
 	}
 
@@ -108,7 +109,7 @@ func TestInitAdoptsLegacyLayoutNonDestructively(t *testing.T) {
 	before := snapshotTree(t, repo)
 
 	svc := newTestService(t, repo, time.Date(2026, 3, 31, 12, 0, 0, 0, time.UTC))
-	result, err := svc.Init(false)
+	result, err := svc.Init(InitInput{})
 	if err != nil {
 		t.Fatalf("init: %v", err)
 	}
@@ -144,7 +145,7 @@ func TestInitMigrationDryRunChangesNothing(t *testing.T) {
 	before := snapshotTree(t, repo)
 
 	svc := newTestService(t, repo, time.Date(2026, 3, 31, 12, 0, 0, 0, time.UTC))
-	result, err := svc.Init(false)
+	result, err := svc.Init(InitInput{})
 	if err != nil {
 		t.Fatalf("init dry run: %v", err)
 	}
@@ -157,8 +158,8 @@ func TestInitMigrationDryRunChangesNothing(t *testing.T) {
 	if result.FromVersion != 0 || result.ToVersion != currentLayoutVersion {
 		t.Fatalf("versions = %d -> %d, want 0 -> %d", result.FromVersion, result.ToVersion, currentLayoutVersion)
 	}
-	if len(result.Changes) == 0 {
-		t.Fatal("dry run must report the planned changes")
+	if !slices.ContainsFunc(result.Writes, func(w WriteEntry) bool { return w.Action == writeActionCreate }) {
+		t.Fatal("dry run must report the paths applying would create")
 	}
 
 	after := snapshotTree(t, repo)
@@ -191,7 +192,7 @@ func TestInitMigrationApplyBumpsMarkerAndValidates(t *testing.T) {
 	writeFile(t, paritySkill, string(embeddedSkill))
 
 	svc := newTestService(t, repo, time.Date(2026, 3, 31, 12, 0, 0, 0, time.UTC))
-	result, err := svc.Init(true)
+	result, err := svc.Init(InitInput{Apply: true})
 	if err != nil {
 		t.Fatalf("init apply: %v", err)
 	}
@@ -243,7 +244,7 @@ func TestInitRejectsNewerLayoutVersion(t *testing.T) {
 	svc := newTestService(t, repo, time.Date(2026, 3, 31, 12, 0, 0, 0, time.UTC))
 	writeFile(t, markerFile(repo), "layout_version: 999\nspecs_dir: specs\nplanning_dir: planning\n")
 
-	if _, err := svc.Init(false); err == nil || !strings.Contains(err.Error(), "upgrade taskrail") {
+	if _, err := svc.Init(InitInput{}); err == nil || !strings.Contains(err.Error(), "upgrade taskrail") {
 		t.Fatalf("Init error = %v, want upgrade-taskrail refusal", err)
 	}
 }
@@ -269,7 +270,7 @@ func TestInitDetectsNonStandardLayoutAndProposesMapping(t *testing.T) {
 	before := snapshotTree(t, repo)
 
 	svc := newTestService(t, repo, time.Date(2026, 3, 31, 12, 0, 0, 0, time.UTC))
-	result, err := svc.Init(false)
+	result, err := svc.Init(InitInput{})
 	if err != nil {
 		t.Fatalf("init dry run: %v", err)
 	}
@@ -289,8 +290,8 @@ func TestInitDetectsNonStandardLayoutAndProposesMapping(t *testing.T) {
 	if !reflect.DeepEqual(result.Mapping, want) {
 		t.Fatalf("mapping = %+v, want %+v", result.Mapping, want)
 	}
-	if len(result.Changes) == 0 {
-		t.Fatal("retrofit preview must report planned changes")
+	if !slices.ContainsFunc(result.Writes, func(w WriteEntry) bool { return w.Action == writeActionCreate }) {
+		t.Fatal("retrofit preview must report the paths applying would create")
 	}
 
 	after := snapshotTree(t, repo)
@@ -310,7 +311,7 @@ func TestInitRetrofitApplyIsNonDestructive(t *testing.T) {
 	humanContent := "# Hand-written specs\n"
 
 	svc := newTestService(t, repo, time.Date(2026, 3, 31, 12, 0, 0, 0, time.UTC))
-	result, err := svc.Init(true)
+	result, err := svc.Init(InitInput{Apply: true})
 	if err != nil {
 		t.Fatalf("init apply: %v", err)
 	}

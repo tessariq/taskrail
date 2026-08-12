@@ -33,7 +33,7 @@ func newCoverageCmd() *cobra.Command {
 			minSet := cmd.Flags().Changed("min")
 			areaSet := cmd.Flags().Changed("area")
 			if err := validateCoverageFlags(cmd, gaps, minPct, failOn); err != nil {
-				return publishMachineError(cmd, err)
+				return publishMachineError(cmd, err, nil)
 			}
 			return runCommand(cmd, func(svc *taskrail.Service) (commandResult, error) {
 				if gaps {

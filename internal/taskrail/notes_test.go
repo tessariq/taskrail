@@ -23,7 +23,7 @@ func TestInitFreshCreatesNotesTemplate(t *testing.T) {
 	repo := initGitRepo(t)
 	svc := newTestService(t, repo, time.Date(2026, 3, 31, 12, 0, 0, 0, time.UTC))
 
-	if _, err := svc.Init(false); err != nil {
+	if _, err := svc.Init(InitInput{}); err != nil {
 		t.Fatalf("init: %v", err)
 	}
 	if got := readFileString(t, notesFile(repo)); got != starterNotes() {
@@ -48,7 +48,7 @@ func TestInitPreservesExistingNotesByteForByte(t *testing.T) {
 	writeFile(t, notesFile(repo), human)
 
 	svc := newTestService(t, repo, time.Date(2026, 3, 31, 12, 0, 0, 0, time.UTC))
-	if _, err := svc.Init(false); err != nil {
+	if _, err := svc.Init(InitInput{}); err != nil {
 		t.Fatalf("init: %v", err)
 	}
 	if got := readFileString(t, notesFile(repo)); got != human {
@@ -69,12 +69,16 @@ func TestInitPreviewReportsNotesCandidateWithoutWriting(t *testing.T) {
 		writeFile(t, markerFile(repo), "layout_version: 0\nspecs_dir: specs\nplanning_dir: planning\n")
 
 		svc := newTestService(t, repo, time.Date(2026, 3, 31, 12, 0, 0, 0, time.UTC))
-		result, err := svc.Init(false)
+		result, err := svc.Init(InitInput{})
 		if err != nil {
 			t.Fatalf("init dry run: %v", err)
 		}
-		if !slices.Contains(result.Changes, want) {
-			t.Fatalf("changes = %v, want one entry %q", result.Changes, want)
+		wantWrite := WriteEntry{Path: "planning/" + notesFileName, Kind: writeKindNote, Action: writeActionCreate}
+		if !slices.Contains(result.Writes, wantWrite) {
+			t.Fatalf("writes = %+v, want one entry %+v", result.Writes, wantWrite)
+		}
+		if action := result.Notes[0].FileAction; action != noteActionCreateTemplate {
+			t.Fatalf("notes file_action = %q, want %q", action, noteActionCreateTemplate)
 		}
 		if fileExists(notesFile(repo)) {
 			t.Fatal("migration preview wrote the sidecar")
@@ -109,14 +113,17 @@ func TestInitPreviewOmitsNotesWhenPresent(t *testing.T) {
 	writeFile(t, notesFile(repo), "# Repository Notes\n")
 
 	svc := newTestService(t, repo, time.Date(2026, 3, 31, 12, 0, 0, 0, time.UTC))
-	result, err := svc.Init(false)
+	result, err := svc.Init(InitInput{})
 	if err != nil {
 		t.Fatalf("init dry run: %v", err)
 	}
-	for _, change := range result.Changes {
-		if strings.Contains(change, notesFileName) {
-			t.Fatalf("preview proposed %q over an existing sidecar", change)
+	for _, write := range result.Writes {
+		if strings.Contains(write.Path, notesFileName) && write.Action != writeActionPreserve {
+			t.Fatalf("preview proposed %q over an existing sidecar", write.Action)
 		}
+	}
+	if action := result.Notes[0].FileAction; action != noteActionPreserve {
+		t.Fatalf("notes file_action = %q, want %q", action, noteActionPreserve)
 	}
 }
 
@@ -176,14 +183,14 @@ func TestInitRefusesUnsafeNotesDestination(t *testing.T) {
 			t.Parallel()
 			repo := seedUnsafeNotes(t, tc.plant)
 			svc := newTestService(t, repo, time.Date(2026, 3, 31, 12, 0, 0, 0, time.UTC))
-			_, err := svc.Init(false)
+			_, err := svc.Init(InitInput{})
 			assertPathBlocked(t, err)
 		})
 		t.Run(tc.name+"/apply", func(t *testing.T) {
 			t.Parallel()
 			repo := seedUnsafeNotes(t, tc.plant)
 			svc := newTestService(t, repo, time.Date(2026, 3, 31, 12, 0, 0, 0, time.UTC))
-			_, err := svc.Init(true)
+			_, err := svc.Init(InitInput{Apply: true})
 			assertPathBlocked(t, err)
 			if tc.afterApply != nil {
 				tc.afterApply(t, repo)
@@ -215,7 +222,7 @@ func TestNotesDestinationFollowsConfiguredPlanningDir(t *testing.T) {
 	writeFile(t, markerFile(repo), "layout_version: 1\nspecs_dir: docs/specs\nplanning_dir: docs/planning\n")
 
 	svc := newTestService(t, repo, time.Date(2026, 3, 31, 12, 0, 0, 0, time.UTC))
-	if _, err := svc.Init(true); err != nil {
+	if _, err := svc.Init(InitInput{Apply: true}); err != nil {
 		t.Fatalf("init: %v", err)
 	}
 	if got := readFileString(t, filepath.Join(repo, "docs", "planning", notesFileName)); got != starterNotes() {

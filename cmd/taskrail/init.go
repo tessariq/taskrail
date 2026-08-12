@@ -25,22 +25,25 @@ func newInitCmd() *cobra.Command {
 			"agent-tool directories is opt-in and never happens on a default init.",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return runCommand(cmd, func(svc *taskrail.Service) (commandResult, error) {
-				result, err := svc.Init(apply)
+				result, err := svc.Init(taskrail.InitInput{
+					Apply:        apply,
+					WithSkills:   withSkills,
+					ForceSkills:  forceSkills,
+					SkillVersion: version,
+				})
 				if err != nil {
-					return commandResult{}, err
-				}
-				summary := initSummary(result)
-				if withSkills {
-					res, wErr := svc.WriteShippableSkills(version, forceSkills)
-					if wErr != nil {
+					if withSkills {
 						// Report what was installed before the failure so the user
 						// knows the partial state, then propagate the error. The
 						// layout is already on disk and the skill set is not, so
 						// this is a partial write rather than a refusal.
-						fmt.Fprintln(cmd.ErrOrStderr(), skillsSummary(res))
-						return commandResult{}, taskrail.WithMachineErrorCode(taskrail.MachineCodePartialWrite, wErr)
+						fmt.Fprintln(cmd.ErrOrStderr(), skillsSummary(result.SkillInstall))
 					}
-					summary += "\n" + skillsSummary(res)
+					return commandResult{}, err
+				}
+				summary := initSummary(result)
+				if withSkills {
+					summary += "\n" + skillsSummary(result.SkillInstall)
 				}
 				return commandResult{shape: "InitResult", value: result, text: summary}, nil
 			})
@@ -48,7 +51,7 @@ func newInitCmd() *cobra.Command {
 	}
 	addMachineJSONFlag(cmd)
 	cmd.Flags().BoolVar(&apply, "apply", false, "apply a pending layout migration instead of a dry run")
-	cmd.Flags().BoolVar(&withSkills, "with-skills", false, "install the embedded repo-agnostic tracked-work skills (opt-in; installed paths are listed in text output only, not --json)")
+	cmd.Flags().BoolVar(&withSkills, "with-skills", false, "install the embedded repo-agnostic tracked-work skills (opt-in; installed paths are reported in both text and --json output)")
 	cmd.Flags().BoolVar(&forceSkills, "force", false, "with --with-skills, reinstall embedded skills over existing copies, backing up locally-modified files first")
 	return cmd
 }
@@ -78,7 +81,8 @@ func skillsSummary(res taskrail.SkillInstallResult) string {
 }
 
 // initSummary renders the human-readable outcome, listing the diff and the
-// re-run reminder when a migration is pending.
+// re-run reminder when a migration is pending. The diff is rendered from the
+// reported write inventory, so a human and an agent read one set of facts.
 func initSummary(result taskrail.InitResult) string {
 	switch result.Outcome {
 	case taskrail.InitAdopted:
@@ -87,19 +91,36 @@ func initSummary(result taskrail.InitResult) string {
 		return fmt.Sprintf("taskrail structure already current (layout_version %d)", result.ToVersion)
 	case taskrail.InitMigrationPreview:
 		return fmt.Sprintf("migration available %d -> %d (dry run)\n%sre-run with --apply to migrate",
-			result.FromVersion, result.ToVersion, changeLines(result.Changes))
+			result.FromVersion, result.ToVersion, writeLines(result))
 	case taskrail.InitMigrated:
 		return fmt.Sprintf("migrated layout %d -> %d\n%svalidation: %s",
-			result.FromVersion, result.ToVersion, changeLines(result.Changes), validationLabel(result.Validation))
+			result.FromVersion, result.ToVersion, writeLines(result), validationLabel(result.Validation))
 	case taskrail.InitRetrofitPreview:
 		return fmt.Sprintf("non-standard layout detected; proposed mapping (dry run)\n%s%sexisting content is not moved; re-run with --apply to retrofit",
-			mappingLines(result.Mapping), changeLines(result.Changes))
+			mappingLines(result.Mapping), writeLines(result))
 	case taskrail.InitRetrofitApplied:
 		return fmt.Sprintf("retrofit applied (existing content was not moved)\n%s%svalidation: %s",
-			mappingLines(result.Mapping), changeLines(result.Changes), validationLabel(result.Validation))
+			mappingLines(result.Mapping), writeLines(result), validationLabel(result.Validation))
 	default:
 		return "initialized taskrail structure"
 	}
+}
+
+// writeLines lists the paths the outcome creates or rewrites. Paths it leaves
+// exactly as they are stay out: the diff answers "what changes here?", and
+// listing untouched files would bury that answer.
+func writeLines(result taskrail.InitResult) string {
+	var changes []string
+	for _, write := range result.Writes {
+		switch write.Action {
+		case "create":
+			changes = append(changes, "create "+write.Path)
+		case "refresh":
+			changes = append(changes, fmt.Sprintf("update %s layout_version %d -> %d",
+				write.Path, result.FromVersion, result.ToVersion))
+		}
+	}
+	return changeLines(changes)
 }
 
 // mappingLines renders the proposed retrofit mapping so the human can confirm

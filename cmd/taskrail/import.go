@@ -31,7 +31,7 @@ func newImportCmd() *cobra.Command {
 		Args: machineArgs(cobra.MaximumNArgs(1)),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := validateImportArgs(args, to, emitPrompt, apply); err != nil {
-				return publishMachineError(cmd, err)
+				return publishMachineError(cmd, err, nil)
 			}
 			return runCommand(cmd, func(svc *taskrail.Service) (commandResult, error) {
 				if applyPath := strings.TrimSpace(apply); applyPath != "" {
@@ -87,16 +87,18 @@ func validateImportArgs(args []string, to string, emitPrompt bool, apply string)
 // sees them.
 func applyDraftResult(cmd *cobra.Command, svc *taskrail.Service, path string) (commandResult, error) {
 	result, err := svc.ApplyImportDraft(taskrail.ApplyDraftInput{DraftPath: path})
-	printWarnings(cmd, result.Warnings)
 	if err != nil {
 		if result.Partial && !machineJSONRequested(cmd) {
 			fmt.Fprint(cmd.OutOrStdout(), renderApplyArtifacts(result))
 		}
-		return commandResult{}, err
+		// The warnings ride along so the failure's envelope still carries the
+		// advisories the partially applied draft raised.
+		return commandResult{warnings: result.Warnings}, err
 	}
 	return commandResult{
 		shape: "ImportV1ApplyResult", value: result,
-		text: strings.TrimSuffix(renderApplyArtifacts(result), "\n"),
+		text:     strings.TrimSuffix(renderApplyArtifacts(result), "\n"),
+		warnings: result.Warnings,
 	}, nil
 }
 

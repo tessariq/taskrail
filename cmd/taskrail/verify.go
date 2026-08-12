@@ -35,6 +35,12 @@ func newVerifyCmd() *cobra.Command {
 				if err != nil {
 					return commandResult{}, err
 				}
+				// Reported on stderr only. The one advisory `--create-followup`
+				// can raise is the follow-up's empty derived slug, and the
+				// companion registry limits `empty_derived_slug` to the task
+				// authoring commands, so publishing it in verify's envelope
+				// would be a warning its contract does not allow. The bare id
+				// itself is still machine-readable as `followup_task_id`.
 				printWarnings(cmd, verifyResult.Warnings)
 				return commandResult{
 					shape: "VerifyResult", value: verifyResult, text: verifyResult.ReportPath,

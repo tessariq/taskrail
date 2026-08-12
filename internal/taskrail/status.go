@@ -27,7 +27,7 @@ type StatusNext struct {
 	Priority  string    `json:"priority,omitempty"`
 	Reason    string    `json:"reason"`
 	Persisted bool      `json:"persisted"`
-	Warnings  []Warning `json:"warnings,omitempty"`
+	Warnings  []Warning `json:"-"`
 }
 
 // BlockedTask is a blocked task paired with its recorded reason.
@@ -78,10 +78,23 @@ type StatusActiveSpecDrift struct {
 	Away            []AwayTask `json:"away"`
 }
 
+// StatusStorage is the active storage snapshot status reports so a skill can
+// select delivery behavior and transient staging without opening the layout
+// marker. ArtifactsDir designates transient storage only: it is never a durable
+// citation or publication destination, and in a Git repository a producer must
+// still prove its selected path effectively ignored, untracked, and unstaged
+// before using it (specs/v0.5.0.md#uniform-agent-machine-results).
+type StatusStorage struct {
+	Mode         string `json:"mode"`
+	Root         string `json:"root"`
+	ArtifactsDir string `json:"artifacts_dir"`
+}
+
 // StatusReport is the strictly read-only snapshot of current tracked-work state.
 type StatusReport struct {
 	ActiveSpecVersion      string                `json:"active_spec_version"`
 	ActiveSpecPath         string                `json:"active_spec_path"`
+	Storage                StatusStorage         `json:"storage"`
 	Counts                 StatusCounts          `json:"counts"`
 	Next                   StatusNext            `json:"next"`
 	Blocked                []BlockedTask         `json:"blocked"`
@@ -108,6 +121,7 @@ func (s *Service) Status() (StatusReport, error) {
 	return StatusReport{
 		ActiveSpecVersion: state.Frontmatter.ActiveSpecVersion,
 		ActiveSpecPath:    state.Frontmatter.ActiveSpecPath,
+		Storage:           s.storageSnapshot(),
 		Counts:            countByStatus(tasks),
 		Next: StatusNext{
 			TaskID:    next.TaskID,

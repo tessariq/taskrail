@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -24,6 +25,10 @@ type commandResult struct {
 	shape string
 	value any
 	text  string
+	// warnings are the advisories the command raised. They are honored even
+	// alongside an error, because a failure after a warned-about step still has
+	// to report the advisory that explains it.
+	warnings []taskrail.Warning
 	// gate is set when the command contract makes this completed report's
 	// findings gating. The document stays a result envelope and the process
 	// exits non-zero, identically in text and JSON mode. No writer sets it: a
@@ -40,11 +45,16 @@ type commandResult struct {
 func runCommand(cmd *cobra.Command, produce func(*taskrail.Service) (commandResult, error)) error {
 	svc, err := serviceFromCmd(cmd)
 	if err != nil {
-		return publishMachineError(cmd, err)
+		return publishMachineError(cmd, err, nil)
 	}
 	result, err := produce(svc)
+	// Advisories reach a human on stderr in either mode, including on the failure
+	// path: an advisory that explains a failure is exactly the one worth keeping.
+	// An agent reads the same advisories from the envelope's warning array, and
+	// neither stream can contaminate the document on stdout.
+	printWarnings(cmd, result.warnings)
 	if err != nil {
-		return publishMachineError(cmd, err)
+		return publishMachineError(cmd, err, result.warnings)
 	}
 	if !machineJSONRequested(cmd) {
 		if _, err := fmt.Fprintln(cmd.OutOrStdout(), result.text); err != nil {
@@ -55,7 +65,7 @@ func runCommand(cmd *cobra.Command, produce func(*taskrail.Service) (commandResu
 	outcome := taskrail.MachineOutcome{
 		Command:  machineCommandPath(cmd),
 		Surface:  taskrail.MachineSurfaceStdout,
-		Warnings: []taskrail.MachineWarning{},
+		Warnings: envelopeWarnings(cmd, result.warnings),
 		Result:   &taskrail.MachineResult{Shape: result.shape, Value: result.value, Gated: result.gate != nil},
 	}
 	if err := taskrail.EmitMachineDocument(cmd.OutOrStdout(), outcome); err != nil {
@@ -69,7 +79,7 @@ func runCommand(cmd *cobra.Command, produce func(*taskrail.Service) (commandResu
 // exit stays the one human mode would use. The failure itself carries the facts
 // the details report: the registered code, whether the complete semantic
 // operation committed, and the managed paths a partial write left behind.
-func publishMachineError(cmd *cobra.Command, cause error) error {
+func publishMachineError(cmd *cobra.Command, cause error, warnings []taskrail.Warning) error {
 	if !machineJSONRequested(cmd) {
 		return cause
 	}
@@ -77,7 +87,7 @@ func publishMachineError(cmd *cobra.Command, cause error) error {
 	outcome := taskrail.MachineOutcome{
 		Command:  machineCommandPath(cmd),
 		Surface:  taskrail.MachineSurfaceStdout,
-		Warnings: []taskrail.MachineWarning{},
+		Warnings: envelopeWarnings(cmd, warnings),
 		Error: &taskrail.MachineError{
 			Code:    failure.Code,
 			Message: cause.Error(),
@@ -111,7 +121,19 @@ func publishSelectionError(cmd *cobra.Command, cause error) error {
 	if !machinePublishesEnvelope(cmd) {
 		return cause
 	}
-	return publishMachineError(cmd, taskrail.WithMachineErrorCode(taskrail.MachineCodeInvalidArguments, cause))
+	return publishMachineError(cmd, taskrail.WithMachineErrorCode(taskrail.MachineCodeInvalidArguments, cause), nil)
+}
+
+// envelopeWarnings assembles the document's warning array: the ambient
+// advisories every registry command carries after repository discovery, then the
+// ones this command raised. It is the only place a warning becomes machine
+// output, so a command cannot publish an advisory the envelope does not carry.
+func envelopeWarnings(cmd *cobra.Command, raised []taskrail.Warning) []taskrail.MachineWarning {
+	// Clone before appending: the ambient advisories are one memoized slice
+	// shared by every reader of this invocation, and appending into its spare
+	// capacity would rewrite what another reader already published.
+	warnings := append(slices.Clone(ambientWarnings(cmd)), raised...)
+	return taskrail.MachineWarnings(warnings)
 }
 
 // machineArgs publishes cobra's own argument rejections through the envelope.

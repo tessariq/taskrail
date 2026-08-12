@@ -81,7 +81,7 @@ func TestInitDefaultWritesNoSkillDirs(t *testing.T) {
 	repo := initGitRepo(t)
 	svc := newTestService(t, repo, time.Date(2026, 3, 31, 12, 0, 0, 0, time.UTC))
 
-	if _, err := svc.Init(false); err != nil {
+	if _, err := svc.Init(InitInput{}); err != nil {
 		t.Fatalf("init: %v", err)
 	}
 
@@ -98,7 +98,7 @@ func TestWriteShippableSkillsInstallsToTargets(t *testing.T) {
 
 	repo := initGitRepo(t)
 	svc := newTestService(t, repo, time.Date(2026, 3, 31, 12, 0, 0, 0, time.UTC))
-	if _, err := svc.Init(false); err != nil {
+	if _, err := svc.Init(InitInput{}); err != nil {
 		t.Fatalf("init: %v", err)
 	}
 
@@ -143,7 +143,7 @@ func TestWriteShippableSkillsIdempotent(t *testing.T) {
 
 	repo := initGitRepo(t)
 	svc := newTestService(t, repo, time.Date(2026, 3, 31, 12, 0, 0, 0, time.UTC))
-	if _, err := svc.Init(false); err != nil {
+	if _, err := svc.Init(InitInput{}); err != nil {
 		t.Fatalf("init: %v", err)
 	}
 	if _, err := svc.WriteShippableSkills("v0.0.0-test", false); err != nil {
@@ -197,7 +197,7 @@ func TestWriteShippableSkillsForceOverwritesWithBackup(t *testing.T) {
 
 	repo := initGitRepo(t)
 	svc := newTestService(t, repo, time.Date(2026, 3, 31, 12, 0, 0, 0, time.UTC))
-	if _, err := svc.Init(false); err != nil {
+	if _, err := svc.Init(InitInput{}); err != nil {
 		t.Fatalf("init: %v", err)
 	}
 	if _, err := svc.WriteShippableSkills("v0.0.0-test", false); err != nil {
@@ -255,7 +255,7 @@ func TestWriteShippableSkillsForceKeepsDistinctBackups(t *testing.T) {
 
 	repo := initGitRepo(t)
 	svc := newTestService(t, repo, time.Date(2026, 3, 31, 12, 0, 0, 0, time.UTC))
-	if _, err := svc.Init(false); err != nil {
+	if _, err := svc.Init(InitInput{}); err != nil {
 		t.Fatalf("init: %v", err)
 	}
 	if _, err := svc.WriteShippableSkills("v0.0.0-test", false); err != nil {
@@ -301,7 +301,7 @@ func TestWriteShippableSkillsForceSkipsIdentical(t *testing.T) {
 
 	repo := initGitRepo(t)
 	svc := newTestService(t, repo, time.Date(2026, 3, 31, 12, 0, 0, 0, time.UTC))
-	if _, err := svc.Init(false); err != nil {
+	if _, err := svc.Init(InitInput{}); err != nil {
 		t.Fatalf("init: %v", err)
 	}
 	if _, err := svc.WriteShippableSkills("v0.0.0-test", false); err != nil {
@@ -333,7 +333,7 @@ func TestWriteShippableSkillsRejectsInvalidMarkerBeforeWriting(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			repo := initGitRepo(t)
 			svc := newTestService(t, repo, time.Date(2026, 3, 31, 12, 0, 0, 0, time.UTC))
-			if _, err := svc.Init(false); err != nil {
+			if _, err := svc.Init(InitInput{}); err != nil {
 				t.Fatalf("init: %v", err)
 			}
 

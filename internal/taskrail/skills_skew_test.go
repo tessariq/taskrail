@@ -67,7 +67,7 @@ func TestSkillSkewWarningsSilentWithoutInstalledSkills(t *testing.T) {
 
 	repo := initGitRepo(t)
 	svc := newTestService(t, repo, time.Date(2026, 3, 31, 12, 0, 0, 0, time.UTC))
-	if _, err := svc.Init(false); err != nil {
+	if _, err := svc.Init(InitInput{}); err != nil {
 		t.Fatalf("init: %v", err)
 	}
 

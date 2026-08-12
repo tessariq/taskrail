@@ -39,7 +39,7 @@ func newTaskNewCmd() *cobra.Command {
 			// from the active spec, so an explicit --spec-ref is only required when
 			// neither is given.
 			if strings.TrimSpace(followUp) == "" && strings.TrimSpace(specRef) == "" && strings.TrimSpace(area) == "" {
-				return publishMachineError(cmd, invalidArgumentsf("one of --spec-ref, --area, or --follow-up is required"))
+				return publishMachineError(cmd, invalidArgumentsf("one of --spec-ref, --area, or --follow-up is required"), nil)
 			}
 			return runCommand(cmd, func(svc *taskrail.Service) (commandResult, error) {
 				// An explicit --slug wins; otherwise the title is the slug source, so a
@@ -64,8 +64,9 @@ func newTaskNewCmd() *cobra.Command {
 				if err != nil {
 					return commandResult{}, err
 				}
-				printWarnings(cmd, result.Warnings)
-				return commandResult{shape: "TaskNewResult", value: result, text: result.Path}, nil
+				return commandResult{
+					shape: "TaskNewResult", value: result, text: result.Path, warnings: result.Warnings,
+				}, nil
 			})
 		},
 	}
@@ -122,9 +123,9 @@ func newTaskRenameCmd() *cobra.Command {
 				if err != nil {
 					return commandResult{}, err
 				}
-				printWarnings(cmd, result.Warnings)
 				return commandResult{
 					shape: "TaskRenameResult", value: result, text: renameSummary(result),
+					warnings: result.Warnings,
 				}, nil
 			})
 		},

@@ -36,10 +36,10 @@ func newRetrofitCmd() *cobra.Command {
 			// config load), so a misuse fails fast without touching the filesystem.
 			if emitPrompt {
 				if apply {
-					return publishMachineError(cmd, invalidArgumentsf("--emit-prompt prints a read-only prompt; do not combine it with --apply"))
+					return publishMachineError(cmd, invalidArgumentsf("--emit-prompt prints a read-only prompt; do not combine it with --apply"), nil)
 				}
 				if len(args) == 0 {
-					return publishMachineError(cmd, invalidArgumentsf("retrofit --emit-prompt requires a notes source"))
+					return publishMachineError(cmd, invalidArgumentsf("retrofit --emit-prompt requires a notes source"), nil)
 				}
 			}
 

@@ -27,7 +27,10 @@ func newStatusCmd() *cobra.Command {
 				if err != nil {
 					return commandResult{}, err
 				}
-				return commandResult{shape: "StatusResult", value: snapshot, text: renderStatusText(snapshot)}, nil
+				return commandResult{
+					shape: "StatusResult", value: snapshot, text: renderStatusText(snapshot),
+					warnings: snapshot.Next.Warnings,
+				}, nil
 			})
 		},
 	}
@@ -80,18 +83,14 @@ func renderActiveSpecDrift(d taskrail.StatusActiveSpecDrift) string {
 }
 
 // renderStatusNext renders the next-task line, always marked "not persisted" so
-// the read-only guarantee is visible at a glance.
+// the read-only guarantee is visible at a glance. Selection advisories are not
+// rendered here: they reach a human on stderr and an agent in the envelope's
+// warning array.
 func renderStatusNext(n taskrail.StatusNext) string {
-	var b strings.Builder
 	if n.TaskID == "" {
-		b.WriteString("next: none (no eligible task) — not persisted\n")
-	} else {
-		fmt.Fprintf(&b, "next: %s %s (%s) — not persisted\n", n.TaskID, n.Title, n.Priority)
+		return "next: none (no eligible task) — not persisted\n"
 	}
-	for _, warning := range n.Warnings {
-		fmt.Fprintf(&b, "%s\n", warning.Message)
-	}
-	return b.String()
+	return fmt.Sprintf("next: %s %s (%s) — not persisted\n", n.TaskID, n.Title, n.Priority)
 }
 
 func renderStatusCoverage(c taskrail.StatusCoverage) string {

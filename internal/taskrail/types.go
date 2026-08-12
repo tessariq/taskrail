@@ -23,13 +23,22 @@ var (
 )
 
 type Paths struct {
-	RepoRoot     string
-	SpecsDir     string
-	PlanningDir  string
-	TasksDir     string
-	ArtifactsDir string
-	VerifyDir    string
-	StateFile    string
+	RepoRoot string
+	// Storage is the active storage context every physical directory below was
+	// resolved through, so a reporter states the mode and root it actually used
+	// rather than re-deriving one.
+	Storage StorageContext
+	// LogicalSpecsDir and LogicalPlanningDir are the directory names the marker
+	// records. They stay logical in every storage mode, so a reported managed
+	// path never carries a physical overlay prefix.
+	LogicalSpecsDir    string
+	LogicalPlanningDir string
+	SpecsDir           string
+	PlanningDir        string
+	TasksDir           string
+	ArtifactsDir       string
+	VerifyDir          string
+	StateFile          string
 }
 
 // LayoutConfig is the machine-owned `.taskrail/config.yml` marker. It signals
@@ -65,17 +74,122 @@ type RetrofitMapping struct {
 	Role   string `json:"role"`   // Taskrail role the target fills ("specs" | "planning")
 }
 
-// InitResult reports what version-aware init observed and did. Changes is the
-// human-readable diff (populated for migration outcomes); Validation is set only
-// after an applied migration re-runs validation.
+// WriteEntry is one path an operation creates, leaves alone, rewrites, or
+// removes. Paths are managed logical repository paths except where the entry's
+// kind names a physical destination (`skill`, `runtime`), which keeps its
+// discovery location in every storage mode.
+type WriteEntry struct {
+	Path   string `json:"path"`
+	Kind   string `json:"kind"`
+	Action string `json:"action"`
+}
+
+// The WriteEntry kinds and actions this version emits. Init writes layout
+// content only, so `task`, `review`, `runtime`, and `remove` belong to other
+// producers; installed skills are reported through `skills`, which is its own
+// array with its own action vocabulary.
+const (
+	writeKindConfig = "config"
+	writeKindSpec   = "spec"
+	writeKindState  = "state"
+	writeKindNote   = "note"
+
+	writeActionCreate   = "create"
+	writeActionPreserve = "preserve"
+	writeActionRefresh  = "refresh"
+)
+
+// InitConfig reports the layout marker init wrote or kept. CandidateSHA256
+// digests the exact marker bytes the outcome publishes, so preview and apply
+// name the same candidate and a caller can tell an unchanged marker from a
+// rewritten one without reading the file.
+type InitConfig struct {
+	Path            string `json:"path"`
+	Action          string `json:"action"`
+	CandidateSHA256 string `json:"candidate_sha256"`
+}
+
+// The config actions: a fresh marker, an existing one left as it is, and one
+// rewritten to the current layout version.
+const (
+	configActionCreate   = "create"
+	configActionPreserve = "preserve"
+	configActionMigrate  = "migrate"
+)
+
+// InitNote reports the human-owned notes sidecar: what happened to the file, and
+// which continuation-note dispositions the repository's state makes available.
+// ContinuationAction is null until an operator selects one; the choices are what
+// they may select from, in the contract's `extract|drop` order.
+type InitNote struct {
+	Path                string   `json:"path"`
+	FileAction          string   `json:"file_action"`
+	ContinuationAction  *string  `json:"continuation_action"`
+	ContinuationChoices []string `json:"continuation_choices"`
+}
+
+// The notes file actions: a template written into an absent destination, an
+// existing human-owned sidecar left untouched, and an outcome that does not
+// scaffold layout content at all.
+const (
+	noteActionCreateTemplate = "create_template"
+	noteActionPreserve       = "preserve"
+	noteActionNone           = "none"
+
+	continuationChoiceExtract = "extract"
+	continuationChoiceDrop    = "drop"
+)
+
+// InitSkill is one installed packaged-skill file at its normal assistant
+// discovery path, which is the same in committed and local storage.
+type InitSkill struct {
+	Path   string `json:"path"`
+	Action string `json:"action"`
+}
+
+// InitSkillExclusion is one packaged-skill destination subtree Taskrail manages
+// an exclusion for. Only a local installation owns exclusions; a committed one
+// reports none.
+type InitSkillExclusion struct {
+	Path   string `json:"path"`
+	Action string `json:"action"`
+}
+
+// InitInput selects what one init invocation does. Skills are opt-in: without
+// WithSkills no assistant directory is touched and both skill inventories are
+// empty.
+type InitInput struct {
+	Apply        bool
+	WithSkills   bool
+	ForceSkills  bool
+	SkillVersion string
+}
+
+// InitResult reports what version-aware init observed and did, in the exact
+// shape specs/contracts/v0.5.0-machine-api.md fixes for it. Preview and apply
+// expose the same candidate paths and choices, so an agent can decide from a dry
+// run exactly what applying would do. Validation is set only where the outcome
+// re-runs it.
 type InitResult struct {
-	Outcome     InitOutcome       `json:"outcome"`
-	FromVersion int               `json:"from_version"`
-	ToVersion   int               `json:"to_version"`
-	Applied     bool              `json:"applied"`
-	Changes     []string          `json:"changes,omitempty"`
-	Mapping     []RetrofitMapping `json:"mapping,omitempty"`
-	Validation  *ValidationResult `json:"validation,omitempty"`
+	Outcome           InitOutcome          `json:"outcome"`
+	FromVersion       int                  `json:"from_version"`
+	ToVersion         int                  `json:"to_version"`
+	Applied           bool                 `json:"applied"`
+	StorageMode       string               `json:"storage_mode"`
+	Config            InitConfig           `json:"config"`
+	Writes            []WriteEntry         `json:"writes"`
+	Notes             []InitNote           `json:"notes"`
+	Skills            []InitSkill          `json:"skills"`
+	SkillExclusions   []InitSkillExclusion `json:"skill_exclusions"`
+	ContinuationNotes []string             `json:"continuation_notes"`
+	Validation        *ValidationResult    `json:"validation"`
+
+	// Mapping and SkillInstall are the retrofit proposal and the installer's own
+	// created/overwritten/backed-up lists. Both exist for the human summary:
+	// `RetrofitResult` owns the published mapping, and the skill inventory above
+	// owns the published installation, so neither belongs on init's wire shape.
+	Mapping      []RetrofitMapping  `json:"-"`
+	SkillInstall SkillInstallResult `json:"-"`
 }
 
 type StateFrontmatter struct {
@@ -131,9 +245,14 @@ type NextResult struct {
 	// (default idle selection filters off-spec work out); it is always emitted so
 	// agents can distinguish an active-spec pick from an off-spec pick.
 	OffSpec  bool      `json:"off_spec"`
-	Warnings []Warning `json:"warnings,omitempty"`
+	Warnings []Warning `json:"-"`
 }
 
+// Warning is one advisory a command raised in process. It is never a published
+// member of a result: the envelope's `warnings` array is the single wire
+// location for every advisory, so these values only travel from the service to
+// the boundary that projects them onto the closed union
+// (specs/v0.5.0.md#uniform-agent-machine-results).
 type Warning struct {
 	Code           string `json:"code"`
 	Message        string `json:"message"`
@@ -180,9 +299,8 @@ type CreateTaskResult struct {
 	SpecRef  string `json:"spec_ref"`
 	Path     string `json:"path"`
 	// Warnings reports non-fatal signals about the created task — currently only
-	// the empty-derived-slug fallback. Omitted when empty so the machine-readable
-	// shape of an ordinary creation is unchanged.
-	Warnings []Warning `json:"warnings,omitempty"`
+	// the empty-derived-slug fallback.
+	Warnings []Warning `json:"-"`
 }
 
 // The three lifecycle writers each report their own transition plus the
@@ -244,7 +362,7 @@ type VerifyResult struct {
 	ReportPath     string    `json:"report_path"`
 	ReportMarkdown string    `json:"report_markdown"`
 	FollowupTaskID string    `json:"followup_task_id,omitempty"`
-	Warnings       []Warning `json:"warnings,omitempty"`
+	Warnings       []Warning `json:"-"`
 }
 
 type VerificationArtifact struct {

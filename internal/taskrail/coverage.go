@@ -232,8 +232,12 @@ func detectAreaAnchorIssues(areas []parsedArea) []AreaAnchorIssue {
 // readActiveSpec reads the active spec's markdown, wrapping any IO error with
 // the same path-portable context both the spec-wide and area-scoped coverage
 // paths report.
+// The recorded `active_spec_path` is a logical repository path, so it resolves
+// through the active storage context; in committed mode that mapping is the
+// identity and the physical location is unchanged.
 func (s *Service) readActiveSpec(activePath string) (string, error) {
-	data, err := os.ReadFile(filepath.Join(s.paths.RepoRoot, filepath.Clean(activePath)))
+	logical := filepath.ToSlash(filepath.Clean(activePath))
+	data, err := os.ReadFile(filepath.Join(s.paths.RepoRoot, filepath.FromSlash(s.paths.Storage.physical(logical))))
 	if err != nil {
 		return "", fmt.Errorf("read active spec %s: %w", activePath, fsCause(err))
 	}

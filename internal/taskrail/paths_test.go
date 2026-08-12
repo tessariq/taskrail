@@ -98,7 +98,12 @@ func assertDefaultLayout(t *testing.T, repo string, paths Paths) {
 	planning := filepath.Join(repo, "planning")
 	artifacts := filepath.Join(planning, "artifacts")
 	want := Paths{
-		RepoRoot:     repo,
+		RepoRoot: repo,
+		// Discovery resolves the committed context until a local marker exists.
+		Storage:            committedStorage(),
+		LogicalSpecsDir:    "specs",
+		LogicalPlanningDir: "planning",
+
 		SpecsDir:     filepath.Join(repo, "specs"),
 		PlanningDir:  planning,
 		TasksDir:     filepath.Join(planning, "tasks"),

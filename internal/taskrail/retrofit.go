@@ -81,6 +81,52 @@ func (s *Service) Retrofit(input RetrofitInput) (RetrofitResult, error) {
 	}, nil
 }
 
+// applyLayout is retrofit's apply tail: create the current layout idempotently,
+// persist the given marker, and re-run validation. It only ever adds missing
+// content, so human-authored files survive.
+func (s *Service) applyLayout(marker LayoutConfig) (ValidationResult, error) {
+	if err := s.ensureLayout(); err != nil {
+		return ValidationResult{}, err
+	}
+	if err := writeMarker(s.paths.RepoRoot, marker); err != nil {
+		return ValidationResult{}, err
+	}
+	return s.Validate()
+}
+
+// markerWriteChange describes writing the current marker, used in dry-run diffs.
+func markerWriteChange() string {
+	return fmt.Sprintf("write %s (layout_version %d)", markerRelPath(), currentLayoutVersion)
+}
+
+// pendingLayoutChanges lists the layout directories and files ensureLayout would
+// create, so a retrofit dry run can report exactly what applying it would add.
+// It fails for the same unusable notes destination the apply path refuses:
+// previewing a write that could never happen would be a worse answer than
+// naming the entry blocking it, and classification itself writes nothing.
+func (s *Service) pendingLayoutChanges() ([]string, error) {
+	var changes []string
+	for _, dir := range []string{s.paths.SpecsDir, s.paths.TasksDir} {
+		if !dirExists(dir) {
+			changes = append(changes, "create dir "+relPath(s.paths.RepoRoot, dir))
+		}
+	}
+	notesExists, err := classifyNotesDestination(s.paths.RepoRoot, s.paths.PlanningDir)
+	if err != nil {
+		return nil, err
+	}
+	for _, file := range s.layoutFiles() {
+		exists := fileExists(file.physical)
+		if file.kind == writeKindNote {
+			exists = notesExists
+		}
+		if !exists {
+			changes = append(changes, "create "+relPath(s.paths.RepoRoot, file.physical))
+		}
+	}
+	return changes, nil
+}
+
 // retrofitBootstrap imports the optional notes file into a planning bootstrap
 // draft. It reuses the structural import (T-033), so the resulting draft and
 // state seed are reviewable proposals a human adopts through the CLI, never

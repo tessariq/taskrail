@@ -33,6 +33,25 @@ type MachineWarning struct {
 	CurrentHead    *string
 }
 
+// MachineWarnings projects the advisories a command raised in process onto the
+// closed union the envelope publishes. The encoder emits only the members the
+// variant's code declares, so a value carried for one variant can never leak
+// into another's object. The result is always non-nil: the envelope's warning
+// array is required and is `[]` when a command warned about nothing.
+func MachineWarnings(warnings []Warning) []MachineWarning {
+	projected := make([]MachineWarning, 0, len(warnings))
+	for _, warning := range warnings {
+		projected = append(projected, MachineWarning{
+			Code:           warning.Code,
+			Message:        warning.Message,
+			TaskID:         warning.TaskID,
+			SpecRef:        warning.SpecRef,
+			ActiveSpecPath: warning.ActiveSpecPath,
+		})
+	}
+	return projected
+}
+
 func decodeMachineWarnings(raw json.RawMessage) ([]MachineWarning, error) {
 	elements, err := arrayMember(raw, "document", "warnings")
 	if err != nil {

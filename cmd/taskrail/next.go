@@ -1,9 +1,6 @@
 package main
 
 import (
-	"fmt"
-	"strings"
-
 	"github.com/spf13/cobra"
 	"github.com/tessariq/taskrail/internal/taskrail"
 )
@@ -24,7 +21,7 @@ func newNextCmd() *cobra.Command {
 					fallback = "no eligible task"
 				}
 				return commandResult{
-					shape: "NextResult", value: result, text: renderNextText(result, fallback),
+					shape: "NextResult", value: result, text: fallback, warnings: result.Warnings,
 				}, nil
 			})
 		},
@@ -39,16 +36,4 @@ func selectNext(svc *taskrail.Service, includeOffSpec bool) (taskrail.NextResult
 		return svc.NextIncludingOffSpec()
 	}
 	return svc.Next()
-}
-
-func renderNextText(result taskrail.NextResult, fallback string) string {
-	if len(result.Warnings) == 0 {
-		return fallback
-	}
-	var b strings.Builder
-	fmt.Fprintln(&b, fallback)
-	for _, warning := range result.Warnings {
-		fmt.Fprintln(&b, warning.Message)
-	}
-	return strings.TrimRight(b.String(), "\n")
 }

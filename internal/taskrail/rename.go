@@ -49,9 +49,8 @@ type RenameTaskResult struct {
 	Changes    []RenameChange    `json:"changes"`
 	Validation *ValidationResult `json:"validation,omitempty"`
 	// Warnings reports the empty-derived-slug de-slug, the one non-fatal signal a
-	// rename can raise. Omitted when empty so an ordinary re-slug's shape is
-	// unchanged.
-	Warnings []Warning `json:"warnings,omitempty"`
+	// rename can raise.
+	Warnings []Warning `json:"-"`
 }
 
 // RenameTask atomically re-slugs a task: it rewrites the `id:` frontmatter,

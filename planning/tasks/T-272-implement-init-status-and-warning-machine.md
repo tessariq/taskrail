@@ -1,13 +1,13 @@
 ---
 id: T-272-implement-init-status-and-warning-machine
 title: Implement init status and warning machine contracts
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#uniform-agent-machine-results
 dependencies:
     - T-213-define-the-uniform-agent-machine-api
     - T-214-bootstrap-and-migrate-human-owned-repository-notes
-updated_at: "2026-08-08T14:23:08Z"
+updated_at: "2026-08-12T10:09:13Z"
 ---
 
 # T-272-implement-init-status-and-warning-machine Implement init status and warning machine contracts
@@ -43,3 +43,7 @@ advisories without reconstructing repository paths or parsing human diagnostics.
   inventories for exact deterministic paths and actions.
 
 ## Implementation Notes
+
+- 2026-08-12T08:28:21Z: verification fail
+- 2026-08-12T10:09:00Z: Implemented init/status/warning machine contracts; all required checks and the final fresh portability review passed.
+- 2026-08-12T10:09:13Z: verification pass

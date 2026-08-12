@@ -31,7 +31,7 @@ func DiscoverPaths(start string) (Paths, error) {
 		return Paths{}, err
 	}
 
-	return pathsFromLayout(root, cfg), nil
+	return pathsFromLayout(root, cfg, committedStorage()), nil
 }
 
 // defaultLayoutConfig is the hardcoded v0.1.0 layout used when no marker exists.
@@ -147,13 +147,21 @@ func ensureWithinRoot(root, field, rel string) error {
 	return nil
 }
 
-func pathsFromLayout(root string, cfg LayoutConfig) Paths {
-	planningDir := filepath.Join(root, cfg.PlanningDir)
+// pathsFromLayout resolves the layout's logical directories through one storage
+// context. The marker keeps recording logical `specs`/`planning`; the context
+// decides where those resolve physically, so every reader and writer below stays
+// storage-neutral by construction.
+func pathsFromLayout(root string, cfg LayoutConfig, storage StorageContext) Paths {
+	planningDir := filepath.Join(root, filepath.FromSlash(storage.physical(cfg.PlanningDir)))
 	artifactsDir := filepath.Join(planningDir, "artifacts")
 
 	return Paths{
-		RepoRoot:     root,
-		SpecsDir:     filepath.Join(root, cfg.SpecsDir),
+		RepoRoot:           root,
+		Storage:            storage,
+		LogicalSpecsDir:    filepath.ToSlash(cfg.SpecsDir),
+		LogicalPlanningDir: filepath.ToSlash(cfg.PlanningDir),
+
+		SpecsDir:     filepath.Join(root, filepath.FromSlash(storage.physical(cfg.SpecsDir))),
 		PlanningDir:  planningDir,
 		TasksDir:     filepath.Join(planningDir, "tasks"),
 		ArtifactsDir: artifactsDir,

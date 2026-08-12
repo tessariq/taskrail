@@ -18,6 +18,15 @@ All notable user-visible changes to Taskrail will be documented in this file.
   prose-only stderr.
 - `taskrail start`, `complete`, and `block` gain `--json`, reporting the
   transition and the validation re-run alongside it. Text output is unchanged.
+- `taskrail init --json` now reports the layout marker, the write inventory,
+  the `planning/NOTES.md` disposition with its continuation-note choices, and —
+  with `--with-skills` — every installed skill path, replacing the prose
+  `changes` list. `--with-skills` installs are no longer text-only.
+- `taskrail status --json` now reports `storage` with the active mode, root, and
+  physical `artifacts_dir` for transient staging.
+- Warnings are published only in the envelope's `warnings` array; commands no
+  longer repeat them inside their result payloads. Text output still shows them
+  on stderr, and they never change the exit status.
 - `taskrail import --apply` now reports a partial apply as a `partial_write`
   error naming the paths it wrote, replacing the `"partial": true` result.
 - Task operands now require the exact full persisted ID, and `taskrail validate`

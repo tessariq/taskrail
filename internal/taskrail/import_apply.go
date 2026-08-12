@@ -39,7 +39,7 @@ type ApplyDraftResult struct {
 	// paths — and only selects the text-mode verb, so it stays out of the
 	// published shape.
 	Partial  bool      `json:"-"`
-	Warnings []Warning `json:"warnings,omitempty"`
+	Warnings []Warning `json:"-"`
 }
 
 // ApplyImportDraft validates a draft and writes real spec/task files. Structural

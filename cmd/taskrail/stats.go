@@ -27,7 +27,7 @@ func newStatsCmd() *cobra.Command {
 			// repository work rather than after a discovery failure.
 			if format != "" {
 				if machineJSONRequested(cmd) {
-					return publishMachineError(cmd, invalidArgumentsf("--format and --json are mutually exclusive"))
+					return publishMachineError(cmd, invalidArgumentsf("--format and --json are mutually exclusive"), nil)
 				}
 				svc, err := serviceFromCmd(cmd)
 				if err != nil {

@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
+	"slices"
 	"strings"
 )
 
@@ -40,6 +42,122 @@ type SkillInstallResult struct {
 	BackedUp    []string // timestamped backups written before an overwrite (force only)
 }
 
+// packagedSkillFiles lists every embedded skill file, in walk order, as a
+// package-relative slash path. It is the one enumeration behind both the
+// installer and the reported inventory, so the two cannot disagree about what
+// the package contains.
+func packagedSkillFiles() ([]string, error) {
+	var files []string
+	err := fs.WalkDir(shippableSkillsFS, shippableSkillsRoot, func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if !d.IsDir() {
+			files = append(files, strings.TrimPrefix(p, shippableSkillsRoot+"/"))
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return files, nil
+}
+
+// packagedSkillNames lists the packaged skills' own directory names, which are
+// the subtrees an installation owns in each assistant root.
+func packagedSkillNames() ([]string, error) {
+	entries, err := fs.ReadDir(shippableSkillsFS, shippableSkillsRoot)
+	if err != nil {
+		return nil, err
+	}
+	names := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		if entry.IsDir() {
+			names = append(names, entry.Name())
+		}
+	}
+	slices.Sort(names)
+	return names, nil
+}
+
+// skillReport is the machine inventory of one `--with-skills` installation: every
+// packaged file at its normal assistant discovery path, plus the skill-subtree
+// exclusions the active storage context owns. Committed storage owns none, so a
+// committed install reports an empty exclusion list; the local overlay never
+// changes a skill's discovery path, only whether Taskrail excludes it.
+//
+// The installer reports what it created and what it rewrote, so anything else on
+// the packaged list was already in place and is preserved.
+func (s *Service) skillReport(installed SkillInstallResult) ([]InitSkill, []InitSkillExclusion, error) {
+	files, err := packagedSkillFiles()
+	if err != nil {
+		return nil, nil, err
+	}
+	created := pathSet(installed.Written)
+	refreshed := pathSet(installed.Overwritten)
+
+	skills := make([]InitSkill, 0, len(files)*len(shippableSkillTargets))
+	for _, target := range shippableSkillTargets {
+		for _, file := range files {
+			dest := path.Join(filepath.ToSlash(target), file)
+			skills = append(skills, InitSkill{Path: dest, Action: skillAction(dest, created, refreshed)})
+		}
+	}
+	slices.SortFunc(skills, func(a, b InitSkill) int { return strings.Compare(a.Path, b.Path) })
+
+	exclusions, err := s.skillExclusions()
+	if err != nil {
+		return nil, nil, err
+	}
+	return skills, exclusions, nil
+}
+
+func skillAction(dest string, created, refreshed map[string]struct{}) string {
+	if _, ok := created[dest]; ok {
+		return writeActionCreate
+	}
+	if _, ok := refreshed[dest]; ok {
+		return writeActionRefresh
+	}
+	return writeActionPreserve
+}
+
+// skillExclusions reports one exact exclusion per packaged-skill subtree in each
+// supported assistant root, in path order. Only local storage owns them:
+// `.agents/`, `.claude/`, and either shared `skills/` directory are never
+// excluded, and a committed installation excludes nothing at all
+// (specs/v0.5.0.md#local-planning-mode).
+func (s *Service) skillExclusions() ([]InitSkillExclusion, error) {
+	if s.paths.Storage.Mode != StorageLocal {
+		return []InitSkillExclusion{}, nil
+	}
+	names, err := packagedSkillNames()
+	if err != nil {
+		return nil, err
+	}
+	exclusions := make([]InitSkillExclusion, 0, len(names)*len(shippableSkillTargets))
+	for _, target := range shippableSkillTargets {
+		for _, name := range names {
+			subtree := path.Join(filepath.ToSlash(target), name)
+			action := writeActionCreate
+			if dirExists(filepath.Join(s.paths.RepoRoot, filepath.FromSlash(subtree))) {
+				action = writeActionPreserve
+			}
+			exclusions = append(exclusions, InitSkillExclusion{Path: subtree, Action: action})
+		}
+	}
+	slices.SortFunc(exclusions, func(a, b InitSkillExclusion) int { return strings.Compare(a.Path, b.Path) })
+	return exclusions, nil
+}
+
+func pathSet(paths []string) map[string]struct{} {
+	set := make(map[string]struct{}, len(paths))
+	for _, p := range paths {
+		set[filepath.ToSlash(p)] = struct{}{}
+	}
+	return set
+}
+
 // WriteShippableSkills materializes the embedded skill set into the agent-tool
 // skill directories, stamping each file with the writing binary's version.
 //
@@ -56,33 +174,27 @@ func (s *Service) WriteShippableSkills(version string, force bool) (SkillInstall
 		dest string
 		data []byte
 	}
+	files, err := packagedSkillFiles()
+	if err != nil {
+		return SkillInstallResult{}, err
+	}
 	var writes []skillWrite
-	err := fs.WalkDir(shippableSkillsFS, shippableSkillsRoot, func(p string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if d.IsDir() {
-			return nil
-		}
+	for _, rel := range files {
+		p := path.Join(shippableSkillsRoot, rel)
 		data, err := shippableSkillsFS.ReadFile(p)
 		if err != nil {
-			return fmt.Errorf("read embedded skill %s: %w", p, err)
+			return SkillInstallResult{}, fmt.Errorf("read embedded skill %s: %w", p, err)
 		}
 		if err := validateAgentSkill(data); err != nil {
-			return fmt.Errorf("validate embedded skill %s: %w", p, err)
+			return SkillInstallResult{}, fmt.Errorf("validate embedded skill %s: %w", p, err)
 		}
 		data, err = stampSkillVersion(data, version)
 		if err != nil {
-			return fmt.Errorf("stamp embedded skill %s: %w", p, err)
+			return SkillInstallResult{}, fmt.Errorf("stamp embedded skill %s: %w", p, err)
 		}
-		rel := strings.TrimPrefix(p, shippableSkillsRoot+"/")
 		for _, target := range shippableSkillTargets {
 			writes = append(writes, skillWrite{dest: filepath.Join(s.paths.RepoRoot, target, filepath.FromSlash(rel)), data: data})
 		}
-		return nil
-	})
-	if err != nil {
-		return SkillInstallResult{}, err
 	}
 
 	// Validate every existing marker before the first write so conflicting or
