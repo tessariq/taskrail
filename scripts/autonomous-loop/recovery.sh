@@ -157,7 +157,7 @@ resume_delivery() {
   TASKRAIL="$ROOT/bin/taskrail" "$ROOT/bin/taskrail" validate >/dev/null || die "recovery state is invalid" 2
   case "$result" in
     completed_pass) report_result=pass ;;
-    blocked_fail) report_result=fail ;;
+    blocked_fail | rework_fail) report_result=fail ;;
     *) die "recovery bundle has invalid outcome" 2 ;;
   esac
   validate_report_binding "$id" "$report_result" "$report" "$generated" || die "recovery lifecycle/report binding changed" 2
@@ -202,6 +202,6 @@ resume_delivery() {
     runner_log "completed and pushed: $id ($(git rev-parse HEAD))"
   else
     runner_log "resumed and pushed: $id ($(git rev-parse HEAD))"
-    [[ "$result" != "blocked_fail" ]] || return 1
+    [[ "$result" != "blocked_fail" && "$result" != "rework_fail" ]] || return 1
   fi
 }

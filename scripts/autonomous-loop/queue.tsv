@@ -116,3 +116,4 @@ T-316-harden-temporary-autonomous-loop-timeout-and	hold-operator	Operator-owned 
 T-317-bind-delegated-grants-to-the-owner-s-declared-task	hold-operator	Verification follow-up from T-156-protect-existing-semantic-writers-with-snapshot; operator review required
 T-319-reject-run-mode-queue-rows-scoped-to-the-loop	hold-operator	Verification follow-up from T-318-accept-inline-loop-follow-up-recommendations; operator review required
 T-320-clarify-loop-prompt-stop-and-budget-rules	hold-operator	Loop-owned prompt contract; operator-executed outside the delegated loop
+T-321-align-temporary-loop-with-the-maximum-review	hold-operator	Operator-owned temporary-loop review-budget alignment

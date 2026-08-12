@@ -617,6 +617,9 @@ run_iteration() {
   elif [[ "$after_status" == "blocked" ]]; then
     report_result=fail
     result="blocked_fail"
+  elif [[ "$after_status" == "in_progress" ]]; then
+    report_result=fail
+    result="rework_fail"
   else
     die "$id has invalid lifecycle/verification outcome: status=$after_status verification=$verification"
   fi
@@ -652,6 +655,8 @@ run_iteration() {
 
   if [[ "$result" == "blocked_fail" ]]; then
     die "$id was blocked and its failing verification was committed and pushed"
+  elif [[ "$result" == "rework_fail" ]]; then
+    die "$id remained in progress and its failing verification was committed and pushed"
   fi
 }
 

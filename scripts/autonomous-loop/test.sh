@@ -67,9 +67,12 @@ assert_review_prompt() {
   assert_contains "$name mandatory low" "$value" "a mandatory low is current scope"
   assert_contains "$name mutation proof" "$value" "temporarily introduce the specific regression"
   assert_contains "$name named stop" "$value" "Stopping always means the blocked path"
-  assert_contains "$name review ceiling" "$value" "at most three correctness reviews in total"
-  assert_contains "$name budget blocked path" "$value" "use the blocked path with a reason that names the unresolved review risk"
-  assert_contains "$name terminal outcome pair" "$value" "parent accepts only completed/pass or blocked/fail"
+  assert_contains "$name review ceiling" "$value" "at most five correctness reviews in total"
+  assert_contains "$name repairable passes" "$value" "Findings from reviews one through four"
+  assert_contains "$name terminal clean pass" "$value" "The fifth review must be clean"
+  assert_contains "$name budget rework path" "$value" "use the rework path with a reason that names the unresolved review risk"
+  assert_contains "$name no budget follow-up" "$value" "Budget exhaustion never turns current work into a follow-up"
+  assert_contains "$name terminal outcome set" "$value" "parent accepts only completed/pass, blocked/fail, or in-progress/fail"
   assert_contains "$name blocked follow-up" "$value" "A blocked run may create one follow-up"
   assert_contains "$name held follow-up" "$value" "parent runner always queues it as held"
   assert_contains "$name parent Git ownership" "$value" "The parent runner owns Git delivery"
@@ -147,13 +150,11 @@ fi
 if [[ "${AUTONOMOUS_TEST_ACTION:-}" == "git-config" ]]; then
   git config user.name Mutated
 fi
-if [[ "${AUTONOMOUS_TEST_OUTCOME:-completed}" == "blocked" ]]; then
-  status=blocked
-  result=fail
-else
-  status=completed
-  result=pass
-fi
+case "${AUTONOMOUS_TEST_OUTCOME:-completed}" in
+  blocked) status=blocked; result=fail ;;
+  rework) status=in_progress; result=fail ;;
+  *) status=completed; result=pass ;;
+esac
 if [[ "${AUTONOMOUS_TEST_ACTION:-}" == "in-progress-hang" ]]; then
   printf '%s\n' 'id: T-900-fixture-task' 'status: in_progress' 'spec_ref: specs/v0.5.0.md#test-area' 'dependencies: []' >"$AUTONOMOUS_TEST_ROOT/planning/tasks/T-900-fixture-task.md"
   printf '%s\n' 'active_spec_path: specs/v0.5.0.md' 'current_task: T-900-fixture-task' 'last_verification_result: none' >"$AUTONOMOUS_TEST_ROOT/planning/STATE.md"
@@ -452,6 +453,15 @@ rc=$?
 [[ $rc -eq 2 ]] || fail "blocked retry expected exit 2, got $rc"
 assert_contains "blocked retry" "$output" "has status blocked"
 [[ "$(wc -l <"$root/captures/agent-invocations")" == "$invocations_before" ]] || fail "blocked retry invoked the agent"
+
+root="$(create_fixture rework-run)"
+before_head="$(git -C "$root" rev-parse HEAD)"
+output="$(AUTONOMOUS_TEST_OUTCOME=rework run_fixture "$root")"
+rc=$?
+[[ $rc -eq 1 ]] || fail "rework run expected exit 1, got $rc: $output"
+assert_contains "rework run" "$output" "remained in progress and its failing verification was committed and pushed"
+[[ "$(git -C "$root" rev-parse HEAD^)" == "$before_head" ]] || fail "rework run did not create one direct-child commit"
+[[ "$(git -C "$root" rev-parse HEAD)" == "$(git --git-dir="$TMP_ROOT/rework-run.git" rev-parse refs/heads/main)" ]] || fail "rework run did not push its evidence"
 
 root="$(create_fixture deleted-exchange)"
 output="$(AUTONOMOUS_TEST_ACTION=delete-exchange run_fixture "$root")"

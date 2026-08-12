@@ -23,6 +23,10 @@
   specialist skills or subagents, and fail closed when delegation is unavailable.
   Fix high and medium current-scope findings; low findings are report-only unless
   acceptance, specification, invariants, or required evidence makes them mandatory.
+  Correctness review stops clean early and is bounded at five invocations: findings
+  from reviews one through four may be fixed and re-reviewed, while review five
+  must be clean or the task stops in progress with failing rework evidence.
+  Exhaustion never creates a follow-up for unfinished current scope.
 - Do not add logs, results, session data, credentials, or generated files here.
   Runtime output belongs under ignored `planning/artifacts/runs/` or external
   temporary storage.

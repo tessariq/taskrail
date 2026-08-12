@@ -82,10 +82,13 @@ restore the correct implementation, demonstrate that it passes, and remove all
 deliberate regression code. Record both outcomes concisely.
 
 After a material fix, rerun affected checks, freeze the changed final bytes, and
-obtain another fresh correctness review. A clean review stops. Run at most three
-correctness reviews in total; if a required finding is still unresolved after the
-third, or changed final bytes remain unreviewed, use the blocked path with a reason
-that names the unresolved review risk, verify fail, and stop.
+obtain another fresh correctness review. A clean review stops. Run at most five
+correctness reviews in total. Findings from reviews one through four may be fixed
+in the current task and then reviewed on frozen changed bytes. The fifth review
+must be clean: if it reports a required finding, or changed final bytes remain
+unreviewed when the budget is exhausted, use the rework path with a reason that
+names the unresolved review risk, verify fail, and stop. Budget exhaustion never
+turns current work into a follow-up.
 
 ## Follow-Up And Lifecycle
 
@@ -117,7 +120,10 @@ follow-up is required. Never verify pass before completion.
 If implementation cannot safely proceed, run `${TASKRAIL:-taskrail} block
 {{TASK_ID}} --reason "..."`, then `${TASKRAIL:-taskrail} verify {{TASK_ID}}
 --result fail --summary "..." --details "..."`. Never verify fail while leaving
-the task in progress because the parent accepts only completed/pass or blocked/fail.
+the task in progress except for review-budget rework. For review-budget exhaustion,
+leave the task in progress and run `${TASKRAIL:-taskrail} verify {{TASK_ID}}
+--result fail --summary "..." --details "..."`; the parent accepts only
+completed/pass, blocked/fail, or in-progress/fail.
 Never complete a blocked or failing task. A blocked run may create one follow-up under the same single-follow-up
 rules, but only for a genuinely separate outcome; work this task still owns is
 never offloaded that way. If completion succeeds but passing verification fails, stop without
