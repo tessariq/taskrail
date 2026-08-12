@@ -1,14 +1,15 @@
 ---
 schema_version: 1
-updated_at: "2026-08-12T12:10:28Z"
+updated_at: "2026-08-12T12:35:05Z"
 active_spec_version: v0.5.0
 active_spec_path: specs/v0.5.0.md
 current_task: ""
 current_task_title: ""
-status_summary: idle
-blockers: []
-next_action: Select the next eligible task
-last_verification_result: pass for T-240-implement-the-normative-review-schema-decoders at 2026-08-12T12:10:28Z
+status_summary: blocked
+blockers:
+    - 'T-274-decode-reviewed-decomposition-bundles-strictly: Third and final correctness review found unresolved current-scope Markdown parsing defects: Setext H1 headings bypass the reviewed-body top-level-heading prohibition, and unseparated trailing # characters are incorrectly stripped as ATX closers. Fixing after review three would leave changed final bytes unreviewed. The standalone taskrail:check also cannot validate the mandated runner wrapper without bypassing it.'
+next_action: Resolve verification findings for T-274-decode-reviewed-decomposition-bundles-strictly
+last_verification_result: fail for T-274-decode-reviewed-decomposition-bundles-strictly at 2026-08-12T12:35:05Z
 relevant_artifacts: []
 continuation_notes:
     - This repository is temporarily dogfooding bootstrap workflow tooling until Taskrail v0.1.0 exists.
@@ -26,19 +27,19 @@ continuation_notes:
 
 ## Status
 
-- idle
+- blocked
 
 ## Blockers
 
-- None
+- T-274-decode-reviewed-decomposition-bundles-strictly: Third and final correctness review found unresolved current-scope Markdown parsing defects: Setext H1 headings bypass the reviewed-body top-level-heading prohibition, and unseparated trailing # characters are incorrectly stripped as ATX closers. Fixing after review three would leave changed final bytes unreviewed. The standalone taskrail:check also cannot validate the mandated runner wrapper without bypassing it.
 
 ## Last Verification
 
-- pass for T-240-implement-the-normative-review-schema-decoders at 2026-08-12T12:10:28Z
+- fail for T-274-decode-reviewed-decomposition-bundles-strictly at 2026-08-12T12:35:05Z
 
 ## Next Action
 
-- Select the next eligible task
+- Resolve verification findings for T-274-decode-reviewed-decomposition-bundles-strictly
 
 ## Relevant Artifacts
 
@@ -50,8 +51,8 @@ continuation_notes:
 
 ## Task Counts
 
-- todo: 143
+- todo: 142
 - in_progress: 0
 - completed: 176
-- blocked: 0
+- blocked: 1
 - cancelled: 0
