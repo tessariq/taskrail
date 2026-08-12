@@ -160,6 +160,9 @@ func stringMember(obj map[string]json.RawMessage, what, name string) (string, er
 	if !ok {
 		return "", fmt.Errorf("%s is missing member %q", what, name)
 	}
+	if isJSONNull(raw) {
+		return "", fmt.Errorf("%s member %q is null", what, name)
+	}
 	var value string
 	if err := json.Unmarshal(raw, &value); err != nil {
 		return "", fmt.Errorf("%s member %q is not a string", what, name)

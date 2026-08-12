@@ -1,12 +1,12 @@
 ---
 id: T-240-implement-the-normative-review-schema-decoders
 title: Decode common task and spec review schemas strictly
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#safe-review-artifact-publication
 dependencies:
     - T-230-enforce-the-normative-v0-5-machine-schema
-updated_at: "2026-08-08T08:40:49Z"
+updated_at: "2026-08-12T12:10:28Z"
 ---
 
 # T-240-implement-the-normative-review-schema-decoders Decode common task and spec review schemas strictly
@@ -43,3 +43,6 @@ the first independently publishable review bundle types.
   duplicate, unknown, and unresolved high/medium finding cases.
 
 ## Implementation Notes
+
+- 2026-08-12T12:10:14Z: Implemented strict exact-byte task-review and four-lens spec-review schema decoders with manifest integrity validation and mutation coverage.
+- 2026-08-12T12:10:28Z: verification pass
