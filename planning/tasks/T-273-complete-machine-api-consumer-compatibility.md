@@ -1,14 +1,14 @@
 ---
 id: T-273-complete-machine-api-consumer-compatibility
 title: Complete machine API consumer compatibility
-status: blocked
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#uniform-agent-machine-results
 dependencies:
     - T-270-migrate-inherited-read-only-machine-results
     - T-271-migrate-inherited-semantic-writer-machine-results
     - T-272-implement-init-status-and-warning-machine
-updated_at: "2026-08-12T11:34:24Z"
+updated_at: "2026-08-12T11:50:44Z"
 ---
 
 # T-273-complete-machine-api-consumer-compatibility Complete machine API consumer compatibility
@@ -49,3 +49,6 @@ prove later envelope generations reject or retain inherited documents deliberate
 - 2026-08-12T11:19:09Z: verification fail
 - 2026-08-12T11:34:13Z: Review budget exhausted after correcting final packaged-command coverage, provenance receipt-path validation, and loop terminal-outcome consistency; one fresh correctness review of the resulting final bytes is required
 - 2026-08-12T11:34:24Z: verification fail
+- 2026-08-12T11:50:20Z: Fresh final-byte correctness review passed after strict generation fixture corrections
+- 2026-08-12T11:50:34Z: Completed uniform machine-result consumer migration, executable packaged-skill JSON flows, direct-result compatibility documentation, and strict generation 1/2/3 compatibility fixtures; fresh final-byte review was clean and all checks passed
+- 2026-08-12T11:50:44Z: verification pass

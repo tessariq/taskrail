@@ -1,6 +1,7 @@
 package taskrail
 
 import (
+	"encoding/json"
 	"fmt"
 	"slices"
 	"strings"
@@ -525,20 +526,18 @@ func TestDecodeMachineEnvelopeRejects(t *testing.T) {
 
 func TestEnvelopeGenerationsRetainOuterMembersAndRejectInheritedShapes(t *testing.T) {
 	generations := []struct {
-		version int
-		path    string
-		kind    string
+		version  int
+		document string
 	}{
-		{1, "planning/tasks/T-001.md", "task"},
-		{2, "planning/tasks/T-001.md", "task"},
-		{3, "planning/provenance/planning-sources/psr-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.json", "provenance"},
+		{1, `{"schema_version":1,"command":"start","warnings":[],"result":{"task_id":"T-001-example","status":"in_progress","updated_at":"2026-08-12T00:00:00Z","validation":{"valid":true,"violations":[]}}}`},
+		{2, `{"schema_version":2,"command":"start","warnings":[],"result":{"task_ref":"T-001","task_id":"T-001-example","status":"in_progress","updated_at":"2026-08-12T00:00:00Z","validation":{"valid":true,"violations":[]}}}`},
+		{3, `{"schema_version":3,"command":"local promote","warnings":[],"result":{"applied":false,"source_mode":"local","target_mode":"committed","writes":[{"path":"planning/provenance/planning-sources/psr-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.json","kind":"provenance"}],"preserved":[],"excluded":[],"removed_exclusions":[],"skills":[],"validation":{"valid":true,"violations":[]}}}`},
 	}
 	for _, consumer := range generations {
 		for _, producer := range generations {
 			name := fmt.Sprintf("consumer %d producer %d", consumer.version, producer.version)
 			t.Run(name, func(t *testing.T) {
-				document := []byte(fmt.Sprintf(`{"schema_version":%d,"command":"local promote","warnings":[],"result":{"applied":false,"source_mode":"local","target_mode":"committed","writes":[{"path":%q,"kind":%q}],"preserved":[],"excluded":[],"removed_exclusions":[],"skills":[],"validation":{"valid":true,"violations":[]}}}`, producer.version, producer.path, producer.kind))
-				err := decodeGenerationFixture(document, consumer.version)
+				err := decodeGenerationFixture([]byte(producer.document), consumer.version)
 				if producer.version == consumer.version && err != nil {
 					t.Fatalf("supported document rejected: %v", err)
 				}
@@ -548,6 +547,19 @@ func TestEnvelopeGenerationsRetainOuterMembersAndRejectInheritedShapes(t *testin
 			})
 		}
 	}
+
+	t.Run("generation 2 rejects inherited generation 1 result", func(t *testing.T) {
+		document := strings.Replace(generations[0].document, `"schema_version":1`, `"schema_version":2`, 1)
+		if err := decodeGenerationFixture([]byte(document), 2); err == nil {
+			t.Fatal("generation 2 accepted a start result without task_ref")
+		}
+	})
+	t.Run("generation 1 rejects generation 2 result", func(t *testing.T) {
+		document := strings.Replace(generations[1].document, `"schema_version":2`, `"schema_version":1`, 1)
+		if err := decodeGenerationFixture([]byte(document), 1); err == nil {
+			t.Fatal("generation 1 accepted a start result with task_ref")
+		}
+	})
 }
 
 func decodeGenerationFixture(data []byte, version int) error {
@@ -562,11 +574,66 @@ func decodeGenerationFixture(data []byte, version int) error {
 	if !ok || got != int64(version) {
 		return fmt.Errorf("unsupported schema version")
 	}
+	warnings, err := arrayMember(obj["warnings"], "document", "warnings")
+	if err != nil || len(warnings) != 0 {
+		return fmt.Errorf("document warnings must be an empty representative array")
+	}
+	if version < 3 {
+		return decodeStartGenerationFixture(obj, version)
+	}
+	return decodePromotionGenerationFixture(obj)
+}
+
+func decodeStartGenerationFixture(obj map[string]json.RawMessage, version int) error {
+	if _, err := fixedMember(obj, "document", "command", "start"); err != nil {
+		return err
+	}
+	result, err := strictObject(obj["result"], "result")
+	if err != nil {
+		return err
+	}
+	members := []string{"task_id", "status", "updated_at", "validation"}
+	if version == 2 {
+		members = []string{"task_ref", "task_id", "status", "updated_at", "validation"}
+	}
+	if err := exactMembers(result, "result", members); err != nil {
+		return err
+	}
+	if version == 2 {
+		if _, err := stringMember(result, "result", "task_ref"); err != nil {
+			return err
+		}
+	}
+	if _, err := stringMember(result, "result", "task_id"); err != nil {
+		return err
+	}
+	if _, err := fixedMember(result, "result", "status", "in_progress"); err != nil {
+		return err
+	}
+	if _, err := stringMember(result, "result", "updated_at"); err != nil {
+		return err
+	}
+	return decodeGenerationValidation(result["validation"])
+}
+
+func decodePromotionGenerationFixture(obj map[string]json.RawMessage) error {
+	if _, err := fixedMember(obj, "document", "command", "local promote"); err != nil {
+		return err
+	}
 	result, err := strictObject(obj["result"], "result")
 	if err != nil {
 		return err
 	}
 	if err := exactMembers(result, "result", []string{"applied", "source_mode", "target_mode", "writes", "preserved", "excluded", "removed_exclusions", "skills", "validation"}); err != nil {
+		return err
+	}
+	if _, err := boolMember(result, "result", "applied"); err != nil {
+		return err
+	}
+	if _, err := fixedMember(result, "result", "source_mode", "local"); err != nil {
+		return err
+	}
+	if _, err := fixedMember(result, "result", "target_mode", "committed"); err != nil {
 		return err
 	}
 	writes, err := arrayMember(result["writes"], "result", "writes")
@@ -584,23 +651,40 @@ func decodeGenerationFixture(data []byte, version int) error {
 	if err != nil {
 		return err
 	}
-	wantPath := "planning/tasks/T-001.md"
-	if version == 3 {
-		wantPath = "planning/provenance/planning-sources/psr-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.json"
-	}
+	wantPath := "planning/provenance/planning-sources/psr-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.json"
 	if path != wantPath {
-		return fmt.Errorf("promotion entry path %q is unsupported by schema version %d", path, version)
+		return fmt.Errorf("promotion entry path %q is unsupported by schema version 3", path)
 	}
 	kind, err := stringMember(entry, "promotion entry", "kind")
 	if err != nil {
 		return err
 	}
-	allowed := []string{"config", "spec", "state", "task", "note", "review", "prompt", "artifact", "runtime"}
-	if version == 3 {
-		allowed = append(allowed, "provenance")
+	if kind != "provenance" {
+		return fmt.Errorf("promotion entry kind %q is unsupported by schema version 3", kind)
 	}
-	if !slices.Contains(allowed, kind) {
-		return fmt.Errorf("promotion entry kind %q is unsupported by schema version %d", kind, version)
+	for _, name := range []string{"preserved", "excluded", "removed_exclusions", "skills"} {
+		values, err := arrayMember(result[name], "result", name)
+		if err != nil || len(values) != 0 {
+			return fmt.Errorf("result member %q must be an empty representative array", name)
+		}
+	}
+	return decodeGenerationValidation(result["validation"])
+}
+
+func decodeGenerationValidation(raw json.RawMessage) error {
+	validation, err := strictObject(raw, "validation")
+	if err != nil {
+		return err
+	}
+	if err := exactMembers(validation, "validation", []string{"valid", "violations"}); err != nil {
+		return err
+	}
+	if _, err := boolMember(validation, "validation", "valid"); err != nil {
+		return err
+	}
+	violations, err := arrayMember(validation["violations"], "validation", "violations")
+	if err != nil || len(violations) != 0 {
+		return fmt.Errorf("validation violations must be an empty representative array")
 	}
 	return nil
 }
