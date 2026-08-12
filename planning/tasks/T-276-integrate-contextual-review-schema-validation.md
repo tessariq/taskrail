@@ -1,13 +1,13 @@
 ---
 id: T-276-integrate-contextual-review-schema-validation
 title: Integrate contextual review schema validation
-status: todo
+status: blocked
 priority: high
 spec_ref: specs/v0.5.0.md#safe-review-artifact-publication
 dependencies:
     - T-274-decode-reviewed-decomposition-bundles-strictly
     - T-275-decode-workflow-adversarial-review-memory-strictly
-updated_at: "2026-08-08T14:23:08Z"
+updated_at: "2026-08-12T18:41:43Z"
 ---
 
 # T-276-integrate-contextual-review-schema-validation Integrate contextual review schema validation
@@ -44,3 +44,6 @@ evidence while historical review reads remain stable.
   reads remain byte-stable while new publication uses the new context.
 
 ## Implementation Notes
+
+- 2026-08-12T18:40:59Z: Acceptance requires surfaces this repository has not built: review publication preview/apply (T-215 todo), role-mandated prompt resolution and its invalid_proposal/prompt_invalid/source_changed precedence (T-159, T-236, T-255 todo), durable published-review roots and historical 'review show' (T-292, T-293, T-294 todo). machine_contract.go marks 'review publish', 'review show', and every 'prompt' command MachineOriginPlanned/MachineJSONAbsent, and cmd/taskrail/root.go registers no review or prompt command, so A1, A3, and A4 cannot be verified. Declared dependencies cover only the decoders (T-274, T-275), which leaves A2 the sole reachable criterion and any delivery an arbitrary slice. Operator must decide whether to re-sequence T-276 behind the publisher, prompt-resolution, and review-show tasks by adding those dependencies, or re-scope its acceptance to the context binding the existing decoders support.
+- 2026-08-12T18:41:43Z: verification fail
