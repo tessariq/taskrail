@@ -300,8 +300,7 @@ func decodeDecompositionTrace(data []byte, subjects DecompositionSubjects) (Deco
 		}
 		_, anchor, e := parseSpecRef(req.SpecRef)
 		normalized, ne := normalizeSpecRef(req.SpecRef)
-		normalizedPath, _, _ := strings.Cut(normalized, "#")
-		if e != nil || ne != nil || normalized != req.SpecRef || normalizedPath != subjects.SpecPath {
+		if e != nil || ne != nil || normalized != req.SpecRef || specRefPath(normalized) != subjects.SpecPath {
 			return out, fmt.Errorf("%s spec_ref is not a normalized selected-spec reference", what)
 		}
 		if _, ok := anchors[anchor]; !ok {
@@ -395,8 +394,8 @@ func validateDraftTrace(draft ReviewedImportDraft, trace DecompositionTrace, sub
 	anchors := collectHeadingAnchors(string(subjects.Spec))
 	for _, task := range draft.Tasks {
 		keys[task.Key] = struct{}{}
-		path, anchor, _ := parseSpecRef(task.SpecRef)
-		if path != subjects.SpecPath {
+		_, anchor, _ := parseSpecRef(task.SpecRef)
+		if specRefPath(task.SpecRef) != subjects.SpecPath {
 			return fmt.Errorf("task %q spec_ref does not target selected spec", task.Key)
 		}
 		if _, ok := anchors[anchor]; !ok {
@@ -417,6 +416,11 @@ func validateDraftTrace(draft ReviewedImportDraft, trace DecompositionTrace, sub
 		}
 	}
 	return nil
+}
+
+func specRefPath(ref string) string {
+	path, _, _ := strings.Cut(ref, "#")
+	return path
 }
 
 func decodeDecompositionReview(data []byte, pass int) (DecompositionReview, error) {
