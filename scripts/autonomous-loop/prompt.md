@@ -54,16 +54,18 @@ Block instead of guessing around an operator decision or external write.
 
 First use one fresh subagent for a behavior-preserving simplification pass. Apply
 accepted simplifications, rerun affected checks, and freeze the resulting
-snapshot. Then use a separate fresh subagent for correctness review of the frozen
-current implementation snapshot.
+snapshot. Then run a correctness-review round over the frozen current
+implementation snapshot.
 
 Before each pass, inspect the available installed skills and subagents. Prefer
 dedicated code-simplifier and code-reviewer capabilities; otherwise use a
 general-purpose fresh subagent with an explicit simplification or correctness
-lens. Give it the frozen snapshot plus task, spec, and test context. Subagents
-return findings; the parent applies fixes. Parent-context self-review does not
-satisfy either pass. If fresh delegation is unavailable or fails, block and
-verify fail.
+lens. Each review round uses one to three fresh review subagents. Give every
+reviewer the same frozen snapshot plus task, spec, and test context, but assign
+each a different explicit review lens so their scopes do not duplicate one
+another. Run them concurrently when the backend supports it. Subagents return
+findings; the parent applies fixes. Parent-context self-review does not satisfy
+either pass. If fresh delegation is unavailable or fails, block and verify fail.
 
 Correctness review covers behavior, tests, security, error handling, edge cases,
 unnecessary complexity, and domain fit. Findings cite concrete evidence such as
@@ -74,21 +76,26 @@ Classify every finding with severity and exactly one disposition: `fix-now`,
 evidence. Fix high- and medium-severity current-scope findings. Leave low-severity
 observations report-only unless acceptance, specification, an invariant, or
 required evidence makes them mandatory; a mandatory low is current scope and
-must be fixed. Budget exhaustion never turns current work into a follow-up.
+must be fixed. A review-round limit never turns current work into a follow-up.
 
 When a finding identifies a missing or weak test, add the strengthened test,
 temporarily introduce the specific regression, demonstrate that the test fails,
 restore the correct implementation, demonstrate that it passes, and remove all
 deliberate regression code. Record both outcomes concisely.
 
-After a material fix, rerun affected checks, freeze the changed final bytes, and
-obtain another fresh correctness review. A clean review stops. Run at most five
-correctness reviews in total. Findings from reviews one through four may be fixed
-in the current task and then reviewed on frozen changed bytes. The fifth review
-must be clean: if it reports a required finding, or changed final bytes remain
-unreviewed when the budget is exhausted, use the rework path with a reason that
-names the unresolved review risk, verify fail, and stop. Budget exhaustion never
-turns current work into a follow-up.
+Run at most two correctness-review rounds. A clean round stops early. After fixing
+any findings from a round, use a fresh code-simplifier subagent on the changed
+implementation, apply accepted behavior-preserving simplifications, and rerun
+affected checks. Freeze those bytes before starting round two.
+
+After the second round, do not request another correctness review. Fix its
+required findings, run the required post-fix simplifier, and require that the
+final applicable build and test checks pass, including `go build ./cmd/taskrail`
+and `go test ./...`. The resulting simplified bytes do not require a third review.
+Continue to successful completion even though the post-review fixes and
+simplifications were not reviewed again. If final checks fail and cannot be fixed
+within the task, use the blocked path. Record any residual review risk in
+verification details.
 
 ## Follow-Up And Lifecycle
 
@@ -120,10 +127,7 @@ follow-up is required. Never verify pass before completion.
 If implementation cannot safely proceed, run `${TASKRAIL:-taskrail} block
 {{TASK_ID}} --reason "..."`, then `${TASKRAIL:-taskrail} verify {{TASK_ID}}
 --result fail --summary "..." --details "..."`. Never verify fail while leaving
-the task in progress except for review-budget rework. For review-budget exhaustion,
-leave the task in progress and run `${TASKRAIL:-taskrail} verify {{TASK_ID}}
---result fail --summary "..." --details "..."`; the parent accepts only
-completed/pass, blocked/fail, or in-progress/fail.
+the task in progress; the parent accepts only completed/pass or blocked/fail.
 Never complete a blocked or failing task. A blocked run may create one follow-up under the same single-follow-up
 rules, but only for a genuinely separate outcome; work this task still owns is
 never offloaded that way. If completion succeeds but passing verification fails, stop without

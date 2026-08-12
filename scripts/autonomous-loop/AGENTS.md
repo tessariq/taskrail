@@ -18,15 +18,17 @@
   terminal outcome interrupted before delivery names a private XDG-state bundle;
   inspect it, then use `--resume-delivery <absolute-bundle-path>` to revalidate and
   perform delivery without launching another agent.
-- The shared prompt requires separate fresh subagents for simplification and
-  correctness review. Each backend must inspect installed capabilities, prefer
-  specialist skills or subagents, and fail closed when delegation is unavailable.
-  Fix high and medium current-scope findings; low findings are report-only unless
-  acceptance, specification, invariants, or required evidence makes them mandatory.
-  Correctness review stops clean early and is bounded at five invocations: findings
-  from reviews one through four may be fixed and re-reviewed, while review five
-  must be clean or the task stops in progress with failing rework evidence.
-  Exhaustion never creates a follow-up for unfinished current scope.
+- The shared prompt requires fresh subagents for simplification and correctness
+  review. Each backend must inspect installed capabilities, prefer specialist
+  skills or subagents, and fail closed when delegation is unavailable. A review
+  round uses one to three fresh reviewers with different explicit lenses and the
+  same frozen snapshot. At most two rounds run, with early exit after a clean
+  round. Fix high and medium current-scope findings; low findings are report-only
+  unless acceptance, specification, invariants, or required evidence makes them
+  mandatory. After fixing any findings from a round, run a fresh code simplifier and
+  affected checks. After round two there is no third review: green final build
+  and tests permit completion, with residual review risk recorded. The round
+  limit never creates a follow-up for unfinished current scope.
 - Do not add logs, results, session data, credentials, or generated files here.
   Runtime output belongs under ignored `planning/artifacts/runs/` or external
   temporary storage.
