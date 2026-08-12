@@ -1,12 +1,12 @@
 ---
 id: T-275-decode-workflow-adversarial-review-memory-strictly
 title: Decode workflow adversarial review memory strictly
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#safe-review-artifact-publication
 dependencies:
     - T-240-implement-the-normative-review-schema-decoders
-updated_at: "2026-08-08T14:23:08Z"
+updated_at: "2026-08-12T18:35:10Z"
 ---
 
 # T-275-decode-workflow-adversarial-review-memory-strictly Decode workflow adversarial review memory strictly
@@ -44,3 +44,6 @@ cyclic, ambiguous, or lossy history.
   cap and observe refusal without history loss.
 
 ## Implementation Notes
+
+- 2026-08-12T18:34:42Z: Added strict workflow-adversarial report and canonical INDEX.json decoding plus mechanical candidate-index derivation with cap refusal, referential integrity, and history-immutability rules.
+- 2026-08-12T18:35:10Z: verification pass

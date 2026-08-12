@@ -578,10 +578,14 @@ func reviewKeyMember(obj map[string]json.RawMessage, what, name string) (string,
 	if err != nil {
 		return "", err
 	}
-	if len(value) > 128 || !portableReviewKey.MatchString(value) {
+	if !isPortableReviewKey(value) {
 		return "", fmt.Errorf("%s member %q is not a portable review key", what, name)
 	}
 	return value, nil
+}
+
+func isPortableReviewKey(value string) bool {
+	return len(value) <= 128 && portableReviewKey.MatchString(value)
 }
 
 func reviewPathMember(obj map[string]json.RawMessage, what, name string) (string, error) {
@@ -613,10 +617,17 @@ func exactOptionalMembers(obj map[string]json.RawMessage, what string, required,
 			return fmt.Errorf("%s is missing member %q", what, name)
 		}
 	}
+	var unknown []string
 	for name := range obj {
 		if !slices.Contains(required, name) && !slices.Contains(optional, name) {
-			return fmt.Errorf("%s has unknown member %q", what, name)
+			unknown = append(unknown, name)
 		}
+	}
+	// Sorted, so two unknown members always name the same one and error text is
+	// reproducible across runs of the same input.
+	if len(unknown) > 0 {
+		slices.Sort(unknown)
+		return fmt.Errorf("%s has unknown member %q", what, unknown[0])
 	}
 	return nil
 }
