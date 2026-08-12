@@ -1,6 +1,7 @@
 package taskrail
 
 import (
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
@@ -255,7 +256,8 @@ func TestDecodeMachineEnvelopeRejects(t *testing.T) {
 		},
 
 		// Version.
-		{"unsupported version", `{"schema_version":2,"command":"status","warnings":[],"result":{}}`, "unsupported schema version 2"},
+		{"unsupported generation 2", `{"schema_version":2,"command":"status","warnings":[],"result":{"inherited_shape":"incompatible"}}`, "unsupported schema version 2"},
+		{"unsupported generation 3", `{"schema_version":3,"command":"status","warnings":[],"result":{"inherited_shape":"incompatible"}}`, "unsupported schema version 3"},
 		{"non-integer version", `{"schema_version":1.0,"command":"status","warnings":[],"result":{}}`, "is not an integer"},
 		{"string version", `{"schema_version":"1","command":"status","warnings":[],"result":{}}`, "is not an integer"},
 		{"missing version", `{"command":"status","warnings":[],"result":{}}`, `missing member "schema_version"`},
@@ -519,6 +521,88 @@ func TestDecodeMachineEnvelopeRejects(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestEnvelopeGenerationsRetainOuterMembersAndRejectInheritedShapes(t *testing.T) {
+	generations := []struct {
+		version int
+		path    string
+		kind    string
+	}{
+		{1, "planning/tasks/T-001.md", "task"},
+		{2, "planning/tasks/T-001.md", "task"},
+		{3, "planning/provenance/planning-sources/psr-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.json", "provenance"},
+	}
+	for _, consumer := range generations {
+		for _, producer := range generations {
+			name := fmt.Sprintf("consumer %d producer %d", consumer.version, producer.version)
+			t.Run(name, func(t *testing.T) {
+				document := []byte(fmt.Sprintf(`{"schema_version":%d,"command":"local promote","warnings":[],"result":{"applied":false,"source_mode":"local","target_mode":"committed","writes":[{"path":%q,"kind":%q}],"preserved":[],"excluded":[],"removed_exclusions":[],"skills":[],"validation":{"valid":true,"violations":[]}}}`, producer.version, producer.path, producer.kind))
+				err := decodeGenerationFixture(document, consumer.version)
+				if producer.version == consumer.version && err != nil {
+					t.Fatalf("supported document rejected: %v", err)
+				}
+				if producer.version != consumer.version && err == nil {
+					t.Fatal("consumer silently accepted an incompatible inherited document")
+				}
+			})
+		}
+	}
+}
+
+func decodeGenerationFixture(data []byte, version int) error {
+	obj, err := strictObject(data, "document")
+	if err != nil {
+		return err
+	}
+	if err := exactMembers(obj, "document", []string{"schema_version", "command", "warnings", "result"}); err != nil {
+		return err
+	}
+	got, ok := decodeJSONInteger(obj["schema_version"])
+	if !ok || got != int64(version) {
+		return fmt.Errorf("unsupported schema version")
+	}
+	result, err := strictObject(obj["result"], "result")
+	if err != nil {
+		return err
+	}
+	if err := exactMembers(result, "result", []string{"applied", "source_mode", "target_mode", "writes", "preserved", "excluded", "removed_exclusions", "skills", "validation"}); err != nil {
+		return err
+	}
+	writes, err := arrayMember(result["writes"], "result", "writes")
+	if err != nil || len(writes) != 1 {
+		return fmt.Errorf("result writes must contain one representative entry")
+	}
+	entry, err := strictObject(writes[0], "promotion entry")
+	if err != nil {
+		return err
+	}
+	if err := exactMembers(entry, "promotion entry", []string{"path", "kind"}); err != nil {
+		return err
+	}
+	path, err := stringMember(entry, "promotion entry", "path")
+	if err != nil {
+		return err
+	}
+	wantPath := "planning/tasks/T-001.md"
+	if version == 3 {
+		wantPath = "planning/provenance/planning-sources/psr-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.json"
+	}
+	if path != wantPath {
+		return fmt.Errorf("promotion entry path %q is unsupported by schema version %d", path, version)
+	}
+	kind, err := stringMember(entry, "promotion entry", "kind")
+	if err != nil {
+		return err
+	}
+	allowed := []string{"config", "spec", "state", "task", "note", "review", "prompt", "artifact", "runtime"}
+	if version == 3 {
+		allowed = append(allowed, "provenance")
+	}
+	if !slices.Contains(allowed, kind) {
+		return fmt.Errorf("promotion entry kind %q is unsupported by schema version %d", kind, version)
+	}
+	return nil
 }
 
 // TestDecodeMachineEnvelopeAcceptsEveryRegisteredErrorCode keeps the decoder's

@@ -84,8 +84,8 @@ deliberate regression code. Record both outcomes concisely.
 After a material fix, rerun affected checks, freeze the changed final bytes, and
 obtain another fresh correctness review. A clean review stops. Run at most three
 correctness reviews in total; if a required finding is still unresolved after the
-third, or changed final bytes remain unreviewed, keep the task in progress,
-verify fail, and stop.
+third, or changed final bytes remain unreviewed, use the blocked path with a reason
+that names the unresolved review risk, verify fail, and stop.
 
 ## Follow-Up And Lifecycle
 
@@ -116,9 +116,9 @@ follow-up is required. Never verify pass before completion.
 
 If implementation cannot safely proceed, run `${TASKRAIL:-taskrail} block
 {{TASK_ID}} --reason "..."`, then `${TASKRAIL:-taskrail} verify {{TASK_ID}}
---result fail --summary "..." --details "..."`. For deliberate rework, verify
-fail while leaving the task in progress. Never complete a blocked or failing
-task. A blocked run may create one follow-up under the same single-follow-up
+--result fail --summary "..." --details "..."`. Never verify fail while leaving
+the task in progress because the parent accepts only completed/pass or blocked/fail.
+Never complete a blocked or failing task. A blocked run may create one follow-up under the same single-follow-up
 rules, but only for a genuinely separate outcome; work this task still owns is
 never offloaded that way. If completion succeeds but passing verification fails, stop without
 repeating completion or compensating with block.

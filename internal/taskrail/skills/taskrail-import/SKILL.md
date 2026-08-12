@@ -25,15 +25,17 @@ do not contain the source helper and skip this source-only guard.
 
 1. Emit the prompt for the source and target:
    `${TASKRAIL:-taskrail} import <source.md> --to <tasks|spec|planning> --emit-prompt`
+   `--emit-prompt` is an exact-text exception because its prompt bytes are the
+   workflow input, not a structured result.
 2. Follow that prompt: read the embedded source and produce a single JSON draft
    that conforms to the schema the prompt describes (`schema_version`, `target`,
    `tasks`, `spec_sections`). Do the real work — split coherent tasks, write
    clear titles, set `spec_ref` to real spec headings, wire `dependencies`.
 3. Save your JSON to a file, e.g. `draft.json`.
-4. Apply it: `${TASKRAIL:-taskrail} import --apply draft.json`. The binary validates the draft
+4. Apply it: `${TASKRAIL:-taskrail} import --apply draft.json --json`. The binary validates the draft
    and writes spec/task files, scaffolding each task through the same path as
    `${TASKRAIL:-taskrail} task new`.
-5. Review the created files. Run `${TASKRAIL:-taskrail} validate`.
+5. Review the created files. Run `${TASKRAIL:-taskrail} validate --json`.
 
 If apply fails during writing (`partial apply already wrote ...` or `partial
 apply may have written ...`, non-zero exit), it still reports what landed or may

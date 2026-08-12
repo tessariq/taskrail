@@ -21,15 +21,16 @@ do not contain the source helper and skip this source-only guard.
 
 ## Required Flow
 
-1. Run `${TASKRAIL:-taskrail} validate`.
+1. Run `${TASKRAIL:-taskrail} validate --json`.
 2. Choose the task to verify.
-3. Run `${TASKRAIL:-taskrail} verify <task-id> --result pass|fail --summary "..."`.
+3. Run `${TASKRAIL:-taskrail} verify <task-id> --result pass --summary "..." --json`, or use
+   `${TASKRAIL:-taskrail} verify <task-id> --result fail --summary "..." --json` when findings remain.
 4. Confirm plan and report artifacts were written under
    `planning/artifacts/verify/`.
 5. Review unresolved findings.
-6. Create a follow-up task with `${TASKRAIL:-taskrail} task new` (or
-   `${TASKRAIL:-taskrail} verify <task-id> --create-followup`) when unresolved work should
-   enter the backlog.
+6. Create a follow-up task with `${TASKRAIL:-taskrail} task new --follow-up <task-id> --title "..." --json`
+   (or `${TASKRAIL:-taskrail} verify <task-id> --result fail --summary "..." --create-followup --json`)
+   when unresolved work should enter the backlog.
 
 ## Rules
 

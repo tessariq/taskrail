@@ -52,14 +52,15 @@ do not contain the source helper and skip this source-only guard.
    `spec_ref` to an anchor discovered in step 2. Save it to `draft.json`. To scaffold
    the exact schema, emit the prompt over the active spec file itself (the
    decomposition source, always present):
-   `${TASKRAIL:-taskrail} import <active-spec-path> --to tasks --emit-prompt`.
-4. **Apply (single writer).** Run `${TASKRAIL:-taskrail} import --apply draft.json`.
+    `${TASKRAIL:-taskrail} import <active-spec-path> --to tasks --emit-prompt`.
+    `--emit-prompt` is an exact-text exception because its prompt bytes are the workflow input.
+4. **Apply (single writer).** Run `${TASKRAIL:-taskrail} import --apply draft.json --json`.
    The binary validates the draft and writes real task files through the same path
    as `${TASKRAIL:-taskrail} task new`, rejecting any `spec_ref` whose anchor does
    not exist. Steps 1–3 write no committed state; this reviewed, human-invoked apply
    is the only writer.
 5. **Validate.** Review the created task files and run
-   `${TASKRAIL:-taskrail} validate`. Confirm the state is valid and re-run
+    `${TASKRAIL:-taskrail} validate --json`. Confirm the state is valid and re-run
    `${TASKRAIL:-taskrail} coverage --json` to see the gaps now closed.
 
 ## Rules

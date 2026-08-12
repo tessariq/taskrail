@@ -15,7 +15,8 @@ All notable user-visible changes to Taskrail will be documented in this file.
 - Every `--json` command now emits the v0.5 machine envelope — `schema_version`,
   `command`, `warnings`, and one of `result`/`error` — instead of the bare report
   or writer payload, and a failure emits a registered error code instead of
-  prose-only stderr.
+  prose-only stderr. This one-time direct-result break has no legacy switch;
+  `schema_version` versions the whole document contract.
 - `taskrail start`, `complete`, and `block` gain `--json`, reporting the
   transition and the validation re-run alongside it. Text output is unchanged.
 - `taskrail init --json` now reports the layout marker, the write inventory,

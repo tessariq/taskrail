@@ -68,6 +68,8 @@ assert_review_prompt() {
   assert_contains "$name mutation proof" "$value" "temporarily introduce the specific regression"
   assert_contains "$name named stop" "$value" "Stopping always means the blocked path"
   assert_contains "$name review ceiling" "$value" "at most three correctness reviews in total"
+  assert_contains "$name budget blocked path" "$value" "use the blocked path with a reason that names the unresolved review risk"
+  assert_contains "$name terminal outcome pair" "$value" "parent accepts only completed/pass or blocked/fail"
   assert_contains "$name blocked follow-up" "$value" "A blocked run may create one follow-up"
   assert_contains "$name held follow-up" "$value" "parent runner always queues it as held"
   assert_contains "$name parent Git ownership" "$value" "The parent runner owns Git delivery"

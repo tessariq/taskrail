@@ -116,7 +116,12 @@ Every `--json` command — including the `start`, `complete`, and `block`
 lifecycle writers — emits one versioned envelope: `schema_version`, the canonical
 `command`, `warnings`, and exactly one of `result` or `error`. A failure carries a
 registered `error.code` plus `details` recording whether the operation committed
-and which paths it touched. Text output stays human-oriented and unchanged.
+and which paths it touched. This is the one-time v0.5 break from pre-v0.5 bare
+result objects: consumers read command payloads under `result`, and there is no
+legacy-output switch. `schema_version` versions the whole document, including
+result, warning, error, enum, nullability, and semantic contracts, not only the
+outer member names. Consumers must reject unsupported versions rather than decode
+an inherited shape optimistically. Text output stays human-oriented and unchanged.
 Idle `next` selection is anchored to the active spec: it considers only `todo`
 tasks whose `spec_ref` points at the active spec, so higher-priority older-spec
 work is skipped rather than selected. When only older-spec work is runnable,

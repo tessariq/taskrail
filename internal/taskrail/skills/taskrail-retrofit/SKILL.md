@@ -26,26 +26,27 @@ do not contain the source helper and skip this source-only guard.
 
 ## Flow
 
-1. **Detect + dry-run.** Run `${TASKRAIL:-taskrail} retrofit <notes.md>` (or
-   `${TASKRAIL:-taskrail} retrofit` with no notes). This defaults to a dry run: it detects the existing
+1. **Detect + dry-run.** Run `${TASKRAIL:-taskrail} retrofit <notes.md> --json` (or
+   `${TASKRAIL:-taskrail} retrofit --json` with no notes). This defaults to a dry run: it detects the existing
    layout, proposes a mapping, and prints the scaffold diff. Nothing is written
    and the notes file is only read.
 2. **Confirm.** Review the proposed mapping and diff. Retrofit never overwrites
    existing files; confirm the scaffold is what the adopter wants before
    applying.
-3. **Apply.** Run `${TASKRAIL:-taskrail} retrofit <notes.md> --apply` to write the scaffold
+3. **Apply.** Run `${TASKRAIL:-taskrail} retrofit <notes.md> --apply --json` to write the scaffold
    and layout marker and re-run validation. The imported bootstrap is a proposal
    to review, not tracked work retrofit creates.
 4. **Adopt (persist reviewed tasks).** Emit the import prompt for the notes:
-   `${TASKRAIL:-taskrail} retrofit <notes.md> --emit-prompt`. Follow that prompt and produce a
-   single JSON draft conforming to the schema it describes (`schema_version`,
+    `${TASKRAIL:-taskrail} retrofit <notes.md> --emit-prompt`.
+    `--emit-prompt` is an exact-text exception because its prompt bytes are the workflow input. Follow
+    that prompt and produce a single JSON draft conforming to the schema it describes (`schema_version`,
    `target`, `tasks`, `spec_sections`). Do the real work — split coherent tasks,
    write clear titles, set `spec_ref` to real spec headings, wire
    `dependencies`. Save it to `draft.json`.
-5. **Land the tasks.** Run `${TASKRAIL:-taskrail} import --apply draft.json`. The binary
+5. **Land the tasks.** Run `${TASKRAIL:-taskrail} import --apply draft.json --json`. The binary
    validates the draft and writes real spec/task files through the same path as
    `${TASKRAIL:-taskrail} task new`.
-6. **Validate.** Review the created files and run `${TASKRAIL:-taskrail} validate`.
+6. **Validate.** Review the created files and run `${TASKRAIL:-taskrail} validate --json`.
 
 ## Rules
 

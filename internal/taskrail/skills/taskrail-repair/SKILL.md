@@ -30,15 +30,15 @@ do not contain the source helper and skip this source-only guard.
 1. **Inspect.** Run `${TASKRAIL:-taskrail} validate --json` and read the violations. Repair
    only heals mechanical STATE.md drift; other violations (a missing `spec_ref`, a
    dependency cycle, more than one in_progress task) need human judgement.
-2. **Dry-run.** Run `${TASKRAIL:-taskrail} repair`. This defaults to a dry run: it prints the
+2. **Dry-run.** Run `${TASKRAIL:-taskrail} repair --json`. This defaults to a dry run: it reports the
    proposed frontmatter corrections and the STATE.md body diff and writes nothing.
 3. **Review.** Confirm every proposed change follows the task files (the source of
    truth) and only touches STATE.md. If a change would advance a status or
    fabricate work, stop — repair does not do that, so an unexpected proposal means
    the drift is not mechanical and needs manual investigation.
-4. **Apply.** Run `${TASKRAIL:-taskrail} repair --apply` to write STATE.md and re-run
+4. **Apply.** Run `${TASKRAIL:-taskrail} repair --apply --json` to write STATE.md and re-run
    validation.
-5. **Re-validate.** Run `${TASKRAIL:-taskrail} validate` and confirm the state is valid. Any
+5. **Re-validate.** Run `${TASKRAIL:-taskrail} validate --json` and confirm the state is valid. Any
    violation that remains was outside repair's mechanical scope; resolve it
    deliberately, never by editing STATE.md by hand.
 
@@ -54,10 +54,10 @@ regenerated, not merged:
    whole (e.g. `git checkout --theirs planning/STATE.md` or `--ours`); the choice
    does not matter because the next step overwrites it. Never edit the conflict
    markers by hand.
-2. **Re-project.** Run `${TASKRAIL:-taskrail} repair --apply` to rebuild
+2. **Re-project.** Run `${TASKRAIL:-taskrail} repair --apply --json` to rebuild
    `STATE.md` from the merged task files. Each PR edits its own task file, so the
    task files merge cleanly and the re-projected aggregate is correct.
-3. **Re-validate.** Run `${TASKRAIL:-taskrail} validate` and confirm the state is
+3. **Re-validate.** Run `${TASKRAIL:-taskrail} validate --json` and confirm the state is
    valid, then commit the regenerated `STATE.md`.
 
 Boundary — repair only re-projects the derived aggregate. It does **not** resolve

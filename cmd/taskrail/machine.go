@@ -172,7 +172,7 @@ func invalidArgumentsf(format string, a ...any) error {
 // envelope. The boundary reads the flag back from cobra, so no binding variable
 // has to be kept in step with it.
 func addMachineJSONFlag(cmd *cobra.Command) {
-	cmd.Flags().Bool("json", false, "print machine-readable output")
+	cmd.Flags().Bool("json", false, "print the versioned machine-result envelope")
 }
 
 // machineJSONRequested reports whether this invocation asked for machine output.

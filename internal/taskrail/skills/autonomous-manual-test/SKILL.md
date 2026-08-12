@@ -12,7 +12,7 @@ Requires the installed `taskrail` binary on `PATH`.
 
 ## Required Flow
 
-1. Run `${TASKRAIL:-taskrail} validate`.
+1. Run `${TASKRAIL:-taskrail} validate --json`.
 2. Read the target task file and extract its acceptance criteria.
 3. Create a manual test plan at
    `planning/artifacts/manual-test/<task-id>/<timestamp>/plan.md`.

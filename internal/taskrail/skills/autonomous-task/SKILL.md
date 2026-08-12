@@ -21,15 +21,19 @@ do not contain the source helper and skip this source-only guard.
 
 ## Required Flow
 
-1. Run `${TASKRAIL:-taskrail} validate`.
+1. Run `${TASKRAIL:-taskrail} validate --json`.
 2. Read the target task file.
-3. Run `${TASKRAIL:-taskrail} start <task-id>`.
+3. Run `${TASKRAIL:-taskrail} start <task-id> --json`.
 4. Implement only the requested scope in a TDD loop.
 5. Run the appropriate tests.
 6. Run manual testing when the task changes visible behavior.
-7. Run `${TASKRAIL:-taskrail} verify <task-id> --result pass|fail --summary "..."`.
-8. Create a follow-up task with `${TASKRAIL:-taskrail} task new` when unresolved work
-   deserves backlog treatment.
+7. On success, run `${TASKRAIL:-taskrail} complete <task-id> --note "..." --json`,
+   then `${TASKRAIL:-taskrail} verify <task-id> --result pass --summary "..." --json`.
+   If work cannot proceed, run `${TASKRAIL:-taskrail} block <task-id> --reason "..." --json`,
+   then `${TASKRAIL:-taskrail} verify <task-id> --result fail --summary "..." --json`;
+   never complete a failing task.
+8. Create a follow-up task with `${TASKRAIL:-taskrail} task new --follow-up <task-id> --title "..." --json`
+   when unresolved work deserves backlog treatment.
 9. Finish as `completed` or `blocked`.
 
 ## Rules

@@ -26,12 +26,12 @@ do not contain the source helper and skip this source-only guard.
 
 1. **Inspect.** Run `${TASKRAIL:-taskrail} validate --json` and read the
    violations.
-2. **Dry-run.** Run `${TASKRAIL:-taskrail} repair` to preview the conservative,
+2. **Dry-run.** Run `${TASKRAIL:-taskrail} repair --json` to preview the conservative,
    mechanical corrections (a stale `current_task` pointer, a `status_summary`
    stale against a single `in_progress` task, stale rendered task counts). This
    defaults to a dry run: review the proposed frontmatter changes and the
    `STATE.md` body diff before applying.
-3. **Apply.** Run `${TASKRAIL:-taskrail} repair --apply` to write the reconciled
+3. **Apply.** Run `${TASKRAIL:-taskrail} repair --apply --json` to write the reconciled
    `STATE.md` and re-run validation.
 4. **Re-validate.** Run `${TASKRAIL:-taskrail} validate --json` again.
 5. If violations remain, they are outside repair's mechanical scope (a missing

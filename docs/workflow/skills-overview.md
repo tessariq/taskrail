@@ -63,16 +63,20 @@ correct by building the working-tree binary onto the mise PATH — run
 - all skills invoke the binary via `${TASKRAIL:-taskrail}` and never `go run`
 - implementation skills must keep changes scoped to one selected task
 - verification skills must point to concrete artifact paths
+- skills use `--json` for consumed IDs, paths, warnings, eligibility, previews,
+  lifecycle outcomes, and failures; exact content and emitted prompt bytes remain
+  explicit text exceptions
 - committed copies must stay byte-identical to the embedded package (parity check)
 
 ## Active v0.5 Additions
 
 The active v0.5 roadmap adds `taskrail-spec-review`, `taskrail-task-review`,
-`taskrail-workflow-adversarial`, and `taskrail-sdd-handoff`, and upgrades existing
-implementation/decomposition skills to the common machine-result and safe review
-publication contracts. Once T-213 ships, skills use `--json` whenever they consume
-command identities, paths, warnings, previews, lifecycle outcomes, or failure
-details. These remain planned until their tracked tasks complete.
+`taskrail-workflow-adversarial`, and `taskrail-sdd-handoff`. Existing packaged
+skills consume structured command facts through the common machine-result
+envelope. `spec show` bodies and `--emit-prompt` output intentionally remain exact
+text because those bytes are workflow input rather than a report to interpret.
+The additional skills and safe review publication contracts remain planned until
+their tracked tasks complete.
 
 Behavioral eval definitions for the packaged set are maintainer-only test assets.
 They are deliberately outside `internal/taskrail/skills/`, so neither

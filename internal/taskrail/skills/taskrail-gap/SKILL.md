@@ -70,10 +70,11 @@ do not contain the source helper and skip this source-only guard.
    the `spec_ref` anchor each belongs to, and a one-line rationale. This is a
    recommendation for a human, not state: the skill never creates tasks on its own.
 4. **Human promotes chosen ones.** A human reviews the list and promotes the ones they
-   accept — a single task with `${TASKRAIL:-taskrail} task new`, or a reviewed batch
-   through `taskrail-decompose`'s `${TASKRAIL:-taskrail} import --apply` draft path.
+    accept — a single task with `${TASKRAIL:-taskrail} task new --title "..." --area <anchor> --json`,
+    or a reviewed batch through `taskrail-decompose`'s
+    `${TASKRAIL:-taskrail} import --apply <draft.json> --json` path.
    The binary is the only writer, and only under that explicit human-invoked apply.
-5. **Validate.** After any promotion, run `${TASKRAIL:-taskrail} validate` and confirm
+5. **Validate.** After any promotion, run `${TASKRAIL:-taskrail} validate --json` and confirm
    the state is valid.
 
 ## Rules

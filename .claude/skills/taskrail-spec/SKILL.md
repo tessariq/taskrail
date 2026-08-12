@@ -27,36 +27,38 @@ do not contain the source helper and skip this source-only guard.
 
 ## Flow
 
-1. **Inspect the specs.** Run `${TASKRAIL:-taskrail} spec list` to see the
+1. **Inspect the specs.** Run `${TASKRAIL:-taskrail} spec list --json` to see the
    versioned specs and which one is active. Read a spec's body with
-   `${TASKRAIL:-taskrail} spec show <version>`.
+    `${TASKRAIL:-taskrail} spec show <version>`. `spec show <version>` is an exact-text exception
+    because the spec body itself is the workflow input.
 2. **Discover anchors before authoring.** Run
    `${TASKRAIL:-taskrail} spec show <version> --anchors --json` to list the
    spec's `spec_ref` heading anchors exactly as `validate` accepts them. Pick the
    anchor the new task belongs under; never hand-craft a `path#anchor` string.
 3. **Inspect a version migration.** Before activation, run
-   `${TASKRAIL:-taskrail} spec diff <current-version> <target-version>`. Its
+    `${TASKRAIL:-taskrail} spec diff <current-version> <target-version> --json`. Its
    read-only area-set delta shows added areas to decompose and removed areas
    whose open tasks may need re-pointing; rename candidates are best-effort only.
 4. **Advance the active spec (when moving versions).** Run
-   `${TASKRAIL:-taskrail} spec activate <version>` to repoint `STATE.md`'s active
+    `${TASKRAIL:-taskrail} spec activate <version> --json` to repoint `STATE.md`'s active
    spec. It re-renders `STATE.md` and re-validates; it is the CLI-only writer of
    the active spec and never touches task files or status fields. Check
    `git status` and stage the regenerated `STATE.md`.
 5. **Author against an active-spec area.** Create a task through the CLI with
    the discovered anchor: `${TASKRAIL:-taskrail} task new --title "..." --area
-   <anchor>`. `--area` resolves against the active spec; use `--spec-ref
+    <anchor> --json`. `--area` resolves against the active spec; use `--spec-ref
    <path#anchor>` only for an intentional cross-spec task.
 6. **Re-point migrated open work.** Preview each move with
-   `${TASKRAIL:-taskrail} task repoint <id> --area <anchor> --dry-run`, then omit
-   `--dry-run` to apply the reviewed move. Re-pointing changes only `spec_ref` and
+    `${TASKRAIL:-taskrail} task repoint <id> --area <anchor> --dry-run --json`, then run
+    `${TASKRAIL:-taskrail} task repoint <id> --area <anchor> --json` to apply the reviewed
+   move. Re-pointing changes only `spec_ref` and
    rejects completed or cancelled history.
 7. **Scaffold a new spec (when starting one).** Run
-   `${TASKRAIL:-taskrail} spec add <version>` to create `specs/<version>.md` with
+    `${TASKRAIL:-taskrail} spec add <version> --json` to create `specs/<version>.md` with
    the standard section skeleton and add it to the `specs/README.md` reading
    order. `spec add` does not activate the new spec; run `spec activate
    <version>` separately once you are ready to work against it.
-8. **Validate.** Run `${TASKRAIL:-taskrail} validate` and confirm the state is
+8. **Validate.** Run `${TASKRAIL:-taskrail} validate --json` and confirm the state is
    valid.
 
 ## Rules

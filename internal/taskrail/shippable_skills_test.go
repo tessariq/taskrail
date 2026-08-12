@@ -116,6 +116,43 @@ func TestShippableSkillsUseConfigurableEntryPoint(t *testing.T) {
 	}
 }
 
+func TestShippableSkillsConsumeStructuredResultsAsJSON(t *testing.T) {
+	required := map[string][]string{
+		"autonomous-backlog":     {"} validate --json", "} next --json", "} start <task-id> --json", "} verify <task-id> --result pass --summary \"...\" --json", "} verify <task-id> --result fail --summary \"...\" --json", "} task new --follow-up <task-id> --title \"...\" --json", "} complete <task-id> --note \"...\" --json", "} block <task-id> --reason \"...\" --json"},
+		"autonomous-task":        {"} validate --json", "} start <task-id> --json", "} verify <task-id> --result pass --summary \"...\" --json", "} verify <task-id> --result fail --summary \"...\" --json", "} task new --follow-up <task-id> --title \"...\" --json", "} complete <task-id> --note \"...\" --json", "} block <task-id> --reason \"...\" --json"},
+		"autonomous-verify":      {"} validate --json", "} verify <task-id> --result pass --summary \"...\" --json", "} verify <task-id> --result fail --summary \"...\" --json", "} task new --follow-up <task-id> --title \"...\" --json", "} verify <task-id> --result fail --summary \"...\" --create-followup --json"},
+		"autonomous-recovery":    {"} validate --json", "} repair --json", "} repair --apply --json"},
+		"autonomous-manual-test": {"} validate --json"},
+		"taskrail-import":        {"} import --apply draft.json --json", "} validate --json"},
+		"taskrail-retrofit":      {"} retrofit <notes.md> --json", "} retrofit --json", "} retrofit <notes.md> --apply --json", "} import --apply draft.json --json", "} validate --json"},
+		"taskrail-repair":        {"} validate --json", "} repair --json", "} repair --apply --json"},
+		"taskrail-spec":          {"} spec list --json", "} spec show <version> --anchors --json", "} spec diff <current-version> <target-version> --json", "} spec activate <version> --json", "} task new --title \"...\" --area", "<anchor> --json", "} task repoint <id> --area <anchor> --dry-run --json", "} task repoint <id> --area <anchor> --json", "} spec add <version> --json", "} validate --json"},
+		"taskrail-decompose":     {"} coverage --json", "} spec show <version> --anchors --json", "} import --apply draft.json --json", "} validate --json"},
+		"taskrail-gap":           {"} coverage --gaps --json", "} coverage --gaps --area <anchor> --json", "} task new --title \"...\" --area <anchor> --json", "} import --apply <draft.json> --json", "} validate --json"},
+	}
+	for _, name := range shippableSkills {
+		body := strings.Join(strings.Fields(readShippableSkill(t, name)), " ")
+		for _, command := range required[name] {
+			command = strings.Join(strings.Fields(command), " ")
+			if !strings.Contains(body, command) {
+				t.Errorf("%s skill must reference %q", name, command)
+			}
+		}
+	}
+}
+
+func TestShippableSkillsNameExactTextExceptions(t *testing.T) {
+	exceptions := map[string]string{
+		"taskrail-spec":      "spec show <version>` is an exact-text exception",
+		"taskrail-import":    "--emit-prompt` is an exact-text exception",
+		"taskrail-retrofit":  "--emit-prompt` is an exact-text exception",
+		"taskrail-decompose": "--emit-prompt` is an exact-text exception",
+	}
+	for name, exception := range exceptions {
+		assertSkillReferences(t, name, exception)
+	}
+}
+
 // Shippable skills create tasks through the real command, not hand-authored
 // markdown (Decision 3 in the productization contract). Matches the resolved
 // subcommand tail, not the binary prefix, since the entry point renders as
