@@ -20,8 +20,9 @@ refresh eligibility, compatibility blockers, and quiescence requirements.
 ## Acceptance
 
 - A1. Upgrade preview reports the complete validated candidate paths, logical and
-  physical roots, committed storage mode, review maximum, source/target versions,
-  skill classifications, and validation outcome without changing repository bytes.
+  physical roots, committed storage mode, broad review-round maximum,
+  source/target versions, skill classifications, and validation outcome without
+  changing repository bytes.
 - A2. Every decoded legacy continuation note is reported in order with exact
   applicable extract/drop choices; empty notes, existing NOTES, and direct
   schema-2 sources expose only valid decisions.

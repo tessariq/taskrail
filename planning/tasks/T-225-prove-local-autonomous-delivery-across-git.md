@@ -16,12 +16,13 @@ updated_at: "2026-08-08T08:40:49Z"
 
 Prove the complete autonomous loop can deliver repository product changes while
 Taskrail metadata stays local and ignored. Cover real Git/worktree boundaries and
-the same lifecycle, iterative-review, verification, containment, and postflight
+the same lifecycle, broad-round/final-diff review, verification, containment, and postflight
 evidence required of committed mode.
 
 ## Acceptance
 
-- Local preflight freezes mode/root, effective review maximum, prompt/executable,
+- Local preflight freezes mode/root, effective broad review-round maximum,
+  three-reviewer ceiling, conditional final-diff rule, prompt/executable,
   task ledger, attached ref/HEAD, complete local ref namespace, dynamic uppercase root ref candidates,
   index, exclusion, and visible cleanliness.
 - A completed-pass child creates exactly one direct-child product commit, leaves no staged/committed
@@ -42,7 +43,7 @@ evidence required of committed mode.
   complete safe diagnostics.
 - Final results report storage and review policy evidence alongside Git/lifecycle
   evidence without claiming remote delivery, reviewer identity, or mechanically
-  observed review-iteration counts.
+  observed broad-round, reviewer, or final-diff-review counts.
 - Scripted prompt/skill fixtures preserve caller-owned author/committer/signing
   configuration and do not instruct hook bypass. Postflight rejects unexpected
   local ref changes and enforces identity/signature/provenance only where frozen

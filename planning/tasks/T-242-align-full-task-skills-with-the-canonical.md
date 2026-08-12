@@ -24,9 +24,15 @@ lifecycle transition.
   then failing verify; deliberate rework records fail and remains in progress.
 - A2. Every writer exit is checked, source-checkout freshness guards remain, and
   completed-unverified/audit-fail recovery never repeats complete or fabricates block.
-- A3. Embedded and committed copies remain Agent Skills-compliant, marker-free,
+- A3. Every full-task skill mirrors T-160's review contract: one to three fresh
+  distinct-lens reviewers in each of at most two broad rounds, a fresh simplifier
+  after fixing findings, and one conditional non-recursive final-diff review. A
+  clean final diff plus green checks permits success; a final-diff finding is
+  repaired, simplified, checked, and remains in-progress/fail because the
+  resulting bytes are unreviewed.
+- A4. Embedded and committed copies remain Agent Skills-compliant, marker-free,
   byte-identical, and provider-neutral.
-- A4. Full-task skills consume managed subjects through Taskrail commands and use
+- A5. Full-task skills consume managed subjects through Taskrail commands and use
   reported storage mode for delivery: committed mode includes Taskrail metadata,
   while local mode never force-adds ignored metadata and commits only required
   visible product changes. Local delivery follows repository-visible Git policy,
@@ -35,7 +41,7 @@ lifecycle transition.
   conventions, but only caller-owned instruction outside managed planning
   authorizes exposing a local Taskrail identity/path in commit metadata;
   outcome-required product bytes do not independently authorize them.
-- A5. Before invoking `start`, every full-task skill applies the T-251 sizing
+- A6. Before invoking `start`, every full-task skill applies the T-251 sizing
   rubric and stops for reviewed replanning on bundled outcomes, non-valuable
   fragments, or unclear integration ownership. Follow-ups remain limited to newly
   discovered independently meaningful out-of-scope outcomes, never unfinished
@@ -45,12 +51,14 @@ lifecycle transition.
 
 - A1: executable skill fixtures observe exact command order and final repository state.
 - A2: injected writer/audit failures prove stop/recovery guidance and no later command.
-- A3: frontmatter, package parity, skew, and command-registry checks provide evidence.
-- A4: committed/local fixtures with decoy logical files and private identifiers
+- A3: executable fixtures cover one-to-three reviewers, clean early stop,
+  post-fix simplification, final-diff clean success, and final-diff finding rework.
+- A4: frontmatter, package parity, skew, and command-registry checks provide evidence.
+- A5: committed/local fixtures with decoy logical files and private identifiers
   prove subject-command reads, exact Git tree/commit provenance, unchanged Git
   identity/configuration, trusted public-reference authorization, product-byte
   exceptions, and current-run self-authorization refusal.
-- A5: executable oversized, fragmented, unclear-integration, in-scope-discovery,
+- A6: executable oversized, fragmented, unclear-integration, in-scope-discovery,
   and valid-follow-up fixtures prove no lifecycle writer runs before replanning
   and no required selected-task scope escapes into a follow-up.
 

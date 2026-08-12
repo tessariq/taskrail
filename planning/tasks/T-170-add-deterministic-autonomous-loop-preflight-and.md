@@ -27,7 +27,7 @@ replacement prompt, launching a child, or writing managed state.
   ambiguous delimiter/flag forms fail before repository access. Unsupported
   retry or background forms are rejected rather than ignored.
 - `--max-iterations` defaults to `1` and accepts only positive integers.
-  `--max-review-iterations` accepts only `1..5` and resolves independently from
+  `--max-review-rounds` accepts only `1..2` and resolves independently from
   the child count without changing configuration. `--timeout` accepts only a
   positive Go duration and omission remains an unlimited per-child deadline.
 - Repository preflight requires Git, a valid clean non-bare worktree with attached
@@ -37,11 +37,12 @@ replacement prompt, launching a child, or writing managed state.
   unstaged, valid, and unmixed; source-checkout execution is rejected by the exact
   `Taskfile.yml` plus `internal/toolchain/cmd/freshcheck` predicate.
 - The resulting immutable snapshot records all task/state/spec/config/layout and
-  prompt inputs, storage mode/root, configured/effective review budget and source,
-  timeout, attached ref/HEAD, index/status, complete local `refs/*`, verification
-  IDs/artifact set, and direct regular uppercase root-ref candidates from the
-  worktree and common Git directories. Enumeration is no-follow, rejects aliases
-  and special files, and excludes only `COMMIT_EDITMSG`.
+  prompt inputs, storage mode/root, configured/effective broad review-round limit
+  and source, the fixed three-reviewer-per-round ceiling and conditional
+  final-diff-review rule, timeout, attached ref/HEAD, index/status, complete local
+  `refs/*`, verification IDs/artifact set, and direct regular uppercase root-ref
+  candidates from the worktree and common Git directories. Enumeration is
+  no-follow, rejects aliases and special files, and excludes only `COMMIT_EDITMSG`.
 - Repository policy and caller-owned provenance authorization remain opaque
   semantic context: preflight does not invent parsed policy fields or claim that
   before/after snapshots can detect transient ref or reflog movement.

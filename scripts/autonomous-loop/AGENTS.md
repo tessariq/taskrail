@@ -25,10 +25,12 @@
   same frozen snapshot. At most two rounds run, with early exit after a clean
   round. Fix high and medium current-scope findings; low findings are report-only
   unless acceptance, specification, invariants, or required evidence makes them
-  mandatory. After fixing any findings from a round, run a fresh code simplifier and
-  affected checks. After round two there is no third review: green final build
-  and tests permit completion, with residual review risk recorded. The round
-  limit never creates a follow-up for unfinished current scope.
+  mandatory. After fixing any findings from a round, run a fresh code simplifier
+  and affected checks. Changed bytes after round two receive one narrow,
+  non-recursive final-diff review. A clean final diff plus green checks permits
+  completion; a finding is repaired and simplified but stops as in-progress/fail
+  because those resulting bytes are unreviewed. The round limit never creates a
+  follow-up for unfinished current scope.
 - Do not add logs, results, session data, credentials, or generated files here.
   Runtime output belongs under ignored `planning/artifacts/runs/` or external
   temporary storage.

@@ -24,7 +24,8 @@ preview decisions or durable apply must publish.
 
 - A1. Strict layout decoding accepts only layout 1 or the exact final/fenced
   layout-2 marker shapes; layout 2 requires explicit committed/local storage and a
-  review maximum from 1 through 5, and unknown or invalid fields are never dropped.
+  broad review-round maximum from 1 through 2, and unknown or invalid fields are
+  never dropped.
 - A2. Strict state-schema-2 decoding accepts only the bounded snapshot fields and
   valid optional verification tuple, rejects `continuation_notes` and rendered
   Notes, and never invents verification identity while migrating schema 1.
@@ -32,8 +33,8 @@ preview decisions or durable apply must publish.
   `loop_reason`, preserving existing pairs exactly and treating absence as implicit
   hold without granting unattended authority.
 - A4. Supported layout-1 input constructs a complete layout-2 candidate with
-  committed mode, review maximum 2, schema-2 state, preserved task meaning, and
-  classified skill/note outcomes without writing repository bytes.
+  committed mode, broad review-round maximum 2, schema-2 state, preserved task
+  meaning, and classified skill/note outcomes without writing repository bytes.
 - A5. Invalid source marker, state, task policy, skill marker/parity, note
   destination, or configured legacy-policy path prevents candidate construction
   without silently repairing or discarding input.

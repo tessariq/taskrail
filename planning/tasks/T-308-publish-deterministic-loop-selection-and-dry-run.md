@@ -34,9 +34,10 @@ outside this task.
   rendered SHA-256 matches the exact UTF-8 content later eligible for stdin.
   `action:none` fabricates neither a selected task nor a prompt.
 - Dry-run emits the uniform envelope with the exact `LoopDryRunResult` fields,
-  nullability, enums, task-loop row shape, review/execution/delivery facts, and
-  ordered violations defined by the v0.5 machine API. Valid `run` and `none` exit
-  zero; report-result `invalid` exits non-zero.
+  nullability, enums, task-loop row shape, configured/effective broad-round
+  limits, three-reviewer ceiling, conditional final-diff rule,
+  execution/delivery facts, and ordered violations defined by the v0.5 machine
+  API. Valid `run` and `none` exit zero; report-result `invalid` exits non-zero.
 - Committed and local dry-runs perform all applicable repository, policy, prompt,
   and lock checks while leaving managed semantic bytes, Git index/status/refs,
   exclusions, and runtime state byte-identical and launching no child.

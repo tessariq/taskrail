@@ -83,19 +83,25 @@ temporarily introduce the specific regression, demonstrate that the test fails,
 restore the correct implementation, demonstrate that it passes, and remove all
 deliberate regression code. Record both outcomes concisely.
 
-Run at most two correctness-review rounds. A clean round stops early. After fixing
+Run at most two broad correctness-review rounds. A clean round stops early. After fixing
 any findings from a round, use a fresh code-simplifier subagent on the changed
 implementation, apply accepted behavior-preserving simplifications, and rerun
 affected checks. Freeze those bytes before starting round two.
 
-After the second round, do not request another correctness review. Fix its
-required findings, run the required post-fix simplifier, and require that the
-final applicable build and test checks pass, including `go build ./cmd/taskrail`
-and `go test ./...`. The resulting simplified bytes do not require a third review.
-Continue to successful completion even though the post-review fixes and
-simplifications were not reviewed again. If final checks fail and cannot be fixed
-within the task, use the blocked path. Record any residual review risk in
-verification details.
+If round two is clean, no final-diff review is needed. If round-two fixes or the
+required post-fix simplifier change bytes, freeze the final candidate and use one
+fresh reviewer to run one narrow final-diff review over exactly the change from
+the round-two snapshot. Its only lenses are fix-induced regressions, integration
+breakage, and behavior drift. It never starts another broad review round.
+
+A clean final-diff review allows closure after the final applicable build and test
+checks pass, including `go build ./cmd/taskrail` and `go test ./...`. If the
+final-diff review reports a current-scope finding, fix it, run a fresh
+code-simplifier subagent, and rerun affected checks. Do not review again: the
+resulting bytes are unreviewed and must use the rework path, leaving the task in
+progress with failing verification. If final checks fail and cannot be fixed
+within the task, use the blocked path. Record the final-diff disposition and any
+residual risk in verification details.
 
 ## Follow-Up And Lifecycle
 
@@ -127,7 +133,10 @@ follow-up is required. Never verify pass before completion.
 If implementation cannot safely proceed, run `${TASKRAIL:-taskrail} block
 {{TASK_ID}} --reason "..."`, then `${TASKRAIL:-taskrail} verify {{TASK_ID}}
 --result fail --summary "..." --details "..."`. Never verify fail while leaving
-the task in progress; the parent accepts only completed/pass or blocked/fail.
+the task in progress except for final-diff rework. For final-diff rework, leave
+the task in progress and run `${TASKRAIL:-taskrail} verify {{TASK_ID}} --result
+fail --summary "..." --details "..."`; the parent accepts only completed/pass,
+blocked/fail, or in-progress/fail.
 Never complete a blocked or failing task. A blocked run may create one follow-up under the same single-follow-up
 rules, but only for a genuinely separate outcome; work this task still owns is
 never offloaded that way. If completion succeeds but passing verification fails, stop without
@@ -153,6 +162,6 @@ The parent may terminate this process at its configured deadline. Timeout never
 retries. Do not spawn detached processes.
 
 Exit zero only after publishing the commit message and leaving a valid
-completed/pass or blocked/fail outcome. Otherwise exit non-zero. Keep the final
+completed/pass, blocked/fail, or in-progress/fail outcome. Otherwise exit non-zero. Keep the final
 response terse: outcome, checks, review dispositions, follow-up decision, and
 remaining risks.

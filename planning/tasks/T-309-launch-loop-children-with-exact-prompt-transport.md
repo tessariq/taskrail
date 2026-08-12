@@ -27,8 +27,9 @@ adding process-tree containment or postflight classification.
 - Each child starts in the repository root and inherits caller-owned environment
   and authentication except that the four exact staged/delegation variables are
   set to T-171's frozen values. The child observes the frozen storage mode/root
-  and effective implementation-review maximum through the rendered contract and
-  cannot replace the staged writer identity.
+  and effective broad implementation-review-round maximum through the rendered
+  contract, including its one-to-three-reviewer and conditional final-diff rules,
+  and cannot replace the staged writer identity.
 - Stdin contains exactly the selected task's frozen UTF-8 rendered prompt bytes,
   with no framing or added newline, and closes immediately at EOF. Child stdout
   and stderr stream faithfully to the corresponding Taskrail streams.

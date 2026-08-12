@@ -28,11 +28,16 @@ guidance. Packaged full-task skill command execution is owned by T-242.
   undeclared context.
 - The workflow covers freshness before every writer, start, implementation,
   simplification, regression perturbation, fresh-context review/fallback
-  labeling, bounded iterative review, correction of every current-scope finding,
-  and re-check/re-review of materially changed final bytes before closure.
+  labeling, one to three distinct-lens reviewers per broad round, at most two
+  broad rounds, correction of every current-scope finding, post-fix
+  simplification, and the conditional non-recursive final-diff review.
 - Every finding receives `fix-now`, `separate-followup`, `blocked`, or `rejected`
-  plus rationale. Budget exhaustion cannot defer current work or permit pass;
-  clean review stops early, while final-pass material change remains rework.
+  plus rationale. A clean broad round stops early. Repair or simplification after
+  the final allowed broad round that changes bytes requires one narrow final-diff
+  review; a clean final-diff review plus green checks permits closure, while a
+  final-diff finding is repaired, simplified, checked, and remains rework because
+  those resulting bytes are unreviewed. The final-diff review never starts another
+  broad round.
 - Success completes then passes; cannot-proceed blocks then fails; deliberate
   rework may remain in progress with fail. Each branch checks writer exits, then
   follows the selected storage-mode delivery contract: committed mode creates one
@@ -78,10 +83,12 @@ guidance. Packaged full-task skill command execution is owned by T-242.
 ## Verification Notes
 
 - Map each branch to golden/mutation fixtures proving lifecycle-before-commit,
-  generated-byte inclusion, source guard, simplification, fresh review,
-  perturbation, barriers, implicitly held follow-ups, delegated policy refusal,
-  exits, recovery, local provenance minimization, repository-policy exceptions,
-  and unchanged Git identity/configuration.
+  generated-byte inclusion, source guard, initial and post-fix simplification,
+  one-to-three distinct-lens reviewers, two-round early-stop behavior,
+  conditional final-diff review, perturbation, barriers, implicitly held
+  follow-ups, delegated policy refusal, exits, recovery, local provenance
+  minimization, repository-policy exceptions, and unchanged Git
+  identity/configuration.
 - Manually render path-valued context and exercise success, blocked, rework, and
   partial-completion instructions without provider invocation by Taskrail.
 - Exercise oversized, fragmented, and unclear-integration selections to prove the

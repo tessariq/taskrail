@@ -26,7 +26,7 @@ rendering, task inspection, and local replacement mapping are separate outcomes.
   envelope while preserving exact prompt result payloads and clean text output.
 - The task-implementation declaration contains only `TASK_ID`, `TASK_PATH`,
   `ACTIVE_SPEC_VERSION`, `ACTIVE_SPEC_PATH`,
-  `IMPLEMENTATION_REVIEW_MAX_ITERATIONS`, and `STORAGE_MODE`; no policy path or
+  `IMPLEMENTATION_REVIEW_MAX_ROUNDS`, and `STORAGE_MODE`; no policy path or
   policy-file render input exists.
 - Resolution order is repository override then built-in, with canonical
   in-repository regular-file and ancestor checks, UTF-8 and size limits, and
@@ -34,7 +34,7 @@ rendering, task inspection, and local replacement mapping are separate outcomes.
   resolved bytes later consumed by review publication.
 - Neither default nor skill-installing init materializes built-ins, placeholders,
   or `.taskrail/prompts/`; local overrides are created only by users.
-- T-250 owns context flags, placeholder substitution, review-budget rendering, and
+- T-250 owns context flags, placeholder substitution, review-round rendering, and
   storage-neutral subject reads; T-236 owns local replacement resolution.
 - Unknown prompts, versions, tokens, files, contexts, providers, and write
   conflicts fail without output mutation.

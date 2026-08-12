@@ -20,11 +20,11 @@ ordered integrity violations without deciding committed/local Git delivery.
 ## Acceptance
 
 - Postflight rechecks active spec, config/layout, storage mode/root, configured and
-  effective review policy, prompt template/rendering, staged executable, selected
-  and complete task bytes, verification artifacts/IDs, attached full ref, local
-  `refs/*`, uppercase root-ref candidates, index/status, and lock identity against
-  the frozen snapshot wherever the later delivery contract does not explicitly
-  permit a change.
+  effective broad review-round policy, fixed reviewer ceiling and final-diff rule,
+  prompt template/rendering, staged executable, selected and complete task bytes,
+  verification artifacts/IDs, attached full ref, local `refs/*`, uppercase
+  root-ref candidates, index/status, and lock identity against the frozen snapshot
+  wherever the later delivery contract does not explicitly permit a change.
 - Pre-existing non-selected tasks remain byte-identical. The selected task may
   change only canonical lifecycle fields/timestamps, blocker, and Implementation
   Notes; ID/title/priority/spec_ref/dependencies, body criteria, and task-local
