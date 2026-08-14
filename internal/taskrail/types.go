@@ -220,6 +220,7 @@ type TaskFrontmatter struct {
 	SpecRef                        string   `yaml:"spec_ref" json:"spec_ref"`
 	Dependencies                   []string `yaml:"dependencies" json:"dependencies"`
 	UpdatedAt                      string   `yaml:"updated_at" json:"updated_at"`
+	LoopPolicyMetadata             `yaml:",inline"`
 	CompletionVerificationMetadata `yaml:",inline"`
 }
 

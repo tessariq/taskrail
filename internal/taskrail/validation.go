@@ -48,6 +48,12 @@ func (s *Service) layoutViolations() []string {
 			violations = append(violations, fmt.Sprintf("missing required file %s", relPath(s.paths.RepoRoot, requiredFile)))
 		}
 	}
+	legacyPolicy := filepath.Join(s.paths.PlanningDir, "AUTONOMY.tsv")
+	if _, err := os.Lstat(legacyPolicy); err == nil {
+		violations = append(violations, fmt.Sprintf("unsupported legacy input %s: record any intended decisions and reasons, remove the entry manually, complete any required layout upgrade, then use taskrail task loop allow|hold <task-id> --reason <reason>; tasks without explicit policy remain implicit hold", relPath(s.paths.RepoRoot, legacyPolicy)))
+	} else if !errors.Is(err, os.ErrNotExist) {
+		violations = append(violations, fmt.Sprintf("inspect unsupported legacy input %s: %v", relPath(s.paths.RepoRoot, legacyPolicy), fsCause(err)))
+	}
 	return violations
 }
 
@@ -316,6 +322,12 @@ func (s *Service) validateTasks(state *State, tasks []*Task) []string {
 		}
 		for _, violation := range ValidateCompletionVerificationMetadata(task.Frontmatter.Status, task.Frontmatter.CompletionVerificationMetadata) {
 			violations = append(violations, fmt.Sprintf("task %s lifecycle metadata: %s", task.Frontmatter.ID, violation))
+		}
+		for _, violation := range ValidateLoopPolicyMetadata(task.Frontmatter.LoopPolicyMetadata) {
+			violations = append(violations, fmt.Sprintf("task %s loop policy: %s", task.Frontmatter.ID, violation))
+		}
+		for _, field := range loopPolicyFieldsInBody(task.Body) {
+			violations = append(violations, fmt.Sprintf("task %s has %s outside frontmatter", task.Frontmatter.ID, field))
 		}
 		for _, dep := range task.Frontmatter.Dependencies {
 			if dep == task.Frontmatter.ID {

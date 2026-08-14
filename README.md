@@ -267,6 +267,12 @@ Create the initial Taskrail structure, specs, and planning area.
 ## Implementation Notes
 ```
 
+Tasks may also carry paired `loop_policy: allow|hold` and `loop_reason: <reason>`
+frontmatter. Omitting both means an implicit hold with reason
+`implicit hold: loop policy is not set`; `taskrail validate` rejects incomplete
+or malformed pairs. Lifecycle and task writers preserve explicit policy metadata,
+and `STATE.md` does not duplicate it.
+
 Let Taskrail pick the next eligible task, start it, and advance it:
 
 ```sh

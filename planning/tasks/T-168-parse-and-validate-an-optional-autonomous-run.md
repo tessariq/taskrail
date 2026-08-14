@@ -1,13 +1,13 @@
 ---
 id: T-168-parse-and-validate-an-optional-autonomous-run
 title: Define the task-local loop policy model
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#task-local-loop-policy
 dependencies:
     - T-229-canonicalize-v0-5-lifecycle-and-task-identities
     - T-230-enforce-the-normative-v0-5-machine-schema
-updated_at: "2026-08-04T21:32:13Z"
+updated_at: "2026-08-14T12:40:42Z"
 ---
 
 # T-168-parse-and-validate-an-optional-autonomous-run Define the task-local loop policy model
@@ -42,3 +42,6 @@ Reporting and mutation commands are separate tasks T-237 and T-238.
   lifecycle, body, rename, repoint, import, and review writers.
 
 ## Implementation Notes
+
+- 2026-08-14T12:40:29Z: defined and validated paired task-local loop policy metadata with preservation coverage
+- 2026-08-14T12:40:42Z: verification pass

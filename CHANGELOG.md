@@ -12,6 +12,9 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ### Changed
 
+- `taskrail validate` accepts paired task-local `loop_policy`/`loop_reason`
+  metadata, treats an absent pair as implicit hold, rejects malformed pairs and
+  legacy `planning/AUTONOMY.tsv`, and preserves explicit policy across task writes.
 - Every `--json` command now emits the v0.5 machine envelope — `schema_version`,
   `command`, `warnings`, and one of `result`/`error` — instead of the bare report
   or writer payload, and a failure emits a registered error code instead of

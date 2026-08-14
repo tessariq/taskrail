@@ -74,11 +74,12 @@ const (
 	CapabilityTaskNew              LifecycleCapability = "task-new"
 	CapabilityVerifyCreateFollowup LifecycleCapability = "verify-create-followup"
 	CapabilityTaskRelease          LifecycleCapability = "task-release"
+	CapabilityTaskLoopMutation     LifecycleCapability = "task-loop-mutation"
 )
 
 func LifecycleCapabilityAllowed(actor LifecycleActor, capability LifecycleCapability) bool {
 	if actor == ActorDirectOperator {
-		return capability == CapabilityTaskNew || capability == CapabilityVerifyCreateFollowup || capability == CapabilityTaskRelease
+		return capability == CapabilityTaskNew || capability == CapabilityVerifyCreateFollowup || capability == CapabilityTaskRelease || capability == CapabilityTaskLoopMutation
 	}
 	return actor == ActorDelegatedChild && capability == CapabilityVerifyCreateFollowup
 }

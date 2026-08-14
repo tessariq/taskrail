@@ -126,9 +126,11 @@ func TestLifecycleCapabilities(t *testing.T) {
 		{ActorDirectOperator, CapabilityTaskNew, true},
 		{ActorDirectOperator, CapabilityVerifyCreateFollowup, true},
 		{ActorDirectOperator, CapabilityTaskRelease, true},
+		{ActorDirectOperator, CapabilityTaskLoopMutation, true},
 		{ActorDelegatedChild, CapabilityTaskNew, false},
 		{ActorDelegatedChild, CapabilityVerifyCreateFollowup, true},
 		{ActorDelegatedChild, CapabilityTaskRelease, false},
+		{ActorDelegatedChild, CapabilityTaskLoopMutation, false},
 	}
 	for _, tt := range tests {
 		if got := LifecycleCapabilityAllowed(tt.actor, tt.capability); got != tt.want {
