@@ -41,10 +41,9 @@ var delegatedCommands = []string{"block", "complete", "start", "unblock", "verif
 // unreachable from a delegated write.
 var delegatedTaskFields = []string{"blocker", "implementation_notes", "status", "updated_at"}
 
-// DelegatedCapability is the fixed upper bound on any delegated join. It is a
-// protocol constant rather than lock metadata: the normative metadata set is
-// closed, and a bound a child could read out of the lock file is a bound an
-// attacker could read too.
+// DelegatedCapability is the fixed command and field upper bound on any
+// delegated join. The owner's selected task and write set are authenticated by
+// the existing delegation digest rather than added to the closed lock metadata.
 func DelegatedCapability() Capability {
 	return Capability{
 		Commands:   slices.Clone(delegatedCommands),

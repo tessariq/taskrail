@@ -142,8 +142,8 @@ func LockPath(repo Repository) string {
 
 // Owner is the exact lock metadata the protocol records. Nullable fields stay
 // null rather than empty so a reader can tell "not delegated" from "delegated
-// with an empty digest". The delegation token itself is never persisted — only
-// its digest — so reading the lock file grants no authority.
+// with an empty digest". The delegation token and grant are never persisted —
+// only their authenticated digest — so reading the lock file grants no authority.
 type Owner struct {
 	LockID           string      `json:"lock_id"`
 	Command          string      `json:"command"`

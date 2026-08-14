@@ -2,6 +2,7 @@ package repolock
 
 import (
 	"context"
+	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -27,9 +28,13 @@ func stageExecutable(t *testing.T, content string) string {
 func acquireDelegating(t *testing.T, repo Repository, executable string) (*Lock, Delegation) {
 	t.Helper()
 	lock, err := Acquire(context.Background(), Request{
-		Repository:     repo,
-		Command:        "loop",
-		Capability:     Capability{Commands: []string{"loop"}, TaskFields: nil},
+		Repository: repo,
+		Command:    "loop",
+		Capability: Capability{
+			Commands:     []string{"loop"},
+			SelectedTask: "T-1",
+			Writes:       []string{"planning/tasks/T-1.md", "planning/STATE.md"},
+		},
 		ExecutablePath: executable,
 	})
 	if err != nil {
@@ -44,7 +49,12 @@ func acquireDelegating(t *testing.T, repo Repository, executable string) (*Lock,
 }
 
 func childCapability() Capability {
-	return Capability{Commands: []string{"complete"}, TaskFields: []string{"status", "updated_at"}}
+	return Capability{
+		Commands:     []string{"complete"},
+		TaskFields:   []string{"status", "updated_at"},
+		SelectedTask: "T-1",
+		Writes:       []string{"planning/tasks/T-1.md", "planning/STATE.md"},
+	}
 }
 
 func joinRequest(repo Repository, delegation Delegation) JoinRequest {
@@ -53,11 +63,12 @@ func joinRequest(repo Repository, delegation Delegation) JoinRequest {
 		Command:          "complete",
 		Token:            delegation.Token,
 		ExecutableSHA256: delegation.ExecutableSHA256,
+		Grant:            delegation.Grant,
 		Capability:       childCapability(),
 	}
 }
 
-func TestDelegationExposesOnlyTheTokenDigest(t *testing.T) {
+func TestDelegationExposesOnlyTheAuthenticatedGrantDigest(t *testing.T) {
 	repo := committedRepo(t)
 	executable := stageExecutable(t, "taskrail-bytes")
 	lock, delegation := acquireDelegating(t, repo, executable)
@@ -73,9 +84,10 @@ func TestDelegationExposesOnlyTheTokenDigest(t *testing.T) {
 	if owner.DelegationDigest == nil {
 		t.Fatal("delegating lock recorded no delegation digest")
 	}
-	digest := sha256.Sum256([]byte(delegation.Token))
-	if *owner.DelegationDigest != hex.EncodeToString(digest[:]) {
-		t.Fatalf("delegation_digest = %q, want the token digest", *owner.DelegationDigest)
+	mac := hmac.New(sha256.New, []byte(delegation.Token))
+	_, _ = mac.Write([]byte(`{"selected_task":"T-1","writes":["planning/STATE.md","planning/tasks/T-1.md"]}`))
+	if *owner.DelegationDigest != hex.EncodeToString(mac.Sum(nil)) {
+		t.Fatalf("delegation_digest = %q, want the canonical grant digest", *owner.DelegationDigest)
 	}
 
 	want, err := ExecutableDigest(executable)
@@ -84,6 +96,99 @@ func TestDelegationExposesOnlyTheTokenDigest(t *testing.T) {
 	}
 	if owner.ExecutableSHA256 == nil || *owner.ExecutableSHA256 != want || delegation.ExecutableSHA256 != want {
 		t.Fatalf("executable digest not bound to the lock: %+v", owner)
+	}
+}
+
+func TestJoinAuthenticatesTheOwnerDeclaredGrantBeforeNarrowing(t *testing.T) {
+	repo := committedRepo(t)
+	_, delegation := acquireDelegating(t, repo, stageExecutable(t, "taskrail-bytes"))
+
+	narrow := joinRequest(repo, delegation)
+	narrow.Capability.Writes = []string{"planning/tasks/T-1.md"}
+	if _, err := Join(narrow); err != nil {
+		t.Fatalf("join with a narrowed write set: %v", err)
+	}
+
+	for _, tc := range []struct {
+		name   string
+		mutate func(*JoinRequest)
+	}{
+		{
+			name: "another selected task",
+			mutate: func(req *JoinRequest) {
+				req.Grant.SelectedTask = "T-2"
+				req.Capability.SelectedTask = "T-2"
+			},
+		},
+		{
+			name: "a wider task request under the valid grant",
+			mutate: func(req *JoinRequest) {
+				req.Capability.SelectedTask = "T-2"
+			},
+		},
+		{
+			name: "an added write path",
+			mutate: func(req *JoinRequest) {
+				req.Grant.Writes = append(req.Grant.Writes, "planning/tasks/T-2.md")
+				req.Capability.Writes = append(req.Capability.Writes, "planning/tasks/T-2.md")
+			},
+		},
+		{
+			name: "an unbounded requested task",
+			mutate: func(req *JoinRequest) {
+				req.Capability.SelectedTask = ""
+			},
+		},
+		{
+			name: "an unbounded requested write set",
+			mutate: func(req *JoinRequest) {
+				req.Capability.Writes = nil
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			req := joinRequest(repo, delegation)
+			tc.mutate(&req)
+			if _, err := Join(req); !errors.Is(err, ErrRefused) {
+				t.Fatalf("join error = %v, want ErrRefused", err)
+			}
+		})
+	}
+}
+
+func TestDelegationGrantDigestIsCanonical(t *testing.T) {
+	token := strings.Repeat("a", 64)
+	canonical, err := delegationGrant(Capability{
+		SelectedTask: "T-1",
+		Writes:       []string{"planning/STATE.md", "planning/tasks/T-1.md"},
+	})
+	if err != nil {
+		t.Fatalf("canonical grant: %v", err)
+	}
+	unordered, err := delegationGrant(Capability{
+		SelectedTask: " T-1 ",
+		Writes:       []string{" planning/tasks/T-1.md ", "planning/STATE.md", "planning/STATE.md"},
+	})
+	if err != nil {
+		t.Fatalf("unordered grant: %v", err)
+	}
+	if delegationDigest(token, canonical) != delegationDigest(token, unordered) {
+		t.Fatal("equivalent grants produced different delegation digests")
+	}
+}
+
+func TestDelegatingAcquisitionRequiresATaskAndWriteSet(t *testing.T) {
+	repo := committedRepo(t)
+	executable := stageExecutable(t, "taskrail-bytes")
+	for _, capability := range []Capability{
+		{Commands: []string{"loop"}, Writes: []string{"planning/STATE.md"}},
+		{Commands: []string{"loop"}, SelectedTask: "T-1"},
+	} {
+		if _, err := Acquire(context.Background(), Request{
+			Repository: repo, Command: "loop", Capability: capability, ExecutablePath: executable,
+		}); err == nil {
+			t.Fatal("delegating acquisition accepted an unbounded grant")
+		}
 	}
 }
 
@@ -248,19 +353,28 @@ func TestJoinedOwnershipCannotWidenItsCapability(t *testing.T) {
 	}
 
 	if _, err := joined.Narrow(Capability{
-		Commands:   []string{"complete", "verify"},
-		TaskFields: []string{"status", "updated_at"},
+		Commands:     []string{"complete", "verify"},
+		TaskFields:   []string{"status", "updated_at"},
+		SelectedTask: "T-1",
+		Writes:       []string{"planning/tasks/T-1.md", "planning/STATE.md"},
 	}); err == nil {
 		t.Fatal("a delegated join widened its command set")
 	}
 	if _, err := joined.Narrow(Capability{
-		Commands:   []string{"complete"},
-		TaskFields: []string{"status", "updated_at", "implementation_notes"},
+		Commands:     []string{"complete"},
+		TaskFields:   []string{"status", "updated_at", "implementation_notes"},
+		SelectedTask: "T-1",
+		Writes:       []string{"planning/tasks/T-1.md", "planning/STATE.md"},
 	}); err == nil {
 		t.Fatal("a delegated join widened its task-field write set")
 	}
 
-	narrowed, err := joined.Narrow(Capability{Commands: []string{"complete"}, TaskFields: []string{"status"}})
+	narrowed, err := joined.Narrow(Capability{
+		Commands:     []string{"complete"},
+		TaskFields:   []string{"status"},
+		SelectedTask: "T-1",
+		Writes:       []string{"planning/tasks/T-1.md"},
+	})
 	if err != nil {
 		t.Fatalf("narrow: %v", err)
 	}
@@ -274,9 +388,13 @@ func TestJoinedOwnershipCannotWidenItsCapability(t *testing.T) {
 func TestLocalModeSupportsTheWholeOwnershipAndDelegationCycle(t *testing.T) {
 	repo := localRepo(t)
 	lock, err := Acquire(context.Background(), Request{
-		Repository:     repo,
-		Command:        "loop",
-		Capability:     Capability{Commands: []string{"loop"}},
+		Repository: repo,
+		Command:    "loop",
+		Capability: Capability{
+			Commands:     []string{"loop"},
+			SelectedTask: "T-1",
+			Writes:       []string{"planning/tasks/T-1.md", "planning/STATE.md"},
+		},
 		ExecutablePath: stageExecutable(t, "taskrail-bytes"),
 	})
 	if err != nil {

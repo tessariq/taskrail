@@ -1,12 +1,12 @@
 ---
 id: T-317-bind-delegated-grants-to-the-owner-s-declared-task
 title: Bind delegated grants to the owner's declared task and write set
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#repository-discovery-locking-and-recovery
 dependencies:
     - T-156-protect-existing-semantic-writers-with-snapshot
-updated_at: "2026-08-11T08:46:54Z"
+updated_at: "2026-08-14T13:11:43Z"
 ---
 
 # T-317-bind-delegated-grants-to-the-owner-s-declared-task Bind delegated grants to the owner's declared task and write set
@@ -23,3 +23,8 @@ A delegated join currently declares its own selected task and write set; repoloc
 ## Verification Notes
 
 - Re-run task-scoped verification after implementing the fix.
+
+## Implementation Notes
+
+- 2026-08-14T13:11:31Z: Bound each delegation digest to the owner's canonical selected task and write set with HMAC-SHA256; joins authenticate that grant before allowing narrower capabilities, with repository, storage, executable, fixed metadata, and nested narrowing preserved.
+- 2026-08-14T13:11:43Z: verification pass

@@ -31,9 +31,13 @@ func delegatingLock(t *testing.T, repo repolock.Repository) repolock.Delegation 
 		t.Fatalf("stage executable: %v", err)
 	}
 	lock, err := repolock.Acquire(context.Background(), repolock.Request{
-		Repository:     repo,
-		Command:        "loop",
-		Capability:     repolock.Capability{Commands: []string{"loop"}},
+		Repository: repo,
+		Command:    "loop",
+		Capability: repolock.Capability{
+			Commands:     []string{"loop"},
+			SelectedTask: "T-1",
+			Writes:       delegatedWrites(),
+		},
 		ExecutablePath: executable,
 	})
 	if err != nil {
@@ -55,6 +59,7 @@ func join(t *testing.T, repo repolock.Repository, capability repolock.Capability
 		Command:          "complete",
 		Token:            delegation.Token,
 		ExecutableSHA256: delegation.ExecutableSHA256,
+		Grant:            delegation.Grant,
 		Capability:       capability,
 	})
 	if err != nil {
@@ -116,22 +121,6 @@ func TestDelegatedWideningRefusesBeforeMutation(t *testing.T) {
 			capability: childCapability(),
 			mutate: func(r *Request, repo repolock.Repository) {
 				r.Published = append(r.Published, managed(repo, "planning/tasks/T-2.md", "other task"))
-			},
-		},
-		{
-			name: "no selected task at all",
-			capability: repolock.Capability{
-				Commands:   []string{"complete"},
-				TaskFields: []string{"status"},
-				Writes:     delegatedWrites(),
-			},
-		},
-		{
-			name: "no write set at all",
-			capability: repolock.Capability{
-				Commands:     []string{"complete"},
-				TaskFields:   []string{"status"},
-				SelectedTask: "T-1",
 			},
 		},
 	} {
@@ -235,7 +224,7 @@ func TestDelegatedJoinStaysBoundToItsRepositoryAndExecutable(t *testing.T) {
 			name: "another repository",
 			req: repolock.JoinRequest{
 				Repository: other, Command: "complete", Token: delegation.Token,
-				ExecutableSHA256: delegation.ExecutableSHA256, Capability: childCapability(),
+				ExecutableSHA256: delegation.ExecutableSHA256, Grant: delegation.Grant, Capability: childCapability(),
 			},
 		},
 		{
@@ -245,21 +234,21 @@ func TestDelegatedJoinStaysBoundToItsRepositoryAndExecutable(t *testing.T) {
 					Root: repo.Root, GitCommonDir: filepath.Join(repo.Root, ".git"), Mode: repolock.ModeLocal,
 				},
 				Command: "complete", Token: delegation.Token,
-				ExecutableSHA256: delegation.ExecutableSHA256, Capability: childCapability(),
+				ExecutableSHA256: delegation.ExecutableSHA256, Grant: delegation.Grant, Capability: childCapability(),
 			},
 		},
 		{
 			name: "another executable",
 			req: repolock.JoinRequest{
 				Repository: repo, Command: "complete", Token: delegation.Token,
-				ExecutableSHA256: digestOf([]byte("other-binary")), Capability: childCapability(),
+				ExecutableSHA256: digestOf([]byte("other-binary")), Grant: delegation.Grant, Capability: childCapability(),
 			},
 		},
 		{
 			name: "another token",
 			req: repolock.JoinRequest{
 				Repository: repo, Command: "complete", Token: "not-the-token",
-				ExecutableSHA256: delegation.ExecutableSHA256, Capability: childCapability(),
+				ExecutableSHA256: delegation.ExecutableSHA256, Grant: delegation.Grant, Capability: childCapability(),
 			},
 		},
 	} {

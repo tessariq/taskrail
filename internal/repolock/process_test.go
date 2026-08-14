@@ -57,7 +57,11 @@ func TestRepolockHelperProcess(t *testing.T) {
 			Command:          "complete",
 			Token:            os.Getenv(helperTokenEnv),
 			ExecutableSHA256: os.Getenv(helperExecDigestEnv),
-			Capability:       childCapability(),
+			Grant: Capability{
+				SelectedTask: "T-1",
+				Writes:       []string{"planning/tasks/T-1.md", "planning/STATE.md"},
+			},
+			Capability: childCapability(),
 		})
 		if err != nil {
 			os.Stdout.WriteString("refused: " + err.Error() + "\n")

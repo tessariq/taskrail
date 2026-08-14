@@ -276,6 +276,10 @@ func newOwner(req Request) (Owner, *Delegation, error) {
 	if req.ExecutablePath == "" {
 		return owner, nil, nil
 	}
+	grant, err := delegationGrant(req.Capability)
+	if err != nil {
+		return Owner{}, nil, err
+	}
 
 	executable, err := ExecutableDigest(req.ExecutablePath)
 	if err != nil {
@@ -285,10 +289,10 @@ func newOwner(req Request) (Owner, *Delegation, error) {
 	if err != nil {
 		return Owner{}, nil, err
 	}
-	digest := sha256Hex([]byte(token))
+	digest := delegationDigest(token, grant)
 	owner.ExecutableSHA256 = &executable
 	owner.DelegationDigest = &digest
-	return owner, &Delegation{Token: token, ExecutableSHA256: executable}, nil
+	return owner, &Delegation{Token: token, ExecutableSHA256: executable, Grant: grant}, nil
 }
 
 // Owner reports the metadata this lock published.
