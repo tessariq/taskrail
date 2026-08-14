@@ -48,6 +48,9 @@ func runCommand(cmd *cobra.Command, produce func(*taskrail.Service) (commandResu
 		return publishMachineError(cmd, err, nil)
 	}
 	result, err := produce(svc)
+	if recoveryErr := svc.CheckRecovery(); recoveryErr != nil {
+		return publishMachineError(cmd, recoveryErr, result.warnings)
+	}
 	// Advisories reach a human on stderr in either mode, including on the failure
 	// path: an advisory that explains a failure is exactly the one worth keeping.
 	// An agent reads the same advisories from the envelope's warning array, and
@@ -98,6 +101,7 @@ func publishMachineError(cmd *cobra.Command, cause error, warnings []taskrail.Wa
 				// is `[]` on the wire, and cloning nil would leave it null.
 				Paths:     append([]string{}, failure.Paths...),
 				Snapshots: []taskrail.MachineSnapshot{},
+				Recovery:  failure.Recovery,
 			},
 		},
 	}

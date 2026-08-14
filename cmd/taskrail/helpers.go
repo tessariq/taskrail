@@ -63,5 +63,8 @@ func observeAmbientWarnings(cmd *cobra.Command) []taskrail.Warning {
 	if err != nil {
 		return nil
 	}
+	if err := svc.CheckRecovery(); err != nil {
+		return nil
+	}
 	return warnings
 }

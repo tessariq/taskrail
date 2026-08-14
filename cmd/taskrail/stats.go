@@ -37,6 +37,9 @@ func newStatsCmd() *cobra.Command {
 				if err != nil {
 					return err
 				}
+				if err := svc.CheckRecovery(); err != nil {
+					return err
+				}
 				_, err = fmt.Fprint(cmd.OutOrStdout(), graph)
 				return err
 			}

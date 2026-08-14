@@ -25,6 +25,7 @@ const (
 	MachineCodeInvalidProposal    = "invalid_proposal"
 	MachineCodeDestinationExists  = "destination_exists"
 	MachineCodePathBlocked        = "path_blocked"
+	MachineCodeRecoveryPending    = "recovery_pending"
 	MachineCodePartialWrite       = "partial_write"
 	MachineCodeRollbackFailed     = "rollback_failed"
 )
@@ -42,6 +43,10 @@ type MachineFailure struct {
 	// Paths are the managed paths the failure implicates, such as the artifacts a
 	// partial write left behind.
 	Paths []string
+	// Recovery is present only when retained state strictly identifies one
+	// canonical transaction. Malformed retained state still fails closed without
+	// inventing journal facts.
+	Recovery *MachineRecoveryRef
 }
 
 // machineCodedError carries a failure's machine facts without changing its

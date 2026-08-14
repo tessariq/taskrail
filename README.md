@@ -162,6 +162,13 @@ Taskrail commands intentionally use different write conventions based on risk:
 `updated_at`. Use `status` when you need the same next-task computation without a
 tracked write.
 
+All semantic command classes share one recovery admission fence. Retained or
+malformed transaction state beneath the canonical repository runtime root makes
+readers and writers fail with `recovery_pending`; no semantic result is printed
+and writers do not begin. Git linked worktrees and committed/local storage share
+the Git-common fence, while non-Git committed repositories use their root-local
+runtime directory.
+
 ### Coverage vs gap analysis
 
 `coverage` and `coverage --gaps` sit one word apart and answer different questions —

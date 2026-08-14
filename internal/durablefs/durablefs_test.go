@@ -6,10 +6,110 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/tessariq/taskrail/internal/repolock"
 )
+
+func TestObserveTreeReturnsStableMembershipAndBytes(t *testing.T) {
+	base := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(base, "runtime", "transactions", "tx"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	mustWrite(t, filepath.Join(base, "runtime", "transactions", "tx", "journal.json"), []byte("one"), 0o600)
+
+	first, err := ObserveTree(base, "runtime/transactions")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !first.Present || len(first.Entries) != 2 || first.Entries[1].Snapshot.SHA256 == "" {
+		t.Fatalf("snapshot = %+v", first)
+	}
+	content, snapshot, err := ReadFile(base, "runtime/transactions/tx/journal.json", 16)
+	if err != nil || string(content) != "one" || snapshot != first.Entries[1].Snapshot {
+		t.Fatalf("stable file read: content=%q snapshot=%+v err=%v", content, snapshot, err)
+	}
+	if _, _, err := ReadFile(base, "runtime/transactions/tx/journal.json", 2); !errors.Is(err, ErrUnsupported) {
+		t.Fatalf("bounded file read = %v, want ErrUnsupported", err)
+	}
+	second, err := ObserveTree(base, "runtime/transactions")
+	if err != nil || !first.Same(second) {
+		t.Fatalf("unchanged snapshot differs: same=%t err=%v", first.Same(second), err)
+	}
+	mustWrite(t, filepath.Join(base, "runtime", "transactions", "tx", "journal.json"), []byte("two"), 0o600)
+	changed, err := ObserveTree(base, "runtime/transactions")
+	if err != nil || first.Same(changed) {
+		t.Fatalf("changed snapshot not detected: same=%t err=%v", first.Same(changed), err)
+	}
+}
+
+func TestObserveTreeRefusesAliasesLinksAndSpecialEntries(t *testing.T) {
+	for _, test := range []struct {
+		name  string
+		build func(*testing.T, string)
+	}{
+		{name: "linked ancestor", build: func(t *testing.T, base string) {
+			outside := t.TempDir()
+			if err := os.Symlink(outside, filepath.Join(base, "runtime")); err != nil {
+				t.Fatal(err)
+			}
+		}},
+		{name: "linked member", build: func(t *testing.T, base string) {
+			if err := os.MkdirAll(filepath.Join(base, "runtime", "transactions"), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Symlink(t.TempDir(), filepath.Join(base, "runtime", "transactions", "tx")); err != nil {
+				t.Fatal(err)
+			}
+		}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			base := t.TempDir()
+			test.build(t, base)
+			if _, err := ObserveTree(base, "runtime/transactions"); err == nil {
+				t.Fatal("ObserveTree succeeded, want refusal")
+			}
+		})
+	}
+
+	if runtime.GOOS != "windows" {
+		base := t.TempDir()
+		if err := os.MkdirAll(filepath.Join(base, "runtime", "transactions", "Case"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Mkdir(filepath.Join(base, "runtime", "transactions", "case"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		_, err := ObserveTree(base, "runtime/transactions")
+		if !errors.Is(err, ErrAlias) || !strings.Contains(err.Error(), "Case") {
+			t.Fatalf("alias error = %v", err)
+		}
+	}
+}
+
+func TestObserveTreeDetectsReplacementDuringInspection(t *testing.T) {
+	base := t.TempDir()
+	transactions := filepath.Join(base, "runtime", "transactions")
+	if err := os.MkdirAll(filepath.Join(transactions, "tx"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	mustWrite(t, filepath.Join(transactions, "tx", "journal.json"), []byte("one"), 0o600)
+	testHookObserveTree = func() {
+		testHookObserveTree = nil
+		if err := os.Rename(transactions, transactions+"-old"); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.MkdirAll(filepath.Join(transactions, "tx"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		mustWrite(t, filepath.Join(transactions, "tx", "journal.json"), []byte("two"), 0o600)
+	}
+	t.Cleanup(func() { testHookObserveTree = nil })
+	if _, err := ObserveTree(base, "runtime/transactions"); !errors.Is(err, ErrConflict) {
+		t.Fatalf("replacement error = %v, want ErrConflict", err)
+	}
+}
 
 func TestRepositoryLockSerializesRoots(t *testing.T) {
 	repo := t.TempDir()

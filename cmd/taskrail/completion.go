@@ -35,7 +35,7 @@ func specVersionCompletions(cmd *cobra.Command) ([]string, cobra.ShellCompDirect
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
 	versions, err := svc.SpecVersionCompletions()
-	if err != nil {
+	if err != nil || svc.CheckRecovery() != nil {
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
 	return versions, cobra.ShellCompDirectiveNoFileComp
@@ -51,7 +51,7 @@ func completeSpecRef(cmd *cobra.Command, _ []string, toComplete string) ([]strin
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
 	refs, err := svc.SpecRefCompletions(toComplete)
-	if err != nil {
+	if err != nil || svc.CheckRecovery() != nil {
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
 	directive := cobra.ShellCompDirectiveNoFileComp
@@ -70,7 +70,7 @@ func completeArea(cmd *cobra.Command, _ []string, _ string) ([]string, cobra.She
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
 	anchors, err := svc.ActiveSpecAreaCompletions()
-	if err != nil {
+	if err != nil || svc.CheckRecovery() != nil {
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
 	return anchors, cobra.ShellCompDirectiveNoFileComp

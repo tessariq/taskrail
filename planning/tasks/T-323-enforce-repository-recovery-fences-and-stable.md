@@ -1,12 +1,12 @@
 ---
 id: T-323-enforce-repository-recovery-fences-and-stable
 title: Enforce repository recovery fences and stable semantic reads
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#repository-discovery-locking-and-recovery
 dependencies:
     - T-322-provide-handle-bound-durable-filesystem-primitives
-updated_at: "2026-08-14T13:12:57Z"
+updated_at: "2026-08-14T15:33:17Z"
 ---
 
 # T-323-enforce-repository-recovery-fences-and-stable Enforce repository recovery fences and stable semantic reads
@@ -50,3 +50,6 @@ the recovery action engine.
   Git committed/local and non-Git committed repositories.
 
 ## Implementation Notes
+
+- 2026-08-14T15:33:11Z: Implemented canonical repository recovery admission with stable no-follow transaction inspection, strict recovery_pending machine evidence, command-family fencing, race coverage, and Git/non-Git sandbox verification.
+- 2026-08-14T15:33:17Z: verification pass

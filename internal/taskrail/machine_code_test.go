@@ -21,6 +21,7 @@ func TestMachineCodesAreRegistered(t *testing.T) {
 		MachineCodeInvalidProposal,
 		MachineCodeDestinationExists,
 		MachineCodePathBlocked,
+		MachineCodeRecoveryPending,
 		MachineCodePartialWrite,
 		MachineCodeRollbackFailed,
 	} {
