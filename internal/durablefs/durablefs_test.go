@@ -401,8 +401,14 @@ func TestMkdirRepeatsAliasCheckAtMutationBoundary(t *testing.T) {
 	if _, err := root.Mkdir("case", 0o755); !errors.Is(err, ErrAlias) {
 		t.Fatalf("Mkdir after alias insertion = %v, want ErrAlias", err)
 	}
-	if _, err := os.Stat(filepath.Join(repo, "case")); !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("lower-case alias was created: %v", err)
+	entries, err := os.ReadDir(repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range entries {
+		if entry.Name() == "case" {
+			t.Fatal("lower-case alias was created")
+		}
 	}
 }
 
