@@ -14,21 +14,28 @@ import (
 // The registered common error codes this package tags failures with. They are
 // held to the closed registry by TestMachineCodesAreRegistered.
 const (
-	MachineCodeInvalidArguments   = "invalid_arguments"
-	MachineCodeNotInitialized     = "not_initialized"
-	MachineCodeIncompatibleLayout = "incompatible_layout"
-	MachineCodeRepositoryInvalid  = "repository_invalid"
-	MachineCodeValidationFailed   = "validation_failed"
-	MachineCodeTaskNotFound       = "task_not_found"
-	MachineCodeInvalidStatus      = "invalid_status"
-	MachineCodeInvalidReason      = "invalid_reason"
-	MachineCodeInvalidProposal    = "invalid_proposal"
-	MachineCodeDestinationExists  = "destination_exists"
-	MachineCodePathBlocked        = "path_blocked"
-	MachineCodeRecoveryPending    = "recovery_pending"
-	MachineCodePartialWrite       = "partial_write"
-	MachineCodeRollbackFailed     = "rollback_failed"
-	MachineCodeUnsupported        = "unsupported"
+	MachineCodeInvalidArguments    = "invalid_arguments"
+	MachineCodeNotInitialized      = "not_initialized"
+	MachineCodeIncompatibleLayout  = "incompatible_layout"
+	MachineCodeRepositoryInvalid   = "repository_invalid"
+	MachineCodeValidationFailed    = "validation_failed"
+	MachineCodeTaskNotFound        = "task_not_found"
+	MachineCodeInvalidStatus       = "invalid_status"
+	MachineCodeInvalidReason       = "invalid_reason"
+	MachineCodeInvalidProposal     = "invalid_proposal"
+	MachineCodeDestinationExists   = "destination_exists"
+	MachineCodePathBlocked         = "path_blocked"
+	MachineCodeLockHeld            = "lock_held"
+	MachineCodeDelegatedRefused    = "delegated_write_refused"
+	MachineCodeDependencyExists    = "dependency_exists"
+	MachineCodeDependencyAbsent    = "dependency_absent"
+	MachineCodeDependencyCycle     = "dependency_cycle"
+	MachineCodeCancelledDependency = "cancelled_dependency"
+	MachineCodeWriteConflict       = "write_conflict"
+	MachineCodeRecoveryPending     = "recovery_pending"
+	MachineCodePartialWrite        = "partial_write"
+	MachineCodeRollbackFailed      = "rollback_failed"
+	MachineCodeUnsupported         = "unsupported"
 )
 
 // MachineFailure is what a failing writer knows about its own outcome beyond the
@@ -44,6 +51,8 @@ type MachineFailure struct {
 	// Paths are the managed paths the failure implicates, such as the artifacts a
 	// partial write left behind.
 	Paths []string
+	// Snapshots carry normal-transaction byte evidence in deterministic order.
+	Snapshots []MachineSnapshot
 	// Recovery is present only when retained state strictly identifies one
 	// canonical transaction. Malformed retained state still fails closed without
 	// inventing journal facts.

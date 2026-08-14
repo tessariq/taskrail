@@ -100,7 +100,7 @@ func publishMachineError(cmd *cobra.Command, cause error, warnings []taskrail.Wa
 				// append onto an empty slice, not slices.Clone: a required array
 				// is `[]` on the wire, and cloning nil would leave it null.
 				Paths:     append([]string{}, failure.Paths...),
-				Snapshots: []taskrail.MachineSnapshot{},
+				Snapshots: append([]taskrail.MachineSnapshot{}, failure.Snapshots...),
 				Recovery:  failure.Recovery,
 			},
 		},

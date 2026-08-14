@@ -6,6 +6,8 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ### Added
 
+- `taskrail task dependency add|remove <task-id> <dependency-id>` edits one
+  exact-ID edge transactionally; `--dry-run` previews the validated candidate.
 - `taskrail init` and `retrofit --apply` create `planning/NOTES.md` for
   human-owned context when absent; an existing file is untouched, and an unsafe
   path (symlink, directory, case alias) refuses with `path_blocked`.

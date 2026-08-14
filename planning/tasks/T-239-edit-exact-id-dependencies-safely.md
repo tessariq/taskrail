@@ -1,13 +1,13 @@
 ---
 id: T-239-edit-exact-id-dependencies-safely
 title: Edit exact-ID dependencies safely
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#exact-id-dependency-editing
 dependencies:
     - T-229-canonicalize-v0-5-lifecycle-and-task-identities
     - T-223-run-every-v0-5-command-against-local-storage
-updated_at: "2026-08-06T13:46:30Z"
+updated_at: "2026-08-14T16:03:24Z"
 ---
 
 # T-239-edit-exact-id-dependencies-safely Edit exact-ID dependencies safely
@@ -33,3 +33,6 @@ using exact full IDs and one-edge transactional changes.
 - A3: identity/delegation/storage negatives retain identical repository snapshots.
 
 ## Implementation Notes
+
+- 2026-08-14T16:03:07Z: Implemented exact-ID one-edge dependency add/remove with transactional committed/local writes, strict JSON, byte-preserving previews, graph refusals, docs, and passing automated/manual checks.
+- 2026-08-14T16:03:24Z: verification pass

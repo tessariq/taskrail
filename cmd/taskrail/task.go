@@ -16,7 +16,51 @@ func newTaskCmd() *cobra.Command {
 	cmd.AddCommand(newTaskNewCmd())
 	cmd.AddCommand(newTaskRenameCmd())
 	cmd.AddCommand(newTaskRepointCmd())
+	cmd.AddCommand(newTaskDependencyCmd())
 	return cmd
+}
+
+func newTaskDependencyCmd() *cobra.Command {
+	cmd := &cobra.Command{Use: "dependency", Short: "Add or remove one exact-ID dependency edge"}
+	cmd.AddCommand(newTaskDependencyOperationCmd(taskrail.DependencyAdd))
+	cmd.AddCommand(newTaskDependencyOperationCmd(taskrail.DependencyRemove))
+	return cmd
+}
+
+func newTaskDependencyOperationCmd(operation taskrail.DependencyOperation) *cobra.Command {
+	var dryRun bool
+	cmd := &cobra.Command{
+		Use:   string(operation) + " <task-id> <dependency-id>",
+		Short: strings.ToUpper(string(operation[:1])) + string(operation[1:]) + " one exact full-ID dependency edge",
+		Long: "Edit one dependency edge on a live open task. Both operands must be exact full persisted task IDs. " +
+			"Add appends without reordering and rejects self, duplicate, cancelled, missing, or cyclic edges; " +
+			"remove rejects an absent edge. The task and reprojected STATE.md publish transactionally. " +
+			"Use --dry-run to validate the same candidate without writing.",
+		Args: machineArgs(cobra.ExactArgs(2)),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runCommand(cmd, func(svc *taskrail.Service) (commandResult, error) {
+				result, err := svc.EditDependency(taskrail.EditDependencyInput{
+					TaskID: args[0], DependencyID: args[1], Operation: operation, DryRun: dryRun,
+				})
+				if err != nil {
+					return commandResult{}, err
+				}
+				return commandResult{shape: "DependencyResult", value: result, text: dependencySummary(result)}, nil
+			})
+		},
+	}
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "validate and report the candidate without writing")
+	addMachineJSONFlag(cmd)
+	return cmd
+}
+
+func dependencySummary(result taskrail.DependencyResult) string {
+	action := "applied"
+	if !result.Applied {
+		action = "dry run"
+	}
+	return fmt.Sprintf("dependency %s %s: %s %s %s\nvalidation: %s",
+		result.Operation, action, result.TaskID, result.Operation, result.DependencyID, validationLabel(result.Validation))
 }
 
 func newTaskNewCmd() *cobra.Command {

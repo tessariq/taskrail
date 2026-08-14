@@ -141,7 +141,7 @@ running it where it is, use
 - **See where work stands** — `status`, `stats`, and `coverage` report a live snapshot, aggregate metrics, and advisory spec-linkage, all read-only. `status` also breaks down open work (`todo`/`in_progress`/`blocked`) by how much targets the active spec versus points away from it, listing the away tasks and their `spec_ref`; the away set matches the active-spec filter `next` uses for idle selection.
 - **Author and steer specs** — the `spec` family (`list`, `show`, `add`, `activate`, `diff`) inspects and evolves versioned specs; `spec diff` previews the mechanical area-set delta before activation.
 - **Draft missing work** — the optional `taskrail-decompose` and `taskrail-gap` skills turn uncovered areas and structural gap signals into reviewable proposals; only an explicit `task new` or `import --apply` writes tracked tasks.
-- **Handle the messy parts** — `block`/`unblock` park and resume work, `task new` scaffolds a task with the next free id, `task rename` atomically re-slugs a task's id, filename, and inbound dependency references, and `task repoint` moves an open task's `spec_ref` onto another area.
+- **Handle the messy parts** — `block`/`unblock` park and resume work, `task new` scaffolds a task, `task rename` re-slugs it, `task repoint` moves its `spec_ref`, and `task dependency add|remove` changes one reviewed dependency edge.
 
 Run `taskrail --help`, or `taskrail <command> --help`, for the full command list and every flag.
 
@@ -154,7 +154,7 @@ Taskrail commands intentionally use different write conventions based on risk:
 | Read-only | `validate`, `status`, `stats`, `coverage`, `spec list/show/diff` | Inspect only; never rewrite tracked planning state. |
 | Mode-dependent initialization | `init` | Fresh, unmarked-standard, and current-layout adoption/repair paths may write immediately; detected migration or retrofit paths preview unless `--apply` is supplied. In v0.4, `--with-skills` may also install skills after any successful init result. |
 | Preview by default | `retrofit`, `repair` | Report a candidate; `--apply` is the write opt-in. |
-| Apply with preview option | `task rename`, `task repoint` | Write by default; `--dry-run` validates the candidate first. |
+| Apply with preview option | `task rename`, `task repoint`, `task dependency add/remove` | Write by default; `--dry-run` validates the candidate first. |
 | Lifecycle/state writers | `next`, `start`, `complete`, `block`, `unblock`, `verify`, `spec activate`, `task new` | Rewrite `STATE.md` and sometimes task files; inspect `git status` afterward. |
 | Reviewed import writer | `import --apply <draft>` | Validates an external draft and writes its bounded task/spec/state set. |
 
@@ -403,6 +403,22 @@ title, status, or dependencies, and never rewrites another task file. It is not 
 status mutator and not a bulk migrator. Completed and cancelled tasks are delivered
 history and are rejected. Because it re-projects `planning/STATE.md`, run `git
 status` afterwards and stage the regenerated file with the change.
+
+### Editing one dependency edge
+
+Use exact full persisted task IDs to apply one accepted dependency-review change:
+
+```sh
+taskrail task dependency add T-010-api T-009-model --dry-run
+taskrail task dependency add T-010-api T-009-model
+taskrail task dependency remove T-010-api T-009-model
+```
+
+The target must be `todo`, `in_progress`, or `blocked`. Add appends without
+reordering and rejects missing, self, duplicate, cancelled, or cyclic edges;
+remove rejects an absent edge. Both operations preserve all other task bytes,
+transactionally publish the task with a reprojected `STATE.md`, and support the
+common `--json` envelope.
 
 Bootstrap drafts from rough notes without any LLM — preview first, then apply:
 

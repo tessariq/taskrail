@@ -134,7 +134,7 @@ var migratedCommands = []string{
 	"block", "complete", "coverage", "import", "init", "next", "repair", "retrofit",
 	"spec activate", "spec add", "spec diff", "spec list", "spec show", "start",
 	"stats", "status", "task new", "task rename", "task repoint", "unblock",
-	"validate", "verify",
+	"task dependency add", "task dependency remove", "validate", "verify",
 }
 
 // TestOnlyMigratedCommandsPublishTheCommonEnvelope pins the migration boundary,

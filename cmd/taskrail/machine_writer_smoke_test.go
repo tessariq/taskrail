@@ -54,6 +54,15 @@ func seedSecondSpec(t *testing.T) string {
 	return root
 }
 
+func seedDependencyEdge(t *testing.T) string {
+	t.Helper()
+	root := seedDependencyTasks(t)
+	if out, err := runRoot(t, "task", "dependency", "add", "T-100-target", "T-101-dependency"); err != nil {
+		t.Fatalf("dependency add: %v (output %q)", err, out)
+	}
+	return root
+}
+
 // seedDraft writes a minimal agent draft `import --apply` can land.
 func seedDraft(t *testing.T) string {
 	t.Helper()
@@ -121,6 +130,14 @@ var writerMachineInvocations = []struct {
 		[]string{"task", "repoint", "T-100", "--spec-ref", "specs/v0.2.0.md#summary", "--dry-run", "--json"}, "task repoint", "TaskRepointResult"},
 	{"task repoint apply", seedSecondSpec,
 		[]string{"task", "repoint", "T-100", "--spec-ref", "specs/v0.2.0.md#summary", "--json"}, "task repoint", "TaskRepointResult"},
+	{"task dependency add dry run", seedDependencyTasks,
+		[]string{"task", "dependency", "add", "T-100-target", "T-101-dependency", "--dry-run", "--json"}, "task dependency add", "DependencyResult"},
+	{"task dependency add apply", seedDependencyTasks,
+		[]string{"task", "dependency", "add", "T-100-target", "T-101-dependency", "--json"}, "task dependency add", "DependencyResult"},
+	{"task dependency remove dry run", seedDependencyEdge,
+		[]string{"task", "dependency", "remove", "T-100-target", "T-101-dependency", "--dry-run", "--json"}, "task dependency remove", "DependencyResult"},
+	{"task dependency remove apply", seedDependencyEdge,
+		[]string{"task", "dependency", "remove", "T-100-target", "T-101-dependency", "--json"}, "task dependency remove", "DependencyResult"},
 	{"spec add", seedTodo, []string{"spec", "add", "v0.2.0", "--json"}, "spec add", "SpecAddResult"},
 	{"spec activate", seedSecondSpec,
 		[]string{"spec", "activate", "v0.2.0", "--json"}, "spec activate", "SpecActivateResult"},

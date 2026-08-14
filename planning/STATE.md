@@ -1,6 +1,6 @@
 ---
 schema_version: 1
-updated_at: "2026-08-14T15:46:02Z"
+updated_at: "2026-08-14T16:03:24Z"
 active_spec_version: v0.5.0
 active_spec_path: specs/v0.5.0.md
 current_task: ""
@@ -9,7 +9,7 @@ status_summary: blocked
 blockers:
     - 'T-277-add-durable-transaction-journals-and-recovery: Correctness review found the proposed portable path-based journal cannot satisfy A1-A4: preparation can strand an unrecoverable fence, recovery lacks lock-bound final CAS, path identity is not no-follow/handle-bound, retained fences do not block normal readers/writers, and post-rename fsync failure can lose recovery evidence. Operator must approve decomposition around a handle-bound filesystem primitive plus global fence integration, or revise the portability contract.'
 next_action: Select the next eligible task
-last_verification_result: pass for T-223-run-every-v0-5-command-against-local-storage at 2026-08-14T15:46:02Z
+last_verification_result: pass for T-239-edit-exact-id-dependencies-safely at 2026-08-14T16:03:24Z
 relevant_artifacts: []
 continuation_notes:
     - This repository is temporarily dogfooding bootstrap workflow tooling until Taskrail v0.1.0 exists.
@@ -35,7 +35,7 @@ continuation_notes:
 
 ## Last Verification
 
-- pass for T-223-run-every-v0-5-command-against-local-storage at 2026-08-14T15:46:02Z
+- pass for T-239-edit-exact-id-dependencies-safely at 2026-08-14T16:03:24Z
 
 ## Next Action
 
@@ -51,8 +51,8 @@ continuation_notes:
 
 ## Task Counts
 
-- todo: 134
+- todo: 133
 - in_progress: 0
-- completed: 187
+- completed: 188
 - blocked: 1
 - cancelled: 0
