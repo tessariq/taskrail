@@ -1,13 +1,13 @@
 ---
 id: T-322-provide-handle-bound-durable-filesystem-primitives
 title: Provide handle-bound durable filesystem primitives
-status: todo
+status: blocked
 priority: high
 spec_ref: specs/v0.5.0.md#repository-discovery-locking-and-recovery
 dependencies:
     - T-222-initialize-and-discover-ignored-local-taskrail
     - T-317-bind-delegated-grants-to-the-owner-s-declared-task
-updated_at: "2026-08-14T13:12:51Z"
+updated_at: "2026-08-14T13:35:45Z"
 ---
 
 # T-322-provide-handle-bound-durable-filesystem-primitives Provide handle-bound durable filesystem primitives
@@ -51,3 +51,23 @@ their failure model, not transaction phases or recovery policy.
   implementations; retain platform-specific runtime coverage in CI-facing tests.
 
 ## Implementation Notes
+
+- A TDD candidate proved retained-parent ancestry, no-follow opening, native
+  barriers, and restart evidence, but the bounded filesystem/security review
+  found the strong A1-A2 leaf contract cannot be implemented with the approved
+  native surfaces. Linux `renameat2`/`unlinkat` and macOS
+  `renameatx_np`/`unlinkat` resolve a source name, not a retained source handle;
+  verify-then-mutate therefore has an unavoidable substitution window. Neither
+  platform provides an atomic expected-file-identity compare for rename/remove,
+  and a concurrent actor can add a hard link between every link-count check and
+  mutation.
+- The same review found generic restart evidence cannot prove non-reuse across
+  every supported filesystem: Linux mount IDs are not restart-stable and Windows
+  volume/file IDs may be reused after deletion. Failing closed would leave no
+  conforming Linux/macOS implementation for required operations, contrary to A5;
+  weakening the adversarial contract was explicitly disallowed.
+- The unsound candidate was removed. T-322 needs a contract revision that scopes
+  namespace ownership/concurrency, or approval for a stronger platform-specific
+  mechanism and narrower filesystem matrix, before implementation can proceed.
+- 2026-08-14T13:35:41Z: A1-A2 require atomic wrong-leaf refusal, but Linux/macOS renameat/unlinkat mutate names without an expected retained-handle identity CAS; leaf and hard-link substitution remains possible between every check and mutation. Generic restart IDs also cannot prove non-reuse on all required filesystems. Revising concurrency scope or approving narrower platform/filesystem mechanisms is required.
+- 2026-08-14T13:35:45Z: verification fail
