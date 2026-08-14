@@ -1,5 +1,7 @@
 package taskrail
 
+import "github.com/tessariq/taskrail/internal/repolock"
+
 const stateSchemaVersion = 1
 
 // status_summary values the transition, reconcile, and repair paths write into
@@ -23,7 +25,17 @@ var (
 )
 
 type Paths struct {
-	RepoRoot string
+	// RepoRoot remains the logical repository root used by existing callers.
+	// ManagedRoot names the same identity explicitly beside the independent Git
+	// and physical-storage identities discovery now preserves.
+	RepoRoot     string
+	ManagedRoot  string
+	WorktreeRoot string
+	GitDir       string
+	GitCommonDir string
+	ConfigFile   string
+	StorageRoot  string
+	LockRoot     string
 	// Storage is the active storage context every physical directory below was
 	// resolved through, so a reporter states the mode and root it actually used
 	// rather than re-deriving one.
@@ -33,12 +45,25 @@ type Paths struct {
 	// path never carries a physical overlay prefix.
 	LogicalSpecsDir    string
 	LogicalPlanningDir string
+	LogicalPromptsDir  string
 	SpecsDir           string
 	PlanningDir        string
+	PromptsDir         string
 	TasksDir           string
 	ArtifactsDir       string
 	VerifyDir          string
+	RuntimeDir         string
 	StateFile          string
+}
+
+// LockRepository projects the discovered identity into the existing lock
+// contract without asking a caller to reconstruct roots or translate modes.
+func (p Paths) LockRepository() repolock.Repository {
+	mode := repolock.ModeCommitted
+	if p.Storage.Mode == StorageLocal {
+		mode = repolock.ModeLocal
+	}
+	return repolock.Repository{Root: p.ManagedRoot, GitCommonDir: p.GitCommonDir, Mode: mode}
 }
 
 // LayoutConfig is the machine-owned `.taskrail/config.yml` marker. It signals

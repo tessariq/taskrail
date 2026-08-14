@@ -4,9 +4,11 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 
+	"golang.org/x/text/unicode/norm"
 	"gopkg.in/yaml.v3"
 )
 
@@ -21,17 +23,209 @@ const (
 )
 
 func DiscoverPaths(start string) (Paths, error) {
-	root, err := findRepoRoot(start)
+	start, err := canonicalStart(start)
 	if err != nil {
 		return Paths{}, err
 	}
-
-	cfg, err := loadLayoutConfig(root)
+	git, err := discoverGitWorktree(start)
 	if err != nil {
 		return Paths{}, err
 	}
+	root, markerFound, err := discoverManagedRoot(start)
+	if err != nil {
+		return Paths{}, err
+	}
+	if !markerFound {
+		if git.WorktreeRoot == "" {
+			return Paths{}, WithMachineErrorCode(MachineCodeNotInitialized,
+				fmt.Errorf("managed repository root not found from %s", start))
+		}
+		root = git.WorktreeRoot
+	}
+	if git.WorktreeRoot != "" && root != git.WorktreeRoot {
+		return Paths{}, WithMachineErrorCode(MachineCodeRepositoryInvalid,
+			fmt.Errorf("managed root %s does not match Git worktree root %s", root, git.WorktreeRoot))
+	}
+	cfg, storage, err := discoverLayout(root, markerFound)
+	if err != nil {
+		return Paths{}, err
+	}
+	if storage.Mode == StorageLocal && git.WorktreeRoot == "" {
+		return Paths{}, WithMachineErrorCode(MachineCodeRepositoryInvalid,
+			fmt.Errorf("local storage mode requires a Git worktree"))
+	}
+	paths := pathsFromDiscovery(root, cfg, storage, git)
+	if err := validateDiscoveredPaths(paths); err != nil {
+		return Paths{}, WithMachineErrorCode(MachineCodeRepositoryInvalid, err)
+	}
+	return paths, nil
+}
 
-	return pathsFromLayout(root, cfg, committedStorage()), nil
+type gitContext struct {
+	WorktreeRoot string
+	GitDir       string
+	GitCommonDir string
+}
+
+func canonicalStart(start string) (string, error) {
+	abs, err := filepath.Abs(start)
+	if err != nil {
+		return "", fmt.Errorf("resolve path: %w", err)
+	}
+	abs = filepath.Clean(abs)
+	if err := validateExistingPath(abs, true); err != nil {
+		return "", WithMachineErrorCode(MachineCodeRepositoryInvalid, fmt.Errorf("unsafe invocation path: %w", err))
+	}
+	return abs, nil
+}
+
+func discoverManagedRoot(start string) (string, bool, error) {
+	for current := start; ; current = filepath.Dir(current) {
+		taskrailDir, found, err := exactChild(current, taskrailConfigDir)
+		if err != nil {
+			return "", false, err
+		}
+		if found {
+			config, configFound, err := exactChild(taskrailDir, taskrailConfigFile)
+			if err != nil {
+				return "", false, err
+			}
+			if configFound {
+				if err := validateRegularFile(config); err != nil {
+					return "", false, fmt.Errorf("invalid layout marker: %w", err)
+				}
+				return current, true, nil
+			}
+		}
+		parent := filepath.Dir(current)
+		if parent == current {
+			return "", false, nil
+		}
+	}
+}
+
+func discoverGitWorktree(start string) (gitContext, error) {
+	for current := start; ; current = filepath.Dir(current) {
+		gitEntry, found, err := exactChild(current, ".git")
+		if err != nil {
+			return gitContext{}, err
+		}
+		if found {
+			gitDir, err := resolveGitDir(current, gitEntry)
+			if err != nil {
+				return gitContext{}, err
+			}
+			common, err := resolveGitCommonDir(gitDir)
+			if err != nil {
+				return gitContext{}, err
+			}
+			return gitContext{WorktreeRoot: current, GitDir: gitDir, GitCommonDir: common}, nil
+		}
+		parent := filepath.Dir(current)
+		if parent == current {
+			return gitContext{}, nil
+		}
+	}
+}
+
+func resolveGitDir(worktree, entry string) (string, error) {
+	info, err := os.Lstat(entry)
+	if err != nil {
+		return "", fmt.Errorf("inspect Git directory: %w", fsCause(err))
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return "", fmt.Errorf("Git directory traversal contains symlink %s", entry)
+	}
+	if info.IsDir() {
+		return entry, nil
+	}
+	if !info.Mode().IsRegular() {
+		return "", fmt.Errorf("Git directory marker %s is not a regular file or directory", entry)
+	}
+	data, err := os.ReadFile(entry)
+	if err != nil {
+		return "", fmt.Errorf("read Git directory marker: %w", fsCause(err))
+	}
+	line := strings.TrimSpace(string(data))
+	if !strings.HasPrefix(line, "gitdir: ") || strings.Contains(line, "\n") {
+		return "", fmt.Errorf("Git directory marker is malformed")
+	}
+	dir := strings.TrimPrefix(line, "gitdir: ")
+	if !filepath.IsAbs(dir) {
+		dir = filepath.Join(worktree, dir)
+	}
+	dir = filepath.Clean(dir)
+	if err := validateExistingPath(dir, true); err != nil {
+		return "", fmt.Errorf("unsafe Git directory: %w", err)
+	}
+	return dir, nil
+}
+
+func resolveGitCommonDir(gitDir string) (string, error) {
+	commonFile := filepath.Join(gitDir, "commondir")
+	info, err := os.Lstat(commonFile)
+	if errors.Is(err, os.ErrNotExist) {
+		return gitDir, nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("inspect Git common directory marker: %w", fsCause(err))
+	}
+	if !info.Mode().IsRegular() {
+		return "", fmt.Errorf("Git common directory marker is not a regular file")
+	}
+	data, err := os.ReadFile(commonFile)
+	if err != nil {
+		return "", fmt.Errorf("read Git common directory marker: %w", fsCause(err))
+	}
+	value := strings.TrimSpace(string(data))
+	if value == "" || strings.Contains(value, "\n") {
+		return "", fmt.Errorf("Git common directory marker is malformed")
+	}
+	if !filepath.IsAbs(value) {
+		value = filepath.Join(gitDir, value)
+	}
+	value = filepath.Clean(value)
+	if err := validateExistingPath(value, true); err != nil {
+		return "", fmt.Errorf("unsafe Git common directory: %w", err)
+	}
+	return value, nil
+}
+
+func discoverLayout(root string, markerFound bool) (LayoutConfig, StorageContext, error) {
+	if !markerFound {
+		return defaultLayoutConfig(), committedStorage(), nil
+	}
+	data, err := os.ReadFile(markerPath(root))
+	if err != nil {
+		return LayoutConfig{}, StorageContext{}, fmt.Errorf("read layout marker: %w", fsCause(err))
+	}
+	var header struct {
+		LayoutVersion int `yaml:"layout_version"`
+	}
+	if err := yaml.Unmarshal(data, &header); err != nil {
+		return LayoutConfig{}, StorageContext{}, WithMachineErrorCode(MachineCodeRepositoryInvalid,
+			fmt.Errorf("parse layout marker: %w", err))
+	}
+	if header.LayoutVersion <= currentLayoutVersion {
+		cfg, err := loadLayoutConfig(root)
+		return cfg, committedStorage(), err
+	}
+	if header.LayoutVersion > layout2Version {
+		return LayoutConfig{}, StorageContext{}, ensureSupportedLayoutVersion(LayoutConfig{LayoutVersion: header.LayoutVersion})
+	}
+	cfg, err := decodeLayoutMarkerStrict(data)
+	if err != nil {
+		return LayoutConfig{}, StorageContext{}, WithMachineErrorCode(MachineCodeRepositoryInvalid, err)
+	}
+	if cfg.MigrationFence != nil {
+		return LayoutConfig{}, StorageContext{}, WithMachineErrorCode(MachineCodeRepositoryInvalid,
+			fmt.Errorf("layout migration is in progress"))
+	}
+	storage := committedStorage()
+	if cfg.LayoutVersion == layout2Version && cfg.StorageMode == StorageLocal {
+		storage = localStorage()
+	}
+	return LayoutConfig{LayoutVersion: cfg.LayoutVersion, SpecsDir: cfg.SpecsDir, PlanningDir: cfg.PlanningDir}, storage, nil
 }
 
 // defaultLayoutConfig is the hardcoded v0.1.0 layout used when no marker exists.
@@ -152,41 +346,225 @@ func ensureWithinRoot(root, field, rel string) error {
 // decides where those resolve physically, so every reader and writer below stays
 // storage-neutral by construction.
 func pathsFromLayout(root string, cfg LayoutConfig, storage StorageContext) Paths {
+	return pathsFromDiscovery(root, cfg, storage, gitContext{})
+}
+
+func pathsFromDiscovery(root string, cfg LayoutConfig, storage StorageContext, git gitContext) Paths {
 	planningDir := filepath.Join(root, filepath.FromSlash(storage.physical(cfg.PlanningDir)))
 	artifactsDir := filepath.Join(planningDir, "artifacts")
+	storageRoot := root
+	promptsDir := filepath.Join(root, taskrailConfigDir, "prompts")
+	runtimeDir := filepath.Join(root, taskrailConfigDir, "runtime")
+	if storage.Mode == StorageLocal {
+		storageRoot = filepath.Join(root, filepath.FromSlash(localStorageRoot))
+		promptsDir = filepath.Join(storageRoot, "prompts")
+		runtimeDir = filepath.Join(storageRoot, "runtime")
+	}
+	lockRoot := runtimeDir
+	if git.GitCommonDir != "" {
+		lockRoot = filepath.Join(git.GitCommonDir, "taskrail")
+	}
 
 	return Paths{
 		RepoRoot:           root,
+		ManagedRoot:        root,
+		WorktreeRoot:       git.WorktreeRoot,
+		GitDir:             git.GitDir,
+		GitCommonDir:       git.GitCommonDir,
+		ConfigFile:         markerPath(root),
+		StorageRoot:        storageRoot,
+		LockRoot:           lockRoot,
 		Storage:            storage,
 		LogicalSpecsDir:    filepath.ToSlash(cfg.SpecsDir),
 		LogicalPlanningDir: filepath.ToSlash(cfg.PlanningDir),
+		LogicalPromptsDir:  path.Join(taskrailConfigDir, "prompts"),
 
 		SpecsDir:     filepath.Join(root, filepath.FromSlash(storage.physical(cfg.SpecsDir))),
 		PlanningDir:  planningDir,
+		PromptsDir:   promptsDir,
 		TasksDir:     filepath.Join(planningDir, "tasks"),
 		ArtifactsDir: artifactsDir,
 		VerifyDir:    filepath.Join(artifactsDir, "verify"),
+		RuntimeDir:   runtimeDir,
 		StateFile:    filepath.Join(planningDir, "STATE.md"),
 	}
 }
 
-func findRepoRoot(start string) (string, error) {
-	abs, err := filepath.Abs(start)
+func validateDiscoveredPaths(paths Paths) error {
+	if paths.LogicalSpecsDir == paths.LogicalPlanningDir || pathContains(paths.LogicalSpecsDir, paths.LogicalPlanningDir) || pathContains(paths.LogicalPlanningDir, paths.LogicalSpecsDir) {
+		return fmt.Errorf("layout specs_dir and planning_dir overlap")
+	}
+	for _, field := range []struct{ name, logical string }{
+		{name: "specs_dir", logical: paths.LogicalSpecsDir},
+		{name: "planning_dir", logical: paths.LogicalPlanningDir},
+	} {
+		if err := validateLogicalDir(field.name, field.logical); err != nil {
+			return err
+		}
+	}
+	if err := validateOptionalRegularFile(paths.ConfigFile); err != nil {
+		return err
+	}
+	for _, physical := range []string{paths.StorageRoot, paths.SpecsDir, paths.PlanningDir, paths.PromptsDir, paths.RuntimeDir} {
+		if err := validateDirectoryTarget(physical); err != nil {
+			return err
+		}
+	}
+	if paths.Storage.Mode == StorageLocal {
+		for _, committed := range []string{
+			filepath.Join(paths.ManagedRoot, filepath.FromSlash(paths.LogicalSpecsDir)),
+			filepath.Join(paths.ManagedRoot, filepath.FromSlash(paths.LogicalPlanningDir)),
+			filepath.Join(paths.ManagedRoot, taskrailConfigDir, "prompts"),
+		} {
+			if err := validateTargetPath(committed); err != nil {
+				return err
+			}
+			if exists(committed) {
+				return fmt.Errorf("mixed committed/local Taskrail state at %s", committed)
+			}
+		}
+	} else {
+		for _, local := range []string{
+			filepath.Join(paths.ManagedRoot, filepath.FromSlash(localStorageRoot), filepath.FromSlash(paths.LogicalSpecsDir)),
+			filepath.Join(paths.ManagedRoot, filepath.FromSlash(localStorageRoot), filepath.FromSlash(paths.LogicalPlanningDir)),
+			filepath.Join(paths.ManagedRoot, filepath.FromSlash(localStorageRoot), "prompts"),
+		} {
+			if err := validateTargetPath(local); err != nil {
+				return err
+			}
+			if exists(local) {
+				return fmt.Errorf("mixed committed/local Taskrail state at %s", local)
+			}
+		}
+	}
+	return nil
+}
+
+func validateLogicalDir(field, value string) error {
+	if value == "" || filepath.IsAbs(filepath.FromSlash(value)) || path.Clean(value) != value || value == "." || strings.HasPrefix(value, "../") || strings.Contains(value, "\\") {
+		return fmt.Errorf("layout config %s %q is not a canonical repository-relative path", field, value)
+	}
+	return nil
+}
+
+func pathContains(parent, child string) bool {
+	return strings.HasPrefix(child, strings.TrimSuffix(parent, "/")+"/")
+}
+
+func exactChild(parent, wanted string) (string, bool, error) {
+	entries, err := os.ReadDir(parent)
 	if err != nil {
-		return "", fmt.Errorf("resolve path: %w", err)
+		return "", false, fmt.Errorf("read directory %s: %w", parent, fsCause(err))
 	}
-
-	current := abs
-	for {
-		if _, err := os.Stat(filepath.Join(current, ".git")); err == nil {
-			return current, nil
+	found := false
+	for _, entry := range entries {
+		if !samePortableName(entry.Name(), wanted) {
+			continue
 		}
-
-		parent := filepath.Dir(current)
-		if parent == current {
-			return "", WithMachineErrorCode(MachineCodeNotInitialized,
-				fmt.Errorf("repository root not found from %s", start))
+		if entry.Name() != wanted || found {
+			return "", false, fmt.Errorf("path alias for %s exists beneath %s", wanted, parent)
 		}
-		current = parent
+		found = true
 	}
+	return filepath.Join(parent, wanted), found, nil
+}
+
+func samePortableName(a, b string) bool {
+	return strings.EqualFold(norm.NFC.String(a), norm.NFC.String(b))
+}
+
+func validateTargetPath(target string) error {
+	current := filepath.VolumeName(target) + string(filepath.Separator)
+	for _, component := range strings.Split(strings.TrimPrefix(target, current), string(filepath.Separator)) {
+		if component == "" {
+			continue
+		}
+		parent := current
+		candidate, found, err := exactChild(parent, component)
+		if err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				return nil
+			}
+			return err
+		}
+		if !found {
+			return nil
+		}
+		info, err := os.Lstat(candidate)
+		if err != nil {
+			return err
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("path traversal contains symlink %s", candidate)
+		}
+		if candidate != target && !info.IsDir() {
+			return fmt.Errorf("path traversal contains special or non-directory entry %s", candidate)
+		}
+		current = candidate
+	}
+	return nil
+}
+
+func validateExistingPath(target string, requireDir bool) error {
+	if err := validateTargetPath(target); err != nil {
+		return err
+	}
+	info, err := os.Lstat(target)
+	if err != nil {
+		return err
+	}
+	if requireDir && !info.IsDir() {
+		return fmt.Errorf("%s is not a directory", target)
+	}
+	return nil
+}
+
+func validateDirectoryTarget(target string) error {
+	if err := validateTargetPath(target); err != nil {
+		return err
+	}
+	info, err := os.Lstat(target)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("managed directory %s is a special or non-directory entry", target)
+	}
+	return nil
+}
+
+func validateRegularFile(target string) error {
+	if err := validateTargetPath(target); err != nil {
+		return err
+	}
+	info, err := os.Lstat(target)
+	if err != nil {
+		return err
+	}
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("%s is not a regular file", target)
+	}
+	return nil
+}
+
+func validateOptionalRegularFile(target string) error {
+	if err := validateTargetPath(target); err != nil {
+		return err
+	}
+	_, err := os.Lstat(target)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	return validateRegularFile(target)
+}
+
+func exists(target string) bool {
+	_, err := os.Lstat(target)
+	return err == nil
 }

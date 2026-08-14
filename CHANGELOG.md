@@ -12,6 +12,8 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ### Changed
 
+- Repository discovery now preserves distinct managed, worktree, Git-common,
+  storage, and lock identities and strictly maps layout-2 committed/local paths.
 - `taskrail validate` accepts paired task-local `loop_policy`/`loop_reason`
   metadata, treats an absent pair as implicit hold, rejects malformed pairs and
   legacy `planning/AUTONOMY.tsv`, and preserves explicit policy across task writes.

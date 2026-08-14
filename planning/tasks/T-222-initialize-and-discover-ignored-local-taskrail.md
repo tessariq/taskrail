@@ -1,12 +1,12 @@
 ---
 id: T-222-initialize-and-discover-ignored-local-taskrail
 title: Discover repository and active storage context
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#local-planning-mode
 dependencies:
     - T-157-upgrade-repositories-transactionally-to-layout-2
-updated_at: "2026-08-05T22:04:16Z"
+updated_at: "2026-08-14T13:04:53Z"
 ---
 
 # T-222-initialize-and-discover-ignored-local-taskrail Discover repository and active storage context
@@ -45,3 +45,6 @@ durable local initialization and inspection commands are separate slices.
   refusal to prove this foundation is read-only.
 
 ## Implementation Notes
+
+- 2026-08-14T13:04:43Z: Implemented strict read-only repository discovery with distinct managed, worktree, Git, storage, lock, physical, and logical identities; layout-2 committed/local mapping; linked-worktree and non-Git support; and fail-closed mixed, alias, traversal, and incompatible-state handling. Verified by focused/race/full Go suites and manual descendant local-mode CLI sandbox evidence.
+- 2026-08-14T13:04:53Z: verification pass

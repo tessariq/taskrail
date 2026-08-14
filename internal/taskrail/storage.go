@@ -7,10 +7,8 @@ import "path"
 // repository root; local mode (specs/v0.5.0.md#local-planning-mode) maps the same
 // logical namespace beneath one fixed ignored overlay root.
 //
-// Only the reporting half lives here. Discovering a local marker, bootstrapping
-// the overlay, and proving its paths ignored belong to the local-mode tasks; a
-// context is supplied explicitly until then, which is why every consumer takes it
-// as data rather than re-deriving it from a marker.
+// Discovery supplies this context from the layout marker. Bootstrapping the
+// overlay and proving its paths ignored remain separate local-mode outcomes.
 
 // StorageMode is the companion's `committed | local` enum.
 type StorageMode string
