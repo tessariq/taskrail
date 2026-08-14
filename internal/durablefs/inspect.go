@@ -132,6 +132,7 @@ func ReadFile(base, path string, maxBytes int64) ([]byte, Snapshot, error) {
 }
 
 func openInspectionRoot(path string) (*os.Root, Identity, error) {
+	path = nativeRootPath(path)
 	observed, err := openRootObserved(path)
 	if err != nil {
 		return nil, Identity{}, err

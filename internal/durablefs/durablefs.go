@@ -134,7 +134,8 @@ func Open(path string, own ownership) (*Root, error) {
 	if err := own.Authorize(owner.Command); err != nil {
 		return nil, err
 	}
-	observed, err := openRootObserved(abs)
+	nativePath := nativeRootPath(abs)
+	observed, err := openRootObserved(nativePath)
 	if err != nil {
 		return nil, err
 	}
@@ -146,7 +147,7 @@ func Open(path string, own ownership) (*Root, error) {
 	if testHookBeforeRootOpen != nil {
 		testHookBeforeRootOpen()
 	}
-	handle, err := os.OpenRoot(abs)
+	handle, err := os.OpenRoot(nativePath)
 	if err != nil {
 		return nil, fmt.Errorf("open repository root: %w", err)
 	}
@@ -445,6 +446,13 @@ func stableMode(mode fs.FileMode) fs.FileMode {
 		return 0o666
 	}
 	return mode & (fs.ModePerm | fs.ModeSetuid | fs.ModeSetgid | fs.ModeSticky)
+}
+
+func nativeRootPath(path string) string {
+	if runtime.GOOS == "darwin" && (path == "/var" || strings.HasPrefix(path, "/var/")) {
+		return "/private" + path
+	}
+	return path
 }
 
 func randomName() (string, error) {

@@ -148,7 +148,7 @@ func isReparsePoint(info fs.FileInfo) bool {
 }
 
 func classifySyncError(step Barrier, err error) error {
-	if errors.Is(err, windows.ERROR_INVALID_FUNCTION) || errors.Is(err, windows.ERROR_NOT_SUPPORTED) || errors.Is(err, windows.ERROR_INVALID_HANDLE) {
+	if errors.Is(err, windows.ERROR_INVALID_FUNCTION) || errors.Is(err, windows.ERROR_NOT_SUPPORTED) || errors.Is(err, windows.ERROR_INVALID_HANDLE) || errors.Is(err, windows.ERROR_ACCESS_DENIED) {
 		return fmt.Errorf("%w: %s barrier: %v", ErrUnsupported, step, err)
 	}
 	return fmt.Errorf("%s barrier: %w", step, err)

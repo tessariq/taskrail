@@ -78,7 +78,9 @@ func TestObserveTreeRefusesAliasesLinksAndSpecialEntries(t *testing.T) {
 		if err := os.MkdirAll(filepath.Join(base, "runtime", "transactions", "Case"), 0o755); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.Mkdir(filepath.Join(base, "runtime", "transactions", "case"), 0o755); err != nil {
+		if err := os.Mkdir(filepath.Join(base, "runtime", "transactions", "case"), 0o755); errors.Is(err, os.ErrExist) {
+			t.Skip("case-insensitive filesystem prevents creating a distinct alias")
+		} else if err != nil {
 			t.Fatal(err)
 		}
 		_, err := ObserveTree(base, "runtime/transactions")
@@ -257,6 +259,9 @@ func TestMutationRefusesModeAndLinkCountChanges(t *testing.T) {
 		}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
+			if runtime.GOOS == "windows" && test.name == "mode" {
+				t.Skip("Windows does not expose Unix permission changes")
+			}
 			repo := t.TempDir()
 			path := filepath.Join(repo, "file")
 			mustWrite(t, path, []byte("old"), 0o640)
@@ -331,6 +336,9 @@ func TestOperationsAreBoundedAndCompareImmediatelyBeforeMutation(t *testing.T) {
 }
 
 func TestCreatePublishReplaceRemoveAndMkdir(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows reports directory durability as unsupported")
+	}
 	repo := t.TempDir()
 	root, lock := openTestRoot(t, repo)
 	defer releaseTestRoot(t, root, lock)
@@ -468,6 +476,7 @@ func lockRequest(repo string) repolock.Request {
 
 func openTestRoot(t *testing.T, repo string) (*Root, *repolock.Lock) {
 	t.Helper()
+	t.Cleanup(resetTestHooks)
 	lock := acquireTestLock(t, repo)
 	root, err := Open(repo, lock)
 	if err != nil {
@@ -475,6 +484,18 @@ func openTestRoot(t *testing.T, repo string) (*Root, *repolock.Lock) {
 		t.Fatal(err)
 	}
 	return root, lock
+}
+
+func resetTestHooks() {
+	testHookBeforeMutation = nil
+	testHookBarrier = nil
+	testHookBeforeRootOpen = nil
+	testHookAfterDirOpen = nil
+	testHookBeforeStageCAS = nil
+	testHookRemoveStage = nil
+	testHookBeforeLink = nil
+	testHookAfterCommit = nil
+	testHookEntryClose = nil
 }
 
 func releaseTestRoot(t *testing.T, root *Root, lock *repolock.Lock) {

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -20,10 +21,13 @@ func TestPublicationRunsOrderedDurabilityBarriers(t *testing.T) {
 		return nil
 	}
 	defer func() { testHookBarrier = nil }()
-	if _, err := root.Publish("file", []byte("data"), 0o640); err != nil {
+	if _, err := root.Publish("file", []byte("data"), 0o640); err != nil && !(runtime.GOOS == "windows" && errors.Is(err, ErrUnsupported)) {
 		t.Fatal(err)
 	}
 	want := []string{string(BarrierContent), string(BarrierMetadata), string(BarrierDirectory)}
+	if runtime.GOOS == "windows" {
+		want = want[:2]
+	}
 	if !slices.Equal(events, want) {
 		t.Fatalf("barriers = %v, want %v", events, want)
 	}
