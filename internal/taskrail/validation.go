@@ -11,6 +11,9 @@ import (
 )
 
 func (s *Service) Validate() (ValidationResult, error) {
+	if err := s.paths.ensureStorageCapability(); err != nil {
+		return ValidationResult{}, err
+	}
 	violations := s.layoutViolations()
 
 	state, stateErr := s.loadState()
@@ -40,19 +43,19 @@ func (s *Service) layoutViolations() []string {
 	// clean checkout, so they are not required; verify creates them on demand.
 	for _, requiredDir := range []string{s.paths.SpecsDir, s.paths.PlanningDir, s.paths.TasksDir} {
 		if !dirExists(requiredDir) {
-			violations = append(violations, fmt.Sprintf("missing required directory %s", relPath(s.paths.RepoRoot, requiredDir)))
+			violations = append(violations, fmt.Sprintf("missing required directory %s", s.paths.logicalManagedPath(requiredDir)))
 		}
 	}
 	for _, requiredFile := range []string{filepath.Join(s.paths.SpecsDir, "README.md"), s.paths.StateFile} {
 		if !fileExists(requiredFile) {
-			violations = append(violations, fmt.Sprintf("missing required file %s", relPath(s.paths.RepoRoot, requiredFile)))
+			violations = append(violations, fmt.Sprintf("missing required file %s", s.paths.logicalManagedPath(requiredFile)))
 		}
 	}
 	legacyPolicy := filepath.Join(s.paths.PlanningDir, "AUTONOMY.tsv")
 	if _, err := os.Lstat(legacyPolicy); err == nil {
-		violations = append(violations, fmt.Sprintf("unsupported legacy input %s: record any intended decisions and reasons, remove the entry manually, complete any required layout upgrade, then use taskrail task loop allow|hold <task-id> --reason <reason>; tasks without explicit policy remain implicit hold", relPath(s.paths.RepoRoot, legacyPolicy)))
+		violations = append(violations, fmt.Sprintf("unsupported legacy input %s: record any intended decisions and reasons, remove the entry manually, complete any required layout upgrade, then use taskrail task loop allow|hold <task-id> --reason <reason>; tasks without explicit policy remain implicit hold", s.paths.logicalManagedPath(legacyPolicy)))
 	} else if !errors.Is(err, os.ErrNotExist) {
-		violations = append(violations, fmt.Sprintf("inspect unsupported legacy input %s: %v", relPath(s.paths.RepoRoot, legacyPolicy), fsCause(err)))
+		violations = append(violations, fmt.Sprintf("inspect unsupported legacy input %s: %v", s.paths.logicalManagedPath(legacyPolicy), fsCause(err)))
 	}
 	return violations
 }
@@ -77,13 +80,13 @@ func (s *Service) validateState(state *State) []string {
 	}
 	if strings.TrimSpace(state.Frontmatter.ActiveSpecPath) == "" {
 		violations = append(violations, "state active_spec_path must not be empty")
-	} else if !fileExists(filepath.Join(s.paths.RepoRoot, filepath.Clean(state.Frontmatter.ActiveSpecPath))) {
+	} else if activeSpec, err := s.paths.physicalSpecPath(state.Frontmatter.ActiveSpecPath); err != nil || !fileExists(activeSpec) {
 		violations = append(violations, fmt.Sprintf("state active_spec_path does not exist: %s", state.Frontmatter.ActiveSpecPath))
 	}
 	if strings.TrimSpace(state.Frontmatter.StatusSummary) == "" {
 		violations = append(violations, "state status_summary must not be empty")
 	}
-	violations = append(violations, stateArtifactRefs(state.Frontmatter)...)
+	violations = append(violations, stateArtifactRefsForPrefix(state.Frontmatter, s.logicalArtifactPrefix())...)
 	return violations
 }
 
@@ -92,6 +95,10 @@ func (s *Service) validateState(state *State) []string {
 // reference to a concrete file under it always dangles. We pattern-match the
 // prefix rather than shelling out to git (T-026).
 const gitignoredArtifactPrefix = "planning/artifacts/"
+
+func (s *Service) logicalArtifactPrefix() string {
+	return path.Join(s.paths.LogicalPlanningDir, "artifacts") + "/"
+}
 
 // danglingArtifactPaths returns concrete file paths under the gitignored
 // artifacts tree referenced in s. It targets producer-only pointers like
@@ -103,9 +110,13 @@ const gitignoredArtifactPrefix = "planning/artifacts/"
 // planning prose does not embed the prefix inside unrelated tokens (e.g. URLs),
 // so keeping the scan simple is preferred over anchoring to word boundaries.
 func danglingArtifactPaths(s string) []string {
+	return danglingArtifactPathsForPrefix(s, gitignoredArtifactPrefix)
+}
+
+func danglingArtifactPathsForPrefix(s, prefix string) []string {
 	paths := make([]string, 0)
 	for rest := s; ; {
-		idx := strings.Index(rest, gitignoredArtifactPrefix)
+		idx := strings.Index(rest, prefix)
 		if idx < 0 {
 			break
 		}
@@ -165,9 +176,13 @@ func isConcreteArtifactFile(token string) bool {
 // stateArtifactRefs flags committed STATE.md frontmatter fields that point at a
 // concrete gitignored artifact file, naming the offending field.
 func stateArtifactRefs(fm StateFrontmatter) []string {
+	return stateArtifactRefsForPrefix(fm, gitignoredArtifactPrefix)
+}
+
+func stateArtifactRefsForPrefix(fm StateFrontmatter, prefix string) []string {
 	violations := make([]string, 0)
 	scan := func(field, value string) {
-		for _, p := range danglingArtifactPaths(value) {
+		for _, p := range danglingArtifactPathsForPrefix(value, prefix) {
 			violations = append(violations, fmt.Sprintf("state %s references gitignored artifact path %s", field, p))
 		}
 	}
@@ -189,14 +204,18 @@ func stateArtifactRefs(fm StateFrontmatter) []string {
 // taskArtifactRefs flags a committed task file (frontmatter title and body
 // lines) that points at a concrete gitignored artifact file.
 func taskArtifactRefs(task *Task) []string {
+	return taskArtifactRefsForPrefix(task, gitignoredArtifactPrefix)
+}
+
+func taskArtifactRefsForPrefix(task *Task, prefix string) []string {
 	violations := make([]string, 0)
 	id := task.Frontmatter.ID
-	for _, p := range danglingArtifactPaths(task.Frontmatter.Title) {
+	for _, p := range danglingArtifactPathsForPrefix(task.Frontmatter.Title, prefix) {
 		violations = append(violations, fmt.Sprintf("task %s title references gitignored artifact path %s", id, p))
 	}
 	// An artifact path never spans a newline (\n is not a path byte), so a
 	// single whole-body scan yields the same tokens as a per-line scan.
-	for _, p := range danglingArtifactPaths(task.Body) {
+	for _, p := range danglingArtifactPathsForPrefix(task.Body, prefix) {
 		violations = append(violations, fmt.Sprintf("task %s body references gitignored artifact path %s", id, p))
 	}
 	return violations
@@ -309,7 +328,11 @@ func (s *Service) validateTasks(state *State, tasks []*Task) []string {
 		}
 
 		if task.Frontmatter.ID == "" {
-			violations = append(violations, fmt.Sprintf("task file %s missing id", relPath(s.paths.RepoRoot, task.Filename)))
+			logicalPath := task.Path
+			if logicalPath == "" {
+				logicalPath = s.paths.logicalManagedPath(task.Filename)
+			}
+			violations = append(violations, fmt.Sprintf("task file %s missing id", logicalPath))
 		}
 		if base := filepath.Base(task.Filename); base != task.Frontmatter.ID+".md" {
 			violations = append(violations, fmt.Sprintf("task %s filename must be %s.md", task.Frontmatter.ID, task.Frontmatter.ID))
@@ -339,7 +362,7 @@ func (s *Service) validateTasks(state *State, tasks []*Task) []string {
 		} else if _, err := s.validateSpecRef(task.Frontmatter.SpecRef); err != nil {
 			violations = append(violations, fmt.Sprintf("task %s invalid spec_ref: %v", task.Frontmatter.ID, err))
 		}
-		violations = append(violations, taskArtifactRefs(task)...)
+		violations = append(violations, taskArtifactRefsForPrefix(task, s.logicalArtifactPrefix())...)
 	}
 
 	for _, task := range tasks {
@@ -421,7 +444,10 @@ func (s *Service) validateSpecRef(specRef string) (string, error) {
 		return "", err
 	}
 
-	fullPath := filepath.Join(s.paths.RepoRoot, pathPart)
+	fullPath, err := s.paths.physicalSpecPath(filepath.ToSlash(pathPart))
+	if err != nil {
+		return "", err
+	}
 	data, err := os.ReadFile(fullPath)
 	if err != nil {
 		return "", fmt.Errorf("read spec file %s: %w", pathPart, fsCause(err))

@@ -3,6 +3,7 @@ package taskrail
 import (
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -48,6 +49,9 @@ type SpecShowResult struct {
 // vN.N.N naming convention) in version order and marks the STATE.md active spec.
 // It is strictly read-only: it never writes STATE.md or task files.
 func (s *Service) SpecList() (SpecListResult, error) {
+	if err := s.paths.ensureStorageCapability(); err != nil {
+		return SpecListResult{}, err
+	}
 	active, err := s.activeSpecVersion()
 	if err != nil {
 		return SpecListResult{}, err
@@ -56,7 +60,7 @@ func (s *Service) SpecList() (SpecListResult, error) {
 	entries, err := os.ReadDir(s.paths.SpecsDir)
 	if err != nil {
 		return SpecListResult{}, WithMachineErrorCode(missingOrInvalidCode(err, MachineCodeNotInitialized),
-			fmt.Errorf("read specs dir %s: %w", relPath(s.paths.RepoRoot, s.paths.SpecsDir), fsCause(err)))
+			fmt.Errorf("read specs dir %s: %w", s.paths.logicalManagedPath(s.paths.SpecsDir), fsCause(err)))
 	}
 
 	specs := make([]SpecEntry, 0, len(entries))
@@ -70,7 +74,7 @@ func (s *Service) SpecList() (SpecListResult, error) {
 		}
 		specs = append(specs, SpecEntry{
 			Version: version,
-			Path:    relPath(s.paths.RepoRoot, filepath.Join(s.paths.SpecsDir, entry.Name())),
+			Path:    path.Join(s.paths.LogicalSpecsDir, entry.Name()),
 			Active:  version == active,
 		})
 	}
@@ -95,6 +99,9 @@ func sortSpecVersions(versions []string) {
 // it, the spec body. It rejects a non-conforming or missing version before any
 // output and is strictly read-only.
 func (s *Service) SpecShow(version string, anchorsOnly bool) (SpecShowResult, error) {
+	if err := s.paths.ensureStorageCapability(); err != nil {
+		return SpecShowResult{}, err
+	}
 	if !specVersionPattern.MatchString(version) {
 		return SpecShowResult{}, invalidArgumentsf("invalid spec version %q: expected a versioned name like v0.3.0", version)
 	}
@@ -104,7 +111,7 @@ func (s *Service) SpecShow(version string, anchorsOnly bool) (SpecShowResult, er
 		// A version operand naming no spec is an argument failure, not a broken
 		// repository: the read-only spec commands have no not-found code.
 		return SpecShowResult{}, WithMachineErrorCode(missingOrInvalidCode(err, MachineCodeInvalidArguments),
-			fmt.Errorf("read spec file %s: %w", relPath(s.paths.RepoRoot, specFile), fsCause(err)))
+			fmt.Errorf("read spec file %s: %w", s.paths.logicalManagedPath(specFile), fsCause(err)))
 	}
 	active, err := s.activeSpecVersion()
 	if err != nil {
@@ -113,7 +120,7 @@ func (s *Service) SpecShow(version string, anchorsOnly bool) (SpecShowResult, er
 
 	result := SpecShowResult{
 		Version: version,
-		Path:    relPath(s.paths.RepoRoot, specFile),
+		Path:    s.paths.logicalManagedPath(specFile),
 		Active:  version == active,
 	}
 	if anchorsOnly {

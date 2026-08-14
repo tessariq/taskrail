@@ -1,12 +1,12 @@
 ---
 id: T-223-run-every-v0-5-command-against-local-storage
 title: Make shared readers, renderers, and validation storage-neutral
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#local-planning-mode
 dependencies:
     - T-222-initialize-and-discover-ignored-local-taskrail
-updated_at: "2026-08-08T08:40:49Z"
+updated_at: "2026-08-14T15:46:02Z"
 ---
 
 # T-223-run-every-v0-5-command-against-local-storage Make shared readers, renderers, and validation storage-neutral
@@ -45,3 +45,6 @@ owned by T-289 through T-291.
   fixtures for T-289 through T-291 and downstream prompt/review/loop tasks.
 
 ## Implementation Notes
+
+- 2026-08-14T15:45:50Z: Made shared loaders, validation, reports, review evidence, artifact guards, and rename previews storage-neutral with logical identities, strict capability refusal, decoy/no-write coverage, and a passing local-mode CLI sandbox.
+- 2026-08-14T15:46:02Z: verification pass

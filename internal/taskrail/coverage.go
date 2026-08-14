@@ -237,7 +237,11 @@ func detectAreaAnchorIssues(areas []parsedArea) []AreaAnchorIssue {
 // identity and the physical location is unchanged.
 func (s *Service) readActiveSpec(activePath string) (string, error) {
 	logical := filepath.ToSlash(filepath.Clean(activePath))
-	data, err := os.ReadFile(filepath.Join(s.paths.RepoRoot, filepath.FromSlash(s.paths.Storage.physical(logical))))
+	physical, err := s.paths.physicalSpecPath(logical)
+	if err != nil {
+		return "", err
+	}
+	data, err := os.ReadFile(physical)
 	if err != nil {
 		return "", fmt.Errorf("read active spec %s: %w", activePath, fsCause(err))
 	}

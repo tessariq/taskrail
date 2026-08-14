@@ -28,6 +28,7 @@ const (
 	MachineCodeRecoveryPending    = "recovery_pending"
 	MachineCodePartialWrite       = "partial_write"
 	MachineCodeRollbackFailed     = "rollback_failed"
+	MachineCodeUnsupported        = "unsupported"
 )
 
 // MachineFailure is what a failing writer knows about its own outcome beyond the

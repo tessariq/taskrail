@@ -23,10 +23,13 @@ func (s *Service) loadStateAndTasks() (*State, []*Task, error) {
 }
 
 func (s *Service) loadState() (*State, error) {
+	if err := s.paths.ensureStorageCapability(); err != nil {
+		return nil, err
+	}
 	data, err := os.ReadFile(s.paths.StateFile)
 	if err != nil {
 		return nil, WithMachineErrorCode(missingOrInvalidCode(err, MachineCodeNotInitialized),
-			fmt.Errorf("read state file %s: %w", relPath(s.paths.RepoRoot, s.paths.StateFile), fsCause(err)))
+			fmt.Errorf("read state file %s: %w", s.paths.logicalManagedPath(s.paths.StateFile), fsCause(err)))
 	}
 	frontmatter, body, err := parseFrontmatter[StateFrontmatter](data)
 	if err != nil {
@@ -36,10 +39,13 @@ func (s *Service) loadState() (*State, error) {
 }
 
 func (s *Service) loadTasks() ([]*Task, error) {
+	if err := s.paths.ensureStorageCapability(); err != nil {
+		return nil, err
+	}
 	entries, err := os.ReadDir(s.paths.TasksDir)
 	if err != nil {
 		return nil, WithMachineErrorCode(missingOrInvalidCode(err, MachineCodeNotInitialized),
-			fmt.Errorf("read tasks dir %s: %w", relPath(s.paths.RepoRoot, s.paths.TasksDir), fsCause(err)))
+			fmt.Errorf("read tasks dir %s: %w", s.paths.logicalManagedPath(s.paths.TasksDir), fsCause(err)))
 	}
 	tasks := make([]*Task, 0, len(entries))
 	for _, entry := range entries {
@@ -55,7 +61,7 @@ func (s *Service) loadTasks() ([]*Task, error) {
 		if err != nil {
 			return nil, fmt.Errorf("parse task %s: %w", entry.Name(), err)
 		}
-		tasks = append(tasks, &Task{Frontmatter: frontmatter, Body: body, Filename: filename})
+		tasks = append(tasks, &Task{Frontmatter: frontmatter, Body: body, Path: s.paths.logicalManagedPath(filename), Filename: filename})
 	}
 	sort.Slice(tasks, func(i, j int) bool {
 		return tasks[i].Frontmatter.ID < tasks[j].Frontmatter.ID

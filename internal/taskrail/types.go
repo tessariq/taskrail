@@ -252,7 +252,10 @@ type TaskFrontmatter struct {
 type Task struct {
 	Frontmatter TaskFrontmatter
 	Body        string
-	Filename    string
+	// Path is the durable logical identity. Filename remains the resolved physical
+	// location used by command-family writers until their dedicated routing tasks.
+	Path     string
+	Filename string
 }
 
 type ValidationResult struct {

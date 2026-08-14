@@ -24,6 +24,7 @@ func TestMachineCodesAreRegistered(t *testing.T) {
 		MachineCodeRecoveryPending,
 		MachineCodePartialWrite,
 		MachineCodeRollbackFailed,
+		MachineCodeUnsupported,
 	} {
 		if !slices.Contains(machineErrorCodes, code) {
 			t.Errorf("tagged code %q is outside the closed error registry", code)

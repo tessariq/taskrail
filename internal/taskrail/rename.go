@@ -106,10 +106,10 @@ func (s *Service) RenameTask(input RenameTaskInput) (RenameTaskResult, error) {
 	// clobber it. Refuse before any write, so the tree is never partially renamed.
 	if filepath.Clean(oldPath) != filepath.Clean(newPath) && fileExists(newPath) {
 		return RenameTaskResult{}, WithMachineErrorCode(MachineCodeDestinationExists,
-			fmt.Errorf("target file %s already exists", relPath(s.paths.RepoRoot, newPath)))
+			fmt.Errorf("target file %s already exists", s.paths.logicalManagedPath(newPath)))
 	}
 	inbound := inboundDependents(tasks, oldID)
-	changes := renameChanges(s.paths.RepoRoot, oldID, newID, oldPath, newPath, target.Body, inbound)
+	changes := renameChanges(oldID, newID, s.paths.logicalManagedPath(oldPath), s.paths.logicalManagedPath(newPath), target.Body, inbound)
 
 	// Both branches report the state the rename *would* leave behind. Apply mode
 	// also uses this preview as its write gate, so a validation failure cannot
@@ -207,10 +207,10 @@ func bodyHeadingLine(body string) string {
 // renameChanges builds the reviewable change set: the frontmatter id rewrite, the
 // file rename, the body heading rewrite when the body carries one, and one
 // dependency_ref edit per inbound task.
-func renameChanges(root, oldID, newID, oldPath, newPath, body string, inbound []*Task) []RenameChange {
+func renameChanges(oldID, newID, oldPath, newPath, body string, inbound []*Task) []RenameChange {
 	changes := []RenameChange{
 		{Kind: "frontmatter_id", TaskID: oldID, From: oldID, To: newID},
-		{Kind: "file_rename", TaskID: oldID, From: relPath(root, oldPath), To: relPath(root, newPath)},
+		{Kind: "file_rename", TaskID: oldID, From: oldPath, To: newPath},
 	}
 	if rewritten, ok := renameBodyHeading(body, oldID, newID); ok {
 		changes = append(changes, RenameChange{

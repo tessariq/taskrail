@@ -14,6 +14,8 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 - Repository discovery now preserves distinct managed, worktree, Git-common,
   storage, and lock identities and strictly maps layout-2 committed/local paths.
+- Read-only validation, spec/task loading, reports, review evidence, artifact
+  guards, and rename previews now preserve logical paths in either storage mode.
 - All semantic commands now refuse `recovery_pending` without a partial result or
   write while canonical retained or malformed transaction state exists.
 - `taskrail validate` accepts paired task-local `loop_policy`/`loop_reason`

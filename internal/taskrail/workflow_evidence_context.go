@@ -26,6 +26,9 @@ func ValidateWorkflowFileEvidence(report WorkflowReport, context WorkflowEvidenc
 	if context.RepoRoot == "" || context.PlanningDir == "" || context.ArtifactsDir == "" || !workflowObjectID.MatchString(report.TestedHead) {
 		return fmt.Errorf("workflow file evidence context is incomplete")
 	}
+	if err := context.Storage.validate(); err != nil {
+		return err
+	}
 	for _, observation := range report.Observations {
 		for _, evidence := range observation.Evidence {
 			if evidence.Kind != "file" {
@@ -87,6 +90,12 @@ func workflowManagedPath(logicalPath, planningDir string) bool {
 }
 
 func readPublishedReview(context WorkflowEvidenceContext, logicalPath string) ([]byte, error) {
+	if err := context.Storage.validate(); err != nil {
+		return nil, err
+	}
+	if !workflowReviewPath(logicalPath, context.PlanningDir) {
+		return nil, fmt.Errorf("path is outside configured durable review roots")
+	}
 	physical := filepath.Join(context.RepoRoot, filepath.FromSlash(context.Storage.physical(logicalPath)))
 	rel, err := filepath.Rel(context.RepoRoot, physical)
 	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
