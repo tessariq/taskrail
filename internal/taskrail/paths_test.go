@@ -1,6 +1,7 @@
 package taskrail
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -181,10 +182,13 @@ func TestDiscoverPathsLinkedWorktreePreservesGitIdentities(t *testing.T) {
 	if paths.WorktreeRoot != linked || paths.ManagedRoot != linked {
 		t.Fatalf("worktree roots = %q / %q", paths.WorktreeRoot, paths.ManagedRoot)
 	}
-	if paths.GitDir == paths.GitCommonDir || paths.GitCommonDir != filepath.Join(repo, ".git") {
+	wantCommon := filepath.Join(repo, ".git")
+	commonInfo, commonErr := os.Stat(paths.GitCommonDir)
+	wantCommonInfo, wantCommonErr := os.Stat(wantCommon)
+	if paths.GitDir == paths.GitCommonDir || commonErr != nil || wantCommonErr != nil || !os.SameFile(commonInfo, wantCommonInfo) {
 		t.Fatalf("git identities = dir %q common %q", paths.GitDir, paths.GitCommonDir)
 	}
-	if paths.LockRoot != filepath.Join(repo, ".git", "taskrail") {
+	if paths.LockRoot != filepath.Join(paths.GitCommonDir, "taskrail") {
 		t.Fatalf("lock root = %q", paths.LockRoot)
 	}
 	if !reflect.DeepEqual(snapshotTree(t, linked), worktreeBefore) || !reflect.DeepEqual(snapshotTree(t, repo), commonBefore) {
@@ -290,7 +294,9 @@ func TestDiscoverPathsRefusesMismatchMixedAndUnsafeTraversal(t *testing.T) {
 	t.Run("case alias", func(t *testing.T) {
 		repo := initGitRepo(t)
 		writeFile(t, filepath.Join(repo, ".taskrail", "config.yml"), layout2Marker("committed", "specs", "planning"))
-		if err := os.Mkdir(filepath.Join(repo, ".TASKRAIL"), 0o755); err != nil {
+		if err := os.Mkdir(filepath.Join(repo, ".TASKRAIL"), 0o755); errors.Is(err, os.ErrExist) {
+			t.Skip("case-insensitive filesystem prevents creating a distinct alias")
+		} else if err != nil {
 			t.Fatal(err)
 		}
 		if _, err := DiscoverPaths(repo); err == nil || !strings.Contains(err.Error(), "alias") {

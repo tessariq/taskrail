@@ -100,6 +100,8 @@ damage tracked state. The core remains deterministic and provider-independent.
 
 ### Fixed
 
+- Repository discovery now accepts macOS's system `/var` alias and validates
+  Windows 8.3 path ancestors; durable file modes use native Windows semantics.
 - Spec anchor parsing now ignores ATX-looking lines inside backtick and tilde
   fences across validation, inspection, coverage, gap analysis, and spec diff.
 - Release builds now consistently report a `v`-prefixed version, and publishing

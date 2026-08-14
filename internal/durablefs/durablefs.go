@@ -13,6 +13,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/tessariq/taskrail/internal/repolock"
@@ -437,6 +438,12 @@ func directoryIdentity(root *os.Root) (Identity, uint64, error) {
 }
 
 func stableMode(mode fs.FileMode) fs.FileMode {
+	if runtime.GOOS == "windows" {
+		if mode&0o222 == 0 {
+			return 0o444
+		}
+		return 0o666
+	}
 	return mode & (fs.ModePerm | fs.ModeSetuid | fs.ModeSetgid | fs.ModeSticky)
 }
 

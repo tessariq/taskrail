@@ -6,6 +6,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"golang.org/x/text/unicode/norm"
@@ -488,16 +489,25 @@ func validateTargetPath(target string) error {
 			return err
 		}
 		if !found {
-			return nil
+			// Windows temporary paths may contain an 8.3 component (for example
+			// RUNNER~1) that is not returned by ReadDir. Keep validating through
+			// that existing spelling rather than treating the rest as absent.
+			candidate = filepath.Join(parent, component)
+			if _, err := os.Lstat(candidate); errors.Is(err, os.ErrNotExist) {
+				return nil
+			} else if err != nil {
+				return err
+			}
 		}
 		info, err := os.Lstat(candidate)
 		if err != nil {
 			return err
 		}
-		if info.Mode()&os.ModeSymlink != 0 {
+		macOSVarAlias := runtime.GOOS == "darwin" && candidate == "/var" && info.Mode()&os.ModeSymlink != 0
+		if info.Mode()&os.ModeSymlink != 0 && !macOSVarAlias {
 			return fmt.Errorf("path traversal contains symlink %s", candidate)
 		}
-		if candidate != target && !info.IsDir() {
+		if candidate != target && !info.IsDir() && !macOSVarAlias {
 			return fmt.Errorf("path traversal contains special or non-directory entry %s", candidate)
 		}
 		current = candidate

@@ -349,8 +349,8 @@ func TestCreatePublishReplaceRemoveAndMkdir(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if entry.Snapshot().Mode != 0o600 {
-		t.Fatalf("mode = %o, want 600", entry.Snapshot().Mode)
+	if entry.Snapshot().Mode != stableMode(0o600) {
+		t.Fatalf("mode = %o, want %o", entry.Snapshot().Mode, stableMode(0o600))
 	}
 	if err := entry.Remove(); err != nil {
 		t.Fatal(err)
