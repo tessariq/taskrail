@@ -21,6 +21,8 @@ T-240-implement-the-normative-review-schema-decoders	run	-
 T-274-decode-reviewed-decomposition-bundles-strictly	run	-
 T-275-decode-workflow-adversarial-review-memory-strictly	run	-
 T-276-integrate-contextual-review-schema-validation	run	-
+T-322-provide-handle-bound-durable-filesystem-primitives	run	-
+T-323-enforce-repository-recovery-fences-and-stable	run	-
 T-277-add-durable-transaction-journals-and-recovery	run	-
 T-278-publish-typed-directories-without-clobbering	run	-
 T-168-parse-and-validate-an-optional-autonomous-run	run	-
