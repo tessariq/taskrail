@@ -1,14 +1,14 @@
 ---
 id: T-157-upgrade-repositories-transactionally-to-layout-2
 title: Construct strict layout 2 migration candidates
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#layout-compatibility-and-upgrade
 dependencies:
     - T-168-parse-and-validate-an-optional-autonomous-run
     - T-201-make-packaged-skills-agent-skills-compliant
     - T-214-bootstrap-and-migrate-human-owned-repository-notes
-updated_at: "2026-08-04T21:32:13Z"
+updated_at: "2026-08-14T12:53:18Z"
 ---
 
 # T-157-upgrade-repositories-transactionally-to-layout-2 Construct strict layout 2 migration candidates
@@ -53,3 +53,6 @@ preview decisions or durable apply must publish.
   aliases and same-basename decoys, and observe deterministic refusal.
 
 ## Implementation Notes
+
+- 2026-08-14T12:53:09Z: Added strict layout/state/task decoders and write-free layout 2 candidate construction with note and skill classification.
+- 2026-08-14T12:53:18Z: verification pass
