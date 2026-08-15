@@ -1,6 +1,7 @@
 package durablefs
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -56,6 +57,96 @@ func TestBarrierFailureNeverReportsSuccess(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestPublishDirectoryPostcommitBarrierFailureRestoresAbsence(t *testing.T) {
+	repo := t.TempDir()
+	if err := os.Mkdir(filepath.Join(repo, "reviews"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	root, lock := openTestRoot(t, repo)
+	defer releaseTestRoot(t, root, lock)
+	directoryBarriers := 0
+	testHookBarrier = func(step Barrier) error {
+		if step == BarrierDirectory {
+			directoryBarriers++
+			if directoryBarriers == 3 {
+				return errors.New("injected final directory sync failure")
+			}
+		}
+		return nil
+	}
+	defer func() { testHookBarrier = nil }()
+	_, err := root.PublishDirectory(context.Background(), "reviews/session", []DirectoryFile{{Name: "review.json", Content: []byte("candidate"), Mode: 0o644}})
+	if err == nil {
+		t.Fatal("PublishDirectory succeeded after final barrier failure")
+	}
+	if _, statErr := os.Stat(filepath.Join(repo, "reviews", "session")); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("final directory exists: %v", statErr)
+	}
+	if directoryBarriers < 4 {
+		t.Fatalf("directory barriers = %d, want rollback barrier", directoryBarriers)
+	}
+}
+
+func TestPublishDirectoryPostcommitBarrierFailurePreservesExternalEdit(t *testing.T) {
+	repo := t.TempDir()
+	if err := os.Mkdir(filepath.Join(repo, "reviews"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	root, lock := openTestRoot(t, repo)
+	defer releaseTestRoot(t, root, lock)
+	directoryBarriers := 0
+	testHookBarrier = func(step Barrier) error {
+		if step != BarrierDirectory {
+			return nil
+		}
+		directoryBarriers++
+		if directoryBarriers == 3 {
+			mustWrite(t, filepath.Join(repo, "reviews", "session", "review.json"), []byte("external"), 0o644)
+			return errors.New("injected final directory sync failure")
+		}
+		return nil
+	}
+	defer func() { testHookBarrier = nil }()
+	_, err := root.PublishDirectory(context.Background(), "reviews/session", []DirectoryFile{{Name: "review.json", Content: []byte("candidate"), Mode: 0o644}})
+	var mutation *MutationError
+	if !errors.As(err, &mutation) || !mutation.Committed {
+		t.Fatalf("PublishDirectory = %#v, want committed conflict", err)
+	}
+	got, readErr := os.ReadFile(filepath.Join(repo, "reviews", "session", "review.json"))
+	if readErr != nil || string(got) != "external" {
+		t.Fatalf("external bytes = %q, err=%v", got, readErr)
+	}
+}
+
+func TestPublishDirectoryCleansStageWhenMkdirBarrierFails(t *testing.T) {
+	repo := t.TempDir()
+	if err := os.Mkdir(filepath.Join(repo, "reviews"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	root, lock := openTestRoot(t, repo)
+	defer releaseTestRoot(t, root, lock)
+	testHookBarrier = func(step Barrier) error {
+		if step == BarrierDirectory {
+			return errors.New("injected staging directory sync failure")
+		}
+		return nil
+	}
+	defer func() { testHookBarrier = nil }()
+	_, err := root.PublishDirectory(context.Background(), "reviews/session", []DirectoryFile{{Name: "review.json", Content: []byte("candidate"), Mode: 0o644}})
+	if err == nil {
+		t.Fatal("PublishDirectory succeeded")
+	}
+	entries, readErr := os.ReadDir(filepath.Join(repo, "reviews"))
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), ".taskrail-durable-") {
+			t.Fatalf("staging entry remains: %s", entry.Name())
+		}
 	}
 }
 

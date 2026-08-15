@@ -1,12 +1,12 @@
 ---
 id: T-278-publish-typed-directories-without-clobbering
 title: Publish typed directories without clobbering
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#repository-discovery-locking-and-recovery
 dependencies:
     - T-156-protect-existing-semantic-writers-with-snapshot
-updated_at: "2026-08-08T14:23:08Z"
+updated_at: "2026-08-15T11:40:18Z"
 ---
 
 # T-278-publish-typed-directories-without-clobbering Publish typed directories without clobbering
@@ -41,3 +41,6 @@ an existing or substituted destination is never clobbered.
   publication without overwrite or merge.
 
 ## Implementation Notes
+
+- 2026-08-15T11:40:03Z: Added context-aware typed review-directory publication with fixed inventories, lock-derived storage routing, command/write capability bounds, exact-byte receipts, no-follow staged validation, native no-replace commits, durable rollback, and race/fault coverage.
+- 2026-08-15T11:40:18Z: verification pass

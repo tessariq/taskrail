@@ -1,6 +1,6 @@
 ---
 schema_version: 1
-updated_at: "2026-08-15T09:10:43Z"
+updated_at: "2026-08-15T11:40:18Z"
 active_spec_version: v0.5.0
 active_spec_path: specs/v0.5.0.md
 current_task: ""
@@ -8,7 +8,7 @@ current_task_title: ""
 status_summary: idle
 blockers: []
 next_action: Select the next eligible task
-last_verification_result: pass for T-324-harden-native-filesystem-portability-coverage at 2026-08-15T09:10:31Z
+last_verification_result: pass for T-278-publish-typed-directories-without-clobbering at 2026-08-15T11:40:18Z
 relevant_artifacts: []
 continuation_notes:
     - This repository is temporarily dogfooding bootstrap workflow tooling until Taskrail v0.1.0 exists.
@@ -34,7 +34,7 @@ continuation_notes:
 
 ## Last Verification
 
-- pass for T-324-harden-native-filesystem-portability-coverage at 2026-08-15T09:10:31Z
+- pass for T-278-publish-typed-directories-without-clobbering at 2026-08-15T11:40:18Z
 
 ## Next Action
 
@@ -50,8 +50,8 @@ continuation_notes:
 
 ## Task Counts
 
-- todo: 133
+- todo: 132
 - in_progress: 0
-- completed: 190
+- completed: 191
 - blocked: 0
 - cancelled: 0

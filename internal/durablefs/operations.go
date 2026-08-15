@@ -1,10 +1,14 @@
 package durablefs
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io/fs"
 	"os"
+	"path"
+	"slices"
+	"strings"
 )
 
 // Publish atomically creates complete staged bytes without replacing an existing
@@ -182,9 +186,7 @@ func (r *Root) Mkdir(path string, mode fs.FileMode) (*Directory, error) {
 	if err := parent.Mkdir(leaf, PortableMode(mode)); err != nil {
 		return nil, err
 	}
-	if err := barrier(BarrierDirectory, func() error { return syncDirectory(parent) }); err != nil {
-		return nil, &MutationError{Operation: "mkdir", Path: path, Committed: true, Err: err}
-	}
+	barrierErr := barrier(BarrierDirectory, func() error { return syncDirectory(parent) })
 	if testHookAfterCommit != nil {
 		testHookAfterCommit("mkdir", path)
 	}
@@ -197,7 +199,256 @@ func (r *Root) Mkdir(path string, mode fs.FileMode) (*Directory, error) {
 	if err != nil {
 		return nil, &MutationError{Operation: "mkdir", Path: path, Committed: true, Err: err}
 	}
-	return &Directory{Path: path, Identity: identity}, nil
+	directory := &Directory{Path: path, Identity: identity}
+	if barrierErr != nil {
+		return directory, &MutationError{Operation: "mkdir", Path: path, Committed: true, Err: barrierErr}
+	}
+	return directory, nil
+}
+
+// PublishDirectory stages a fixed flat file set beside path and moves the
+// complete directory to that absent name at one native no-replace commit point.
+// The destination parent must already exist.
+func (r *Root) PublishDirectory(ctx context.Context, destination string, files []DirectoryFile) (directory *Directory, err error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if err := r.authorize(); err != nil {
+		return nil, err
+	}
+	stagedFiles, err := validateDirectoryFiles(files)
+	if err != nil {
+		return nil, err
+	}
+	parent, leaf, destinationAncestors, err := r.bindParent(destination)
+	if err != nil {
+		return nil, err
+	}
+	defer parent.Close()
+	if err := exactName(parent, leaf, false); err != nil {
+		return nil, err
+	}
+	stagedLeaf, err := randomName()
+	if err != nil {
+		return nil, err
+	}
+	stagedPath := path.Join(path.Dir(destination), stagedLeaf)
+	staged, err := r.Mkdir(stagedPath, 0o755)
+	if err != nil {
+		if staged != nil {
+			cleanup := r.cleanupDirectory(stagedPath, staged.Identity, nil, nil)
+			return nil, errors.Join(err, cleanup)
+		}
+		return nil, err
+	}
+	committed := false
+	stagedCount := 0
+	snapshots := make([]Snapshot, len(stagedFiles))
+	defer func() {
+		if !committed {
+			if cleanup := r.cleanupDirectory(stagedPath, staged.Identity, stagedFiles[:stagedCount], snapshots[:stagedCount]); cleanup != nil {
+				err = errors.Join(err, &MutationError{Operation: "publish-directory", Path: destination, Staging: stagedPath, Err: cleanup})
+			}
+		}
+	}()
+	for i, file := range stagedFiles {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		if testHookBeforeDirectoryFile != nil {
+			if err := testHookBeforeDirectoryFile(file.Name); err != nil {
+				return nil, err
+			}
+		}
+		entry, err := r.Publish(stagedPath+"/"+file.Name, file.Content, file.Mode)
+		if err != nil {
+			return nil, err
+		}
+		if err := entry.Close(); err != nil {
+			return nil, err
+		}
+		snapshots[i] = entry.Snapshot()
+		stagedCount++
+	}
+	if testHookBeforeDirectoryCommit != nil {
+		testHookBeforeDirectoryCommit(stagedPath, destination)
+	}
+	freshDestination, freshLeaf, freshAncestors, err := r.bindParent(destination)
+	if err != nil {
+		return nil, err
+	}
+	defer freshDestination.Close()
+	if freshLeaf != leaf || !sameIdentities(destinationAncestors, freshAncestors) {
+		return nil, fmt.Errorf("%w: destination ancestors changed before publishing %s", ErrConflict, destination)
+	}
+	if err := exactName(freshDestination, leaf, false); err != nil {
+		return nil, err
+	}
+	freshStaged, stagedName, _, err := r.bindParent(stagedPath)
+	if err != nil {
+		return nil, err
+	}
+	defer freshStaged.Close()
+	identity, err := plainDirectoryIdentity(freshStaged, stagedName, stagedPath)
+	if err != nil || identity != staged.Identity {
+		return nil, fmt.Errorf("%w: staged directory changed before publication: %v", ErrConflict, err)
+	}
+	if err := r.validateStagedDirectory(stagedPath, freshStaged, stagedName, stagedFiles, snapshots); err != nil {
+		return nil, err
+	}
+	if testHookBeforeDirectoryMove != nil {
+		testHookBeforeDirectoryMove(stagedPath, destination)
+	}
+	commitDestination, commitLeaf, commitAncestors, err := r.bindParent(destination)
+	if err != nil {
+		return nil, err
+	}
+	defer commitDestination.Close()
+	if commitLeaf != leaf || !sameIdentities(destinationAncestors, commitAncestors) {
+		return nil, fmt.Errorf("%w: destination ancestors changed at publication of %s", ErrConflict, destination)
+	}
+	if err := exactName(commitDestination, leaf, false); err != nil {
+		return nil, err
+	}
+	commitStaged, commitStagedName, _, err := r.bindParent(stagedPath)
+	if err != nil {
+		return nil, err
+	}
+	defer commitStaged.Close()
+	commitIdentity, err := plainDirectoryIdentity(commitStaged, commitStagedName, stagedPath)
+	if err != nil || commitIdentity != staged.Identity {
+		return nil, fmt.Errorf("%w: staged directory changed at publication: %v", ErrConflict, err)
+	}
+	if err := r.validateStagedDirectory(stagedPath, commitStaged, commitStagedName, stagedFiles, snapshots); err != nil {
+		return nil, err
+	}
+	if testHookAfterDirectoryCheck != nil {
+		testHookAfterDirectoryCheck(stagedPath, destination)
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if err := moveDirectoryNoReplace(commitStaged, commitStagedName, commitDestination, leaf); err != nil {
+		return nil, err
+	}
+	if err := barrier(BarrierDirectory, func() error { return syncDirectory(commitDestination) }); err != nil {
+		if validationErr := r.validatePublishedDirectory(destination, staged.Identity, stagedFiles, snapshots); validationErr != nil {
+			committed = true
+			return nil, &MutationError{Operation: "publish-directory", Path: destination, Committed: true, Err: errors.Join(err, validationErr)}
+		}
+		if rollbackErr := moveDirectoryNoReplace(commitDestination, leaf, commitStaged, commitStagedName); rollbackErr != nil {
+			committed = true
+			return nil, &MutationError{Operation: "publish-directory", Path: destination, Committed: true, Err: errors.Join(err, rollbackErr)}
+		}
+		rollbackBarrierErr := barrier(BarrierDirectory, func() error { return syncDirectory(commitDestination) })
+		return nil, errors.Join(err, rollbackBarrierErr)
+	}
+	if err := r.validatePublishedDirectory(destination, staged.Identity, stagedFiles, snapshots); err != nil {
+		if rollbackErr := moveDirectoryNoReplace(commitDestination, leaf, commitStaged, commitStagedName); rollbackErr != nil {
+			committed = true
+			return nil, &MutationError{Operation: "publish-directory", Path: destination, Committed: true, Err: errors.Join(err, rollbackErr)}
+		}
+		barrierErr := barrier(BarrierDirectory, func() error { return syncDirectory(commitDestination) })
+		return nil, errors.Join(err, barrierErr)
+	}
+	committed = true
+	return &Directory{Path: destination, Identity: staged.Identity}, nil
+}
+
+func (r *Root) validatePublishedDirectory(path string, expected Identity, files []DirectoryFile, snapshots []Snapshot) error {
+	parent, leaf, _, err := r.bindParent(path)
+	if err != nil {
+		return err
+	}
+	defer parent.Close()
+	if err := exactName(parent, leaf, true); err != nil {
+		return err
+	}
+	identity, err := plainDirectoryIdentity(parent, leaf, path)
+	if err != nil {
+		return err
+	}
+	if identity != expected {
+		return fmt.Errorf("%w: directory identity changed for %s", ErrConflict, path)
+	}
+	return r.validateStagedDirectory(path, parent, leaf, files, snapshots)
+}
+
+func (r *Root) validateStagedDirectory(stagedPath string, parent *os.Root, leaf string, files []DirectoryFile, snapshots []Snapshot) error {
+	directory, err := parent.OpenRoot(leaf)
+	if err != nil {
+		return err
+	}
+	entries, err := directory.Open(".")
+	if err != nil {
+		directory.Close()
+		return err
+	}
+	listed, readErr := entries.ReadDir(-1)
+	closeErr := errors.Join(entries.Close(), directory.Close())
+	if readErr != nil || closeErr != nil {
+		return errors.Join(readErr, closeErr)
+	}
+	if len(listed) != len(files) {
+		return fmt.Errorf("%w: staged directory membership changed", ErrConflict)
+	}
+	slices.SortFunc(listed, func(a, b fs.DirEntry) int { return strings.Compare(a.Name(), b.Name()) })
+	for i, file := range files {
+		if listed[i].Name() != file.Name {
+			return fmt.Errorf("%w: staged directory membership changed", ErrConflict)
+		}
+		entry, err := r.Rebind(stagedPath+"/"+file.Name, snapshots[i])
+		if err != nil {
+			return err
+		}
+		if err := entry.Close(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateDirectoryFiles(files []DirectoryFile) ([]DirectoryFile, error) {
+	if len(files) == 0 {
+		return nil, errors.New("directory publication has no files")
+	}
+	out := make([]DirectoryFile, len(files))
+	seen := make(map[string]string, len(files))
+	for i, file := range files {
+		parts, err := splitPath(file.Name)
+		if err != nil || len(parts) != 1 {
+			return nil, fmt.Errorf("invalid directory member %q", file.Name)
+		}
+		key := aliasKey(file.Name)
+		if previous, ok := seen[key]; ok {
+			return nil, fmt.Errorf("%w: directory members %q and %q collide", ErrAlias, previous, file.Name)
+		}
+		seen[key] = file.Name
+		out[i] = DirectoryFile{Name: file.Name, Content: slices.Clone(file.Content), Mode: file.Mode}
+	}
+	slices.SortFunc(out, func(a, b DirectoryFile) int { return strings.Compare(a.Name, b.Name) })
+	return out, nil
+}
+
+func (r *Root) cleanupDirectory(stagedPath string, expected Identity, files []DirectoryFile, snapshots []Snapshot) error {
+	if err := r.validatePublishedDirectory(stagedPath, expected, files, snapshots); err != nil {
+		return err
+	}
+	var problems []error
+	for i, file := range files {
+		entry, err := r.Rebind(stagedPath+"/"+file.Name, snapshots[i])
+		if err != nil {
+			problems = append(problems, err)
+			continue
+		}
+		if err := entry.Remove(); err != nil {
+			problems = append(problems, err)
+		}
+	}
+	if err := r.RemoveDir(stagedPath); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		problems = append(problems, err)
+	}
+	return errors.Join(problems...)
 }
 
 // RemoveDir removes one empty directory relative to a retained parent and makes

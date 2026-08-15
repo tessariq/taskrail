@@ -368,6 +368,351 @@ func TestCreatePublishReplaceRemoveAndMkdir(t *testing.T) {
 	}
 }
 
+func TestPublishDirectoryCommitsCompleteBytesAtOneAbsentName(t *testing.T) {
+	repo := t.TempDir()
+	if err := os.Mkdir(filepath.Join(repo, "reviews"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	root, lock := openTestRoot(t, repo)
+	defer releaseTestRoot(t, root, lock)
+
+	directory, err := root.PublishDirectory(context.Background(), "reviews/session", []DirectoryFile{
+		{Name: "a.json", Content: []byte("a"), Mode: 0o640},
+		{Name: "b.json", Content: []byte("b"), Mode: 0o600},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if directory.Path != "reviews/session" {
+		t.Fatalf("directory = %+v", directory)
+	}
+	for name, want := range map[string]string{"a.json": "a", "b.json": "b"} {
+		got, readErr := os.ReadFile(filepath.Join(repo, "reviews", "session", name))
+		if readErr != nil || string(got) != want {
+			t.Fatalf("%s = %q, err=%v", name, got, readErr)
+		}
+	}
+}
+
+func TestPublishDirectoryLosesDestinationRaceWithoutClobbering(t *testing.T) {
+	repo := t.TempDir()
+	if err := os.Mkdir(filepath.Join(repo, "reviews"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	root, lock := openTestRoot(t, repo)
+	defer releaseTestRoot(t, root, lock)
+	testHookBeforeDirectoryCommit = func(_, path string) {
+		testHookBeforeDirectoryCommit = nil
+		if err := os.Mkdir(filepath.Join(repo, filepath.FromSlash(path)), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		mustWrite(t, filepath.Join(repo, filepath.FromSlash(path), "winner"), []byte("external"), 0o644)
+	}
+	t.Cleanup(func() { testHookBeforeDirectoryCommit = nil })
+
+	_, err := root.PublishDirectory(context.Background(), "reviews/session", []DirectoryFile{{Name: "review.json", Content: []byte("candidate"), Mode: 0o644}})
+	if err == nil {
+		t.Fatal("PublishDirectory succeeded after destination race")
+	}
+	got, readErr := os.ReadFile(filepath.Join(repo, "reviews", "session", "winner"))
+	if readErr != nil || string(got) != "external" {
+		t.Fatalf("winner bytes = %q, err=%v", got, readErr)
+	}
+	if _, statErr := os.Stat(filepath.Join(repo, "reviews", "session", "review.json")); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("candidate merged into winner: %v", statErr)
+	}
+}
+
+func TestDirectoryNoReplaceCommitHasOneConcurrentWinner(t *testing.T) {
+	repo := t.TempDir()
+	for _, candidate := range []string{"one", "two"} {
+		if err := os.Mkdir(filepath.Join(repo, candidate), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		mustWrite(t, filepath.Join(repo, candidate, "review.json"), []byte(candidate), 0o644)
+	}
+	start := make(chan struct{})
+	results := make(chan error, 2)
+	for _, candidate := range []string{"one", "two"} {
+		go func() {
+			parent, err := os.OpenRoot(repo)
+			if err != nil {
+				results <- err
+				return
+			}
+			defer parent.Close()
+			<-start
+			results <- moveDirectoryNoReplace(parent, candidate, parent, "winner")
+		}()
+	}
+	close(start)
+	var succeeded int
+	for range 2 {
+		if err := <-results; err == nil {
+			succeeded++
+		}
+	}
+	if succeeded != 1 {
+		t.Fatalf("successful commits = %d, want 1", succeeded)
+	}
+	got, err := os.ReadFile(filepath.Join(repo, "winner", "review.json"))
+	if err != nil || (string(got) != "one" && string(got) != "two") {
+		t.Fatalf("winner bytes = %q, err=%v", got, err)
+	}
+}
+
+func TestPublishDirectoryStagingFailureLeavesNoFinalDirectory(t *testing.T) {
+	repo := t.TempDir()
+	if err := os.Mkdir(filepath.Join(repo, "reviews"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	root, lock := openTestRoot(t, repo)
+	defer releaseTestRoot(t, root, lock)
+	testHookBeforeDirectoryFile = func(name string) error {
+		if name == "b.json" {
+			return errors.New("injected staging failure")
+		}
+		return nil
+	}
+	t.Cleanup(func() { testHookBeforeDirectoryFile = nil })
+
+	_, err := root.PublishDirectory(context.Background(), "reviews/session", []DirectoryFile{
+		{Name: "a.json", Content: []byte("a"), Mode: 0o644},
+		{Name: "b.json", Content: []byte("b"), Mode: 0o644},
+	})
+	if err == nil {
+		t.Fatal("PublishDirectory succeeded")
+	}
+	if _, statErr := os.Stat(filepath.Join(repo, "reviews", "session")); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("final directory exists: %v", statErr)
+	}
+	entries, readErr := os.ReadDir(filepath.Join(repo, "reviews"))
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), ".taskrail-durable-") {
+			t.Fatalf("staging directory remains: %s", entry.Name())
+		}
+	}
+}
+
+func TestPublishDirectoryRefusesStagedByteAndMembershipChanges(t *testing.T) {
+	for _, test := range []struct {
+		name   string
+		mutate func(*testing.T, string)
+	}{
+		{name: "bytes", mutate: func(t *testing.T, staged string) {
+			mustWrite(t, filepath.Join(staged, "review.json"), []byte("changed"), 0o644)
+		}},
+		{name: "member", mutate: func(t *testing.T, staged string) {
+			mustWrite(t, filepath.Join(staged, "extra.json"), []byte("extra"), 0o644)
+		}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			repo := t.TempDir()
+			if err := os.Mkdir(filepath.Join(repo, "reviews"), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			root, lock := openTestRoot(t, repo)
+			defer releaseTestRoot(t, root, lock)
+			testHookBeforeDirectoryCommit = func(staged, _ string) {
+				testHookBeforeDirectoryCommit = nil
+				test.mutate(t, filepath.Join(repo, filepath.FromSlash(staged)))
+			}
+			t.Cleanup(func() { testHookBeforeDirectoryCommit = nil })
+			_, err := root.PublishDirectory(context.Background(), "reviews/session", []DirectoryFile{{Name: "review.json", Content: []byte("candidate"), Mode: 0o644}})
+			if !errors.Is(err, ErrConflict) {
+				t.Fatalf("PublishDirectory = %v, want ErrConflict", err)
+			}
+			if _, statErr := os.Stat(filepath.Join(repo, "reviews", "session")); !errors.Is(statErr, os.ErrNotExist) {
+				t.Fatalf("final directory exists: %v", statErr)
+			}
+		})
+	}
+}
+
+func TestPublishDirectoryRefusesStageSubstitutionAtCommit(t *testing.T) {
+	repo := t.TempDir()
+	if err := os.Mkdir(filepath.Join(repo, "reviews"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	root, lock := openTestRoot(t, repo)
+	defer releaseTestRoot(t, root, lock)
+	testHookBeforeDirectoryMove = func(staged, _ string) {
+		testHookBeforeDirectoryMove = nil
+		physical := filepath.Join(repo, filepath.FromSlash(staged))
+		if err := os.Rename(physical, physical+"-original"); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Mkdir(physical, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		mustWrite(t, filepath.Join(physical, "review.json"), []byte("external"), 0o644)
+	}
+	t.Cleanup(func() { testHookBeforeDirectoryMove = nil })
+	_, err := root.PublishDirectory(context.Background(), "reviews/session", []DirectoryFile{{Name: "review.json", Content: []byte("candidate"), Mode: 0o644}})
+	if !errors.Is(err, ErrConflict) {
+		t.Fatalf("PublishDirectory = %v, want ErrConflict", err)
+	}
+	if _, statErr := os.Stat(filepath.Join(repo, "reviews", "session")); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("final directory exists: %v", statErr)
+	}
+	var substitute string
+	entries, readErr := os.ReadDir(filepath.Join(repo, "reviews"))
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), ".taskrail-durable-") && !strings.HasSuffix(entry.Name(), "-original") {
+			substitute = filepath.Join(repo, "reviews", entry.Name(), "review.json")
+		}
+	}
+	got, readErr := os.ReadFile(substitute)
+	if readErr != nil || string(got) != "external" {
+		t.Fatalf("substituted stage bytes = %q, err=%v", got, readErr)
+	}
+}
+
+func TestPublishDirectoryRollsBackStageSubstitutionAfterFinalCheck(t *testing.T) {
+	repo := t.TempDir()
+	if err := os.Mkdir(filepath.Join(repo, "reviews"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	root, lock := openTestRoot(t, repo)
+	defer releaseTestRoot(t, root, lock)
+	var substitute string
+	testHookAfterDirectoryCheck = func(staged, _ string) {
+		testHookAfterDirectoryCheck = nil
+		physical := filepath.Join(repo, filepath.FromSlash(staged))
+		if err := os.Rename(physical, physical+"-candidate"); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Mkdir(physical, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		substitute = filepath.Join(physical, "review.json")
+		mustWrite(t, substitute, []byte("external"), 0o644)
+	}
+	t.Cleanup(func() { testHookAfterDirectoryCheck = nil })
+
+	_, err := root.PublishDirectory(context.Background(), "reviews/session", []DirectoryFile{{Name: "review.json", Content: []byte("candidate"), Mode: 0o644}})
+	if !errors.Is(err, ErrConflict) {
+		t.Fatalf("PublishDirectory = %v, want ErrConflict", err)
+	}
+	if _, statErr := os.Stat(filepath.Join(repo, "reviews", "session")); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("final directory exists: %v", statErr)
+	}
+	got, readErr := os.ReadFile(substitute)
+	if readErr != nil || string(got) != "external" {
+		t.Fatalf("substituted bytes = %q, err=%v", got, readErr)
+	}
+}
+
+func TestPublishDirectoryRollsBackAliasCreatedAtCommit(t *testing.T) {
+	repo := t.TempDir()
+	if err := os.Mkdir(filepath.Join(repo, "reviews"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	root, lock := openTestRoot(t, repo)
+	defer releaseTestRoot(t, root, lock)
+	testHookAfterDirectoryCheck = func(_, _ string) {
+		testHookAfterDirectoryCheck = nil
+		if err := os.Mkdir(filepath.Join(repo, "reviews", "Session"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Cleanup(func() { testHookAfterDirectoryCheck = nil })
+
+	_, err := root.PublishDirectory(context.Background(), "reviews/session", []DirectoryFile{{Name: "review.json", Content: []byte("candidate"), Mode: 0o644}})
+	if !errors.Is(err, ErrAlias) {
+		t.Fatalf("PublishDirectory = %v, want ErrAlias", err)
+	}
+	if _, statErr := os.Stat(filepath.Join(repo, "reviews", "session")); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("final directory exists: %v", statErr)
+	}
+}
+
+func TestPublishDirectoryCleanupPreservesSubstitutedStage(t *testing.T) {
+	repo := t.TempDir()
+	if err := os.Mkdir(filepath.Join(repo, "reviews"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	root, lock := openTestRoot(t, repo)
+	defer releaseTestRoot(t, root, lock)
+	var substitute string
+	testHookBeforeDirectoryCommit = func(staged, _ string) {
+		testHookBeforeDirectoryCommit = nil
+		physical := filepath.Join(repo, filepath.FromSlash(staged))
+		if err := os.Rename(physical, physical+"-original"); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Mkdir(physical, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		substitute = filepath.Join(physical, "review.json")
+		mustWrite(t, substitute, []byte("external"), 0o644)
+	}
+	t.Cleanup(func() { testHookBeforeDirectoryCommit = nil })
+	_, err := root.PublishDirectory(context.Background(), "reviews/session", []DirectoryFile{{Name: "review.json", Content: []byte("candidate"), Mode: 0o644}})
+	if !errors.Is(err, ErrConflict) {
+		t.Fatalf("PublishDirectory = %v, want ErrConflict", err)
+	}
+	got, readErr := os.ReadFile(substitute)
+	if readErr != nil || string(got) != "external" {
+		t.Fatalf("substituted stage bytes = %q, err=%v", got, readErr)
+	}
+}
+
+func TestPublishDirectoryPostcommitSubstitutionDoesNotReportSuccess(t *testing.T) {
+	repo := t.TempDir()
+	if err := os.Mkdir(filepath.Join(repo, "reviews"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	root, lock := openTestRoot(t, repo)
+	defer releaseTestRoot(t, root, lock)
+	directoryBarriers := 0
+	testHookBarrier = func(step Barrier) error {
+		if step != BarrierDirectory {
+			return nil
+		}
+		directoryBarriers++
+		if directoryBarriers == 3 {
+			final := filepath.Join(repo, "reviews", "session")
+			if err := os.Rename(final, final+"-candidate"); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Mkdir(final, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			mustWrite(t, filepath.Join(final, "review.json"), []byte("external"), 0o644)
+		}
+		return nil
+	}
+	t.Cleanup(func() { testHookBarrier = nil })
+	_, err := root.PublishDirectory(context.Background(), "reviews/session", []DirectoryFile{{Name: "review.json", Content: []byte("candidate"), Mode: 0o644}})
+	if err == nil {
+		t.Fatal("PublishDirectory reported success after final substitution")
+	}
+	if _, statErr := os.Stat(filepath.Join(repo, "reviews", "session")); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("final directory exists: %v", statErr)
+	}
+	entries, readErr := os.ReadDir(filepath.Join(repo, "reviews"))
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	preserved := false
+	for _, entry := range entries {
+		got, err := os.ReadFile(filepath.Join(repo, "reviews", entry.Name(), "review.json"))
+		if err == nil && string(got) == "external" {
+			preserved = true
+		}
+	}
+	if !preserved {
+		t.Fatal("external final bytes were not preserved after rollback")
+	}
+}
+
 func TestClosedEntryReplaceRefuses(t *testing.T) {
 	repo := t.TempDir()
 	mustWrite(t, filepath.Join(repo, "file"), []byte("old"), 0o640)

@@ -106,16 +106,28 @@ type Directory struct {
 	Identity Identity
 }
 
+// DirectoryFile is one plain regular file staged for an atomic directory
+// publication. Name is a single canonical basename.
+type DirectoryFile struct {
+	Name    string
+	Content []byte
+	Mode    fs.FileMode
+}
+
 var (
-	testHookBeforeMutation func(operation, path string)
-	testHookBarrier        func(Barrier) error
-	testHookBeforeRootOpen func()
-	testHookAfterDirOpen   func(string)
-	testHookBeforeStageCAS func(*os.Root, string)
-	testHookRemoveStage    func(*os.Root, string) error
-	testHookBeforeLink     func(*os.Root, string)
-	testHookAfterCommit    func(string, string)
-	testHookEntryClose     func(*os.Root) error
+	testHookBeforeMutation        func(operation, path string)
+	testHookBarrier               func(Barrier) error
+	testHookBeforeRootOpen        func()
+	testHookAfterDirOpen          func(string)
+	testHookBeforeStageCAS        func(*os.Root, string)
+	testHookRemoveStage           func(*os.Root, string) error
+	testHookBeforeLink            func(*os.Root, string)
+	testHookAfterCommit           func(string, string)
+	testHookBeforeDirectoryFile   func(string) error
+	testHookBeforeDirectoryCommit func(string, string)
+	testHookBeforeDirectoryMove   func(string, string)
+	testHookAfterDirectoryCheck   func(string, string)
+	testHookEntryClose            func(*os.Root) error
 )
 
 // Open binds an absolute repository root without accepting a symlink or reparse
