@@ -455,7 +455,7 @@ func observeFile(parent *os.Root, leaf string) (Snapshot, error) {
 	if confirmErr != nil || confirmedIdentity != identity || confirmedLinks != links {
 		return Snapshot{}, fmt.Errorf("%w: %q identity changed after reading", ErrConflict, leaf)
 	}
-	return Snapshot{SHA256: hex.EncodeToString(digest.Sum(nil)), Mode: stableMode(opened.Mode()), Links: links, Identity: identity}, nil
+	return Snapshot{SHA256: hex.EncodeToString(digest.Sum(nil)), Mode: PortableMode(opened.Mode()), Links: links, Identity: identity}, nil
 }
 
 func directoryIdentity(root *os.Root) (Identity, uint64, error) {
@@ -474,7 +474,9 @@ func directoryIdentity(root *os.Root) (Identity, uint64, error) {
 	return nativeIdentity(file)
 }
 
-func stableMode(mode fs.FileMode) fs.FileMode {
+// PortableMode returns the semantic mode persisted in filesystem evidence.
+// Windows exposes writable versus read-only rather than Unix permission bits.
+func PortableMode(mode fs.FileMode) fs.FileMode {
 	if runtime.GOOS == "windows" {
 		if mode&0o222 == 0 {
 			return 0o444

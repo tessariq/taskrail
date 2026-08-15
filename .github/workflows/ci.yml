@@ -100,6 +100,9 @@ jobs:
       - name: Vet
         run: task vet
 
+      - name: Native filesystem portability
+        run: task test:filesystem
+
       - name: Test
         run: task test
 

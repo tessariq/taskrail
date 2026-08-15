@@ -517,6 +517,33 @@ func TestCIMatrixCoversRequiredOSes(t *testing.T) {
 	}
 }
 
+// Filesystem capability skips must be visible on each native matrix leg rather
+// than buried in the non-verbose full suite.
+func TestCIRunsVerboseFilesystemPortabilitySuiteOnNativeMatrix(t *testing.T) {
+	root := repoRoot(t)
+	target := strings.Join(taskfileBlock(readFile(t, root, "Taskfile.yml"), "test:filesystem:"), "\n")
+	for _, required := range []string{"go test -v", "./internal/durablefs", "./internal/durabletx", "./internal/repolock", "./internal/repotx", "./internal/taskrail", "TestParseFrontmatterHandlesCRLF", "TestDecodeDecompositionBundlePreservesCompleteValidBundle"} {
+		if !strings.Contains(target, required) {
+			t.Errorf("Taskfile test:filesystem target must contain %q", required)
+		}
+	}
+
+	ci := readFile(t, root, ".github/workflows/ci.yml")
+	found := false
+	for _, block := range workflowStepBlocks(ci) {
+		joined := strings.Join(block, "\n")
+		if strings.Contains(joined, "run: task test:filesystem") {
+			found = true
+			if strings.Contains(joined, "if:") {
+				t.Error("filesystem portability suite must run unconditionally on the native matrix")
+			}
+		}
+	}
+	if !found {
+		t.Error("ci.yml build-test matrix must run `task test:filesystem`")
+	}
+}
+
 // ciStepRunsUnderCondition reports whether any workflow step whose `if:`
 // condition equality-matches cond has a `run:` body invoking runCmd. It reuses
 // workflowStepBlocks to split the file into per-step blocks, so the guard

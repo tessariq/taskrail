@@ -357,8 +357,8 @@ func TestCreatePublishReplaceRemoveAndMkdir(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if entry.Snapshot().Mode != stableMode(0o600) {
-		t.Fatalf("mode = %o, want %o", entry.Snapshot().Mode, stableMode(0o600))
+	if entry.Snapshot().Mode != PortableMode(0o600) {
+		t.Fatalf("mode = %o, want %o", entry.Snapshot().Mode, PortableMode(0o600))
 	}
 	if err := entry.Remove(); err != nil {
 		t.Fatal(err)
@@ -475,7 +475,10 @@ func TestMoveDirAtomicallyClearsSourceNamespace(t *testing.T) {
 	root, lock := openTestRoot(t, repo)
 	defer releaseTestRoot(t, root, lock)
 	if err := root.MoveDir("transactions/tx", "completed/tx"); err != nil {
-		t.Fatalf("MoveDir: %v", err)
+		var mutation *MutationError
+		if !errors.As(err, &mutation) || !mutation.Committed || !errors.Is(err, ErrUnsupported) {
+			t.Fatalf("MoveDir: %v", err)
+		}
 	}
 	if _, err := os.Stat(filepath.Join(repo, "transactions", "tx")); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("source remains: %v", err)

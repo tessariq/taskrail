@@ -182,7 +182,7 @@ func (m manifest) validate(transactionID string, repo repolock.Repository) error
 			return fmt.Errorf("manifest member %q records incomplete identity evidence", member.Reported)
 		}
 		for _, state := range []*fileState{member.Original, member.Candidate} {
-			if state != nil && (!digestPattern.MatchString(state.SHA256) || uint32(stableMode(fs.FileMode(state.Mode))) != state.Mode) {
+			if state != nil && (!digestPattern.MatchString(state.SHA256) || uint32(durablefs.PortableMode(fs.FileMode(state.Mode))) != state.Mode) {
 				return fmt.Errorf("manifest member %q records invalid digest or mode", member.Reported)
 			}
 		}

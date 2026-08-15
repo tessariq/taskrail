@@ -1,12 +1,55 @@
 package durabletx
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
+
+	"github.com/tessariq/taskrail/internal/repolock"
 )
+
+const (
+	durableTXHelperModeEnv = "DURABLETX_HELPER_MODE"
+	durableTXHelperRootEnv = "DURABLETX_HELPER_ROOT"
+	durableTXTestID        = "0123456789abcdef0123456789abcdef"
+)
+
+func TestDurableTXHelperProcess(t *testing.T) {
+	if os.Getenv(durableTXHelperModeEnv) != "kill-during-publish" {
+		t.Skip("helper process entry point; runs only when re-executed")
+	}
+	repo := repolock.Repository{Root: os.Getenv(durableTXHelperRootEnv), Mode: repolock.ModeCommitted}
+	lock, err := repolock.Acquire(context.Background(), repolock.Request{
+		Repository: repo, Command: "init", TransactionID: durableTXTestID, Capability: ownerCapability(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	testHookAfterMember = func(phase Phase, reported string) error {
+		if phase != PhasePublishing {
+			return nil
+		}
+		if _, err := fmt.Fprintf(os.Stdout, "DURABLETX_READY %s %s\n", durableTXTestID, reported); err != nil {
+			return err
+		}
+		for {
+			time.Sleep(time.Hour)
+		}
+	}
+	_, err = Run(context.Background(), lock, repo, request("init",
+		member("planning/A.md", "new-a"), member("planning/B.md", "new-b")))
+	if err != nil {
+		t.Fatal(err)
+	}
+}
 
 func TestRecoverClearsPreparedFence(t *testing.T) {
 	repo := newRepository(t)
@@ -281,6 +324,101 @@ func TestRecoverRestoresMixedPublication(t *testing.T) {
 	}
 	if b, _ := read(t, repo, "planning/B.md"); b != "old-b" {
 		t.Fatalf("B = %q, want old-b", b)
+	}
+}
+
+func TestRecoverRestoresMixedPublicationAfterProcessTermination(t *testing.T) {
+	repo := newRepository(t)
+	seed(t, repo, "planning/A.md", "old-a")
+	seed(t, repo, "planning/B.md", "old-b")
+
+	cmd := exec.Command(os.Args[0], "-test.run=^TestDurableTXHelperProcess$")
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	cmd.Env = append(os.Environ(),
+		durableTXHelperModeEnv+"=kill-during-publish",
+		durableTXHelperRootEnv+"="+repo.Root,
+	)
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	finished := false
+	t.Cleanup(func() {
+		if !finished {
+			_ = cmd.Process.Kill()
+			_ = cmd.Wait()
+		}
+	})
+
+	ready := "DURABLETX_READY " + durableTXTestID + " planning/A.md"
+	scanner := bufio.NewScanner(stdout)
+	seenReady := false
+	for scanner.Scan() {
+		if strings.TrimSpace(scanner.Text()) == ready {
+			seenReady = true
+			break
+		}
+	}
+	if !seenReady {
+		waitErr := cmd.Wait()
+		finished = true
+		t.Fatalf("helper did not reach publication boundary: scan=%v wait=%v stderr=%s", scanner.Err(), waitErr, stderr.String())
+	}
+	if err := cmd.Process.Kill(); err != nil {
+		t.Fatalf("kill helper: %v", err)
+	}
+	if err := cmd.Wait(); err == nil {
+		t.Fatal("killed helper exited successfully")
+	}
+	finished = true
+
+	status, err := repolock.Inspect(repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !status.Held || status.Owner == nil || status.Owner.PID != cmd.Process.Pid ||
+		status.Owner.TransactionID == nil || *status.Owner.TransactionID != durableTXTestID {
+		t.Fatalf("abandoned ownership = %+v, want killed transaction owner", status)
+	}
+	if a, _ := read(t, repo, "planning/A.md"); a != "new-a" {
+		t.Fatalf("A before recovery = %q, want published candidate", a)
+	}
+	if b, _ := read(t, repo, "planning/B.md"); b != "old-b" {
+		t.Fatalf("B before recovery = %q, want original", b)
+	}
+
+	// Guarded stale-lock clearing is owned by T-231. Remove only this inspected,
+	// test-created abandoned record so the recovery engine can take ownership.
+	if err := os.Remove(repolock.LockPath(repo)); err != nil {
+		t.Fatalf("remove abandoned test lock: %v", err)
+	}
+	lock := acquire(t, repo, ownerCapability())
+	preview, err := Recover(context.Background(), lock, repo, RecoveryRequest{TransactionID: durableTXTestID})
+	if err != nil {
+		t.Fatalf("preview recovery: %v", err)
+	}
+	if preview.Action != RestoreOriginal || preview.Applied {
+		t.Fatalf("preview = %+v, want unapplied restore_original", preview)
+	}
+	applied, err := Recover(context.Background(), lock, repo, RecoveryRequest{TransactionID: durableTXTestID, Apply: true})
+	if err != nil {
+		t.Fatalf("apply recovery: %v", err)
+	}
+	if !applied.Applied || applied.Action != RestoreOriginal {
+		t.Fatalf("applied recovery = %+v", applied)
+	}
+	if a, _ := read(t, repo, "planning/A.md"); a != "old-a" {
+		t.Fatalf("A after recovery = %q, want original", a)
+	}
+	if b, _ := read(t, repo, "planning/B.md"); b != "old-b" {
+		t.Fatalf("B after recovery = %q, want original", b)
+	}
+	if retained(t, repo) != "" {
+		t.Fatal("recovery left a transaction fence")
 	}
 }
 

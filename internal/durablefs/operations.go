@@ -127,7 +127,7 @@ func stage(parent *os.Root, content []byte, mode fs.FileMode) (string, *os.File,
 	if err := barrier(BarrierContent, func() error { return nativeSync(file) }); err != nil {
 		return failed(err)
 	}
-	if err := file.Chmod(stableMode(mode)); err != nil {
+	if err := file.Chmod(PortableMode(mode)); err != nil {
 		return failed(err)
 	}
 	if err := barrier(BarrierMetadata, func() error { return nativeSync(file) }); err != nil {
@@ -137,8 +137,8 @@ func stage(parent *os.Root, content []byte, mode fs.FileMode) (string, *os.File,
 	if err != nil {
 		return failed(err)
 	}
-	if snapshot.Mode != stableMode(mode) {
-		return failed(fmt.Errorf("%w: requested mode %o became %o", ErrUnsupported, stableMode(mode), snapshot.Mode))
+	if snapshot.Mode != PortableMode(mode) {
+		return failed(fmt.Errorf("%w: requested mode %o became %o", ErrUnsupported, PortableMode(mode), snapshot.Mode))
 	}
 	return name, file, snapshot, nil
 }
@@ -179,7 +179,7 @@ func (r *Root) Mkdir(path string, mode fs.FileMode) (*Directory, error) {
 		return nil, err
 	}
 	fresh.Close()
-	if err := parent.Mkdir(leaf, stableMode(mode)); err != nil {
+	if err := parent.Mkdir(leaf, PortableMode(mode)); err != nil {
 		return nil, err
 	}
 	if err := barrier(BarrierDirectory, func() error { return syncDirectory(parent) }); err != nil {

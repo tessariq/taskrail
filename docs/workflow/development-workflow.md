@@ -14,6 +14,7 @@ Contributor and coding-agent workflow for Taskrail tracked work.
 
 - Build: `go build ./cmd/taskrail`
 - Tests: `go test ./...`
+- Native filesystem portability: `task test:filesystem`
 - Workflow validation: `go run ./cmd/taskrail validate`
 - CLI smoke: `go run ./cmd/taskrail --help`
 - Skill package parity: `task check:skills`
@@ -30,6 +31,7 @@ For any code change:
 
 - Unit tests are the default layer.
 - Filesystem-level integration tests should use temporary repositories.
+- `task test:filesystem` runs filesystem-sensitive packages and known path/line-ending regressions verbosely so native capability skips remain visible.
 - Keep CLI smoke tests sparse and high-signal.
 
 Rules:
@@ -37,6 +39,10 @@ Rules:
 - Keep tests deterministic.
 - Prefer temporary directories over global state.
 - Do not introduce Testcontainers here.
+
+Linux containers may add Linux filesystem coverage, but they do not execute the
+native macOS or Windows filesystem APIs. The CI matrix's native runners remain
+the portability authority; cross-compilation proves only that target code builds.
 
 ## Manual Testing
 

@@ -22,6 +22,7 @@ func newRepository(t *testing.T) repolock.Repository {
 	if err := os.MkdirAll(filepath.Join(root, ".taskrail", "runtime"), 0o755); err != nil {
 		t.Fatalf("seed runtime directory: %v", err)
 	}
+	requireDirectoryDurability(t, root)
 	return repolock.Repository{Root: root, Mode: repolock.ModeCommitted}
 }
 
@@ -39,7 +40,24 @@ func newLocalRepository(t *testing.T) repolock.Repository {
 	if err := os.MkdirAll(repo.StorageRoot(), 0o755); err != nil {
 		t.Fatal(err)
 	}
+	requireDirectoryDurability(t, repo.StorageRoot())
 	return repo
+}
+
+func requireDirectoryDurability(t *testing.T, root string) {
+	t.Helper()
+	directory, err := os.Open(root)
+	if err != nil {
+		t.Fatalf("open directory durability probe: %v", err)
+	}
+	syncErr := directory.Sync()
+	closeErr := directory.Close()
+	if syncErr != nil {
+		t.Skipf("filesystem does not support durable directory sync: %v", syncErr)
+	}
+	if closeErr != nil {
+		t.Fatalf("close directory durability probe: %v", closeErr)
+	}
 }
 
 func ownerCapability() repolock.Capability {

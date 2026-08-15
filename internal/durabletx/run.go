@@ -181,7 +181,7 @@ func prepareEntries(store *store, req Request) ([]*transactionEntry, error) {
 			} else if requested := requestedMode(req.Members, entry.manifest.Kind, entry.manifest.Reported); requested != 0 {
 				mode = requested
 			}
-			candidate := fileState{SHA256: digest(entry.candidate), Mode: uint32(stableMode(mode))}
+			candidate := fileState{SHA256: digest(entry.candidate), Mode: uint32(durablefs.PortableMode(mode))}
 			entry.manifest.Candidate = &candidate
 		}
 	}
@@ -647,8 +647,4 @@ func removeDirectory(root *durablefs.Root, name string) error {
 func digest(data []byte) string {
 	sum := sha256.Sum256(data)
 	return hex.EncodeToString(sum[:])
-}
-
-func stableMode(mode fs.FileMode) fs.FileMode {
-	return mode & (fs.ModePerm | fs.ModeSetuid | fs.ModeSetgid | fs.ModeSticky)
 }

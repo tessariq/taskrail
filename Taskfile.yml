@@ -72,6 +72,12 @@ tasks:
     cmds:
       - go test ./...
 
+  test:filesystem:
+    desc: Run native filesystem portability tests verbosely, including capability skips
+    cmds:
+      - go test -v ./internal/durablefs ./internal/durabletx ./internal/repolock ./internal/repotx
+      - go test -v ./internal/taskrail -run '^(TestParseFrontmatterHandlesCRLF|TestAppendTaskNoteTwiceKeepsOneHeading|TestApplyImportDraftResolvesSpecRefAgainstPendingImportedSpec|TestDecodeDecompositionBundlePreservesCompleteValidBundle|TestDiscoverPathsLinkedWorktreePreservesGitIdentities)$'
+
   vet:
     desc: Run go vet across all packages
     cmds:

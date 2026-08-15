@@ -96,7 +96,7 @@ func ObserveRoot(base string) (TreeSnapshot, error) {
 		if err != nil {
 			return TreeSnapshot{}, err
 		}
-		return TreeSnapshot{Present: true, Identity: identity, Mode: stableMode(info.Mode()), Modified: info.ModTime().UnixNano(), Entries: entries}, nil
+		return TreeSnapshot{Present: true, Identity: identity, Mode: PortableMode(info.Mode()), Modified: info.ModTime().UnixNano(), Entries: entries}, nil
 	}
 	first, err := read()
 	if err != nil {
@@ -244,7 +244,7 @@ func observeTree(root *os.Root, rootIdentity Identity, path string) (TreeSnapsho
 	}
 	return TreeSnapshot{
 		Present: true, Ancestors: ancestors[:len(ancestors)-1], Identity: ancestors[len(ancestors)-1],
-		Mode: stableMode(stat.Mode()), Modified: stat.ModTime().UnixNano(), Entries: entries,
+		Mode: PortableMode(stat.Mode()), Modified: stat.ModTime().UnixNano(), Entries: entries,
 	}, nil
 }
 
@@ -306,7 +306,7 @@ func inspectDirectory(root *os.Root, prefix string) ([]TreeEntry, error) {
 			if err != nil {
 				return nil, err
 			}
-			entries = append(entries, TreeEntry{Path: entryPath, Directory: true, Identity: identity, Mode: stableMode(info.Mode()), Modified: info.ModTime().UnixNano()})
+			entries = append(entries, TreeEntry{Path: entryPath, Directory: true, Identity: identity, Mode: PortableMode(info.Mode()), Modified: info.ModTime().UnixNano()})
 			nested, err := inspectDirectory(child, entryPath)
 			child.Close()
 			if err != nil {
