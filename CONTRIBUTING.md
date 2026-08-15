@@ -38,6 +38,10 @@ Direct `go` commands work without mise.
 - Conventional Commit subject with only the short task key as a suffix:
   `feat: add repair surface (T-050)` — never the full slugged task identifier or
   a task prefix.
+- After the subject and a blank line, include a concise body explaining the
+  commit's intent, context, and non-obvious decisions rather than restating the
+  diff. Wrap body lines at 72 characters. The `commit-msg` hook requires this
+  body and line limit for ordinary commits.
 - Update `CHANGELOG.md` under `## Unreleased` for user-visible changes only.
   Keep it terse: one to two lines, lead with the command. Skip internal refactors.
   Policy and examples: [`docs/workflow/changelog.md`](docs/workflow/changelog.md).

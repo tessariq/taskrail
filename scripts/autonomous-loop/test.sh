@@ -83,6 +83,7 @@ assert_review_prompt() {
   assert_contains "$name held follow-up" "$value" "parent runner always queues it as held"
   assert_contains "$name parent Git ownership" "$value" "The parent runner owns Git delivery"
   assert_contains "$name no timeout retry" "$value" "Timeout never retries"
+  assert_contains "$name commit body" "$value" "intent, context, and non-obvious decisions"
 }
 
 create_fixture() {
@@ -205,7 +206,8 @@ esac
 if ((create_followup == 1)); then
   printf '%s\n' 'id: T-902' 'status: todo' 'spec_ref: specs/v0.5.0.md#test-area' 'dependencies:' '    - T-900-fixture-task' >"$AUTONOMOUS_TEST_ROOT/planning/tasks/T-902.md"
 fi
-printf '%s\n' "test: deliver $status fixture task (T-900)" >"$AUTONOMOUS_COMMIT_MESSAGE_FILE"
+printf '%s\n\n%s\n' "test: deliver $status fixture task (T-900)" \
+  "Exercise the fixture's delivery path and preserve its expected outcome." >"$AUTONOMOUS_COMMIT_MESSAGE_FILE"
 if [[ "${AUTONOMOUS_TEST_ACTION:-}" == "delete-exchange" ]]; then
   rm -rf "$(dirname "$AUTONOMOUS_COMMIT_MESSAGE_FILE")"
 fi
@@ -260,13 +262,47 @@ bash -n "$RUNNER" || fail "runner syntax"
 bash -n "$0" || fail "test syntax"
 valid_message="$TMP_ROOT/valid-commit-message"
 slugged_message="$TMP_ROOT/slugged-commit-message"
-printf '%s\n' 'test: accept short task key (T-900)' >"$valid_message"
-printf '%s\n' 'test: reject slugged task id (T-900-fixture-task)' >"$slugged_message"
+bodyless_message="$TMP_ROOT/bodyless-commit-message"
+unseparated_message="$TMP_ROOT/unseparated-commit-message"
+generated_message="$TMP_ROOT/generated-commit-message"
+assisted_message="$TMP_ROOT/assisted-commit-message"
+merge_message="$TMP_ROOT/merge-commit-message"
+body_72_message="$TMP_ROOT/72-character-body-message"
+body_73_message="$TMP_ROOT/73-character-body-message"
+body_72="$(printf '%072d' 0)"
+body_73="$(printf '%073d' 0)"
+printf '%s\n\n%s\n' 'test: accept short task key (T-900)' 'Explain why the fixture needs this change.' >"$valid_message"
+printf '%s\n\n%s\n' 'test: reject slugged task id (T-900-fixture-task)' 'Exercise slug validation.' >"$slugged_message"
+printf '%s\n' 'test: reject missing body' >"$bodyless_message"
+printf '%s\n%s\n' 'test: reject unseparated body' 'Explain the fixture change.' >"$unseparated_message"
+printf '%s\n\n%s\n\n%s\n' 'test: reject generated attribution' 'Explain the fixture change.' '💘 Generated with Crush' >"$generated_message"
+printf '%s\n\n%s\n\n%s\n' 'test: reject assisted attribution' 'Explain the fixture change.' 'Assisted-by: Crush:glm-5.3' >"$assisted_message"
+printf '%s\n' 'Merge branch fixture' >"$merge_message"
+printf '%s\n\n%s\n' 'test: accept 72-character body line' "$body_72" >"$body_72_message"
+printf '%s\n\n%s\n' 'test: reject 73-character body line' "$body_73" >"$body_73_message"
 "$SCRIPT_DIR/../check-commit-msg.sh" "$valid_message" || fail "short task key commit message was rejected"
 slugged_output="$("$SCRIPT_DIR/../check-commit-msg.sh" "$slugged_message" 2>&1)"
 slugged_rc=$?
 [[ $slugged_rc -ne 0 ]] || fail "slugged task id commit message was accepted"
 assert_contains "slugged task id guidance" "$slugged_output" "short task key"
+bodyless_output="$("$SCRIPT_DIR/../check-commit-msg.sh" "$bodyless_message" 2>&1)"
+bodyless_rc=$?
+[[ $bodyless_rc -ne 0 ]] || fail "bodyless commit message was accepted"
+assert_contains "commit body guidance" "$bodyless_output" "intent, context, and non-obvious decisions"
+"$SCRIPT_DIR/../check-commit-msg.sh" "$unseparated_message" >/dev/null 2>&1 \
+  && fail "commit body without a separating blank line was accepted"
+"$SCRIPT_DIR/../check-commit-msg.sh" "$generated_message" >/dev/null 2>&1 \
+  && fail "generated attribution was accepted"
+"$SCRIPT_DIR/../check-commit-msg.sh" "$assisted_message" >/dev/null 2>&1 \
+  && fail "assisted attribution was accepted"
+"$SCRIPT_DIR/../check-commit-msg.sh" "$merge_message" \
+  || fail "generated merge commit without a body was rejected"
+"$SCRIPT_DIR/../check-commit-msg.sh" "$body_72_message" \
+  || fail "72-character commit body line was rejected"
+body_73_output="$("$SCRIPT_DIR/../check-commit-msg.sh" "$body_73_message" 2>&1)"
+body_73_rc=$?
+[[ $body_73_rc -ne 0 ]] || fail "73-character commit body line was accepted"
+assert_contains "commit body line length guidance" "$body_73_output" "72 characters"
 queue_output="$("$RUNNER" --check-queue 2>&1)"
 queue_rc=$?
 [[ $queue_rc -eq 0 ]] || fail "repository queue validation exited $queue_rc: $queue_output"

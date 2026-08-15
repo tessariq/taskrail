@@ -155,8 +155,10 @@ controls. The parent runner owns Git delivery.
 
 Write exactly one valid Conventional Commit message to
 `$AUTONOMOUS_COMMIT_MESSAGE_FILE` before the final response. Its subject must end
-with the short task key `({{TASK_KEY}})`, not the full slugged ID. Add no
-attribution trailer.
+with the short task key `({{TASK_KEY}})`, not the full slugged ID. After a blank
+line, include a concise body explaining the commit's intent, context, and
+non-obvious decisions rather than merely restating the diff. Wrap body lines at
+72 characters. Add no attribution trailer.
 
 The parent may terminate this process at its configured deadline. Timeout never
 retries. Do not spawn detached processes.

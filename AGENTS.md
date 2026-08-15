@@ -115,7 +115,7 @@ Guidance for coding agents working in the Taskrail repository.
 ### Git Hooks (Optional)
 
 - Install once: `task hooks:install` (runs `lefthook install`).
-- `lefthook.yml` wires local hooks that mirror CI: `pre-commit` runs `gofmt`, `go vet ./...`, `taskrail validate`, the skill package-parity check, and the binary freshness guard (`task taskrail:check`, so a stale binary cannot write committed tracked-work state); `commit-msg` enforces Conventional Commits and rejects agent-attribution trailers; `pre-push` runs `go test ./...`.
+- `lefthook.yml` wires local hooks that mirror CI: `pre-commit` runs `gofmt`, `go vet ./...`, `taskrail validate`, the skill package-parity check, and the binary freshness guard (`task taskrail:check`, so a stale binary cannot write committed tracked-work state); `commit-msg` enforces Conventional Commits with descriptive bodies and rejects agent-attribution trailers; `pre-push` runs `go test ./...`.
 - Hooks are an opt-in convenience. CI remains the authoritative gate. Do not bypass with `--no-verify`.
 
 ## Repository Workflow Rules
@@ -179,7 +179,8 @@ Guidance for coding agents working in the Taskrail repository.
 
 - Use Conventional Commits: `<type>: <description>` (types: `feat`, `fix`, `refactor`, `docs`, `test`, `chore`, `perf`, `ci`).
 - Reference only the short task key as a parenthetical suffix on the subject, never the full slugged task identifier and never a prefix: `feat: add version reporting to taskrail CLI (T-012)`, not `feat: add version reporting to taskrail CLI (T-012-add-version-reporting)` or `feat: T-012 add version reporting`.
-- Keep the subject imperative and scoped to one logical outcome; use the body to explain the why when it is not obvious.
+- Keep the subject imperative and scoped to one logical outcome.
+- Every ordinary commit requires a body after the subject and blank line. Explain the change's intent, context, and non-obvious decisions; do not merely restate the diff, and wrap body lines at 72 characters. Generated merge, revert, fixup, and squash commits are exempt.
 
 ### Committing Tracked-Work State
 
