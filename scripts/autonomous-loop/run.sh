@@ -15,6 +15,10 @@ KILL_GRACE_SECONDS=10
 RESUME_BUNDLE=""
 BACKEND=claude
 BACKEND_SET=0
+MODEL=""
+MODEL_SET=0
+EFFORT=""
+EFFORT_SET=0
 TMP_DIR=""
 CHILD_DIR=""
 LOCK_DIR=""
@@ -66,7 +70,7 @@ trap 'handle_interrupt HUP' HUP
 
 usage() {
   printf '%s\n' \
-    'Usage: scripts/autonomous-loop/run.sh [--backend <claude|opencode>] [--timeout <duration>] [--dry-run] [--max-iterations <n>]' \
+    'Usage: scripts/autonomous-loop/run.sh [--backend <claude|opencode>] [--model <model>] [--effort <level>] [--timeout <duration>] [--dry-run] [--max-iterations <n>]' \
     '       scripts/autonomous-loop/run.sh --resume-delivery <bundle-path>' \
     '       scripts/autonomous-loop/run.sh --check-queue' \
     '' \
@@ -104,6 +108,24 @@ while (($#)); do
       fi
       BACKEND="$2"
       BACKEND_SET=1
+      shift 2
+      ;;
+    --model)
+      (($# >= 2)) && [[ -n "$2" && "$2" != --* ]] || die "--model requires a model" 2
+      if [[ $MODEL_SET -eq 1 && "$MODEL" != "$2" ]]; then
+        die "conflicting --model values: $MODEL and $2" 2
+      fi
+      MODEL="$2"
+      MODEL_SET=1
+      shift 2
+      ;;
+    --effort)
+      (($# >= 2)) && [[ -n "$2" && "$2" != --* ]] || die "--effort requires a level" 2
+      if [[ $EFFORT_SET -eq 1 && "$EFFORT" != "$2" ]]; then
+        die "conflicting --effort values: $EFFORT and $2" 2
+      fi
+      EFFORT="$2"
+      EFFORT_SET=1
       shift 2
       ;;
     -n|--max-iterations)
@@ -572,8 +594,14 @@ run_iteration() {
         claude -p --permission-mode auto --add-dir "$CHILD_DIR"
         --allowedTools "Bash($CHILD_DIR/taskrail-writer *)"
       )
+      [[ -z "$MODEL" ]] || agent_command+=(--model "$MODEL")
+      [[ -z "$EFFORT" ]] || agent_command+=(--effort "$EFFORT")
       ;;
-    opencode) agent_command=(opencode run --auto) ;;
+    opencode)
+      agent_command=(opencode run --auto)
+      [[ -z "$MODEL" ]] || agent_command+=(--model "$MODEL")
+      [[ -z "$EFFORT" ]] || agent_command+=(--variant "$EFFORT")
+      ;;
   esac
   command -v "${agent_command[0]}" >/dev/null 2>&1 || die "$BACKEND CLI not found"
   command -v setsid >/dev/null 2>&1 || die "setsid is required for bounded child execution" 2
@@ -702,6 +730,8 @@ render_prompt "$SELECTED_ID"
 if [[ $DRY_RUN -eq 1 ]]; then
   log "selected: $SELECTED_ID"
   log "backend: $BACKEND"
+  log "model: ${MODEL:-backend default}"
+  log "effort: ${EFFORT:-backend default}"
   log "timeout: $TIMEOUT"
   log "head: $(git rev-parse HEAD)"
   log "origin/main: $(remote_main)"

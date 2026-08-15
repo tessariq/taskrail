@@ -279,6 +279,8 @@ rc=$?
 [[ $rc -eq 0 ]] || fail "dry-run exited $rc: $output"
 assert_contains "dry-run selection" "$output" "selected: T-900-fixture-task"
 assert_contains "dry-run default backend" "$output" "backend: claude"
+assert_contains "dry-run default model" "$output" "model: backend default"
+assert_contains "dry-run default effort" "$output" "effort: backend default"
 assert_contains "dry-run prompt digest" "$output" "prompt sha256:"
 [[ ! -e "$root/captures/agent-invocations" ]] || fail "dry-run invoked an agent"
 [[ "$(git -C "$root" rev-parse HEAD)" == "$before_head" ]] || fail "dry-run moved HEAD"
@@ -300,25 +302,51 @@ assert_contains "default Claude arguments" "$claude_args" "-p --permission-mode 
 assert_contains "Claude temporary directory access" "$claude_args" "--add-dir "
 assert_contains "Claude wrapper permission" "$claude_args" "--allowedTools Bash("
 assert_contains "Claude wrapper path" "$claude_args" "taskrail-writer *)"
+assert_not_contains "default Claude model" "$claude_args" "--model"
+assert_not_contains "default Claude effort" "$claude_args" "--effort"
 [[ "$(git -C "$root" rev-list --count HEAD~1..HEAD)" == "1" ]] || fail "successful run did not create one commit"
 [[ "$(git -C "$root" rev-parse HEAD)" == "$(git --git-dir="$TMP_ROOT/successful-run.git" rev-parse refs/heads/main)" ]] || fail "successful run did not push main"
 dirty="$(git -C "$root" status --porcelain=v1 --untracked-files=all)"
 [[ -z "$dirty" ]] || fail "successful run left a dirty tree: $dirty"
 
 root="$(create_fixture explicit-claude)"
-output="$(run_fixture "$root" --backend claude --max-iterations 1)"
+output="$(run_fixture "$root" --backend claude --model opus --effort high --max-iterations 1)"
 rc=$?
 [[ $rc -eq 0 ]] || fail "explicit Claude run exited $rc: $output"
 [[ "$(<"$root/captures/backend")" == "claude" ]] || fail "explicit Claude backend invoked the wrong CLI"
+claude_args="$(<"$root/captures/agent-args")"
+assert_contains "explicit Claude model" "$claude_args" "--model opus"
+assert_contains "explicit Claude effort" "$claude_args" "--effort high"
+assert_not_contains "Claude OpenCode variant" "$claude_args" "--variant"
+
+root="$(create_fixture default-opencode)"
+output="$(run_fixture "$root" --backend opencode --max-iterations 1)"
+rc=$?
+[[ $rc -eq 0 ]] || fail "default OpenCode run exited $rc: $output"
+opencode_args="$(<"$root/captures/agent-args")"
+assert_not_contains "default OpenCode model" "$opencode_args" "--model"
+assert_not_contains "default OpenCode variant" "$opencode_args" "--variant"
 
 root="$(create_fixture explicit-opencode)"
-output="$(run_fixture "$root" --backend opencode --max-iterations 1)"
+output="$(run_fixture "$root" --backend opencode --model anthropic/claude-opus-4-1 --effort max --max-iterations 1)"
 rc=$?
 [[ $rc -eq 0 ]] || fail "explicit OpenCode run exited $rc: $output"
 [[ "$(<"$root/captures/backend")" == "opencode" ]] || fail "explicit OpenCode backend invoked the wrong CLI"
-assert_contains "explicit OpenCode arguments" "$(<"$root/captures/agent-args")" "run --auto"
+opencode_args="$(<"$root/captures/agent-args")"
+assert_contains "explicit OpenCode arguments" "$opencode_args" "run --auto"
+assert_contains "explicit OpenCode model" "$opencode_args" "--model anthropic/claude-opus-4-1"
+assert_contains "explicit OpenCode effort variant" "$opencode_args" "--variant max"
+assert_not_contains "OpenCode Claude effort" "$opencode_args" "--effort"
 opencode_prompt="$(<"$root/captures/prompt")"
 [[ "$opencode_prompt" == "$claude_prompt" ]] || fail "Claude and OpenCode received different prompts"
+
+root="$(create_fixture configured-dry-run)"
+output="$(run_fixture "$root" --backend opencode --model openai/gpt-5 --effort high --dry-run)"
+rc=$?
+[[ $rc -eq 0 ]] || fail "configured dry-run exited $rc: $output"
+assert_contains "configured dry-run model" "$output" "model: openai/gpt-5"
+assert_contains "configured dry-run effort" "$output" "effort: high"
+[[ ! -e "$root/captures/agent-invocations" ]] || fail "configured dry-run invoked an agent"
 
 root="$(create_fixture invalid-backend)"
 output="$(run_fixture "$root" --backend unknown)"
@@ -333,6 +361,20 @@ rc=$?
 [[ $rc -eq 2 ]] || fail "missing backend expected exit 2, got $rc"
 assert_contains "missing backend" "$output" "--backend requires claude or opencode"
 [[ ! -e "$root/captures/agent-invocations" ]] || fail "missing backend invoked an agent"
+
+root="$(create_fixture missing-model)"
+output="$(run_fixture "$root" --model)"
+rc=$?
+[[ $rc -eq 2 ]] || fail "missing model expected exit 2, got $rc"
+assert_contains "missing model" "$output" "--model requires a model"
+[[ ! -e "$root/captures/agent-invocations" ]] || fail "missing model invoked an agent"
+
+root="$(create_fixture missing-effort)"
+output="$(run_fixture "$root" --effort)"
+rc=$?
+[[ $rc -eq 2 ]] || fail "missing effort expected exit 2, got $rc"
+assert_contains "missing effort" "$output" "--effort requires a level"
+[[ ! -e "$root/captures/agent-invocations" ]] || fail "missing effort invoked an agent"
 
 root="$(create_fixture missing-backend-cli)"
 rm "$root/fake-bin/opencode"
@@ -358,6 +400,20 @@ rc=$?
 [[ $rc -eq 2 ]] || fail "conflicting backends expected exit 2, got $rc"
 assert_contains "conflicting backends" "$output" "conflicting --backend values"
 [[ ! -e "$root/captures/agent-invocations" ]] || fail "conflicting backends invoked an agent"
+
+root="$(create_fixture conflicting-models)"
+output="$(run_fixture "$root" --model opus --model sonnet)"
+rc=$?
+[[ $rc -eq 2 ]] || fail "conflicting models expected exit 2, got $rc"
+assert_contains "conflicting models" "$output" "conflicting --model values"
+[[ ! -e "$root/captures/agent-invocations" ]] || fail "conflicting models invoked an agent"
+
+root="$(create_fixture conflicting-efforts)"
+output="$(run_fixture "$root" --effort high --effort max)"
+rc=$?
+[[ $rc -eq 2 ]] || fail "conflicting efforts expected exit 2, got $rc"
+assert_contains "conflicting efforts" "$output" "conflicting --effort values"
+[[ ! -e "$root/captures/agent-invocations" ]] || fail "conflicting efforts invoked an agent"
 
 root="$(create_fixture duplicate-row)"
 printf '%s\n' $'T-900-fixture-task\trun\t-' >>"$root/scripts/autonomous-loop/queue.tsv"

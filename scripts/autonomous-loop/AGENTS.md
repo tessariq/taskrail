@@ -13,6 +13,12 @@
   is frozen out of the current invocation.
 - The runner uses Claude by default. Select one backend for the complete invocation
   with `--backend claude` or `--backend opencode`; dry-run reports that selection.
+- Select an invocation-wide model with `--model <model>` and reasoning level with
+  `--effort <level>`. Omitted values preserve backend defaults. The runner passes
+  the model through unchanged, maps effort to Claude's `--effort` or OpenCode's
+  provider-specific `--variant`, and leaves value validation to the selected CLI.
+  For example, use `--backend claude --model opus --effort high` or
+  `--backend opencode --model anthropic/claude-opus-4-1 --effort high`.
 - Agent attempts default to a two-hour timeout; override it with `--timeout 30m`
   or another positive `s`, `m`, or `h` duration. Timeout never retries. A valid
   terminal outcome interrupted before delivery names a private XDG-state bundle;
