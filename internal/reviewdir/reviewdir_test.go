@@ -14,6 +14,7 @@ import (
 )
 
 func TestPublishTypedBundlesPreservesExactBytesAndReportsDeterministicFiles(t *testing.T) {
+	requireDirectoryPublication(t)
 	for _, test := range []struct {
 		type_ Type
 		files []File
@@ -256,6 +257,7 @@ func TestPublishHonorsCancellationBeforeDirectoryCommit(t *testing.T) {
 }
 
 func TestPublishUsesActiveLocalStorageWithoutExposingPhysicalPaths(t *testing.T) {
+	requireDirectoryPublication(t)
 	repoRoot := t.TempDir()
 	gitCommon := filepath.Join(repoRoot, ".git")
 	storageRoot := filepath.Join(repoRoot, ".taskrail", "local")
@@ -312,6 +314,13 @@ func valid(Type, []File) error { return nil }
 
 func request(root string, bundleType Type, destination string, bundle []File) Request {
 	return Request{Type: bundleType, ReviewsRoot: root, Destination: destination, Files: bundle, Validate: valid}
+}
+
+func requireDirectoryPublication(t *testing.T) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows reports directory durability as unsupported")
+	}
 }
 
 func files(names ...string) []File {

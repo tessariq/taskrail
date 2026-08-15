@@ -369,6 +369,7 @@ func TestCreatePublishReplaceRemoveAndMkdir(t *testing.T) {
 }
 
 func TestPublishDirectoryCommitsCompleteBytesAtOneAbsentName(t *testing.T) {
+	requireDirectoryPublication(t)
 	repo := t.TempDir()
 	if err := os.Mkdir(filepath.Join(repo, "reviews"), 0o755); err != nil {
 		t.Fatal(err)
@@ -395,6 +396,7 @@ func TestPublishDirectoryCommitsCompleteBytesAtOneAbsentName(t *testing.T) {
 }
 
 func TestPublishDirectoryLosesDestinationRaceWithoutClobbering(t *testing.T) {
+	requireDirectoryPublication(t)
 	repo := t.TempDir()
 	if err := os.Mkdir(filepath.Join(repo, "reviews"), 0o755); err != nil {
 		t.Fatal(err)
@@ -462,6 +464,7 @@ func TestDirectoryNoReplaceCommitHasOneConcurrentWinner(t *testing.T) {
 }
 
 func TestPublishDirectoryStagingFailureLeavesNoFinalDirectory(t *testing.T) {
+	requireDirectoryPublication(t)
 	repo := t.TempDir()
 	if err := os.Mkdir(filepath.Join(repo, "reviews"), 0o755); err != nil {
 		t.Fatal(err)
@@ -498,6 +501,7 @@ func TestPublishDirectoryStagingFailureLeavesNoFinalDirectory(t *testing.T) {
 }
 
 func TestPublishDirectoryRefusesStagedByteAndMembershipChanges(t *testing.T) {
+	requireDirectoryPublication(t)
 	for _, test := range []struct {
 		name   string
 		mutate func(*testing.T, string)
@@ -533,6 +537,7 @@ func TestPublishDirectoryRefusesStagedByteAndMembershipChanges(t *testing.T) {
 }
 
 func TestPublishDirectoryRefusesStageSubstitutionAtCommit(t *testing.T) {
+	requireDirectoryPublication(t)
 	repo := t.TempDir()
 	if err := os.Mkdir(filepath.Join(repo, "reviews"), 0o755); err != nil {
 		t.Fatal(err)
@@ -575,6 +580,7 @@ func TestPublishDirectoryRefusesStageSubstitutionAtCommit(t *testing.T) {
 }
 
 func TestPublishDirectoryRollsBackStageSubstitutionAfterFinalCheck(t *testing.T) {
+	requireDirectoryPublication(t)
 	repo := t.TempDir()
 	if err := os.Mkdir(filepath.Join(repo, "reviews"), 0o755); err != nil {
 		t.Fatal(err)
@@ -610,6 +616,7 @@ func TestPublishDirectoryRollsBackStageSubstitutionAfterFinalCheck(t *testing.T)
 }
 
 func TestPublishDirectoryRollsBackAliasCreatedAtCommit(t *testing.T) {
+	requireDirectoryPublication(t)
 	repo := t.TempDir()
 	if err := os.Mkdir(filepath.Join(repo, "reviews"), 0o755); err != nil {
 		t.Fatal(err)
@@ -625,8 +632,8 @@ func TestPublishDirectoryRollsBackAliasCreatedAtCommit(t *testing.T) {
 	t.Cleanup(func() { testHookAfterDirectoryCheck = nil })
 
 	_, err := root.PublishDirectory(context.Background(), "reviews/session", []DirectoryFile{{Name: "review.json", Content: []byte("candidate"), Mode: 0o644}})
-	if !errors.Is(err, ErrAlias) {
-		t.Fatalf("PublishDirectory = %v, want ErrAlias", err)
+	if !errors.Is(err, ErrAlias) && !errors.Is(err, os.ErrExist) {
+		t.Fatalf("PublishDirectory = %v, want alias or native no-replace refusal", err)
 	}
 	if _, statErr := os.Stat(filepath.Join(repo, "reviews", "session")); !errors.Is(statErr, os.ErrNotExist) {
 		t.Fatalf("final directory exists: %v", statErr)
@@ -634,6 +641,7 @@ func TestPublishDirectoryRollsBackAliasCreatedAtCommit(t *testing.T) {
 }
 
 func TestPublishDirectoryCleanupPreservesSubstitutedStage(t *testing.T) {
+	requireDirectoryPublication(t)
 	repo := t.TempDir()
 	if err := os.Mkdir(filepath.Join(repo, "reviews"), 0o755); err != nil {
 		t.Fatal(err)
@@ -665,6 +673,7 @@ func TestPublishDirectoryCleanupPreservesSubstitutedStage(t *testing.T) {
 }
 
 func TestPublishDirectoryPostcommitSubstitutionDoesNotReportSuccess(t *testing.T) {
+	requireDirectoryPublication(t)
 	repo := t.TempDir()
 	if err := os.Mkdir(filepath.Join(repo, "reviews"), 0o755); err != nil {
 		t.Fatal(err)
@@ -710,6 +719,13 @@ func TestPublishDirectoryPostcommitSubstitutionDoesNotReportSuccess(t *testing.T
 	}
 	if !preserved {
 		t.Fatal("external final bytes were not preserved after rollback")
+	}
+}
+
+func requireDirectoryPublication(t *testing.T) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows reports directory durability as unsupported")
 	}
 }
 

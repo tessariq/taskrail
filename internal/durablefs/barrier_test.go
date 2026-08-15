@@ -61,6 +61,7 @@ func TestBarrierFailureNeverReportsSuccess(t *testing.T) {
 }
 
 func TestPublishDirectoryPostcommitBarrierFailureRestoresAbsence(t *testing.T) {
+	requireDirectoryPublication(t)
 	repo := t.TempDir()
 	if err := os.Mkdir(filepath.Join(repo, "reviews"), 0o755); err != nil {
 		t.Fatal(err)
@@ -91,6 +92,7 @@ func TestPublishDirectoryPostcommitBarrierFailureRestoresAbsence(t *testing.T) {
 }
 
 func TestPublishDirectoryPostcommitBarrierFailurePreservesExternalEdit(t *testing.T) {
+	requireDirectoryPublication(t)
 	repo := t.TempDir()
 	if err := os.Mkdir(filepath.Join(repo, "reviews"), 0o755); err != nil {
 		t.Fatal(err)
