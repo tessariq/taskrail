@@ -36,6 +36,7 @@ type JoinRequest struct {
 // authority but no claim: it never releases the lock, because the owner holds it
 // across the child's whole lifetime.
 type Joined struct {
+	repository Repository
 	owner      Owner
 	capability Capability
 }
@@ -64,7 +65,7 @@ func Join(req JoinRequest) (*Joined, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Joined{owner: owner, capability: capability}, nil
+	return &Joined{repository: req.Repository, owner: owner, capability: capability}, nil
 }
 
 // matchesOwner checks the joining identity against the lock record. Repository
@@ -129,6 +130,9 @@ func delegationDigest(token string, grant Capability) string {
 // Owner reports the metadata of the lock this delegate joined.
 func (j *Joined) Owner() Owner { return j.owner }
 
+// Repository reports the exact context authenticated by this delegated join.
+func (j *Joined) Repository() Repository { return j.repository }
+
 // Capability reports the bound this delegated ownership works within.
 func (j *Joined) Capability() Capability { return j.capability }
 
@@ -149,5 +153,5 @@ func (j *Joined) Narrow(requested Capability) (*Joined, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Joined{owner: j.owner, capability: capability}, nil
+	return &Joined{repository: j.repository, owner: j.owner, capability: capability}, nil
 }

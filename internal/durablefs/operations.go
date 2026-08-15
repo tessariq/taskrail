@@ -200,6 +200,145 @@ func (r *Root) Mkdir(path string, mode fs.FileMode) (*Directory, error) {
 	return &Directory{Path: path, Identity: identity}, nil
 }
 
+// RemoveDir removes one empty directory relative to a retained parent and makes
+// the removal durable before reporting success. A name occupied by anything but
+// a plain directory refuses, so a planted link never turns a cleanup into a
+// removal somewhere else.
+func (r *Root) RemoveDir(path string) error {
+	if err := r.authorize(); err != nil {
+		return err
+	}
+	parent, leaf, ancestors, err := r.bindParent(path)
+	if err != nil {
+		return err
+	}
+	defer parent.Close()
+	boundIdentity, err := plainDirectoryIdentity(parent, leaf, path)
+	if err != nil {
+		return err
+	}
+	runMutationHook("removedir", path)
+	fresh, freshLeaf, freshAncestors, err := r.bindParent(path)
+	if err != nil {
+		return err
+	}
+	defer fresh.Close()
+	if freshLeaf != leaf || !sameIdentities(ancestors, freshAncestors) {
+		return fmt.Errorf("%w: ancestors changed before removing %s", ErrConflict, path)
+	}
+	freshIdentity, err := plainDirectoryIdentity(fresh, leaf, path)
+	if err != nil {
+		return err
+	}
+	if freshIdentity != boundIdentity {
+		return fmt.Errorf("%w: directory changed before removing %s", ErrConflict, path)
+	}
+	if err := parent.Remove(leaf); err != nil {
+		return err
+	}
+	if err := barrier(BarrierDirectory, func() error { return syncDirectory(parent) }); err != nil {
+		return &MutationError{Operation: "removedir", Path: path, Committed: true, Err: err}
+	}
+	return nil
+}
+
+// MoveDir atomically moves one plain directory within the bound root to an
+// absent name and persists both parent namespaces. It is used to clear a
+// transaction fence at one namespace commit point before best-effort cleanup.
+func (r *Root) MoveDir(from, to string) error {
+	if err := r.authorize(); err != nil {
+		return err
+	}
+	source, sourceLeaf, sourceAncestors, err := r.bindParent(from)
+	if err != nil {
+		return err
+	}
+	defer source.Close()
+	destination, destinationLeaf, destinationAncestors, err := r.bindParent(to)
+	if err != nil {
+		return err
+	}
+	defer destination.Close()
+	sourceIdentity, err := plainDirectoryIdentity(source, sourceLeaf, from)
+	if err != nil {
+		return err
+	}
+	if err := exactName(destination, destinationLeaf, false); err != nil {
+		return err
+	}
+	freshSource, freshSourceLeaf, freshSourceAncestors, err := r.bindParent(from)
+	if err != nil {
+		return err
+	}
+	freshIdentity, identityErr := plainDirectoryIdentity(freshSource, freshSourceLeaf, from)
+	freshSource.Close()
+	if identityErr != nil || freshIdentity != sourceIdentity {
+		return fmt.Errorf("%w: source directory changed before move", ErrConflict)
+	}
+	freshDestination, _, freshDestinationAncestors, err := r.bindParent(to)
+	if err != nil {
+		return err
+	}
+	freshDestination.Close()
+	if !sameIdentities(sourceAncestors, freshSourceAncestors) || !sameIdentities(destinationAncestors, freshDestinationAncestors) {
+		return fmt.Errorf("%w: directory ancestors changed before move", ErrConflict)
+	}
+	if err := exactName(destination, destinationLeaf, false); err != nil {
+		return err
+	}
+	runMutationHook("movedir", from)
+	if err := r.handle.Rename(from, to); err != nil {
+		return err
+	}
+	if err := barrier(BarrierDirectory, func() error { return syncDirectory(source) }); err != nil {
+		return &MutationError{Operation: "movedir", Path: from, Committed: true, Err: err}
+	}
+	if !sameIdentities(sourceAncestors, destinationAncestors) {
+		if err := barrier(BarrierDirectory, func() error { return syncDirectory(destination) }); err != nil {
+			return &MutationError{Operation: "movedir", Path: from, Committed: true, Err: err}
+		}
+	}
+	return nil
+}
+
+func plainDirectoryIdentity(parent *os.Root, leaf, reported string) (Identity, error) {
+	if err := exactName(parent, leaf, true); err != nil {
+		return Identity{}, err
+	}
+	info, err := parent.Lstat(leaf)
+	if err != nil || !info.IsDir() || info.Mode()&fs.ModeSymlink != 0 {
+		return Identity{}, fmt.Errorf("%w: %q is not a plain directory", ErrNotRegular, reported)
+	}
+	bound, err := parent.OpenRoot(leaf)
+	if err != nil {
+		return Identity{}, err
+	}
+	defer bound.Close()
+	identity, _, err := directoryIdentity(bound)
+	return identity, err
+}
+
+// SyncDir persists the namespace state of one bound directory.
+func (r *Root) SyncDir(path string) error {
+	if err := r.authorize(); err != nil {
+		return err
+	}
+	parent, leaf, _, err := r.bindParent(path)
+	if err != nil {
+		return err
+	}
+	defer parent.Close()
+	if err := exactName(parent, leaf, true); err != nil {
+		return err
+	}
+	directory, err := parent.OpenRoot(leaf)
+	if err != nil {
+		return err
+	}
+	defer directory.Close()
+	return barrier(BarrierDirectory, func() error { return syncDirectory(directory) })
+}
+
 // Replace atomically replaces a bound regular file after immediate semantic and
 // identity comparison. It does not claim exclusion of an external actor racing
 // after that comparison outside Taskrail's repository lock.

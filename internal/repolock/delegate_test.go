@@ -224,6 +224,9 @@ func TestJoinAcceptsAMatchingDelegateWithoutMutatingTheLock(t *testing.T) {
 	if err := joined.Authorize("complete", "status"); err != nil {
 		t.Fatalf("authorize delegated write: %v", err)
 	}
+	if joined.Repository() != repo {
+		t.Fatalf("joined repository = %+v, want %+v", joined.Repository(), repo)
+	}
 	if got := readLockBytes(t, repo); !slices.Equal(got, before) {
 		t.Fatal("a delegated join rewrote the lock file")
 	}

@@ -69,6 +69,49 @@ func ObserveTree(base, path string) (TreeSnapshot, error) {
 	return first, nil
 }
 
+// ObserveRoot returns the same stable tree evidence for base itself. It exists
+// for root-level transaction members such as Git's index, whose parent cannot be
+// expressed as a non-empty relative path to ObserveTree.
+func ObserveRoot(base string) (TreeSnapshot, error) {
+	abs, err := filepath.Abs(base)
+	if err != nil || filepath.Clean(abs) != abs {
+		return TreeSnapshot{}, fmt.Errorf("%w: non-canonical root %q", ErrInvalidPath, base)
+	}
+	root, identity, err := openInspectionRoot(abs)
+	if err != nil {
+		return TreeSnapshot{}, err
+	}
+	defer root.Close()
+	read := func() (TreeSnapshot, error) {
+		file, err := root.Open(".")
+		if err != nil {
+			return TreeSnapshot{}, err
+		}
+		info, statErr := file.Stat()
+		file.Close()
+		if statErr != nil {
+			return TreeSnapshot{}, statErr
+		}
+		entries, err := inspectDirectory(root, "")
+		if err != nil {
+			return TreeSnapshot{}, err
+		}
+		return TreeSnapshot{Present: true, Identity: identity, Mode: stableMode(info.Mode()), Modified: info.ModTime().UnixNano(), Entries: entries}, nil
+	}
+	first, err := read()
+	if err != nil {
+		return TreeSnapshot{}, err
+	}
+	if testHookObserveTree != nil {
+		testHookObserveTree()
+	}
+	second, err := read()
+	if err != nil || !first.Same(second) {
+		return TreeSnapshot{}, fmt.Errorf("%w: root changed while inspecting", ErrConflict)
+	}
+	return first, nil
+}
+
 // ReadFile returns bounded bytes from one no-follow regular file only when its
 // semantic and identity snapshot is unchanged across the read.
 func ReadFile(base, path string, maxBytes int64) ([]byte, Snapshot, error) {

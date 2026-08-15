@@ -463,6 +463,29 @@ func TestRestartRebindUsesSemanticSnapshotAndIdentityEvidence(t *testing.T) {
 	}
 }
 
+func TestMoveDirAtomicallyClearsSourceNamespace(t *testing.T) {
+	repo := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(repo, "transactions", "tx"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(repo, "completed"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	mustWrite(t, filepath.Join(repo, "transactions", "tx", "journal.json"), []byte("journal"), 0o644)
+	root, lock := openTestRoot(t, repo)
+	defer releaseTestRoot(t, root, lock)
+	if err := root.MoveDir("transactions/tx", "completed/tx"); err != nil {
+		t.Fatalf("MoveDir: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(repo, "transactions", "tx")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("source remains: %v", err)
+	}
+	data, err := os.ReadFile(filepath.Join(repo, "completed", "tx", "journal.json"))
+	if err != nil || string(data) != "journal" {
+		t.Fatalf("destination bytes = %q, err = %v", data, err)
+	}
+}
+
 func acquireTestLock(t *testing.T, repo string) *repolock.Lock {
 	t.Helper()
 	lock, err := repolock.Acquire(context.Background(), lockRequest(repo))

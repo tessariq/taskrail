@@ -75,6 +75,7 @@ func (e *MutationError) Unwrap() error { return e.Err }
 
 type ownership interface {
 	Owner() repolock.Owner
+	Repository() repolock.Repository
 	Authorize(command string, fields ...string) error
 }
 
@@ -120,18 +121,53 @@ var (
 // Open binds an absolute repository root without accepting a symlink or reparse
 // point in its spelling and requires ownership of that repository's writer lock.
 func Open(path string, own ownership) (*Root, error) {
-	abs, err := filepath.Abs(path)
+	abs, err := absoluteRoot(path)
 	if err != nil {
-		return nil, fmt.Errorf("resolve root: %w", err)
+		return nil, err
 	}
-	if filepath.Clean(abs) != abs {
-		return nil, fmt.Errorf("%w: non-canonical root %q", ErrInvalidPath, path)
-	}
-	owner := own.Owner()
-	if owner.RepositoryRoot != abs {
+	if owner := own.Owner(); owner.RepositoryRoot != abs {
 		return nil, fmt.Errorf("repository lock covers %s, not %s", owner.RepositoryRoot, abs)
 	}
-	if err := own.Authorize(owner.Command); err != nil {
+	return openRoot(abs, own)
+}
+
+// OpenAt binds a root the held lock covers but the repository tree does not
+// contain. Taskrail's own runtime state lives beneath the Git common directory,
+// which a linked worktree is not an ancestor of, so requiring the repository
+// root would leave that state unwritable. Every no-follow, identity, and
+// durability guarantee is the one Open gives; only the containment check
+// differs, exactly as repository transactions exempt Git metadata paths.
+func OpenAt(path string, repo repolock.Repository, own ownership) (*Root, error) {
+	abs, err := absoluteRoot(path)
+	if err != nil {
+		return nil, err
+	}
+	owner := own.Owner()
+	if owner.RepositoryRoot != repo.Root || owner.StorageMode != repo.Mode || owner.StorageRoot != repo.StorageRoot() {
+		return nil, fmt.Errorf("repository context does not match held lock")
+	}
+	if own.Repository() != repo {
+		return nil, fmt.Errorf("repository roots do not match held lock")
+	}
+	if abs != repo.StorageRoot() && abs != repo.GitCommonDir {
+		return nil, fmt.Errorf("root %s is not covered by the repository context", abs)
+	}
+	return openRoot(abs, own)
+}
+
+func absoluteRoot(path string) (string, error) {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return "", fmt.Errorf("resolve root: %w", err)
+	}
+	if filepath.Clean(abs) != abs {
+		return "", fmt.Errorf("%w: non-canonical root %q", ErrInvalidPath, path)
+	}
+	return abs, nil
+}
+
+func openRoot(abs string, own ownership) (*Root, error) {
+	if err := own.Authorize(own.Owner().Command); err != nil {
 		return nil, err
 	}
 	nativePath := nativeRootPath(abs)

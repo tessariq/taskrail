@@ -1,7 +1,7 @@
 ---
 id: T-277-add-durable-transaction-journals-and-recovery
 title: Add durable transaction journals and recovery phases
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#repository-discovery-locking-and-recovery
 dependencies:
@@ -10,7 +10,7 @@ dependencies:
     - T-317-bind-delegated-grants-to-the-owner-s-declared-task
     - T-322-provide-handle-bound-durable-filesystem-primitives
     - T-323-enforce-repository-recovery-fences-and-stable
-updated_at: "2026-08-14T16:05:09Z"
+updated_at: "2026-08-15T08:45:24Z"
 ---
 
 # T-277-add-durable-transaction-journals-and-recovery Add durable transaction journals and recovery phases
@@ -60,3 +60,5 @@ engine, not those substrate concerns or public `taskrail recover` command wiring
 - 2026-08-12T20:37:45Z: Correctness review found the proposed portable path-based journal cannot satisfy A1-A4: preparation can strand an unrecoverable fence, recovery lacks lock-bound final CAS, path identity is not no-follow/handle-bound, retained fences do not block normal readers/writers, and post-rename fsync failure can lose recovery evidence. Operator must approve decomposition around a handle-bound filesystem primitive plus global fence integration, or revise the portability contract.
 - 2026-08-12T20:37:59Z: verification fail
 - 2026-08-14T16:05:09Z: Operator approved the portable concurrency contract and completed T-222 repository discovery, T-317 delegated grant binding, T-322 durable filesystem primitives, and T-323 repository-wide recovery admission; T-277 now owns only journal phases and the lock-bound recovery engine.
+- 2026-08-15T08:45:10Z: Implemented lock-bound durable journals, canonical phases, whole-set CAS publication, interruption-safe restore/accept/clear recovery, strict retained evidence, and durable fence clearing.
+- 2026-08-15T08:45:24Z: verification pass

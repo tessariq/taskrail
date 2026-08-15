@@ -55,6 +55,7 @@ type Request struct {
 // for concurrent use by multiple goroutines; a transaction owns exactly one.
 type Lock struct {
 	path       string
+	repository Repository
 	owner      Owner
 	capability Capability
 	delegation *Delegation
@@ -100,6 +101,7 @@ func Acquire(ctx context.Context, req Request) (*Lock, error) {
 	}
 	return &Lock{
 		path:       path,
+		repository: req.Repository,
 		owner:      owner,
 		capability: req.Capability.normalized(),
 		delegation: delegation,
@@ -297,6 +299,9 @@ func newOwner(req Request) (Owner, *Delegation, error) {
 
 // Owner reports the metadata this lock published.
 func (l *Lock) Owner() Owner { return l.owner }
+
+// Repository reports the canonical context this lock was acquired against.
+func (l *Lock) Repository() Repository { return l.repository }
 
 // Capability reports the bound this ownership was acquired under.
 func (l *Lock) Capability() Capability { return l.capability }
