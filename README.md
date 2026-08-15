@@ -114,26 +114,20 @@ taskrail verify T-001 --result pass --summary "acceptance met"
 
 Every `--json` command — including the `start`, `complete`, and `block`
 lifecycle writers — emits one versioned envelope: `schema_version`, the canonical
-`command`, `warnings`, and exactly one of `result` or `error`. A failure carries a
-registered `error.code` plus `details` recording whether the operation committed
-and which paths it touched. This is the one-time v0.5 break from pre-v0.5 bare
-result objects: consumers read command payloads under `result`, and there is no
-legacy-output switch. `schema_version` versions the whole document, including
-result, warning, error, enum, nullability, and semantic contracts, not only the
-outer member names. Consumers must reject unsupported versions rather than decode
-an inherited shape optimistically. Text output stays human-oriented and unchanged.
+`command`, `warnings`, and exactly one of `result` or `error`. This is the one-time
+v0.5 break from pre-v0.5 bare result objects; consumers must reject unsupported
+versions rather than decode an inherited shape optimistically. Text output stays
+human-oriented and unchanged. See the
+[envelope contract](docs/commands.md#machine-output-envelope).
+
 Idle `next` selection is anchored to the active spec: it considers only `todo`
-tasks whose `spec_ref` points at the active spec, so higher-priority older-spec
-work is skipped rather than selected. When only older-spec work is runnable,
-`next` reports no eligible task and lists the skipped tasks under `warnings`
-(`skipped_non_active_spec`). An already-active task that points outside the
-active spec is still returned so you can continue or resolve it, with a
-`selected_non_active_spec` warning. Recover older work explicitly with
-`start <id>`, or run `next --include-off-spec` for a one-shot pick that ranks
-`todo` tasks across all specs and flags an off-spec selection (`off_spec` /
-`selected_off_spec`). To move an off-spec task *onto* the active spec instead of
-running it where it is, use
-[`task repoint`](#re-pointing-a-task-onto-another-spec-area).
+tasks whose `spec_ref` points at the active spec. When only older-spec work is
+runnable, `next` reports no eligible task and lists the skipped tasks under
+`warnings`; an already-active off-spec task is still returned so you can continue
+or resolve it. Recover older work explicitly with `start <id>` or
+`next --include-off-spec`, or move it onto the active spec with
+[`task repoint`](docs/commands.md#re-pointing-a-task-onto-another-spec-area).
+Details: [docs/commands.md](docs/commands.md#next-task-selection-and-the-active-spec).
 
 **Beyond the core loop**
 
@@ -162,58 +156,31 @@ Taskrail commands intentionally use different write conventions based on risk:
 `updated_at`. Use `status` when you need the same next-task computation without a
 tracked write.
 
-All semantic command classes share one recovery admission fence. Retained or
+All semantic command classes share one recovery admission fence: retained or
 malformed transaction state beneath the canonical repository runtime root makes
-readers and writers fail with `recovery_pending`; no semantic result is printed
-and writers do not begin. Git linked worktrees and committed/local storage share
-the Git-common fence, while non-Git committed repositories use their root-local
-runtime directory.
+readers and writers fail with `recovery_pending`, and writers do not begin. See
+[docs/commands.md](docs/commands.md#recovery-admission-fence).
 
 ### Coverage vs gap analysis
 
-`coverage` and `coverage --gaps` sit one word apart and answer different questions —
-keep them distinct:
-
-- `coverage` answers **"is this spec area linked to any task?"** — decomposition
-  coverage, orphan tasks, and two-directional drift.
-- `coverage --gaps` answers **"does a *covered* area lack a verification/companion
-  task, have a dependency-graph anomaly, or look under-decomposed?"** — it emits
-  structural candidates (`missing-verification`, `dependency-anomaly`,
-  `under-decomposed-area`) over areas that already have tasks.
-
-Both are **read-only** — they never write `STATE.md` or task files and never make
-`validate` fail — and **advisory** by default. `--gaps` opts into gating only through
-`--fail-on <category>`, which exits non-zero when a signal of that category is
-present (mirroring `coverage --min`); the report itself is unchanged.
-
-The hard limit: `--gaps` is **mechanical only**. It reports count, graph, and state
-signals — never a semantic "this needs a test" judgement. Its signals are
-**candidates, not violations**: false positives are expected, and each one is
-something a human or agent inspects and promotes into a real task, not a rule the
-repo broke. For the semantic half — "is this area *actually* missing work?" — use
-the `taskrail-gap` skill, which layers agent judgement on top of these structural
-candidates.
+`coverage` answers **"is this spec area linked to any task?"**;
+`coverage --gaps` answers **"does a *covered* area lack a verification/companion task, have
+a dependency-graph anomaly, or look under-decomposed?"** Both are read-only and
+advisory by default — they never write `STATE.md` or task files and never make
+`validate` fail; `--gaps` opts into gating only through `--fail-on <category>`.
+The hard limit: `--gaps` is **mechanical only** — its signals are **candidates, not violations**: false positives are expected, and each is something to inspect
+and promote into a real task, never a semantic "this needs a test" rule. For the
+semantic half use the `taskrail-gap` skill. Details:
+[docs/commands.md](docs/commands.md#coverage-vs-gap-analysis).
 
 ### Review stages
 
-Taskrail keeps mechanically testable state separate from agent or human semantic
-review. Current `coverage`/`coverage --gaps` report structure; `validate` checks
-repository invariants; `verify` records evidence against one task. The active
-v0.5 roadmap adds distinct advisory stages rather than one overloaded "review":
-
-- post-spec consistency, gap, addition, and adversarial lenses before decomposition;
-- one existing-task review for alignment, dependencies, acceptance, and evidence;
-- adversarial review of an unpublished decomposed task set;
-- separate implementation review before completion and passing verification; and
-- post-implementation workflow-adversarial probes with bounded review memory.
-
-Semantic findings never become `validate` violations automatically. Humans adopt
-accepted changes through the bounded task/spec/import commands. Publisher-backed
-review prompts may be replaced whole-file at repository scope; their durable leaf
-artifacts record the exact prompt template resolution without claiming that
-Taskrail observed or certified the external review process. Implementation review
-remains instructed by the separate `task-implementation` flow and is outside
-review-artifact publication.
+Taskrail keeps mechanically testable state (`validate`, `coverage`) separate from
+agent or human semantic review (`verify` records evidence against one task).
+Semantic findings never become `validate` violations automatically; humans adopt
+accepted changes through the bounded task/spec/import commands. The active v0.5
+roadmap adds distinct advisory review stages — see
+[docs/commands.md](docs/commands.md#review-stages).
 
 ### Shell completion
 
@@ -228,11 +195,9 @@ taskrail completion fish | source   # fish
 
 Run `taskrail completion --help` for per-shell install steps. Completion is
 read-only: it never writes `STATE.md` or task files. Beyond every command and
-flag, it completes spec versions for `spec show`/`spec activate`, real
-`<path>#<anchor>` values for `task new --spec-ref` and `task repoint --spec-ref`,
-and the active spec's bare anchors for their `--area` flags (the anchors it offers
-are exactly the ones `validate` accepts, so a completed reference authors or
-re-points a task that passes `validate`).
+flag, it completes spec versions, real `<path>#<anchor>` values for
+`--spec-ref`, and the active spec's bare anchors for `--area` flags — exactly
+the anchors `validate` accepts.
 
 ## Quickstart
 
@@ -318,13 +283,11 @@ read-only, mechanical anchor-set delta:
 taskrail spec diff v0.3.0 v0.4.0   # added / removed / candidate-rename areas
 ```
 
-Added areas are the ones a migration must decompose into tasks; removed areas are
-the ones whose existing tasks become orphaned drift; rename candidates are
-best-effort only (an added and a removed anchor sharing a normalized stem) and
-labeled for you to verify, never asserted as fact. Like `coverage` and `validate`
-it is side-effect-free: it never writes `STATE.md` or task files and never gates
-validation. `--json` mirrors the output with structured `added`/`removed`/`renamed`
-lists.
+Added areas are the ones a migration must decompose into tasks; removed areas
+are the ones whose existing tasks become orphaned drift; rename candidates are
+best-effort, labeled for you to verify, never asserted as fact. It is
+side-effect-free, and `--json` mirrors the output with structured
+`added`/`removed`/`renamed` lists.
 
 ### The slug-in-id invariant
 
@@ -333,47 +296,24 @@ enforces `filename == "<id>.md"`, so a slugged filename requires a slugged id.
 `task new` produces that pairing directly — `--title "X"` derives a slug and
 writes `T-<n>-x-slug` with a matching `T-<n>-x-slug.md`, `--slug` overrides the
 slug source, and passing neither keeps the bare `T-<n>` / `T-<n>.md` form. Every
-case passes `validate` with no follow-up edit. Accented letters transliterate to
-ASCII first, so `--title "Über Fußball"` yields `T-<n>-ueber-fussball` and
-`--title "Łódź Điện"` yields `T-<n>-lodz-dien` rather than a mangled slug — however
-your keyboard encoded the accent. Title-derived slugs keep only complete tokens up
-to the roughly 50-character cap; if the first token alone exceeds the cap, the
-bounded bare-id fallback is used instead of cutting that token. If the value you
-pass normalizes to no slug at all (`--slug ""`, `--slug "!!!"`,
-a fully non-Latin title), the bare `T-<n>` id is written and a warning naming the
-source goes to stderr — `--json` on stdout stays clean.
-
-Because the id and filename move together, you cannot rename a file for
-readability on its own. A bare `git mv T-<n>.md T-<n>-add-slug.md` changes only
-the filename, leaving the frontmatter `id:` as `T-<n>`, so the next `validate`
-fails with `task <id> filename must be <id>.md`. The fix is `task rename`, which
-re-slugs atomically: it rewrites the `id:` field, renames the file, repoints the
-body's `# <id> <title>` heading, rewrites every inbound `dependencies:` reference
-to the task, re-projects `STATE.md`, and re-runs `validate`.
+case passes `validate` with no follow-up edit. Because id and filename move
+together, you cannot rename a file for readability on its own — a bare
+`git mv T-<n>.md T-<n>-add-slug.md` leaves the frontmatter `id:` bare, and the
+next `validate` fails with `task <id> filename must be <id>.md`. The fix is
+`task rename`, which re-slugs atomically (id, filename, heading, inbound
+dependency refs, `STATE.md`):
 
 ```sh
 taskrail task rename T-<n> --slug add-slug     # or --title "Add slug"; --dry-run previews
 ```
 
-Rename is symmetric with creation: an explicitly empty selector, or one that
-normalizes to no slug, strips
-the slug instead of failing, renaming `T-<n>-<slug>.md` back to `T-<n>.md` (with
-the same stderr warning), so a bad slug can be undone. The length cap is
-symmetric too — a `--title`-derived slug is capped the same way `task new`
-caps it, while an explicit `--slug` is normalized but not length-capped.
-
-`task rename` re-encodes the identifier only: it changes the id/slug and filename
-but never rewrites the `title:` frontmatter field. Re-slugging a task and
-retitling its human-readable title are distinct operations, and there is no
-`task retitle` command in this version — so `task rename --title "New Title"`
-derives a new slug and leaves the title unchanged, by design. To change the
-visible title, edit the task's `title:` field directly.
-
-`--dry-run` writes nothing, and its reported validation previews the state the
-rename *would* leave behind, not the one it would replace — so re-slugging to heal
-a `filename must be <id>.md` drift answers "would this fix it?". The preview covers
-the whole change set (id, filename, inbound dependency refs, and the `current_task`
-pointer when it names the task); violations the rename does not touch still show up.
+`task rename` re-encodes the identifier only — it never rewrites the `title:`
+frontmatter field, and there is no `task retitle` command in this version, so
+`rename --title "New Title"` derives a new slug and leaves the title unchanged;
+to retitle, edit the `title:` field directly. Edge cases — accented
+transliteration, the ~50-character slug cap, symmetric slug stripping — are
+covered in
+[docs/commands.md](docs/commands.md#the-slug-in-id-invariant).
 
 ### Re-pointing a task onto another spec area
 
@@ -381,28 +321,19 @@ After `spec activate`, open tasks still pointing at the previous spec are off-sp
 `next` skips them, `status` lists them under the active-spec drift breakdown, and
 `next --include-off-spec` recovers one to run where it is. To move an open task
 *onto* the active spec instead, `task repoint` rewrites its `spec_ref` — the one
-edit that would otherwise mean hand-editing frontmatter.
+edit that would otherwise mean hand-editing frontmatter:
 
 ```sh
 taskrail task repoint T-<n> --area status-active-spec-drift-breakdown  # active-spec anchor
 taskrail task repoint T-<n> --spec-ref specs/v0.2.0.md#some-area       # explicit, cross-spec
-taskrail task repoint T-<n> --area some-area --dry-run                 # preview, writes nothing
 ```
 
-`--area` resolves the anchor against `STATE.md`'s active spec exactly as `task new
---area` does, so an unknown anchor fails before any write and points at `spec show
-<active-version> --anchors`. `--area` and `--spec-ref` are mutually exclusive.
-
-`--dry-run` writes nothing, and its reported validation previews the state the
-repoint *would* leave behind, not the one it would replace — so previewing a fix
-for a broken `spec_ref` answers "would this make the repo valid?". Violations the
-repoint does not touch still show up.
-
-Repoint re-encodes one reference field: it never touches the id, slug, filename,
-title, status, or dependencies, and never rewrites another task file. It is not a
-status mutator and not a bulk migrator. Completed and cancelled tasks are delivered
-history and are rejected. Because it re-projects `planning/STATE.md`, run `git
-status` afterwards and stage the regenerated file with the change.
+`--area` resolves the anchor against the active spec exactly as `task new --area`
+does, so an unknown anchor fails before any write; `--dry-run` previews the state
+the repoint *would* leave behind. Repoint never touches id, slug, filename, title,
+status, or dependencies; completed and cancelled tasks are rejected. Because it
+re-projects `planning/STATE.md`, run `git status` afterwards. Details:
+[docs/commands.md](docs/commands.md#re-pointing-a-task-onto-another-spec-area).
 
 ### Editing one dependency edge
 
@@ -414,11 +345,10 @@ taskrail task dependency add T-010-api T-009-model
 taskrail task dependency remove T-010-api T-009-model
 ```
 
-The target must be `todo`, `in_progress`, or `blocked`. Add appends without
-reordering and rejects missing, self, duplicate, cancelled, or cyclic edges;
-remove rejects an absent edge. Both operations preserve all other task bytes,
-transactionally publish the task with a reprojected `STATE.md`, and support the
-common `--json` envelope.
+Add appends without reordering and rejects missing, self, duplicate, cancelled,
+or cyclic edges; remove rejects an absent edge. Both preserve all other task
+bytes, transactionally publish the task with a reprojected `STATE.md`, and
+support the common `--json` envelope.
 
 Bootstrap drafts from rough notes without any LLM — preview first, then apply:
 
@@ -429,11 +359,10 @@ taskrail import --apply draft.json                 # validate an agent draft and
 ```
 
 An apply that fails during writing exits non-zero and still reports what it wrote
-or may have touched — the spec and task paths in text mode, and with `--json` a
-`partial_write` error whose `details.paths` name them. Review those paths before
-retrying: a failed spec write may leave an empty or truncated file, and
-re-applying the same draft creates any already-written tasks a second time under
-new ids.
+or may have touched. Review those paths before retrying — a failed spec write may
+leave an empty or truncated file, and re-applying the same draft creates any
+already-written tasks a second time under new ids. Details:
+[docs/commands.md](docs/commands.md#import-drafts-and-partial-writes).
 
 Typical flow:
 
@@ -491,67 +420,37 @@ placeholder is required or tracked.
 The packaged skill set lives in `internal/taskrail/skills/` (embedded; installed
 by `taskrail init --with-skills`). This repository adopts it: committed copies in
 `.agents/skills/` and `.claude/skills/` are kept byte-identical to the package by
-`task check:skills`. Installed skills additionally record the Taskrail version
-that wrote them in `metadata.taskrail_version`, so an install left behind
-by an older binary stays detectable: every command warns on stderr when the
-recorded version is not the running one, naming the affected skills and both
-versions. The warning is advisory — it never fails `validate` or blocks a
-transition — and `taskrail init --with-skills --force` resolves it. The committed
-copies in this repository carry no marker, since parity keeps them byte-identical
-to the unstamped package; byte-identical marker-free copies are silent rather than
-reported as unknown-version. Do not run `--force` here, since stamping the
-committed copies would break `task check:skills`.
-
-Readers retain the legacy top-level marker written by released v0.4 binaries, and
-an explicit successful refresh normalizes it to nested metadata. Maintainer skill
-eval cases remain outside the embedded package and are not installed into adopter
-repositories.
+`task check:skills`. Installed skills record the Taskrail version that wrote them
+in `metadata.taskrail_version`, so version skew is detectable and advisory —
+the details, including why you must not run `init --with-skills --force` in this
+repository, live in
+[docs/workflow/skills-productization.md](docs/workflow/skills-productization.md).
 
 ## Development
 
-[mise](https://mise.jdx.dev) can pin and provision the developer toolchain (Go,
-`task`, `lefthook`) from the committed `mise.toml`. It is optional convenience —
-direct `go` commands and the `Taskfile.yml` targets work without it:
+[mise](https://mise.jdx.dev) provisions the pinned toolchain (Go, `task`,
+`lefthook`) from `mise.toml` — optional; direct `go` commands and the
+`Taskfile.yml` targets work without it:
 
 ```sh
-mise install     # provision the pinned toolchain on a fresh clone
 mise run setup   # provision, build taskrail onto PATH, wire the opt-in git hooks
+go build ./cmd/taskrail && go test ./...
 ```
 
-`mise run setup` (and `task taskrail:install`) build the working-tree
-`./cmd/taskrail` into `./bin` and mise puts `./bin` on PATH, so a bare `taskrail`
-resolves to the current build with no `TASKRAIL` override. `task taskrail:check`
-fails loudly if the on-PATH binary is stale versus the working tree. In this
-source checkout, run that check immediately before `${TASKRAIL:-taskrail}` state
-writers; the packaged skills carry the same source-only guard. Adopter
-repositories without Taskrail's build tooling are unaffected.
+CI (`.github/workflows/ci.yml`) is the authoritative gate: it provisions the
+same toolchain via [`jdx/mise-action`](https://github.com/jdx/mise-action) and
+runs the build/test matrix over Linux, Windows, and macOS. Optional
+[lefthook](https://github.com/evilmartians/lefthook) git hooks mirror CI locally
+(`task hooks:install`, or `go install
+github.com/evilmartians/lefthook@v1.13.6`; `pre-commit` runs `gofmt`/`go vet`/
+`validate` plus the skill-parity and binary-freshness guards). Do not bypass
+them with `--no-verify`.
 
-The `mise.toml` pins are the single source of truth: the `go` pin matches `go.mod`
-and the `lefthook` pin matches the hooks guidance below. CI provisions the same
-toolchain via [`jdx/mise-action`](https://github.com/jdx/mise-action), so local and
-CI builds share one set of pinned versions. The build/test job runs as an OS matrix
-over Linux, Windows, and macOS, catching cross-platform regressions (path
-separators, line endings, file modes) before merge.
-
-Optional git hooks mirror the CI checks locally via
-[lefthook](https://github.com/evilmartians/lefthook). `mise run setup` wires them;
-to install by hand:
-
-```sh
-go install github.com/evilmartians/lefthook@v1.13.6   # or: brew install lefthook
-task hooks:install
-```
-
-- `pre-commit`: `gofmt`, `go vet ./...`, `taskrail validate`, skill package-parity check,
-  `task taskrail:check` (the on-PATH `taskrail` must be the current working-tree build).
-- `commit-msg`: Conventional Commit subject; rejects automated-attribution trailers.
-- `pre-push`: `go test ./...`.
-
-Hooks are a convenience; CI (`.github/workflows/ci.yml`) remains the authoritative
-gate. Do not bypass them with `--no-verify`.
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the PR checklist, the AI-assisted
-contribution policy, and tracked-work rules.
+The binary-freshness guards and the mise/PATH wiring they rely on matter when
+hacking on Taskrail itself — see
+[AGENTS.md → Toolchain And Environment](AGENTS.md#toolchain-and-environment)
+for the full contract. See [CONTRIBUTING.md](CONTRIBUTING.md) for the PR
+checklist, the AI-assisted contribution policy, and tracked-work rules.
 
 ## Status
 
@@ -576,6 +475,7 @@ Apache-2.0. See [LICENSE](LICENSE).
 ## Read Next
 
 - [`specs/v0.4.0.md`](specs/v0.4.0.md) — current release scope
+- [`docs/commands.md`](docs/commands.md) — command deep-dive reference (envelope, gaps, slugs, repoint, import)
 - [`specs/README.md`](specs/README.md) — spec reading order and versioning
 - [`planning/STATE.md`](planning/STATE.md) — live execution state
 - [`AGENTS.md`](AGENTS.md) — guidance for coding agents

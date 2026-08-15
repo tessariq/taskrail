@@ -40,6 +40,7 @@ Direct `go` commands work without mise.
   a task prefix.
 - Update `CHANGELOG.md` under `## Unreleased` for user-visible changes only.
   Keep it terse: one to two lines, lead with the command. Skip internal refactors.
+  Policy and examples: [`docs/workflow/changelog.md`](docs/workflow/changelog.md).
 - No bot-attribution trailers (see above).
 
 ## Tracked work and STATE.md

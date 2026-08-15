@@ -54,31 +54,30 @@ Guidance for coding agents working in the Taskrail repository.
   v0.3.0 commands (`status`, `stats`, `coverage`, `spec ...`). The T-074 freshness
   guard (`task taskrail:check`) turns that staleness into a loud failure rather than
   a silent one.
-- **The wrong-binary trap has a loud variant and a silent one; assume the silent one
-  is happening.** Loud: a new flag is rejected — `taskrail task new --slug ...` fails
-  with `unknown flag: --slug` because the on-PATH binary is a shipped release.
-  Silent and far more expensive: a *state-writing* command (`verify`, `complete`,
-  `start`, `block`) runs against a binary older than the working tree, succeeds, and
-  stamps task files with the behavior the working tree had already fixed. Nothing
-  errors; the damage is only visible by reading the files. This happened during
-  T-109–T-118, where an older `./bin` build wrote the very duplicate
-  `## Implementation Notes` heading that change set was removing. It is why the
-  opt-in `pre-commit` hook runs `task taskrail:check`: a stale binary must not be
-  able to write committed state here (T-123, `docs/binary-resolution-findings.md`).
-- The two binary guards name the remedy that resolves what they detected, so read
-  which one fired (T-123):
-  - `task taskrail:install` fails when its output is not reachable as `taskrail` —
-    the build succeeded but `${TASKRAIL:-taskrail}` still runs something else. Fix
-    the *resolution*, not the build: `mise run setup`, or export an absolute
-    `TASKRAIL` for that shell. Rebuilding changes nothing.
-  - `task taskrail:check` checks the binary `${TASKRAIL:-taskrail}` would run — an
-    exported `TASKRAIL` wins over PATH, as it does for the skills — and separates
-    four causes of a byte difference: `TASKRAIL` points somewhere other than the
-    working-tree build (repoint or unset it), the on-PATH binary is a different
-    file (PATH fix), the two builds came from different Go toolchains (`mise.toml`
-    floats `go = "1.26"` to a patch release, so a system `/usr/local/go` produces
-    different bytes from identical source — rerun both halves under `mise exec --`),
-    or the source genuinely moved on (`task taskrail:install`).
+- **The wrong-binary trap: a state-writing command (`verify`, `complete`, `start`,
+  `block`) run against a binary older than the working tree succeeds silently and
+  stamps task files with behavior the working tree had already fixed.** This
+  happened during T-109–T-118, where an older `./bin` build wrote the very
+  duplicate `## Implementation Notes` heading that change set was removing. It is
+  why the opt-in `pre-commit` hook runs `task taskrail:check`: a stale binary must
+  not write committed state here (T-123, `docs/binary-resolution-findings.md`).
+  Both binary guards name the remedy for what they detected (T-123), so read which
+  one fired:
+
+| Symptom | Cause | Remedy |
+|---|---|---|
+| New flag rejected: `taskrail task new --slug ...` fails with `unknown flag: --slug` | The binary `${TASKRAIL:-taskrail}` resolves to a shipped release older than the working tree | `mise run setup` (builds the working tree onto PATH), or export an absolute `TASKRAIL` |
+| State writer succeeds but task files carry old behavior | Same as above, silently — assume this is happening until a guard clears it | Same as above; inspect and re-run affected writers with the fresh binary |
+| `task taskrail:install` fails | Build succeeded but its output is not reachable as `taskrail` — a *resolution* problem, not a build problem | `mise run setup`, or export an absolute `TASKRAIL` for that shell; rebuilding changes nothing |
+| `task taskrail:check` fires | The binary `${TASKRAIL:-taskrail}` would run (an exported `TASKRAIL` wins over PATH, as for the skills) differs from the working-tree build; the check names which of four causes | See below |
+
+  `task taskrail:check` distinguishes four causes of a byte difference and names
+  the one it found: `TASKRAIL` points somewhere other than the working-tree build
+  (repoint or unset it); the on-PATH binary is a different file (PATH fix); the two
+  builds came from different Go toolchains (`mise.toml` floats `go = "1.26"` to a
+  patch release, so a system `/usr/local/go` produces different bytes from
+  identical source — rerun both halves under `mise exec --`); or the source
+  genuinely moved on (`task taskrail:install`).
 - Prefer repository-local, inspectable file operations over hidden automation.
 
 ## Build, Format, And Test Commands
@@ -206,29 +205,16 @@ Guidance for coding agents working in the Taskrail repository.
 
 ## Change Checklist For Agents
 
-- Run `gofmt -w` on edited Go files.
-- Run `go vet ./...` for non-trivial changes.
-- Run targeted tests for touched packages.
-- Run `go test ./...` before handing off substantial changes.
-- Run manual testing and persist `plan.md` and `report.md` artifacts for changes that alter Taskrail's visible workflow behavior.
+The generic gates (`gofmt -w` on edited Go files, `go vet ./...`, targeted then
+full `go test ./...`) are stated once under [Boundaries](#boundaries). Beyond
+those:
+
 - Run `go run ./cmd/taskrail validate` when changing planning files, task schema, state schema, or spec references.
+- Run manual testing and persist `plan.md` and `report.md` artifacts for changes that alter Taskrail's visible workflow behavior (see [Testing Expectations](#testing-expectations)); delete all ephemeral manual test code after the report is written — never commit `*_manual_test.go` files or `cmd/manual-test-*/` directories.
 - When changing the packaged skills under `internal/taskrail/skills/`, run `task skills:regen` to regenerate the committed `.agents/`/`.claude/` copies from the package (it re-runs the parity check) so they stay byte-identical.
 - After any `taskrail start`/`next`/`verify`/`complete`/`block`/`spec activate`, run `git status` and stage the regenerated `planning/STATE.md` and rewritten task files with the related change; never leave committed `STATE.md` out of sync with task/spec state.
 - Update `README.md` when CLI commands or workflow expectations change.
-- Update `CHANGELOG.md` for user-visible behavior changes under an Unreleased
-  section; skip internal-only refactors, CI plumbing, and dependency-bump noise.
-  Keep entries terse: **one to two lines**, lead with the command or user-facing
-  verb, state the observable effect and the flags a user types. Leave out internal
-  mechanics (function names, struct/schema ids, `embed.FS`, "shared validator")
-  and design rationale — those belong in the commit body or spec. Fold one
-  user-facing feature into one entry even when it spans several tasks. Copy-edit
-  against the existing entries so register and length stay consistent; the terse
-  v0.1.0 entries are the reference.
-  - Good: `` `taskrail repair` — reconcile mechanical `STATE.md` drift; dry run by
-    default, `--apply` writes `STATE.md` only and re-validates. Supports `--json`. ``
-  - Bad: a 5-sentence paragraph restating the task description and how it works
-    internally.
-- Delete all ephemeral manual test code after the report is written; never commit `*_manual_test.go` files or `cmd/manual-test-*/` directories.
+- Update `CHANGELOG.md` for user-visible behavior changes under an Unreleased section — policy and examples in [docs/workflow/changelog.md](docs/workflow/changelog.md).
 
 ## Notes On Repository Behavior
 
@@ -236,12 +222,8 @@ Intentional, non-obvious decisions — do not "fix" these:
 
 - `planning/bootstrap-reviews/` holds hand-produced v0.5 spec-review evidence: one immutable `<version>[-rN].md` report plus a sibling `<version>[-rN]-task-manifest.sha256` in plain `sha256sum -c` format. The report records the manifest's own digest, so one digest transitively binds the exact bytes of every task file that revision reviewed. No command, skill, or script generates these — the v0.5 publisher (T-215) and review lenses (T-162) do not exist yet, which is the whole reason they are hand-made. Do not add a `Taskfile.yml`/CI check for them: superseded revisions verify *partially* on purpose (each is frozen to its own snapshot, and later task edits are expected to break it), so a green/red gate would be meaningless. They are committed because they are evidence, not build output — unreproducible once task files move on, and worthless outside the git history they annotate. A stale revision needs a successor only when current bootstrap evidence is explicitly requested at a new review boundary; ordinary spec or task edits do not trigger one. Never gitignore them, never edit a published revision's digests, and never place them under the real durable review roots (`<planning-dir>/reviews/...`, per `specs/v0.5.0.md`) — the separate directory name is deliberate quarantine so hand-made evidence cannot be mistaken for a schema-v1 artifact. T-256 retires the directory once real publication ships.
 - `planning/STATE.md` still carries a stale `continuation_notes` entry naming Taskrail v0.1.0. It is byte-preserved on purpose: T-200 stopped *seeding* such notes but requires existing ones to survive until the state schema-v2 migration (T-157) exposes and explicitly drops them. No migration silently discards authored text, so do not hand-clear it.
-- `validate` is read-only. It never writes `planning/STATE.md` or task files.
-- `coverage` is read-only (side-effect-free like `validate`): it reports advisory spec-coverage/orphan/drift signals and never writes `planning/STATE.md` or task files, so it needs no post-run `git status`/staging follow-up. Its signals never make `validate` fail.
-- `coverage --gaps` is read-only and advisory by default (side-effect-free like `coverage`): it emits mechanical structural-gap candidates over covered active-spec areas (`missing-verification`, `dependency-anomaly`, `under-decomposed-area`) and never writes `planning/STATE.md` or task files. `--fail-on <category>` opts into a repository-selected exit code policy without changing the report, and gap findings never make `validate` fail. Every signal is a candidate to promote into a real task, never auto-created state; it composes with `--area`, while coverage-only `--min` is rejected with `--gaps`. It stays mechanical — counts and graph edges only, no semantic inference.
-- `status` is read-only (side-effect-free like `validate`): it prints the current tracked-work snapshot and never writes `planning/STATE.md` or task files, so it needs no post-run `git status`/staging follow-up. Unlike `next`, it computes the next eligible task without persisting `next_action`/`updated_at`, so the working tree stays clean.
-- `stats` is read-only (side-effect-free like `validate`): it prints aggregate snapshot-only metrics (status distribution, blocked ratio, spec coverage, dependency shape) and never writes `planning/STATE.md` or task files, so it needs no post-run `git status`/staging follow-up.
-- `spec diff <from> <to>` is read-only (side-effect-free like `coverage`/`validate`): it prints the mechanical anchor-set delta (added areas to decompose, removed areas that orphan tasks, best-effort rename candidates) over exactly the anchors `spec show --anchors` computes, never writes `planning/STATE.md` or task files, and never gates or makes `validate` fail. It is a reporting aid, not a migrator: it never creates tasks, re-points `spec_ref`, or advances status. Rename candidates are labeled best-effort (an added and a removed anchor sharing a normalized stem), never asserted.
+- Read-only commands (`validate`, `status`, `stats`, `coverage`, `spec list/show/diff`) never write `planning/STATE.md` or task files, so they need no post-run `git status`/staging follow-up, and their signals never make `validate` fail. `coverage` reports advisory spec-coverage/orphan/drift signals; `status` computes the next eligible task without persisting `next_action`/`updated_at` (unlike `next`, it leaves the working tree clean); `spec diff` is a reporting aid, not a migrator — it never creates tasks, re-points `spec_ref`, or advances status, and its rename candidates are labeled best-effort, never asserted. See the [command effects table](README.md#command-effects) in the README.
+- `coverage --gaps` is read-only and advisory by default (side-effect-free like `coverage`): it emits mechanical structural-gap candidates (`missing-verification`, `dependency-anomaly`, `under-decomposed-area`) over covered active-spec areas and never writes `planning/STATE.md` or task files. `--fail-on <category>` opts into a repository-selected exit code policy without changing the report, and gap findings never make `validate` fail. Every signal is a candidate to promote into a real task, never auto-created state; it composes with `--area`, while coverage-only `--min` is rejected with `--gaps`. It stays mechanical — counts and graph edges only, no semantic inference.
 - `start`, `next`, `verify`, `complete`, and `block` rewrite `planning/STATE.md` (and sometimes task files). Even a `next` selection probe updates `next_action`/`updated_at`, so it dirties the working tree — check `git status` after running it.
 - `spec activate <version>` rewrites `planning/STATE.md` only (it repoints `active_spec_version`/`active_spec_path`, re-renders, and re-validates); it never touches task files or status fields. It is the sanctioned CLI-only writer of the active spec, so check `git status` after running it.
 - `task repoint <id>` rewrites one open task's `spec_ref` field and re-projects `planning/STATE.md`; it never changes the id, slug, filename, title, status, or dependencies, and never touches another task file. It is the sanctioned CLI way to move an open task onto another spec area instead of hand-editing frontmatter — not a status mutator and not a bulk migrator. Completed and cancelled tasks are delivered history and are rejected. Because it writes `STATE.md`, check `git status` after running it.
