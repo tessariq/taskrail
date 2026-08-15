@@ -635,8 +635,21 @@ func TestPublishDirectoryRollsBackAliasCreatedAtCommit(t *testing.T) {
 	if !errors.Is(err, ErrAlias) && !errors.Is(err, os.ErrExist) {
 		t.Fatalf("PublishDirectory = %v, want alias or native no-replace refusal", err)
 	}
-	if _, statErr := os.Stat(filepath.Join(repo, "reviews", "session")); !errors.Is(statErr, os.ErrNotExist) {
-		t.Fatalf("final directory exists: %v", statErr)
+	entries, readErr := os.ReadDir(filepath.Join(repo, "reviews"))
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	aliasPreserved := false
+	for _, entry := range entries {
+		if entry.Name() == "session" {
+			t.Fatal("exact final directory exists")
+		}
+		if entry.Name() == "Session" {
+			aliasPreserved = true
+		}
+	}
+	if !aliasPreserved {
+		t.Fatal("external alias was not preserved")
 	}
 }
 
