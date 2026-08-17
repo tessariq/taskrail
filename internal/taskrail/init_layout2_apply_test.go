@@ -238,7 +238,6 @@ func TestFencedMigrationBlocksOrdinaryCommands(t *testing.T) {
 	t.Parallel()
 
 	repo := seedLayout1Repo(t)
-	requireRecoveryDirectoryDurability(t, repo)
 	original, err := os.ReadFile(markerFile(repo))
 	if err != nil {
 		t.Fatal(err)
@@ -353,6 +352,7 @@ func TestRecoverRestoresFenceOnlyInterruption(t *testing.T) {
 	t.Parallel()
 
 	repo := seedLayout1Repo(t)
+	requireRecoveryDirectoryDurability(t, repo)
 	original, err := os.ReadFile(markerFile(repo))
 	if err != nil {
 		t.Fatal(err)

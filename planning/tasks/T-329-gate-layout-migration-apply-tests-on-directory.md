@@ -6,7 +6,7 @@ priority: high
 spec_ref: specs/v0.5.0.md#layout-compatibility-and-upgrade
 dependencies:
     - T-280-publish-layout-2-through-the-durable-migration
-updated_at: "2026-08-17T18:05:17Z"
+updated_at: "2026-08-17T18:12:21Z"
 ---
 
 # T-329-gate-layout-migration-apply-tests-on-directory Gate layout migration apply tests on directory durability
@@ -37,3 +37,4 @@ Follow-up derived from T-280-publish-layout-2-through-the-durable-migration's ve
 
 - 2026-08-17T18:05:10Z: Reused the established directory-sync capability probe in only the layout migration and recovery cases that require successful durable publication; preview and refusal coverage remains ungated and runtime behavior is unchanged.
 - 2026-08-17T18:05:17Z: verification pass
+- 2026-08-17T18:12:21Z: verification pass
