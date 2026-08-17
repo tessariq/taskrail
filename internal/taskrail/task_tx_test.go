@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -23,6 +24,13 @@ var taskMutationCommands = []string{
 	"task repoint",
 	"task dependency add",
 	"task dependency remove",
+}
+
+func requirePermissionFaultInjection(t *testing.T) {
+	t.Helper()
+	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+		t.Skip("permission-based fault injection is ineffective on this host")
+	}
 }
 
 // taskMutationFixture seeds a repo whose T-001 is renameable, whose T-002
@@ -228,9 +236,7 @@ func TestTaskMutationWritersRefuseDelegatedInvocation(t *testing.T) {
 // to the original bytes: task creation removes its transaction-created file,
 // and a rename restores the task file its removal had already taken.
 func TestTaskMutationPublicationFailureRollsBack(t *testing.T) {
-	if os.Geteuid() == 0 {
-		t.Skip("permission-based fault injection is ineffective as root")
-	}
+	requirePermissionFaultInjection(t)
 	for _, command := range []string{"task new", "task rename", "task repoint", "task dependency add"} {
 		t.Run(command, func(t *testing.T) {
 			svc, repo := taskMutationFixture(t)

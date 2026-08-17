@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -404,8 +405,8 @@ func TestRefusedWritersChangeNothing(t *testing.T) {
 // failing task publication rolls the state back and the failure envelope
 // reports an uncommitted operation with nothing left on disk to reconcile.
 func TestPartialWriteRollsBackTheWholeTransaction(t *testing.T) {
-	if os.Geteuid() == 0 {
-		t.Skip("root ignores the file mode this test relies on")
+	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+		t.Skip("permission-based fault injection is ineffective on this host")
 	}
 	root := setupRepo(t)
 	statePath := filepath.Join(root, "planning", "STATE.md")

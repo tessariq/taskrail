@@ -126,3 +126,4 @@ T-328-skip-recovery-apply-tests-when-directory	hold-operator	Operator-owned repa
 T-329-gate-layout-migration-apply-tests-on-directory	hold-operator	Operator-owned repair for T-280 native Windows CI
 T-330-canonicalize-verification-write-set-test-paths-on	hold-operator	Operator-owned repair for T-281 native Windows CI
 T-331-snapshot-full-raw-task-bytes-in-the-transactional	hold-operator	Verification follow-up from T-282-protect-inherited-task-mutation-writers; operator review required
+T-332-gate-task-mutation-permission-fault-tests-on	hold-operator	Operator-owned repair for T-282 native Windows CI

@@ -83,9 +83,7 @@ func TestRenameTaskPublishesByFilesystemOperationsInRealRepo(t *testing.T) {
 // bytes, so neither the worktree nor the Git index shows any residue.
 func TestRenameTaskRollbackLeavesGitIndexCleanInRealRepo(t *testing.T) {
 	t.Parallel()
-	if os.Geteuid() == 0 {
-		t.Skip("permission-based fault injection is ineffective as root")
-	}
+	requirePermissionFaultInjection(t)
 	repo, runGit := realGitFixtureRepo(t)
 	writeTask(t, repo, "T-001", "Base", "completed", "high", "specs/v0.1.0.md#summary", nil)
 	writeTask(t, repo, "T-002", "Dependent", "todo", "high", "specs/v0.1.0.md#summary", []string{"T-001"})
