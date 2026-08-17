@@ -30,7 +30,7 @@ func (s *Service) validateAfterWrite() (ValidationResult, error) {
 }
 
 func (s *Service) Start(taskID string) (result StartResult, err error) {
-	own, release, err := s.beginLifecycleWrite(lifecycleStart, taskID,
+	own, release, err := s.beginWriterWrite(lifecycleStart, taskID,
 		[]string{s.reportedStatePath(), s.reportedTaskPath(taskID)})
 	if err != nil {
 		return StartResult{}, err
@@ -137,7 +137,7 @@ func (s *Service) Block(taskID, reason string) (BlockResult, error) {
 // It then re-renders STATE.md and re-runs validation, reporting the result
 // (mirrors ActivateSpec per specs/v0.3.0.md#task-unblocking).
 func (s *Service) Unblock(taskID, reason string) (result UnblockResult, err error) {
-	own, release, err := s.beginLifecycleWrite(lifecycleUnblock, taskID,
+	own, release, err := s.beginWriterWrite(lifecycleUnblock, taskID,
 		[]string{s.reportedStatePath(), s.reportedTaskPath(taskID)})
 	if err != nil {
 		return UnblockResult{}, err
@@ -223,8 +223,8 @@ type transitionOutcome struct {
 	validation ValidationResult
 }
 
-func (s *Service) finishTask(w lifecycleCommand, taskID, status, note string) (outcome transitionOutcome, err error) {
-	own, release, err := s.beginLifecycleWrite(w, taskID,
+func (s *Service) finishTask(w writerCommand, taskID, status, note string) (outcome transitionOutcome, err error) {
+	own, release, err := s.beginWriterWrite(w, taskID,
 		[]string{s.reportedStatePath(), s.reportedTaskPath(taskID)})
 	if err != nil {
 		return transitionOutcome{}, err

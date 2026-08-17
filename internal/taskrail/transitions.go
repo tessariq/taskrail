@@ -4,10 +4,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"slices"
 	"strings"
+
+	"github.com/tessariq/taskrail/internal/repotx"
 )
 
 func (s *Service) Next() (NextResult, error) {
@@ -24,7 +25,7 @@ func (s *Service) NextIncludingOffSpec() (NextResult, error) {
 }
 
 func (s *Service) next(includeOffSpec bool) (result NextResult, err error) {
-	own, release, err := s.beginLifecycleWrite(lifecycleNext, "", []string{s.reportedStatePath()})
+	own, release, err := s.beginWriterWrite(lifecycleNext, "", []string{s.reportedStatePath()})
 	if err != nil {
 		return NextResult{}, err
 	}
@@ -228,7 +229,29 @@ func nextAction(result NextResult) string {
 	}
 }
 
-func (s *Service) Verify(input VerifyInput) (VerifyResult, error) {
+// recordVerification stamps the selected task and the re-projected state with
+// one verification outcome. Task files are committed, so the note and the state
+// summary stay portable: they record result and timestamp without a path into
+// gitignored artifacts; local evidence still lives under
+// planning/artifacts/verify/ for the producer (see VerifyResult).
+func recordVerification(state *State, task *Task, input VerifyInput, followupTaskID, nowText string, preview []*Task) {
+	appendTaskNote(task, verificationNoteLine(nowText, input.Result))
+	task.Frontmatter.UpdatedAt = nowText
+
+	state.Frontmatter.UpdatedAt = nowText
+	state.Frontmatter.LastVerificationResult = fmt.Sprintf("%s for %s at %s", input.Result, task.Frontmatter.ID, nowText)
+	state.Frontmatter.RelevantArtifacts = nil
+	if input.Result == "fail" && followupTaskID != "" {
+		state.Frontmatter.NextAction = fmt.Sprintf("Review follow-up task %s", followupTaskID)
+	} else if input.Result == "fail" {
+		state.Frontmatter.NextAction = fmt.Sprintf("Resolve verification findings for %s", task.Frontmatter.ID)
+	} else {
+		state.Frontmatter.NextAction = nextActionSelectEligible
+	}
+	state.Body = renderStateBody(state.Frontmatter, preview)
+}
+
+func (s *Service) Verify(input VerifyInput) (result VerifyResult, err error) {
 	if input.Result != "pass" && input.Result != "fail" {
 		return VerifyResult{}, invalidArgumentsf("invalid verify result %q", input.Result)
 	}
@@ -237,26 +260,47 @@ func (s *Service) Verify(input VerifyInput) (VerifyResult, error) {
 			errors.New("verify summary must not be empty"))
 	}
 
+	// The timestamp fixes the artifact destination before the lock is taken, so
+	// the write set a delegated child claims is the one it publishes.
+	now := s.now().UTC()
+	ts := now.Format("20060102T150405Z")
+	writes, err := s.verifyWriteClaim(input, ts)
+	if err != nil {
+		return VerifyResult{}, err
+	}
+	own, release, err := s.beginWriterWrite(lifecycleVerify, input.TaskID, writes)
+	if err != nil {
+		return VerifyResult{}, err
+	}
+	defer func() {
+		if releaseErr := release(); releaseErr != nil && err == nil {
+			err = releaseErr
+		}
+	}()
+
 	state, tasks, err := s.loadStateAndTasks()
 	if err != nil {
 		return VerifyResult{}, err
 	}
+	corpus, err := snapshotTaskCorpus(tasks)
+	if err != nil {
+		return VerifyResult{}, err
+	}
+	baseline := s.validateInMemory(state, tasks)
 	task, err := exactTaskByID(tasks, input.TaskID)
 	if err != nil {
 		return VerifyResult{}, err
 	}
 
-	now := s.now().UTC()
-	ts := now.Format("20060102T150405Z")
 	artifactDir := filepath.Join(s.paths.VerifyDir, task.Frontmatter.ID, ts)
-	if err := ensureDir(s.paths.RepoRoot, artifactDir); err != nil {
-		return VerifyResult{}, err
-	}
-
 	planPath := filepath.Join(artifactDir, "plan.md")
 	reportPath := filepath.Join(artifactDir, "report.json")
 	reportMarkdownPath := filepath.Join(artifactDir, "report.md")
+	relPlan := relPath(s.paths.RepoRoot, planPath)
+	relReport := relPath(s.paths.RepoRoot, reportPath)
+	relReportMarkdown := relPath(s.paths.RepoRoot, reportMarkdownPath)
 
+	var followups []*Task
 	followupTaskID := ""
 	var warnings []Warning
 	if input.CreateFollowup {
@@ -264,20 +308,13 @@ func (s *Service) Verify(input VerifyInput) (VerifyResult, error) {
 		if err != nil {
 			return VerifyResult{}, err
 		}
-		tasks = append(tasks, newTask)
+		followups = append(followups, newTask)
 		followupTaskID = newTask.Frontmatter.ID
 		warnings = taskWarnings
 	}
-
-	relPlan := relPath(s.paths.RepoRoot, planPath)
-	relReport := relPath(s.paths.RepoRoot, reportPath)
-	relReportMarkdown := relPath(s.paths.RepoRoot, reportMarkdownPath)
+	preview := append(slices.Clone(tasks), followups...)
 
 	plan := renderVerificationPlan(task, input, followupTaskID)
-	if err := os.WriteFile(planPath, []byte(plan), 0o644); err != nil {
-		return VerifyResult{}, fmt.Errorf("write verification plan %s: %w", relPlan, fsCause(err))
-	}
-
 	report := VerificationArtifact{
 		SchemaVersion:  stateSchemaVersion,
 		TaskID:         task.Frontmatter.ID,
@@ -290,43 +327,30 @@ func (s *Service) Verify(input VerifyInput) (VerifyResult, error) {
 		Artifacts:      []string{relPlan, relReportMarkdown},
 		FollowupTaskID: followupTaskID,
 	}
-
 	reportBytes, err := json.MarshalIndent(report, "", "  ")
 	if err != nil {
 		return VerifyResult{}, fmt.Errorf("marshal verification report: %w", err)
 	}
-	if err := os.WriteFile(reportPath, reportBytes, 0o644); err != nil {
-		return VerifyResult{}, fmt.Errorf("write verification report %s: %w", relReport, fsCause(err))
-	}
-
 	reportMarkdown := renderVerificationReportMarkdown(report)
-	if err := os.WriteFile(reportMarkdownPath, []byte(reportMarkdown), 0o644); err != nil {
-		return VerifyResult{}, fmt.Errorf("write verification markdown report %s: %w", relReportMarkdown, fsCause(err))
-	}
 
 	nowText := timestamp(now)
-	// Task files are committed, so the note must stay portable: record the
-	// result and timestamp without a path into gitignored artifacts (mirrors
-	// the path-free state summary below).
-	appendTaskNote(task, verificationNoteLine(nowText, input.Result))
-	task.Frontmatter.UpdatedAt = nowText
+	recordVerification(state, task, input, followupTaskID, nowText, preview)
 
-	state.Frontmatter.UpdatedAt = nowText
-	// Keep committed state portable: record a path-free summary and list no
-	// gitignored artifact paths. Local evidence still lives under
-	// planning/artifacts/verify/ for the producer (see VerifyResult).
-	state.Frontmatter.LastVerificationResult = fmt.Sprintf("%s for %s at %s", input.Result, task.Frontmatter.ID, nowText)
-	state.Frontmatter.RelevantArtifacts = nil
-	if input.Result == "fail" && followupTaskID != "" {
-		state.Frontmatter.NextAction = fmt.Sprintf("Review follow-up task %s", followupTaskID)
-	} else if input.Result == "fail" {
-		state.Frontmatter.NextAction = fmt.Sprintf("Resolve verification findings for %s", task.Frontmatter.ID)
-	} else {
-		state.Frontmatter.NextAction = nextActionSelectEligible
+	ledger := verifyLedger{
+		state:     state,
+		task:      task,
+		followups: followups,
+		artifacts: []repotx.Candidate{
+			worktreeCandidate(relPlan, planPath, []byte(plan)),
+			worktreeCandidate(relReport, reportPath, reportBytes),
+			worktreeCandidate(relReportMarkdown, reportMarkdownPath, []byte(reportMarkdown)),
+		},
+		original: tasks,
+		preview:  preview,
+		corpus:   corpus,
+		baseline: baseline,
 	}
-	state.Body = renderStateBody(state.Frontmatter, tasks)
-
-	if err := s.saveAll(state, tasks); err != nil {
+	if err := s.commitVerify(own, ledger); err != nil {
 		return VerifyResult{}, err
 	}
 
@@ -580,6 +604,7 @@ func (s *Service) createFollowupTask(tasks []*Task, source *Task, input VerifyIn
 	nextID, warnings := nextTaskIDWithSlug(tasks, title, false, true)
 
 	body := renderFollowupTaskBody(nextID, title, description)
+	filename := filepath.Join(s.paths.TasksDir, nextID+".md")
 	task := &Task{
 		Frontmatter: TaskFrontmatter{
 			ID:           nextID,
@@ -591,7 +616,8 @@ func (s *Service) createFollowupTask(tasks []*Task, source *Task, input VerifyIn
 			UpdatedAt:    timestamp(s.now()),
 		},
 		Body:     body,
-		Filename: filepath.Join(s.paths.TasksDir, nextID+".md"),
+		Path:     s.paths.logicalManagedPath(filename),
+		Filename: filename,
 	}
 	return task, warnings, nil
 }

@@ -303,12 +303,12 @@ func rollback(root string, entries []*entry, cause error) *Error {
 func restore(root string, e *entry) error {
 	if e.original == nil {
 		if err := os.Remove(e.path.Physical); err != nil && !errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf("roll back %s: %w", e.path.Reported, err)
+			return fmt.Errorf("roll back %s: %w", e.path.Reported, fsCause(err))
 		}
 		return nil
 	}
 	if err := publishTo(root, e.path, e.original.content, e.original.mode); err != nil {
-		return fmt.Errorf("roll back %s: %w", e.path.Reported, err)
+		return fmt.Errorf("roll back %s: %w", e.path.Reported, fsCause(err))
 	}
 	return nil
 }

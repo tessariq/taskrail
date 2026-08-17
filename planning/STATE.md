@@ -1,6 +1,6 @@
 ---
 schema_version: 1
-updated_at: "2026-08-17T20:29:56Z"
+updated_at: "2026-08-17T21:18:33Z"
 active_spec_version: v0.5.0
 active_spec_path: specs/v0.5.0.md
 current_task: ""
@@ -8,7 +8,7 @@ current_task_title: ""
 status_summary: idle
 blockers: []
 next_action: Select the next eligible task
-last_verification_result: pass for T-233-protect-lifecycle-and-task-writers-transactionally at 2026-08-17T20:29:56Z
+last_verification_result: pass for T-281-protect-verification-and-follow-up-writers at 2026-08-17T21:18:33Z
 relevant_artifacts: []
 continuation_notes:
     - This repository is temporarily dogfooding bootstrap workflow tooling until Taskrail v0.1.0 exists.
@@ -34,7 +34,7 @@ continuation_notes:
 
 ## Last Verification
 
-- pass for T-233-protect-lifecycle-and-task-writers-transactionally at 2026-08-17T20:29:56Z
+- pass for T-281-protect-verification-and-follow-up-writers at 2026-08-17T21:18:33Z
 
 ## Next Action
 
@@ -50,8 +50,8 @@ continuation_notes:
 
 ## Task Counts
 
-- todo: 128
+- todo: 127
 - in_progress: 0
-- completed: 200
+- completed: 201
 - blocked: 0
 - cancelled: 0

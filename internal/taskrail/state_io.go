@@ -69,21 +69,6 @@ func (s *Service) loadTasks() ([]*Task, error) {
 	return tasks, nil
 }
 
-func (s *Service) saveAll(state *State, tasks []*Task) error {
-	state.Body = renderStateBody(state.Frontmatter, tasks)
-	if err := s.saveState(state); err != nil {
-		return err
-	}
-	for _, task := range tasks {
-		if err := s.saveTask(task); err != nil {
-			// STATE.md is already written by here, so it is part of what a failed
-			// task write leaves inconsistent.
-			return s.withWrittenPaths(err, s.paths.StateFile)
-		}
-	}
-	return nil
-}
-
 func (s *Service) saveState(state *State) error {
 	if strings.TrimSpace(state.Body) == "" {
 		state.Body = renderStateBody(state.Frontmatter, nil)

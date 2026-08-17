@@ -159,8 +159,9 @@ Taskrail commands intentionally use different write conventions based on risk:
 `updated_at`. Use `status` when you need the same next-task computation without a
 tracked write.
 
-`next`, `start`, `complete`, `block`, and `unblock` take the repository mutation
-lock and publish their exact state/task write set transactionally. A concurrent
+`next`, `start`, `complete`, `block`, `unblock`, and `verify` take the repository
+mutation lock and publish their exact state/task write set (plus verification
+artifacts and any `--create-followup` task) transactionally. A concurrent
 writer refuses with `lock_held`; unselected task bytes are never re-encoded.
 
 All semantic command classes share one recovery admission fence: retained or

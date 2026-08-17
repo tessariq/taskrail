@@ -13,48 +13,51 @@ import (
 	"github.com/tessariq/taskrail/internal/repotx"
 )
 
-// The lifecycle and state-selection transaction substrate
+// The tracked-work transaction substrate
 // (specs/v0.5.0.md#repository-discovery-locking-and-recovery): `next`, `start`,
-// `complete`, `block`, and `unblock` publish through one normal transaction.
-// Each writer takes the discovered repository mutation lock, snapshots its
-// complete consumed and published set, validates the full candidate ledger
-// before the first write, and publishes only its declared task and state files
-// — never the save-all rewrite that re-encodes unselected task bytes.
+// `complete`, `block`, `unblock`, and `verify` publish through one normal
+// transaction. Each writer takes the discovered repository mutation lock,
+// snapshots its complete consumed and published set, validates the full
+// candidate ledger before the first write, and publishes only its declared
+// files — never the save-all rewrite that re-encodes unselected task bytes.
 
-// testHookLifecycleValidated runs at the start of one lifecycle transaction's
+// testHookWriterValidated runs at the start of one writer transaction's
 // candidate-validation phase: after the snapshot, before the recheck and the
 // first publication. Tests use it to change the repository mid-transaction —
 // the only window where a conflict or an invalid candidate is deterministically
 // reachable from this package — and to observe the lock a writer must hold. It
 // is nil outside tests.
-var testHookLifecycleValidated func()
+var testHookWriterValidated func()
 
-// lifecycleCommand names one lifecycle writer and the task fields it writes.
+// writerCommand names one tracked-work writer and the task fields it writes.
 // The fields double as the capability bound a delegated child is held to, so
 // every declared field must stay inside repolock's delegated field bound.
-type lifecycleCommand struct {
+type writerCommand struct {
 	command    string
 	taskFields []string
 }
 
 var (
-	lifecycleNext = lifecycleCommand{command: "next"}
+	lifecycleNext = writerCommand{command: "next"}
 	// A state-selection writer reads every task but writes none of them.
-	lifecycleStart = lifecycleCommand{command: "start", taskFields: []string{"status", "updated_at"}}
+	lifecycleStart = writerCommand{command: "start", taskFields: []string{"status", "updated_at"}}
 	// Block also records the reason in the STATE.md blockers ledger, which the
 	// delegated field set names through its "blocker" member.
-	lifecycleComplete = lifecycleCommand{command: "complete", taskFields: []string{"status", "updated_at", "implementation_notes"}}
-	lifecycleBlock    = lifecycleCommand{command: "block", taskFields: []string{"status", "updated_at", "implementation_notes", "blocker"}}
-	lifecycleUnblock  = lifecycleCommand{command: "unblock", taskFields: []string{"status", "updated_at", "implementation_notes"}}
+	lifecycleComplete = writerCommand{command: "complete", taskFields: []string{"status", "updated_at", "implementation_notes"}}
+	lifecycleBlock    = writerCommand{command: "block", taskFields: []string{"status", "updated_at", "implementation_notes", "blocker"}}
+	lifecycleUnblock  = writerCommand{command: "unblock", taskFields: []string{"status", "updated_at", "implementation_notes"}}
+	// Verify records its result in the task's Implementation Notes and stamp,
+	// never the status; its follow-up publication is owned by verify_tx.go.
+	lifecycleVerify = writerCommand{command: "verify", taskFields: []string{"updated_at", "implementation_notes"}}
 )
 
-// beginLifecycleWrite takes the repository mutation lock for one lifecycle
+// beginWriterWrite takes the repository mutation lock for one tracked-work
 // writer. A direct operator acquires it bounded by the command it typed; a
 // delegated child joins its parent's already-held lock, arriving narrowed to
 // the selected task and the exact write set its grant authenticated. The
 // returned release retires only a directly acquired lock — a delegate never
 // releases ownership it does not hold.
-func (s *Service) beginLifecycleWrite(w lifecycleCommand, selectedTask string, writes []string) (repotx.Ownership, func() error, error) {
+func (s *Service) beginWriterWrite(w writerCommand, selectedTask string, writes []string) (repotx.Ownership, func() error, error) {
 	if err := s.paths.ensureStorageCapability(); err != nil {
 		return nil, nil, err
 	}
@@ -130,7 +133,7 @@ func candidateIntroducesViolations(candidate, baseline ValidationResult) bool {
 // one normal transaction: the state file plus, when a task is selected, exactly
 // that task's file. The returned validation is the pre-publication verdict the
 // writer reports in its result.
-func (s *Service) commitLifecycle(own repotx.Ownership, w lifecycleCommand, ledger lifecycleLedger) (ValidationResult, error) {
+func (s *Service) commitLifecycle(own repotx.Ownership, w writerCommand, ledger lifecycleLedger) (ValidationResult, error) {
 	validation := s.validateInMemory(ledger.state, ledger.preview)
 	if candidateIntroducesViolations(validation, ledger.baseline) {
 		return ValidationResult{}, WithMachineErrorCode(MachineCodeValidationFailed,
@@ -146,7 +149,10 @@ func (s *Service) commitLifecycle(own repotx.Ownership, w lifecycleCommand, ledg
 	}
 	selectedTask := ""
 	if ledger.task != nil {
-		taskBytes, err := patchLifecycleTask(ledger.task)
+		taskBytes, err := patchLifecycleTask(ledger.task, map[string]string{
+			"status":     ledger.task.Frontmatter.Status,
+			"updated_at": strconv.Quote(ledger.task.Frontmatter.UpdatedAt),
+		})
 		if err != nil {
 			return ValidationResult{}, err
 		}
@@ -165,8 +171,8 @@ func (s *Service) commitLifecycle(own repotx.Ownership, w lifecycleCommand, ledg
 		Consumed:     consumed,
 		Published:    published,
 		Validate: func([]repotx.Snapshot) error {
-			if testHookLifecycleValidated != nil {
-				testHookLifecycleValidated()
+			if testHookWriterValidated != nil {
+				testHookWriterValidated()
 			}
 			currentTasks, err := s.loadTasks()
 			if err != nil {
@@ -215,9 +221,12 @@ func sameTaskCorpus(expected []string, current []*Task) bool {
 	return true
 }
 
-// patchLifecycleTask changes only lifecycle-owned fields and the body while
-// preserving every unmodeled frontmatter byte on the selected task.
-func patchLifecycleTask(task *Task) ([]byte, error) {
+// patchLifecycleTask changes only the fields the caller names and the body
+// while preserving every unmodeled frontmatter byte on the selected task. The
+// field set must match the writer's declared taskFields so a writer's byte
+// reach never exceeds its capability bound — verify, for instance, never
+// names "status" and so never rewrites that line.
+func patchLifecycleTask(task *Task, fields map[string]string) ([]byte, error) {
 	data, err := os.ReadFile(task.Filename)
 	if err != nil {
 		return nil, err
@@ -235,10 +244,7 @@ func patchLifecycleTask(task *Task) ([]byte, error) {
 	}
 	end += len("---"+newline) + len(marker)
 	frontmatter := string(data[:end])
-	for field, value := range map[string]string{
-		"status":     task.Frontmatter.Status,
-		"updated_at": strconv.Quote(task.Frontmatter.UpdatedAt),
-	} {
+	for field, value := range fields {
 		prefix := field + ":"
 		lines := strings.Split(frontmatter, newline)
 		matches := 0

@@ -15,6 +15,18 @@ import (
 // abrupt death, so there is no journal, no fsync of parent directories, and no
 // cleverness beyond stage-then-rename.
 
+// fsCause unwraps a filesystem error to its underlying cause so a reported
+// message names the path the caller already spelled rather than the absolute
+// physical location a *fs.PathError carries. Classification through errors.Is
+// and errors.As is unaffected.
+func fsCause(err error) error {
+	var pathErr *fs.PathError
+	if errors.As(err, &pathErr) {
+		return pathErr.Err
+	}
+	return err
+}
+
 // resolveRoot is the repository root with every symlink resolved. Publication
 // compares real directories against it, so a symlinked component cannot make a
 // path that passed the lexical containment check land somewhere else.
@@ -40,6 +52,8 @@ func inside(root, path string) bool {
 // The lexical containment check at authorization cannot see a symlinked
 // component, so without this a planted link would publish outside the
 // repository. Git metadata is exempt for the same reason it is exempt there.
+// Errors name the reported path, never the caller's absolute repository
+// location, so a failure stays portable across machines (the T-088 contract).
 func publishTo(root string, p Path, content []byte, mode fs.FileMode) error {
 	directory := filepath.Dir(p.Physical)
 	// Prove containment before creating anything: a planted link partway down the
@@ -52,7 +66,7 @@ func publishTo(root string, p Path, content []byte, mode fs.FileMode) error {
 		testHookBeforeMkdir(p)
 	}
 	if err := os.MkdirAll(directory, 0o755); err != nil {
-		return fmt.Errorf("create directory %s: %w", directory, err)
+		return fmt.Errorf("create directory for %s: %w", p.Reported, fsCause(err))
 	}
 	// Prove it again, now that the directory itself resolves: the first check
 	// could only see its nearest existing ancestor, so a link planted at the leaf
@@ -62,7 +76,7 @@ func publishTo(root string, p Path, content []byte, mode fs.FileMode) error {
 	if err := proveContained(root, p, directory); err != nil {
 		return err
 	}
-	return writeFile(p.Physical, content, mode)
+	return writeFile(p.Reported, p.Physical, content, mode)
 }
 
 // proveContained refuses a directory that really lives outside the repository,
@@ -73,7 +87,7 @@ func proveContained(root string, p Path, directory string) error {
 	if p.Kind == Git {
 		return nil
 	}
-	resolved, err := existingAncestor(directory)
+	resolved, err := existingAncestor(p.Reported, directory)
 	if err != nil {
 		return err
 	}
@@ -88,7 +102,7 @@ func proveContained(root string, p Path, directory string) error {
 // existingAncestor is the nearest ancestor of path that exists, with every
 // symlink resolved. Resolving what is already there is the only way to judge a
 // directory that has not been created yet.
-func existingAncestor(path string) (string, error) {
+func existingAncestor(reported, path string) (string, error) {
 	for current := path; ; {
 		resolved, err := filepath.EvalSymlinks(current)
 		if err == nil {
@@ -96,12 +110,12 @@ func existingAncestor(path string) (string, error) {
 		}
 		if !errors.Is(err, os.ErrNotExist) {
 			return "", failure(KindUnreadable, nil,
-				fmt.Errorf("resolve directory %s: %w", current, err))
+				fmt.Errorf("resolve directory of %s: %w", reported, fsCause(err)))
 		}
 		parent := filepath.Dir(current)
 		if parent == current {
 			return "", failure(KindUnreadable, nil,
-				fmt.Errorf("resolve directory %s: no ancestor of it exists", path))
+				fmt.Errorf("resolve directory of %s: no ancestor of it exists", reported))
 		}
 		current = parent
 	}
@@ -128,7 +142,7 @@ func readState(path Path) (*fileState, error) {
 		return nil, nil
 	}
 	if err != nil {
-		return nil, failure(KindUnreadable, nil, fmt.Errorf("snapshot %s: %w", path.Reported, err))
+		return nil, failure(KindUnreadable, nil, fmt.Errorf("snapshot %s: %w", path.Reported, fsCause(err)))
 	}
 	if !info.Mode().IsRegular() {
 		return nil, failure(KindNotRegularFile, nil,
@@ -136,7 +150,7 @@ func readState(path Path) (*fileState, error) {
 	}
 	content, err := os.ReadFile(path.Physical)
 	if err != nil {
-		return nil, failure(KindUnreadable, nil, fmt.Errorf("snapshot %s: %w", path.Reported, err))
+		return nil, failure(KindUnreadable, nil, fmt.Errorf("snapshot %s: %w", path.Reported, fsCause(err)))
 	}
 	return &fileState{content: content, mode: info.Mode().Perm(), digest: digestOf(content)}, nil
 }
@@ -169,19 +183,22 @@ func sameState(a, b *fileState) bool {
 
 // writeFile replaces a path atomically: the bytes are complete and flushed in a
 // private sibling before the rename makes them visible, so a reader sees either
-// the whole previous file or the whole new one.
-func writeFile(physical string, content []byte, mode fs.FileMode) error {
+// the whole previous file or the whole new one. reported is the portable
+// spelling every error names; the staged sibling's own name is an
+// implementation detail the caller never needs.
+func writeFile(reported, physical string, content []byte, mode fs.FileMode) error {
 	directory := filepath.Dir(physical)
 	file, err := os.CreateTemp(directory, "."+filepath.Base(physical)+".repotx-*")
 	if err != nil {
-		return fmt.Errorf("stage %s: %w", physical, err)
+		return fmt.Errorf("stage %s: %w", reported, fsCause(err))
 	}
 	staged := file.Name()
+	removeStaged := func() error { return fsCause(os.Remove(staged)) }
 	if err := stage(file, content, mode); err != nil {
-		return errors.Join(err, os.Remove(staged))
+		return errors.Join(err, removeStaged())
 	}
 	if err := os.Rename(staged, physical); err != nil {
-		return errors.Join(fmt.Errorf("publish %s: %w", physical, err), os.Remove(staged))
+		return errors.Join(fmt.Errorf("publish %s: %w", reported, fsCause(err)), removeStaged())
 	}
 	return nil
 }
@@ -189,17 +206,17 @@ func writeFile(physical string, content []byte, mode fs.FileMode) error {
 func stage(file *os.File, content []byte, mode fs.FileMode) error {
 	if _, err := file.Write(content); err != nil {
 		file.Close()
-		return fmt.Errorf("write %s: %w", file.Name(), err)
+		return fmt.Errorf("stage bytes: %w", fsCause(err))
 	}
 	if err := file.Sync(); err != nil {
 		file.Close()
-		return fmt.Errorf("sync %s: %w", file.Name(), err)
+		return fmt.Errorf("sync staged bytes: %w", fsCause(err))
 	}
 	if err := file.Close(); err != nil {
-		return fmt.Errorf("close %s: %w", file.Name(), err)
+		return fmt.Errorf("close staged bytes: %w", fsCause(err))
 	}
 	if err := os.Chmod(file.Name(), mode); err != nil {
-		return fmt.Errorf("set mode on %s: %w", file.Name(), err)
+		return fmt.Errorf("stage mode: %w", fsCause(err))
 	}
 	return nil
 }

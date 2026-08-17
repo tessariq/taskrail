@@ -1,12 +1,12 @@
 ---
 id: T-281-protect-verification-and-follow-up-writers
 title: Protect verification and follow-up writers transactionally
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#repository-discovery-locking-and-recovery
 dependencies:
     - T-233-protect-lifecycle-and-task-writers-transactionally
-updated_at: "2026-08-08T14:23:08Z"
+updated_at: "2026-08-17T21:18:33Z"
 ---
 
 # T-281-protect-verification-and-follow-up-writers Protect verification and follow-up writers transactionally
@@ -41,3 +41,6 @@ with T-285 and T-286.
 - Run delegated negatives for wrong task, unapproved creation, and widened fields.
 
 ## Implementation Notes
+
+- 2026-08-17T21:18:18Z: Routed verify, including --create-followup, through the repository mutation lock and normal transaction substrate with an exact artifact/task/state/follow-up write set, field-scoped selected-task byte patching, portable transaction error paths, and delegated bounds.
+- 2026-08-17T21:18:33Z: verification pass

@@ -63,6 +63,27 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ### Changed
 
+- `verify`, including `--create-followup`, now publishes through the repository
+  mutation lock as one normal transaction: it snapshots its selected task,
+  state, task ledger, and artifact destination, validates the complete
+  candidate ledger before the first write, and publishes exactly its
+  verification artifacts, selected task, fresh follow-up tasks, and
+  re-projected `STATE.md` — no longer re-encoding every task file or leaving
+  half-written artifacts behind a mid-sequence failure. Selected-task
+  frontmatter fields Taskrail does not model survive verification byte for
+  byte. A concurrent holder of the mutation lock refuses with `lock_held`, an
+  external edit landing mid-transaction refuses with `write_conflict` while
+  preserving the edited bytes, and a handled publication failure rolls the
+  whole write — including transaction-created follow-up and artifact files —
+  back with `partial_write` evidence. Transaction publication and rollback
+  failures now name reported repository-relative paths (never the caller's
+  absolute repository location), restoring the portable-error contract for
+  every writer that publishes through the transaction substrate, and verify's
+  byte reach on the selected task is exactly its declared fields: the note,
+  the timestamp, and nothing else. A delegated verification joins its
+  parent's narrowed grant: it may create follow-ups only for its selected task
+  and refuses `delegated_write_refused` when the granted write set does not
+  cover exactly what it would publish.
 - `next`, `start`, `complete`, `block`, and `unblock` now publish through the
   repository mutation lock as one normal transaction: they snapshot their
   complete consumed and published set, validate the full candidate ledger

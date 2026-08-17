@@ -515,7 +515,7 @@ func TestExistingAncestorClassifiesAnUnresolvableDirectory(t *testing.T) {
 		t.Skipf("this platform does not allow creating symlinks: %v", err)
 	}
 
-	_, err := existingAncestor(filepath.Join(loop, "reviews"))
+	_, err := existingAncestor("loop/reviews", filepath.Join(loop, "reviews"))
 
 	txErr := txError(t, err)
 	if txErr.Kind != KindUnreadable {

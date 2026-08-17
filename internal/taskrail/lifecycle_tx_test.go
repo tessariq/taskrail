@@ -92,8 +92,8 @@ func runOneLifecycleCommand(t *testing.T, svc *Service, command string) error {
 // test and guarantees its removal, because the hook is package-global.
 func installLifecycleHook(t *testing.T, hook func()) {
 	t.Helper()
-	testHookLifecycleValidated = hook
-	t.Cleanup(func() { testHookLifecycleValidated = nil })
+	testHookWriterValidated = hook
+	t.Cleanup(func() { testHookWriterValidated = nil })
 }
 
 // observeLockDuring runs one lifecycle command with the validation-phase test
