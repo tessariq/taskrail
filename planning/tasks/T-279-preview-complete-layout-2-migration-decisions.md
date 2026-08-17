@@ -20,7 +20,7 @@ refresh eligibility, compatibility blockers, and quiescence requirements.
 ## Acceptance
 
 - A1. Upgrade preview reports the complete validated candidate paths, logical and
-  physical roots, committed storage mode, broad review-round maximum,
+  physical roots, committed storage mode, default broad review-round maximum `1`,
   source/target versions, skill classifications, and validation outcome without
   changing repository bytes.
 - A2. Every decoded legacy continuation note is reported in order with exact
@@ -38,7 +38,8 @@ refresh eligibility, compatibility blockers, and quiescence requirements.
 ## Verification Notes
 
 - A1: run preview over representative layout-1 repositories and compare complete
-  machine/text observations plus unchanged filesystem snapshots.
+  machine/text observations, including review maximum `1`, plus unchanged
+  filesystem snapshots.
 - A2: exercise absent, empty, single, multiple, multiline, quoted notes, existing
   NOTES, extraction, drop, and direct-schema-2 decision matrices.
 - A3: exercise parity-mirror, stamped, legacy-only, matching-dual, divergent, and

@@ -10,12 +10,11 @@ checkpoint complete without the evidence it names:
 
 1. Understand and frame
 2. Start and implement
-3. Checks and manual testing
-4. Simplification
-5. Correctness review
-6. Fix and recheck
-7. Follow-up and lifecycle
-8. Delivery metadata
+3. Verify
+4. Focused review
+5. Fix and re-verify
+6. Follow-up and lifecycle
+7. Delivery metadata
 
 ## Understand And Frame
 
@@ -40,7 +39,7 @@ Run `${TASKRAIL:-taskrail} start {{TASK_ID}}`, then implement the smallest corre
 change. Start behavior changes with a failing test when practical. Preserve the
 repository architecture and avoid unrelated refactors.
 
-## Checks And Manual Testing
+## Verify
 
 Run applicable formatting, targeted tests, `go vet ./...`, `go test ./...`,
 Taskrail validation, skill parity, task-body checks, and sandboxed manual testing
@@ -50,22 +49,29 @@ Never mutate external systems, production data, credentials, live services, or
 resources outside this repository. Read-only inspection is allowed when required.
 Block instead of guessing around an operator decision or external write.
 
-## Simplification And Review
+## Verification And Review
 
-First use one fresh subagent for a behavior-preserving simplification pass. Apply
-accepted simplifications, rerun affected checks, and freeze the resulting
-snapshot. Then run a correctness-review round over the frozen current
-implementation snapshot.
+After implementation, run the applicable deterministic checks and manual tests
+described above. Fix failures before requesting independent review.
 
-Before each pass, inspect the available installed skills and subagents. Prefer
-dedicated code-simplifier and code-reviewer capabilities; otherwise use a
-general-purpose fresh subagent with an explicit simplification or correctness
-lens. Each review round uses one to three fresh review subagents. Give every
-reviewer the same frozen snapshot plus task, spec, and test context, but assign
-each a different explicit review lens so their scopes do not duplicate one
-another. Run them concurrently when the backend supports it. Subagents return
-findings; the parent applies fixes. Parent-context self-review does not satisfy
-either pass. If fresh delegation is unavailable or fails, block and verify fail.
+Inspect the resulting diff for obvious unnecessary complexity and simplify it
+when doing so clearly preserves behavior. Rerun affected checks after any such
+change. A separate simplification subagent is not required.
+
+Freeze the verified implementation snapshot, then run one broad correctness review.
+Use one fresh reviewer by default. Give it the frozen implementation plus the
+relevant task, specification, tests, and verification evidence. Choose an explicit
+review lens based on the actual risks of the task. Review may cover behavior,
+tests, security, error handling, edge cases, unnecessary complexity, and domain
+fit, but do not create additional reviewers merely to cover every category.
+
+Use a second or third concurrent reviewer only when a distinct lens is
+independently relevant to the task's risk and examines something the first
+reviewer is unlikely to cover. Reviewers inspect the same frozen snapshot and
+must not duplicate one another's lens. Run additional reviewers concurrently when
+the backend supports it. Subagents return findings; the parent applies fixes.
+Parent-context self-review does not satisfy the independent review. If required
+fresh delegation is unavailable or fails, block and verify fail.
 
 Correctness review covers behavior, tests, security, error handling, edge cases,
 unnecessary complexity, and domain fit. Findings cite concrete evidence such as
@@ -83,25 +89,34 @@ temporarily introduce the specific regression, demonstrate that the test fails,
 restore the correct implementation, demonstrate that it passes, and remove all
 deliberate regression code. Record both outcomes concisely.
 
-Run at most two broad correctness-review rounds. A clean round stops early. After fixing
-any findings from a round, use a fresh code-simplifier subagent on the changed
-implementation, apply accepted behavior-preserving simplifications, and rerun
-affected checks. Freeze those bytes before starting round two.
+After fixing review findings, rerun all affected deterministic checks. Do not
+start another broad review merely because the implementation changed.
 
-If round two is clean, no final-diff review is needed. If round-two fixes or the
-required post-fix simplifier change bytes, freeze the final candidate and use one
-fresh reviewer to run one narrow final-diff review over exactly the change from
-the round-two snapshot. Its only lenses are fix-induced regressions, integration
-breakage, and behavior drift. It never starts another broad review round.
+One broad round is the normal workflow. A clean review ends broad review
+immediately; proceed to final checks and lifecycle. Use a second broad round only
+when the first round exposes a distinct unresolved risk that deterministic
+verification does not adequately cover and the repository's effective maximum
+permits it, or when repository or task context independently warrants the
+additional review. Freeze the verified repaired candidate before that optional
+round. Broad review never exceeds the effective maximum or two rounds. The
+review-round limit never turns current work into a follow-up.
+
+If review fixes materially change product or test bytes, freeze the final
+candidate and run one narrow final-diff review over exactly the review-induced
+change. Its only lenses are fix-induced regressions, integration breakage, and
+behavior drift. It never starts another broad review round.
 
 A clean final-diff review allows closure after the final applicable build and test
 checks pass, including `go build ./cmd/taskrail` and `go test ./...`. If the
-final-diff review reports a current-scope finding, fix it, run a fresh
-code-simplifier subagent, and rerun affected checks. Do not review again: the
-resulting bytes are unreviewed and must use the rework path, leaving the task in
-progress with failing verification. If final checks fail and cannot be fixed
-within the task, use the blocked path. Record the final-diff disposition and any
-residual risk in verification details.
+final-diff review reports a current-scope finding, repair it and rerun affected
+deterministic checks. If objective evidence demonstrates that the finding is
+closed, such as a regression test, build, static check, or deterministic
+integration or manual reproduction, no further model review is required. If the
+repair cannot be demonstrated adequately by deterministic evidence, leave the
+task in progress, record failing verification as rework, and stop for operator
+review. If final checks fail and cannot be fixed within the task, use the blocked
+path. Record the final-diff disposition, closure evidence, and residual risk in
+verification details.
 
 ## Follow-Up And Lifecycle
 
@@ -133,17 +148,19 @@ follow-up is required. Never verify pass before completion.
 If implementation cannot safely proceed, run `${TASKRAIL:-taskrail} block
 {{TASK_ID}} --reason "..."`, then `${TASKRAIL:-taskrail} verify {{TASK_ID}}
 --result fail --summary "..." --details "..."`. Never verify fail while leaving
-the task in progress except for final-diff rework. For final-diff rework, leave
-the task in progress and run `${TASKRAIL:-taskrail} verify {{TASK_ID}} --result
-fail --summary "..." --details "..."`; the parent accepts only completed/pass,
-blocked/fail, or in-progress/fail.
+the task in progress except for unresolved review rework. For review rework that
+cannot be closed with adequate objective evidence, leave the task in progress and
+run `${TASKRAIL:-taskrail} verify {{TASK_ID}} --result fail --summary "..."
+--details "..."`; the parent accepts only completed/pass, blocked/fail, or
+in-progress/fail.
 Never complete a blocked or failing task. A blocked run may create one follow-up under the same single-follow-up
 rules, but only for a genuinely separate outcome; work this task still owns is
 never offloaded that way. If completion succeeds but passing verification fails, stop without
 repeating completion or compensating with block.
 
-Verification details concisely record acceptance/check/manual evidence, each
-review capability and finding disposition, mutation proof, any follow-up
+Verification details concisely record acceptance/check/manual evidence, the
+selected review lens, rationale for any additional lens or round, every finding
+disposition, deterministic closure evidence, mutation proof, any follow-up
 recommendation, and unresolved risks. Do not quote reviewer responses verbatim.
 
 ## Delivery Metadata

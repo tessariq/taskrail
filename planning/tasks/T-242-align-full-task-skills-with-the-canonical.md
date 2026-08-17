@@ -24,12 +24,13 @@ lifecycle transition.
   then failing verify; deliberate rework records fail and remains in progress.
 - A2. Every writer exit is checked, source-checkout freshness guards remain, and
   completed-unverified/audit-fail recovery never repeats complete or fabricates block.
-- A3. Every full-task skill mirrors T-160's review contract: one to three fresh
-  distinct-lens reviewers in each of at most two broad rounds, a fresh simplifier
-  after fixing findings, and one conditional non-recursive final-diff review. A
-  clean final diff plus green checks permits success; a final-diff finding is
-  repaired, simplified, checked, and remains in-progress/fail because the
-  resulting bytes are unreviewed.
+- A3. Every full-task skill mirrors T-160's review contract: deterministic checks
+  precede one fresh reviewer and one broad round by default, while additional
+  distinct-lens reviewers and a second round require independently relevant risk.
+  Simplification does not require a fresh subagent; findings receive deterministic
+  re-verification and material review-induced changes receive one conditional
+  non-recursive final-diff review. Objective evidence may close a final-diff
+  repair; inadequately demonstrated repairs remain in-progress/fail.
 - A4. Embedded and committed copies remain Agent Skills-compliant, marker-free,
   byte-identical, and provider-neutral.
 - A5. Full-task skills consume managed subjects through Taskrail commands and use
@@ -51,8 +52,9 @@ lifecycle transition.
 
 - A1: executable skill fixtures observe exact command order and final repository state.
 - A2: injected writer/audit failures prove stop/recovery guidance and no later command.
-- A3: executable fixtures cover one-to-three reviewers, clean early stop,
-  post-fix simplification, final-diff clean success, and final-diff finding rework.
+- A3: executable fixtures cover one default reviewer, risk-justified additional
+  lenses and second-round use, clean early stop, post-fix deterministic checks,
+  final-diff clean success, objective repair closure, and judgment-heavy rework.
 - A4: frontmatter, package parity, skew, and command-registry checks provide evidence.
 - A5: committed/local fixtures with decoy logical files and private identifiers
   prove subject-command reads, exact Git tree/commit provenance, unchanged Git

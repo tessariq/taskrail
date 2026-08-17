@@ -35,7 +35,8 @@ outside this task.
   `action:none` fabricates neither a selected task nor a prompt.
 - Dry-run emits the uniform envelope with the exact `LoopDryRunResult` fields,
   nullability, enums, task-loop row shape, configured/effective broad-round
-  limits, three-reviewer ceiling, conditional final-diff rule,
+  limits with default `1`, three-reviewer ceiling as capability rather than the
+  normal reviewer count, conditional final-diff rule,
   execution/delivery facts, and ordered violations defined by the v0.5 machine
   API. Valid `run` and `none` exit zero; report-result `invalid` exits non-zero.
 - Committed and local dry-runs perform all applicable repository, policy, prompt,
@@ -46,7 +47,8 @@ outside this task.
 
 - Golden CLI fixtures cover exact text/JSON for `run`, `none`, and each `invalid`
   boundary, including nullability, ordering, review override, timeout, storage,
-  delivery, held-task bypass, and held-dependency isolation.
+  delivery, held-task bypass, and held-dependency isolation. Review fixtures prove
+  configured/effective default `1` and explicit override `2`.
 - Built-in/replacement fixtures perturb template and rendered bytes independently
   to prove template-only authorization, stale digest refusal, and exact rendering
   hashes.

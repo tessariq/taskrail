@@ -28,8 +28,10 @@ replacement prompt, launching a child, or writing managed state.
   retry or background forms are rejected rather than ignored.
 - `--max-iterations` defaults to `1` and accepts only positive integers.
   `--max-review-rounds` accepts only `1..2` and resolves independently from
-  the child count without changing configuration. `--timeout` accepts only a
-  positive Go duration and omission remains an unlimited per-child deadline.
+  the child count without changing configuration; omitted repository policy
+  resolves to the configured default `1`, while explicit `2` remains valid.
+  `--timeout` accepts only a positive Go duration and omission remains an
+  unlimited per-child deadline.
 - Repository preflight requires Git, a valid clean non-bare worktree with attached
   non-unborn HEAD, equal Taskrail/worktree logical roots, layout 2, no existing
   `in_progress` task, an available shared lock, and exactly one valid committed or
@@ -38,7 +40,8 @@ replacement prompt, launching a child, or writing managed state.
   `Taskfile.yml` plus `internal/toolchain/cmd/freshcheck` predicate.
 - The resulting immutable snapshot records all task/state/spec/config/layout and
   prompt inputs, storage mode/root, configured/effective broad review-round limit
-  and source, the fixed three-reviewer-per-round ceiling and conditional
+  and source, the fixed three-reviewer-per-round ceiling rather than an expected
+  reviewer count, and the conditional
   final-diff-review rule, timeout, attached ref/HEAD, index/status, complete local
   `refs/*`, verification IDs/artifact set, and direct regular uppercase root-ref
   candidates from the worktree and common Git directories. Enumeration is
@@ -51,7 +54,8 @@ replacement prompt, launching a child, or writing managed state.
 
 - Map parser criteria to table tests proving accepted argv and every rejected
   arity, delimiter, bound, timeout, JSON, retry, and background form without
-  repository reads or writes.
+  repository reads or writes, including configured/effective default `1` and an
+  explicit `2` override.
 - In temporary committed/local repositories, assert exact preflight facts for
   clean, dirty, detached, unborn, bare, unequal-root, in-progress, lock-held,
   mixed-storage, invalid-local, and source-checkout cases.

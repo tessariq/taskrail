@@ -370,7 +370,7 @@ func buildLayout2MigrationCandidate(root string) (*Layout2MigrationCandidate, er
 		return nil, err
 	}
 	candidate := &Layout2MigrationCandidate{
-		Marker:     Layout2Config{LayoutVersion: 2, SpecsDir: sourceMarker.SpecsDir, PlanningDir: sourceMarker.PlanningDir, StorageMode: StorageCommitted, ImplementationReviewMaxRounds: 2},
+		Marker:     Layout2Config{LayoutVersion: 2, SpecsDir: sourceMarker.SpecsDir, PlanningDir: sourceMarker.PlanningDir, StorageMode: StorageCommitted, ImplementationReviewMaxRounds: 1},
 		MarkerPath: markerRelPath(), StatePath: path.Join(paths.LogicalPlanningDir, "STATE.md"),
 		TaskBytes: taskBytes, ContinuationNotes: slices.Clone(decodedState.ContinuationNotes),
 		NotesPath: path.Join(paths.LogicalPlanningDir, notesFileName), NotesPresent: notesPresent,

@@ -27,7 +27,8 @@ compatibility boundary and proving supported old/new binary behavior.
   fenced layout-2 marker ahead of any semantic candidate byte.
 - A2. Apply rechecks all source snapshots, publishes the complete candidate, post-
   validates it, and atomically replaces the fence with the strict final marker as
-  its last successful operation.
+  its last successful operation. Both fence and final marker preserve the previewed
+  default broad review-round maximum `1`.
 - A3. Handled failure restores candidate-written bytes before the original marker,
   only when unchanged; interruption leaves an exact shared recovery action and
   blocks incompatible reads/writes without overwriting concurrent edits.

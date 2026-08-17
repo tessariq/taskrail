@@ -14,6 +14,10 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ### Changed
 
+- Layout-2 migration now defaults implementation review to one broad round. The
+  `1..2` policy range and three-reviewer ceiling remain available, while the
+  canonical workflow uses one focused reviewer by default and permits objective
+  evidence to close repairs from its non-recursive final-diff review.
 - Repository discovery now preserves distinct managed, worktree, Git-common,
   storage, and lock identities and strictly maps layout-2 committed/local paths.
 - Read-only validation, spec/task loading, reports, review evidence, artifact

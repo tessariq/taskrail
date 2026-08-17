@@ -330,7 +330,7 @@ func TestDiscoverPathsRefusesMismatchMixedAndUnsafeTraversal(t *testing.T) {
 func TestDiscoverPathsLayout2StrictRefusalsAreReadOnly(t *testing.T) {
 	cases := map[string]string{
 		"unknown field":   layout2Marker("committed", "specs", "planning") + "surprise: true\n",
-		"migration fence": "layout_version: 2\nspecs_dir: specs\nplanning_dir: planning\nstorage_mode: committed\nimplementation_review_max_rounds: 2\nmigration_fence:\n  from_layout_version: 1\n  transaction_id: 0123456789abcdef0123456789abcdef\n",
+		"migration fence": "layout_version: 2\nspecs_dir: specs\nplanning_dir: planning\nstorage_mode: committed\nimplementation_review_max_rounds: 1\nmigration_fence:\n  from_layout_version: 1\n  transaction_id: 0123456789abcdef0123456789abcdef\n",
 	}
 	for name, marker := range cases {
 		t.Run(name, func(t *testing.T) {

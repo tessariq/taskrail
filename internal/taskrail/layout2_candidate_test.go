@@ -181,7 +181,7 @@ func TestBuildLayout2MigrationCandidateIsCompleteAndWriteFree(t *testing.T) {
 	if before != after {
 		t.Fatal("candidate construction changed repository bytes")
 	}
-	if candidate.Marker.StorageMode != StorageCommitted || candidate.Marker.ImplementationReviewMaxRounds != 2 {
+	if candidate.Marker.StorageMode != StorageCommitted || candidate.Marker.ImplementationReviewMaxRounds != 1 {
 		t.Fatalf("marker candidate = %+v", candidate.Marker)
 	}
 	if candidate.MarkerPath != ".taskrail/config.yml" || candidate.StatePath != "planning/STATE.md" || candidate.NotesPath != "planning/NOTES.md" {
@@ -189,6 +189,9 @@ func TestBuildLayout2MigrationCandidateIsCompleteAndWriteFree(t *testing.T) {
 	}
 	if !bytes.Contains(candidate.MarkerBytes, []byte("layout_version: 2\n")) {
 		t.Fatalf("marker bytes = %q", candidate.MarkerBytes)
+	}
+	if !bytes.Contains(candidate.MarkerBytes, []byte("implementation_review_max_rounds: 1\n")) {
+		t.Fatalf("marker bytes do not contain the default review maximum:\n%s", candidate.MarkerBytes)
 	}
 	if bytes.Contains(candidate.StateBytes, []byte("continuation_notes")) || bytes.Contains(candidate.StateBytes, []byte("## Notes")) {
 		t.Fatalf("schema 2 state retained notes:\n%s", candidate.StateBytes)

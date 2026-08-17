@@ -24,19 +24,21 @@
   terminal outcome interrupted before delivery names a private XDG-state bundle;
   inspect it, then use `--resume-delivery <absolute-bundle-path>` to revalidate and
   perform delivery without launching another agent.
-- The shared prompt requires fresh subagents for simplification and correctness
-  review. Each backend must inspect installed capabilities, prefer specialist
-  skills or subagents, and fail closed when delegation is unavailable. A review
-  round uses one to three fresh reviewers with different explicit lenses and the
-  same frozen snapshot. At most two rounds run, with early exit after a clean
-  round. Fix high and medium current-scope findings; low findings are report-only
-  unless acceptance, specification, invariants, or required evidence makes them
-  mandatory. After fixing any findings from a round, run a fresh code simplifier
-  and affected checks. Changed bytes after round two receive one narrow,
+- The shared prompt runs deterministic verification before one focused fresh
+  correctness reviewer by default. Simplification remains required consideration,
+  but separate simplification delegation is optional. Additional concurrent
+  reviewers require distinct independently relevant risks and inspect the same
+  frozen snapshot; the ceiling remains three. One broad round is normal, and a
+  second is exceptional, risk-driven, and bounded by repository policy. Fix high
+  and medium current-scope findings; low findings are report-only unless
+  acceptance, specification, invariants, or required evidence makes them
+  mandatory. Repairs receive affected deterministic checks, not an automatic
+  broad rerun. Material review-induced product or test changes receive one narrow,
   non-recursive final-diff review. A clean final diff plus green checks permits
-  completion; a finding is repaired and simplified but stops as in-progress/fail
-  because those resulting bytes are unreviewed. The round limit never creates a
-  follow-up for unfinished current scope.
+  completion. A final-diff finding is repaired and may complete when objective
+  evidence demonstrates closure; otherwise it stops as in-progress/fail for
+  operator review. Required fresh review delegation remains fail-closed, and the
+  round limit never creates a follow-up for unfinished current scope.
 - Do not add logs, results, session data, credentials, or generated files here.
   Runtime output belongs under ignored `planning/artifacts/runs/` or external
   temporary storage.

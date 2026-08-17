@@ -28,8 +28,9 @@ adding process-tree containment or postflight classification.
   and authentication except that the four exact staged/delegation variables are
   set to T-171's frozen values. The child observes the frozen storage mode/root
   and effective broad implementation-review-round maximum through the rendered
-  contract, including its one-to-three-reviewer and conditional final-diff rules,
-  and cannot replace the staged writer identity.
+  contract, including one reviewer by default, additional reviewers only for
+  distinct relevant risk within the three-reviewer ceiling, and conditional
+  final-diff rules, and cannot replace the staged writer identity.
 - Stdin contains exactly the selected task's frozen UTF-8 rendered prompt bytes,
   with no framing or added newline, and closes immediately at EOF. Child stdout
   and stderr stream faithfully to the corresponding Taskrail streams.

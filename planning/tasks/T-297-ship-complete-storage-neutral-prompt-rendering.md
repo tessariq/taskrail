@@ -24,7 +24,8 @@ managed subject context, transient-path authorization, and strict substitution.
 
 - A1. Every v1 prompt ID accepts exactly its declared context flags, derives all
   required values, rejects undeclared or missing context, and applies the exact
-  max-review-round rule for `task-implementation` only.
+  max-review-round rule for `task-implementation` only: repository default `1`
+  with an explicit render override restricted to `1..2`.
 - A2. Built-in and active committed/local replacements render through the pure
   strict renderer; invalid replacements never fall back and resolution is atomic
   with managed/transient context snapshots.

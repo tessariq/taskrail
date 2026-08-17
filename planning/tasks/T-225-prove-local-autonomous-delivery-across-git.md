@@ -22,7 +22,8 @@ evidence required of committed mode.
 ## Acceptance
 
 - Local preflight freezes mode/root, effective broad review-round maximum,
-  three-reviewer ceiling, conditional final-diff rule, prompt/executable,
+  including configured default `1` or explicit override `2`, the three-reviewer
+  ceiling, conditional final-diff rule, prompt/executable,
   task ledger, attached ref/HEAD, complete local ref namespace, dynamic uppercase root ref candidates,
   index, exclusion, and visible cleanliness.
 - A completed-pass child creates exactly one direct-child product commit, leaves no staged/committed

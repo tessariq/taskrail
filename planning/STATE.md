@@ -1,6 +1,6 @@
 ---
 schema_version: 1
-updated_at: "2026-08-15T11:40:18Z"
+updated_at: "2026-08-17T10:32:45Z"
 active_spec_version: v0.5.0
 active_spec_path: specs/v0.5.0.md
 current_task: ""
@@ -8,7 +8,7 @@ current_task_title: ""
 status_summary: idle
 blockers: []
 next_action: Select the next eligible task
-last_verification_result: pass for T-278-publish-typed-directories-without-clobbering at 2026-08-15T11:40:18Z
+last_verification_result: pass for T-325-simplify-v0-5-implementation-review-loop at 2026-08-17T10:32:45Z
 relevant_artifacts: []
 continuation_notes:
     - This repository is temporarily dogfooding bootstrap workflow tooling until Taskrail v0.1.0 exists.
@@ -34,7 +34,7 @@ continuation_notes:
 
 ## Last Verification
 
-- pass for T-278-publish-typed-directories-without-clobbering at 2026-08-15T11:40:18Z
+- pass for T-325-simplify-v0-5-implementation-review-loop at 2026-08-17T10:32:45Z
 
 ## Next Action
 
@@ -52,6 +52,6 @@ continuation_notes:
 
 - todo: 132
 - in_progress: 0
-- completed: 191
+- completed: 192
 - blocked: 0
 - cancelled: 0
