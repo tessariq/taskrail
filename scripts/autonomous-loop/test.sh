@@ -87,6 +87,11 @@ assert_review_prompt() {
   assert_contains "$name parent Git ownership" "$value" "The parent runner owns Git delivery"
   assert_contains "$name no timeout retry" "$value" "Timeout never retries"
   assert_contains "$name commit body" "$value" "intent, context, and non-obvious decisions"
+  assert_contains "$name child commit checker" "$value" 'scripts/check-commit-msg.sh "$AUTONOMOUS_COMMIT_MESSAGE_FILE"'
+  assert_contains "$name child commit repair" "$value" "repair the same file and rerun the checker until it passes"
+  assert_contains "$name same-process correction" "$value" "inside this one child process; it is not another child launch or autonomous retry"
+  assert_contains "$name child task key check" "$value" '[[ "$commit_subject" == *"(T-900)" ]]'
+  assert_contains "$name parent validation backstop" "$value" "The parent independently revalidates both conditions"
 }
 
 create_fixture() {
@@ -211,6 +216,13 @@ if ((create_followup == 1)); then
 fi
 printf '%s\n\n%s\n' "test: deliver $status fixture task (T-900)" \
   "Exercise the fixture's delivery path and preserve its expected outcome." >"$AUTONOMOUS_COMMIT_MESSAGE_FILE"
+if [[ "${AUTONOMOUS_TEST_ACTION:-}" == "invalid-commit-body" ]]; then
+  printf '%s\n\n%073d\n' "test: reject invalid metadata (T-900)" 0 >"$AUTONOMOUS_COMMIT_MESSAGE_FILE"
+fi
+if [[ "${AUTONOMOUS_TEST_ACTION:-}" == "wrong-commit-key" ]]; then
+  printf '%s\n\n%s\n' "test: reject wrong task key (T-901)" \
+    "Exercise the fixture's delivery path." >"$AUTONOMOUS_COMMIT_MESSAGE_FILE"
+fi
 if [[ "${AUTONOMOUS_TEST_ACTION:-}" == "delete-exchange" ]]; then
   rm -rf "$(dirname "$AUTONOMOUS_COMMIT_MESSAGE_FILE")"
 fi
@@ -347,6 +359,23 @@ assert_not_contains "default Claude effort" "$claude_args" "--effort"
 [[ "$(git -C "$root" rev-parse HEAD)" == "$(git --git-dir="$TMP_ROOT/successful-run.git" rev-parse refs/heads/main)" ]] || fail "successful run did not push main"
 dirty="$(git -C "$root" status --porcelain=v1 --untracked-files=all)"
 [[ -z "$dirty" ]] || fail "successful run left a dirty tree: $dirty"
+
+for action in invalid-commit-body wrong-commit-key; do
+  root="$(create_fixture "$action")"
+  before_head="$(git -C "$root" rev-parse HEAD)"
+  before_remote="$(git --git-dir="$TMP_ROOT/$action.git" rev-parse refs/heads/main)"
+  output="$(AUTONOMOUS_TEST_ACTION="$action" run_fixture "$root" --max-iterations 2)"
+  rc=$?
+  [[ $rc -eq 1 ]] || fail "$action expected exit 1, got $rc: $output"
+  if [[ "$action" == "invalid-commit-body" ]]; then
+    assert_contains "$action refusal" "$output" "published an invalid commit message"
+  else
+    assert_contains "$action refusal" "$output" "commit subject must end with (T-900)"
+  fi
+  [[ "$(git -C "$root" rev-parse HEAD)" == "$before_head" ]] || fail "$action created a commit"
+  [[ "$(git --git-dir="$TMP_ROOT/$action.git" rev-parse refs/heads/main)" == "$before_remote" ]] || fail "$action pushed"
+  [[ "$(wc -l <"$root/captures/agent-invocations")" == "1" ]] || fail "$action launched another child"
+done
 
 root="$(create_fixture explicit-claude)"
 output="$(run_fixture "$root" --backend claude --model opus --effort high --max-iterations 1)"

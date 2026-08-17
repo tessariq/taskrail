@@ -24,6 +24,11 @@
   terminal outcome interrupted before delivery names a private XDG-state bundle;
   inspect it, then use `--resume-delivery <absolute-bundle-path>` to revalidate and
   perform delivery without launching another agent.
+- The child validates its prospective commit message with the repository's exact
+  checker and selected short task key before zero exit, repairing metadata and
+  repeating both checks inside the same process when necessary. That correction
+  is not a retry. The parent repeats both checks independently before staging or
+  delivery; never weaken those trust-boundary backstops or rely on hooks alone.
 - The shared prompt runs deterministic verification before one focused fresh
   correctness reviewer by default. Simplification remains required consideration,
   but separate simplification delegation is optional. Additional concurrent

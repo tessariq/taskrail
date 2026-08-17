@@ -177,6 +177,25 @@ line, include a concise body explaining the commit's intent, context, and
 non-obvious decisions rather than merely restating the diff. Wrap body lines at
 72 characters. Add no attribution trailer.
 
+After writing the file, run the repository's exact prospective-message check:
+
+```bash
+scripts/check-commit-msg.sh "$AUTONOMOUS_COMMIT_MESSAGE_FILE"
+```
+
+If it fails, repair the same file and rerun the checker until it passes. Then
+mechanically check the selected short task key:
+
+```bash
+commit_subject="$(grep -vE '^[[:space:]]*#' "$AUTONOMOUS_COMMIT_MESSAGE_FILE" | sed '/^[[:space:]]*$/d' | head -n 1)"
+[[ "$commit_subject" == *"({{TASK_KEY}})" ]]
+```
+
+If that check fails, repair the file and repeat both checks. Complete this
+correction inside this one child process; it is not another child launch or
+autonomous retry. The parent independently revalidates both conditions before
+staging or delivery, so its checks remain a trust-boundary backstop.
+
 The parent may terminate this process at its configured deadline. Timeout never
 retries. Do not spawn detached processes.
 
