@@ -19,7 +19,10 @@ type transactionEntry struct {
 	manifest  manifestMember
 	candidate []byte
 	original  []byte
-	observed  observation
+	// fence holds the writer's fence bytes in memory; only their digest and
+	// mode are recorded in the manifest, exactly like the final candidate.
+	fence    []byte
+	observed observation
 }
 
 type observation struct {
@@ -37,6 +40,11 @@ var (
 // Run prepares and publishes one durable transaction. Any error after the
 // journal becomes visible either restores the complete original set or retains
 // a recovery fence; it never reports an ordinary un-fenced partial write.
+//
+// A transaction with a fence member publishes in two stages: the fence bytes
+// land after the originals are recorded durably and before any other semantic
+// byte changes, and the fence member's final candidate publishes as the last
+// semantic operation, after post-publication validation.
 func Run(ctx context.Context, own Ownership, repo repolock.Repository, req Request) (Result, error) {
 	if err := req.validate(repo); err != nil {
 		return Result{}, err
@@ -84,6 +92,12 @@ func Run(ctx context.Context, own Ownership, repo repolock.Repository, req Reque
 	if err != nil {
 		return Result{}, failure(KindRecovery, id, doc.Phase, evidence(entries), err)
 	}
+	if err := publishFenceMembers(store, entries); err != nil {
+		return Result{}, recoverRunFailure(store, id, doc, entries, err)
+	}
+	if err := recheckAfterFence(store, entries); err != nil {
+		return Result{}, recoverRunFailure(store, id, doc, entries, err)
+	}
 	doc, err = advancePhase(store, id, doc, PhasePublishing)
 	if err != nil {
 		return Result{}, failure(KindRecovery, id, doc.Phase, evidence(entries), err)
@@ -100,7 +114,7 @@ func Run(ctx context.Context, own Ownership, repo repolock.Repository, req Reque
 		return Result{}, failure(KindRecovery, id, doc.Phase, evidence(entries), err)
 	}
 	current, err := observeEntries(store, entries)
-	if err != nil || !allCandidate(entries, current) {
+	if err != nil || !candidateComplete(entries, current) {
 		return Result{}, recoverRunFailure(store, id, doc, entries,
 			fmt.Errorf("candidate changed before validation: %w", err))
 	}
@@ -114,6 +128,14 @@ func Run(ctx context.Context, own Ownership, repo repolock.Repository, req Reque
 	}
 	if err := ctx.Err(); err != nil {
 		return Result{}, recoverRunFailure(store, id, doc, entries, err)
+	}
+	if err := publishFenceFinals(ctx, store, entries); err != nil {
+		return Result{}, recoverRunFailure(store, id, doc, entries, err)
+	}
+	current, err = observeEntries(store, entries)
+	if err != nil || !allCandidate(entries, current) {
+		return Result{}, recoverRunFailure(store, id, doc, entries,
+			fmt.Errorf("candidate changed after final publication: %w", err))
 	}
 	if err := markComplete(store, id, req.Command, AcceptCandidate, entries); err != nil {
 		return Result{}, failure(KindRecovery, id, PhaseValidating, evidenceFrom(entries, current), err)
@@ -155,7 +177,12 @@ func prepareEntries(store *store, req Request) ([]*transactionEntry, error) {
 		entries = append(entries, &transactionEntry{manifest: manifestMember{Kind: consumed.Kind, Reported: consumed.Reported, Path: consumed.Path}})
 	}
 	for _, member := range req.Members {
-		entries = append(entries, &transactionEntry{manifest: manifestMember{Kind: member.Kind, Reported: member.Reported, Path: member.Path, Published: true}, candidate: slices.Clone(member.Content)})
+		entry := &transactionEntry{manifest: manifestMember{Kind: member.Kind, Reported: member.Reported, Path: member.Path, Published: true},
+			candidate: slices.Clone(member.Content)}
+		if member.Fence != nil {
+			entry.fence = slices.Clone(member.Fence)
+		}
+		entries = append(entries, entry)
 	}
 	slices.SortFunc(entries, func(a, b *transactionEntry) int {
 		if kinds := strings.Compare(string(a.manifest.Kind), string(b.manifest.Kind)); kinds != 0 {
@@ -183,6 +210,9 @@ func prepareEntries(store *store, req Request) ([]*transactionEntry, error) {
 			}
 			candidate := fileState{SHA256: digest(entry.candidate), Mode: uint32(durablefs.PortableMode(mode))}
 			entry.manifest.Candidate = &candidate
+			if entry.fence != nil {
+				entry.manifest.Fence = &fileState{SHA256: digest(entry.fence), Mode: candidate.Mode}
+			}
 		}
 	}
 	return entries, nil
@@ -217,6 +247,20 @@ func persistPreparation(store *store, id, command string, entries []*transaction
 			continue
 		}
 		if err := publishDocument(store.base, fmt.Sprintf("%s/%s/%08d", tx, originalsDirName, i), entry.original); err != nil {
+			return err
+		}
+	}
+	if err := store.ensureDirectory(store.base, store.baseAbsolute, tx+"/"+finalsDirName); err != nil {
+		return err
+	}
+	for i, entry := range entries {
+		if entry.manifest.Fence == nil {
+			continue
+		}
+		// A fence member's final bytes publish after validation, so an
+		// interruption between the two leaves recovery to complete them; that
+		// completion is mechanical only when the exact bytes are retained.
+		if err := publishDocument(store.base, fmt.Sprintf("%s/%s/%08d", tx, finalsDirName, i), entry.candidate); err != nil {
 			return err
 		}
 	}
@@ -273,7 +317,9 @@ func phaseHook(phase Phase) error {
 
 func publishCandidates(ctx context.Context, store *store, entries []*transactionEntry) error {
 	for _, entry := range entries {
-		if !entry.manifest.Published {
+		// A fence member's final candidate publishes as the transaction's last
+		// semantic operation, after post-publication validation.
+		if !entry.manifest.Published || entry.manifest.Fence != nil {
 			continue
 		}
 		if err := ctx.Err(); err != nil {
@@ -444,6 +490,9 @@ func evidenceFrom(entries []*transactionEntry, current []observation) []Evidence
 		if entry.manifest.Candidate != nil {
 			item.CandidateSHA256 = entry.manifest.Candidate.SHA256
 		}
+		if entry.manifest.Fence != nil {
+			item.FenceSHA256 = entry.manifest.Fence.SHA256
+		}
 		if current[i].present {
 			item.CurrentSHA256 = current[i].snapshot.SHA256
 			item.IdentityChanged = entry.manifest.Original != nil && entry.manifest.Original.holds(current[i].snapshot) &&
@@ -455,9 +504,16 @@ func evidenceFrom(entries []*transactionEntry, current []observation) []Evidence
 }
 
 func recoverRunFailure(store *store, id string, doc journal, entries []*transactionEntry, cause error) error {
+	current, err := observeEntries(store, entries)
+	if err != nil {
+		return failure(KindRollbackFailed, id, doc.Phase, evidence(entries), cause)
+	}
 	action := RestoreOriginal
 	next := PhaseRollingBack
-	if doc.Phase == PhasePrepared || doc.Phase == PhaseFencePublished {
+	// Before publication began, an untouched set needs no restore: clearing the
+	// retained fence is the whole undo. A fence member holding its fence bytes
+	// is a written byte, so that state restores instead.
+	if (doc.Phase == PhasePrepared || doc.Phase == PhaseFencePublished) && allOriginal(entries, current) {
 		action, next = ClearFence, PhaseRecoveryClearing
 	}
 	if canAdvance(doc.Phase, next) {
@@ -467,16 +523,12 @@ func recoverRunFailure(store *store, id string, doc journal, entries []*transact
 		}
 		doc = advanced
 	}
-	current, err := observeEntries(store, entries)
-	if err != nil {
-		return failure(KindRollbackFailed, id, doc.Phase, evidence(entries), errors.Join(cause, err))
-	}
 	for i := len(entries) - 1; i >= 0; i-- {
 		entry := entries[i]
 		if !entry.manifest.Published || sameOriginal(entry, current[i]) {
 			continue
 		}
-		if !current[i].present || !entry.manifest.Candidate.holds(current[i].snapshot) {
+		if !holdsRecordedWrite(entry, current[i]) {
 			return failure(KindRollbackFailed, id, doc.Phase, evidenceFrom(entries, current), cause)
 		}
 		if err := restoreOne(store, entry, current[i]); err != nil {
@@ -505,6 +557,20 @@ func recoverRunFailure(store *store, id string, doc journal, entries []*transact
 		return failure(KindRecovery, id, doc.Phase, evidenceFrom(entries, current), errors.Join(cause, err))
 	}
 	return failure(KindRolledBack, id, doc.Phase, evidenceFrom(entries, current), cause)
+}
+
+// holdsRecordedWrite reports whether the member still holds exactly the bytes
+// this transaction wrote — its final candidate, or the fence bytes when the
+// final candidate has not published yet. Anything else is an external edit the
+// rollback must not overwrite.
+func holdsRecordedWrite(entry *transactionEntry, current observation) bool {
+	if !current.present {
+		return false
+	}
+	if entry.manifest.Candidate != nil && entry.manifest.Candidate.holds(current.snapshot) {
+		return true
+	}
+	return holdsFence(entry, current)
 }
 
 func allOriginal(entries []*transactionEntry, current []observation) bool {
@@ -609,6 +675,17 @@ func cleanup(store *store, id string, entries []*transactionEntry, beforeClear f
 	if err := removeFile(store.base, fenceMarker); err != nil {
 		return err
 	}
+	// A successful cleanup leaves the transactions root empty; removing it
+	// returns the tree to its absent baseline. The removal is best-effort for
+	// the same reason the archive cleanup below is: the boundary treats an
+	// empty tree as no retained state either way.
+	remaining, err := durablefs.ObserveTree(store.baseAbsolute, store.transactions)
+	if err != nil {
+		return err
+	}
+	if remaining.Present && len(remaining.Entries) == 0 {
+		_ = removeDirectory(store.base, store.transactions)
+	}
 	// The durable move is the fence-clear commit point. Cleanup after it cannot
 	// change semantic state and must not turn a committed transaction into an
 	// unfenced failure; interrupted archive cleanup is harmless retained garbage.
@@ -616,8 +693,12 @@ func cleanup(store *store, id string, entries []*transactionEntry, beforeClear f
 		if entry.manifest.Original != nil {
 			_ = removeFile(store.base, fmt.Sprintf("%s/%s/%08d", archive, originalsDirName, i))
 		}
+		if entry.manifest.Fence != nil {
+			_ = removeFile(store.base, fmt.Sprintf("%s/%s/%08d", archive, finalsDirName, i))
+		}
 	}
 	_ = removeDirectory(store.base, archive+"/"+originalsDirName)
+	_ = removeDirectory(store.base, archive+"/"+finalsDirName)
 	for _, name := range []string{manifestName, journalName, completionName} {
 		_ = removeFile(store.base, archive+"/"+name)
 	}

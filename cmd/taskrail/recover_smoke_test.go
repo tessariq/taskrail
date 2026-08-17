@@ -58,6 +58,7 @@ type recoverManifestMember struct {
 	Ancestors []recoverIdentity  `json:"ancestors"`
 	Original  *recoverState      `json:"original"`
 	Candidate *recoverState      `json:"candidate"`
+	Fence     *recoverState      `json:"fence"`
 }
 
 type recoverManifest struct {

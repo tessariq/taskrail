@@ -19,12 +19,13 @@ func TestDecodeDocumentRejectsDuplicateMembersAndTrailingValues(t *testing.T) {
 }
 
 func TestDecodeDocumentRequiresEveryPersistedMember(t *testing.T) {
-	valid := `{"transaction_id":"0123456789abcdef0123456789abcdef","command":"init","members":[{"kind":"managed","reported":"planning/STATE.md","path":"planning/STATE.md","published":true,"ancestors":[{"volume":1,"file":2,"mount":3}],"original":null,"candidate":{"sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","mode":420,"identity":null}}]}`
+	valid := `{"transaction_id":"0123456789abcdef0123456789abcdef","command":"init","members":[{"kind":"managed","reported":"planning/STATE.md","path":"planning/STATE.md","published":true,"ancestors":[{"volume":1,"file":2,"mount":3}],"original":null,"candidate":{"sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","mode":420,"identity":null},"fence":null}]}`
 	missing := []string{
 		`{"command":"init","members":[]}`,
-		`{"transaction_id":"0123456789abcdef0123456789abcdef","command":"init","members":[{"kind":"managed","reported":"planning/STATE.md","path":"planning/STATE.md","ancestors":[],"original":null,"candidate":null}]}`,
-		`{"transaction_id":"0123456789abcdef0123456789abcdef","command":"init","members":[{"kind":"managed","reported":"planning/STATE.md","path":"planning/STATE.md","published":true,"ancestors":[{"volume":1,"file":2}],"original":null,"candidate":null}]}`,
-		`{"transaction_id":"0123456789abcdef0123456789abcdef","command":"init","members":[{"kind":"managed","reported":"planning/STATE.md","path":"planning/STATE.md","published":true,"ancestors":[{"volume":1,"file":2,"mount":3}],"original":null,"candidate":{"sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","identity":null}}]}`,
+		`{"transaction_id":"0123456789abcdef0123456789abcdef","command":"init","members":[{"kind":"managed","reported":"planning/STATE.md","path":"planning/STATE.md","ancestors":[],"original":null,"candidate":null,"fence":null}]}`,
+		`{"transaction_id":"0123456789abcdef0123456789abcdef","command":"init","members":[{"kind":"managed","reported":"planning/STATE.md","path":"planning/STATE.md","published":true,"ancestors":[{"volume":1,"file":2}],"original":null,"candidate":null,"fence":null}]}`,
+		`{"transaction_id":"0123456789abcdef0123456789abcdef","command":"init","members":[{"kind":"managed","reported":"planning/STATE.md","path":"planning/STATE.md","published":true,"ancestors":[{"volume":1,"file":2,"mount":3}],"original":null,"candidate":{"sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","identity":null},"fence":null}]}`,
+		`{"transaction_id":"0123456789abcdef0123456789abcdef","command":"init","members":[{"kind":"managed","reported":"planning/STATE.md","path":"planning/STATE.md","published":true,"ancestors":[{"volume":1,"file":2,"mount":3}],"original":null,"candidate":{"sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","mode":420,"identity":null}}]}`,
 	}
 	var decoded manifest
 	if err := decodeDocument([]byte(valid), &decoded); err != nil {

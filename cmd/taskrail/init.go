@@ -108,6 +108,8 @@ func initSummary(result taskrail.InitResult) string {
 	switch {
 	case result.Outcome == taskrail.InitMigrationPreview && result.ToVersion == 2 && result.FromVersion == 1:
 		return layout2PreviewSummary(result)
+	case result.Outcome == taskrail.InitMigrated && result.ToVersion == 2 && result.FromVersion == 1:
+		return layout2AppliedSummary(result)
 	case result.Outcome == taskrail.InitAdopted:
 		return fmt.Sprintf("adopted existing layout; wrote marker (layout_version %d)", result.ToVersion)
 	case result.Outcome == taskrail.InitCurrent:
@@ -155,6 +157,29 @@ func layout2PreviewSummary(result taskrail.InitResult) string {
 		fmt.Fprintf(&b, "  - %s %s%s\n", skill.Action, skill.Path, detail)
 	}
 	b.WriteString("apply requires --confirm-quiescent (all older Taskrail processes stopped)")
+	return b.String()
+}
+
+// layout2AppliedSummary renders the completed migration: what it published,
+// the recorded note decision, and the downgrade path. Downgrade is complete
+// Git reversion of the upgrade, never hand-editing the marker.
+func layout2AppliedSummary(result taskrail.InitResult) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "migrated layout %d -> %d\n", result.FromVersion, result.ToVersion)
+	if result.Layout2Facts != nil {
+		fmt.Fprintf(&b, "storage: %s (specs at %s/, planning at %s/); implementation review rounds: %d\n",
+			result.StorageMode, result.Layout2Facts.SpecsDir, result.Layout2Facts.PlanningDir,
+			result.Layout2Facts.ReviewMaxRounds)
+	}
+	b.WriteString(changeLines(upgradeChangeLines(result)))
+	if note := result.Notes[0]; note.ContinuationAction != nil {
+		fmt.Fprintf(&b, "continuation notes: %s\n", *note.ContinuationAction)
+	}
+	for _, skill := range result.Skills {
+		fmt.Fprintf(&b, "  - %s %s\n", skill.Action, skill.Path)
+	}
+	fmt.Fprintf(&b, "validation: %s\n", validationLabel(result.Validation))
+	b.WriteString("downgrade by reverting the complete upgrade commit with git; never edit .taskrail/config.yml by hand")
 	return b.String()
 }
 

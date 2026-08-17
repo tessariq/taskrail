@@ -235,6 +235,16 @@ func loadRetained(store *store, id string) (journal, []*transactionEntry, *compl
 			}
 			entry.original = data
 		}
+		if member.Fence != nil && completionErr != nil {
+			data, err := durableReadFinal(store, id, i)
+			if err != nil {
+				return journal{}, nil, nil, err
+			}
+			if digest(data) != member.Candidate.SHA256 {
+				return journal{}, nil, nil, fmt.Errorf("retained final %d digest disagrees with manifest", i)
+			}
+			entry.candidate = data
+		}
 		entries[i] = entry
 	}
 	if completionErr == nil {
@@ -265,6 +275,12 @@ func durableReadOriginal(store *store, id string, index int) ([]byte, error) {
 	return data, err
 }
 
+func durableReadFinal(store *store, id string, index int) ([]byte, error) {
+	relative := fmt.Sprintf("%s/%s/%08d", store.transactionDir(id), finalsDirName, index)
+	data, _, err := durablefs.ReadFile(store.baseAbsolute, relative, maximumJournalBytes)
+	return data, err
+}
+
 func selectAction(phase Phase, entries []*transactionEntry, current []observation) (Action, error) {
 	switch phase {
 	case PhaseRollingBack, PhaseRecoveryRestoring:
@@ -272,14 +288,17 @@ func selectAction(phase Phase, entries []*transactionEntry, current []observatio
 			if holdsOriginal(entry, current[i]) {
 				continue
 			}
-			if holdsCandidate(entry, current[i]) {
+			// A fence member mid-rollback still holds its fence bytes: the
+			// rollback restores it last, so an interrupted restore retries the
+			// same action rather than stranding the repository.
+			if holdsCandidate(entry, current[i]) || holdsFence(entry, current[i]) {
 				continue
 			}
 			return "", fmt.Errorf("%s changed during restore recovery", entry.manifest.Reported)
 		}
 		return RestoreOriginal, nil
 	case PhaseRecoveryAccepting:
-		if allCandidate(entries, current) {
+		if candidateComplete(entries, current) {
 			return AcceptCandidate, nil
 		}
 		return "", fmt.Errorf("candidate changed during accept recovery")
@@ -295,7 +314,7 @@ func selectAction(phase Phase, entries []*transactionEntry, current []observatio
 			original++
 			continue
 		}
-		if holdsCandidate(entry, current[i]) {
+		if holdsCandidate(entry, current[i]) || holdsFence(entry, current[i]) {
 			continue
 		}
 		return "", fmt.Errorf("%s holds neither recorded original nor candidate state", entry.manifest.Reported)
@@ -305,9 +324,12 @@ func selectAction(phase Phase, entries []*transactionEntry, current []observatio
 		if original == len(entries) {
 			return ClearFence, nil
 		}
+		if phase == PhaseFencePublished && onlyFenceWritten(entries, current) {
+			return RestoreOriginal, nil
+		}
 		return "", fmt.Errorf("candidate bytes exist before publication phase")
 	case PhaseCandidatePublished, PhaseValidating:
-		if allCandidate(entries, current) {
+		if candidateComplete(entries, current) {
 			return AcceptCandidate, nil
 		}
 		return "", fmt.Errorf("candidate-published phase does not hold the complete candidate")
@@ -343,6 +365,9 @@ func sameObservation(a, b observation) bool {
 }
 
 func applyAction(ctx context.Context, store *store, action Action, entries []*transactionEntry, current []observation) error {
+	if action == AcceptCandidate {
+		return completeFenceFinals(ctx, store, entries)
+	}
 	if action != RestoreOriginal {
 		return nil
 	}
@@ -355,8 +380,7 @@ func applyAction(ctx context.Context, store *store, action Action, entries []*tr
 			continue
 		}
 		latest, _, err := observe(store, entry.manifest.Kind, entry.manifest.Path)
-		if err != nil || !sameObservation(current[i], latest) ||
-			!latest.present || !entry.manifest.Candidate.holds(latest.snapshot) {
+		if err != nil || !sameObservation(current[i], latest) || !holdsRecordedWrite(entry, latest) {
 			return fmt.Errorf("%s changed before restore: %w", entry.manifest.Reported, err)
 		}
 		if err := restoreOne(store, entry, latest); err != nil {

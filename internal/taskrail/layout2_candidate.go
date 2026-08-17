@@ -45,6 +45,9 @@ type MigrationSkillCandidate struct {
 	Outcome MigrationSkillOutcome
 	Marker  string
 	Version string
+	// PackageRel is the embedded package path whose bytes a refresh publishes,
+	// so the durable apply stamps the exact classified copy.
+	PackageRel string
 }
 
 type Layout2MigrationCandidate struct {
@@ -377,6 +380,17 @@ func buildLayout2MigrationCandidate(root string) (*Layout2MigrationCandidate, er
 		SourceStateSchema: decodedState.SourceSchema,
 		NotesPath:         path.Join(paths.LogicalPlanningDir, notesFileName), NotesPresent: notesPresent,
 	}
+	// The durable transaction publishes the fenced marker first and restores
+	// its original last, which the engine secures by ordering; a configured
+	// planning directory that sorts before the marker path cannot uphold that
+	// order, so both the preview and the apply refuse it symmetrically here.
+	for _, published := range []string{candidate.StatePath, candidate.NotesPath} {
+		if published < candidate.MarkerPath {
+			return nil, WithMachineErrorCode(MachineCodeRepositoryInvalid, fmt.Errorf(
+				"configured planning directory %s sorts before the marker path %s; the durable migration cannot fence it",
+				sourceMarker.PlanningDir, candidate.MarkerPath))
+		}
+	}
 	if !notesPresent && len(decodedState.ContinuationNotes) > 0 {
 		candidate.NotesExtractionBytes, err = notesExtractionCandidate(root, paths.PlanningDir, decodedState.ContinuationNotes)
 		if err != nil {
@@ -505,7 +519,7 @@ func classifyMigrationSkills(root string) ([]MigrationSkillCandidate, error) {
 				}
 				outcome = migrationSkillParity
 			}
-			candidates = append(candidates, MigrationSkillCandidate{Path: relPath(root, diskPath), Outcome: outcome, Marker: marker, Version: version})
+			candidates = append(candidates, MigrationSkillCandidate{Path: relPath(root, diskPath), Outcome: outcome, Marker: marker, Version: version, PackageRel: rel})
 		}
 	}
 	slices.SortFunc(candidates, func(a, b MigrationSkillCandidate) int { return strings.Compare(a.Path, b.Path) })

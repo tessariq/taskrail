@@ -101,6 +101,11 @@ type manifestMember struct {
 	// Candidate is what publication commits. Its bytes are the repository's, so
 	// only the digest and mode are recorded here.
 	Candidate *fileState `json:"candidate"`
+	// Fence is the intermediate state exactly one published member is fenced
+	// with before its final candidate publishes, or null. A fenced member's
+	// final bytes are additionally retained beneath finals/ because recovery
+	// completes their publication mechanically from recorded evidence.
+	Fence *fileState `json:"fence"`
 }
 
 // fileState is one path's presence-bearing evidence: exact bytes, exact mode,
@@ -178,10 +183,13 @@ func (m manifest) validate(transactionID string, repo repolock.Repository) error
 			(!member.Published && member.Candidate != nil) || (member.Original != nil && member.Original.SHA256 == "") {
 			return fmt.Errorf("manifest member %q records no digest", member.Reported)
 		}
+		if member.Fence != nil && (!member.Published || member.Candidate == nil) {
+			return fmt.Errorf("manifest fence member %q records no final candidate", member.Reported)
+		}
 		if len(member.Ancestors) == 0 || (member.Original != nil && member.Original.Identity == nil) {
 			return fmt.Errorf("manifest member %q records incomplete identity evidence", member.Reported)
 		}
-		for _, state := range []*fileState{member.Original, member.Candidate} {
+		for _, state := range []*fileState{member.Original, member.Candidate, member.Fence} {
 			if state != nil && (!digestPattern.MatchString(state.SHA256) || uint32(durablefs.PortableMode(fs.FileMode(state.Mode))) != state.Mode) {
 				return fmt.Errorf("manifest member %q records invalid digest or mode", member.Reported)
 			}
@@ -189,8 +197,11 @@ func (m manifest) validate(transactionID string, repo repolock.Repository) error
 		if member.Candidate != nil && member.Candidate.Identity != nil {
 			return fmt.Errorf("manifest member %q records an identity for unpublished candidate bytes", member.Reported)
 		}
+		if member.Fence != nil && member.Fence.Identity != nil {
+			return fmt.Errorf("manifest member %q records an identity for unpublished fence bytes", member.Reported)
+		}
 	}
-	return nil
+	return validateFenceOrder(m.Members)
 }
 
 func (j journal) validate(transactionID string) error {
@@ -294,7 +305,7 @@ func validateManifestShape(raw json.RawMessage) error {
 
 func validateMemberShape(raw json.RawMessage, index int) error {
 	what := fmt.Sprintf("manifest.members[%d]", index)
-	object, err := exactRawObject(raw, what, "kind", "reported", "path", "published", "ancestors", "original", "candidate")
+	object, err := exactRawObject(raw, what, "kind", "reported", "path", "published", "ancestors", "original", "candidate", "fence")
 	if err != nil {
 		return err
 	}
@@ -316,7 +327,7 @@ func validateMemberShape(raw json.RawMessage, index int) error {
 			return err
 		}
 	}
-	for _, name := range []string{"original", "candidate"} {
+	for _, name := range []string{"original", "candidate", "fence"} {
 		if !isNull(object[name]) {
 			if err := validateStateShape(object[name], what+"."+name); err != nil {
 				return err

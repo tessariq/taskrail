@@ -34,10 +34,11 @@ type RecoverResult struct {
 }
 
 // NewRecoveryService discovers the repository for the recovery boundary itself.
-// Unlike NewService it admits retained transaction state, because `recover` is
-// the one command that state exists to be handed to.
+// Unlike NewService it admits retained transaction state and the fenced
+// migration marker, because `recover` is the one command that state exists to
+// be handed to.
 func NewRecoveryService(start string) (*Service, error) {
-	paths, err := DiscoverPaths(start)
+	paths, err := DiscoverRecoveryPaths(start)
 	if err != nil {
 		return nil, err
 	}
@@ -82,20 +83,26 @@ func (s *Service) RecoverTransaction(ctx context.Context, transactionID string, 
 		}
 	}()
 
-	// No durable writer has shipped its recovery validator yet, so none is
-	// supplied here: the engine refuses accept_candidate for a command whose
-	// owning writer has not declared one, which is the exact contract — this
-	// boundary never chooses semantic content on a writer's behalf. Each durable
-	// writer task registers its validator when it wires publication.
+	// Each durable writer that has wired publication registers its recovery
+	// validator here; the engine refuses accept_candidate for any other owning
+	// command rather than letting this boundary choose semantic content on a
+	// writer's behalf. Today the layout-2 migration through init is the one
+	// durable writer.
 	recovered, err = durabletx.Recover(ctx, lock, s.paths.LockRepository(), durabletx.RecoveryRequest{
 		TransactionID: transactionID,
 		Apply:         apply,
+		Validate: func(command string, snapshots []durabletx.Evidence) error {
+			if command != initMigrationCommand {
+				return fmt.Errorf("no recovery validator is registered for %q", command)
+			}
+			return s.validateInitRecovery(transactionID, snapshots)
+		},
 	})
 	if err != nil {
 		return RecoverResult{}, s.mapRecoveryError(transactionID, err)
 	}
 
-	validation, err := s.Validate()
+	validation, err := s.recoveredValidation(recovered)
 	if err != nil {
 		// A read-back failure after a committed apply is the outcome of an
 		// operation already on disk, so it is tagged applied rather than
@@ -114,6 +121,19 @@ func (s *Service) RecoverTransaction(ctx context.Context, transactionID string, 
 		Snapshots:     recoverySnapshots(recovered.Snapshots),
 		Validation:    validation,
 	}, nil
+}
+
+// recoveredValidation reports the coherence of the state a recovery leaves
+// behind. A completed init migration publishes state schema 2, which this
+// binary's schema-1 Validate cannot yet read as valid, so that one outcome
+// validates through the same strict layout-2 readers the migration itself
+// publishes under.
+func (s *Service) recoveredValidation(recovered durabletx.RecoveryResult) (ValidationResult, error) {
+	if !recovered.Applied || recovered.Command != initMigrationCommand || recovered.Action != durabletx.AcceptCandidate {
+		return s.Validate()
+	}
+	violations := strictLayout2Violations(s.paths.RepoRoot, s.paths.LogicalPlanningDir)
+	return ValidationResult{Valid: len(violations) == 0, Violations: violations}, nil
 }
 
 // recoverySnapshots projects the engine's whole-set evidence onto the machine

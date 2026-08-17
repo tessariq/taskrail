@@ -1,7 +1,7 @@
 ---
 id: T-280-publish-layout-2-through-the-durable-migration
 title: Publish layout 2 through the durable migration fence
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#layout-compatibility-and-upgrade
 dependencies:
@@ -9,7 +9,7 @@ dependencies:
     - T-232-recover-v0-5-transactions-through-one-command
     - T-277-add-durable-transaction-journals-and-recovery
     - T-272-implement-init-status-and-warning-machine
-updated_at: "2026-08-08T14:23:08Z"
+updated_at: "2026-08-17T17:36:29Z"
 ---
 
 # T-280-publish-layout-2-through-the-durable-migration Publish layout 2 through the durable migration fence
@@ -53,3 +53,7 @@ compatibility boundary and proving supported old/new binary behavior.
   success, and exercise documented Git-reversion downgrade guidance.
 
 ## Implementation Notes
+
+- 2026-08-17T17:40:00Z: Published the gated layout-2 apply through one durable transaction: the durabletx engine gained a fence member (intermediate fence bytes after durable originals and before any semantic byte, final candidate bytes as the last semantic operation after post-publication validation, retained finals so recovery completes publication mechanically, restore-last ordering enforced structurally); init --apply acquires the writer lock naming the transaction, rebuilds and re-gates the candidate under it, and publishes marker/state/notes/skills with consumed parity rechecks; a fenced marker refuses ordinary commands as migration_in_progress (recovery_pending while the transaction is retained) and admits only the recovery boundary, which now registers the init-migration validator; the applied result reports the previewed paths/decisions plus the recorded note choice and Git-reversion downgrade guidance.
+- 2026-08-17T17:36:15Z: Published the gated layout-2 apply through one durable fenced transaction with recovery admission, the init recovery validator, and preview/apply parity
+- 2026-08-17T17:36:29Z: verification pass

@@ -329,8 +329,8 @@ func TestDiscoverPathsRefusesMismatchMixedAndUnsafeTraversal(t *testing.T) {
 
 func TestDiscoverPathsLayout2StrictRefusalsAreReadOnly(t *testing.T) {
 	cases := map[string]string{
-		"unknown field":   layout2Marker("committed", "specs", "planning") + "surprise: true\n",
-		"migration fence": "layout_version: 2\nspecs_dir: specs\nplanning_dir: planning\nstorage_mode: committed\nimplementation_review_max_rounds: 1\nmigration_fence:\n  from_layout_version: 1\n  transaction_id: 0123456789abcdef0123456789abcdef\n",
+		"unknown field": layout2Marker("committed", "specs", "planning") + "surprise: true\n",
+		"bad fence":     layout2Marker("committed", "specs", "planning") + "migration_fence:\n  from_layout_version: 2\n  transaction_id: 0123456789abcdef0123456789abcdef\n",
 	}
 	for name, marker := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -344,6 +344,34 @@ func TestDiscoverPathsLayout2StrictRefusalsAreReadOnly(t *testing.T) {
 				t.Fatalf("strict refusal changed repository: before=%v after=%v", before, after)
 			}
 		})
+	}
+}
+
+// The exact fenced shape: every ordinary command refuses it as
+// migration_in_progress naming the recovery command, while the recovery
+// discovery alone admits it as the committed layout-2 context it pins.
+func TestDiscoverPathsFencedMarkerAdmittedOnlyByRecovery(t *testing.T) {
+	t.Parallel()
+
+	repo := initGitRepo(t)
+	seedFixtureTree(t, repo)
+	marker := "layout_version: 2\nspecs_dir: specs\nplanning_dir: planning\nstorage_mode: committed\nimplementation_review_max_rounds: 1\nmigration_fence:\n  from_layout_version: 1\n  transaction_id: 0123456789abcdef0123456789abcdef\n"
+	writeFile(t, filepath.Join(repo, ".taskrail", "config.yml"), marker)
+
+	_, err := DiscoverPaths(repo)
+	if failure := MachineFailureFor(err); failure.Code != MachineCodeMigrationInProgress {
+		t.Fatalf("code = %q, want migration_in_progress (%v)", failure.Code, err)
+	}
+	if !strings.Contains(err.Error(), "taskrail recover 0123456789abcdef0123456789abcdef") {
+		t.Fatalf("refusal does not name the recovery path: %v", err)
+	}
+
+	paths, err := DiscoverRecoveryPaths(repo)
+	if err != nil {
+		t.Fatalf("recovery discovery refused the fenced marker: %v", err)
+	}
+	if paths.PlanningDir != filepath.Join(repo, "planning") || paths.Storage.Mode != StorageCommitted {
+		t.Fatalf("recovery paths = %+v, want the fenced committed context", paths)
 	}
 }
 

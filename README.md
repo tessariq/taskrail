@@ -390,14 +390,25 @@ an `AUTONOMY.tsv` legacy entry at the configured planning path, an unsafe
 notes destination, or a divergent or conflicting skill copy — refuses with
 actionable guidance instead.
 
-Applying the upgrade is gated: `taskrail init --apply` requires
+Applying the upgrade is gated and durable: `taskrail init --apply` requires
 `--confirm-quiescent` (your assertion that every older Taskrail process able
 to touch this repository or its linked-worktree storage has stopped), exactly
 one of `--extract-continuation-notes` or `--drop-continuation-notes` when
 decoded notes exist and neither when they do not, and the combined
 `--with-skills --force` whenever stamped skill copies require normalization.
-Until the durable migration publisher ships, a fully gated apply stops at an
-explicit refusal rather than writing anything. An explicit
+A fully gated apply publishes the exact previewed candidate through one
+recoverable transaction: the marker is fenced as layout 2 with a
+`migration_fence` transaction id before any task, state, note, or skill byte
+changes, the complete candidate publishes and post-validates, and the strict
+final marker replaces the fence as the transaction's last operation. A handled
+failure rolls every candidate-written byte back before the original marker;
+an interruption leaves the fence plus the retained transaction, every other
+command refuses (`recovery_pending` with the transaction, or
+`migration_in_progress` when only the fenced marker remains), and
+`taskrail recover <transaction-id>` derives the single safe restore, accept,
+or clear action. Older binaries refuse layout 2 through the command-wide
+compatibility guard, and downgrade is complete Git reversion of the upgrade —
+never hand-editing the marker. An explicit
 `init --with-skills` request on a layout 1 repository is served by the current
 layout, so skill installation keeps working independently of the upgrade.
 

@@ -15,9 +15,8 @@ import (
 // committed storage, the default broad review-round maximum, decoded
 // continuation notes with their extract/drop choices, per-skill classifications,
 // and the candidate's validation outcome — and its `--apply` validates every
-// operator gate before anything can publish. The durable, fenced publication is
-// a separate slice; until it ships, a fully gated apply stops at an explicit
-// `unsupported` refusal rather than falling back to a non-strict write.
+// operator gate and then publishes the exact previewed candidate through the
+// durable migration fence (init_layout2_apply.go).
 
 // digestBytes is the digest over the exact candidate bytes a future apply
 // would publish, so preview and apply name one candidate, not two computations.
@@ -59,9 +58,7 @@ func (s *Service) initLayout2Upgrade(in InitInput) (InitResult, error) {
 	if err := validateLayout2UpgradeApplyInputs(in, candidate); err != nil {
 		return InitResult{}, err
 	}
-	return InitResult{}, WithMachineErrorCode(MachineCodeUnsupported, fmt.Errorf(
-		"layout %d -> %d apply is not available yet: the durable fenced migration publisher has not shipped, so no repository byte is written; re-run without --apply for the read-only preview",
-		currentLayoutVersion, layout2Version))
+	return s.applyLayout2Upgrade(in)
 }
 
 // reportLayout2UpgradePreview renders the candidate as the migration-preview
@@ -69,6 +66,15 @@ func (s *Service) initLayout2Upgrade(in InitInput) (InitResult, error) {
 // round-trips the marker and state through the strict decoders, so a reported
 // preview asserts the migration would publish decodable bytes.
 func (s *Service) reportLayout2UpgradePreview(candidate *Layout2MigrationCandidate) InitResult {
+	result := layout2UpgradeResult(candidate)
+	result.Outcome = InitMigrationPreview
+	return result
+}
+
+// layout2UpgradeResult is the shared projection of one layout-2 migration
+// candidate: the exact paths, decisions, and facts preview and apply both
+// report, so an operator comparing the two reads one set of facts.
+func layout2UpgradeResult(candidate *Layout2MigrationCandidate) InitResult {
 	notes := candidate.ContinuationNotes
 	if notes == nil {
 		// The contract's continuation_notes array is required and non-null.
@@ -87,7 +93,6 @@ func (s *Service) reportLayout2UpgradePreview(candidate *Layout2MigrationCandida
 	}
 	digest := digestBytes(candidate.MarkerBytes)
 	return InitResult{
-		Outcome:     InitMigrationPreview,
 		FromVersion: currentLayoutVersion,
 		ToVersion:   layout2Version,
 		Applied:     false,

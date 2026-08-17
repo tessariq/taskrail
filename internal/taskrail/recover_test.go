@@ -37,6 +37,10 @@ type recoverMember struct {
 	// candidate records the intended publication; nil records a consumed-only
 	// member the transaction never publishes.
 	candidate []byte
+	// fence records a fenced member's intermediate bytes, which the
+	// interruption left on disk; the final candidate bytes are retained beneath
+	// finals/ so recovery can complete the publication.
+	fence []byte
 	// present and onDisk describe the member as recovery finds it.
 	present bool
 	onDisk  []byte
@@ -64,6 +68,7 @@ type fabricatedManifestMember struct {
 	Ancestors []fabricatedIdentity `json:"ancestors"`
 	Original  *fabricatedState     `json:"original"`
 	Candidate *fabricatedState     `json:"candidate"`
+	Fence     *fabricatedState     `json:"fence"`
 }
 
 type fabricatedManifest struct {
@@ -153,6 +158,21 @@ func fabricateRetained(t *testing.T, repo repolock.Repository, id, command, phas
 		if member.candidate != nil {
 			recorded.Candidate = &fabricatedState{
 				SHA256: sha256HexDigest(member.candidate), Mode: uint32(durablefs.PortableMode(0o644)),
+			}
+		}
+		if member.fence != nil {
+			if member.candidate == nil {
+				t.Fatalf("fence member %s records no final candidate", member.reported)
+			}
+			recorded.Fence = &fabricatedState{
+				SHA256: sha256HexDigest(member.fence), Mode: uint32(durablefs.PortableMode(0o644)),
+			}
+			finalPath := filepath.Join(durabletx.TransactionsDir(repo), id, "finals", fmt.Sprintf("%08d", i))
+			if err := os.MkdirAll(filepath.Dir(finalPath), 0o755); err != nil {
+				t.Fatalf("create finals: %v", err)
+			}
+			if err := os.WriteFile(finalPath, member.candidate, 0o644); err != nil {
+				t.Fatalf("record final %s: %v", finalPath, err)
 			}
 		}
 		manifest.Members = append(manifest.Members, recorded)
@@ -447,7 +467,9 @@ func TestRecoverTransactionRefusesAcceptWithoutRegisteredValidator(t *testing.T)
 	root := t.TempDir()
 	paths := committedRecoverPaths(t, root)
 	repo := paths.LockRepository()
-	fabricateRetained(t, repo, recoverFixtureID, "init", "candidate_published", []recoverMember{
+	// No durable writer has been wired for this command, so its transactions
+	// cannot be accepted: the boundary refuses rather than choosing content.
+	fabricateRetained(t, repo, recoverFixtureID, "spec activate", "candidate_published", []recoverMember{
 		{kind: durabletx.Managed, reported: "planning/A.md", path: "planning/A.md",
 			original: []byte("old-a"), candidate: []byte("new-a"), present: true, onDisk: []byte("new-a")},
 	}, "")

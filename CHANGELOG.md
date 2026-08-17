@@ -17,12 +17,28 @@ All notable user-visible changes to Taskrail will be documented in this file.
   gate first — `--confirm-quiescent`, the continuation-note selection the
   source makes applicable (unnecessary or already-schema-2 selections are
   refused), and the combined `--with-skills --force` whenever stamped skill
-  copies require normalization — and until the durable migration publisher
-  ships it stops there with an explicit `unsupported` refusal instead of
-  writing. Legacy `AUTONOMY.tsv` entries at the configured planning path now
-  refuse the upgrade as `unsupported` with `task loop` guidance, and the
-  flagless preview keeps `init --with-skills` on a layout 1 repository served
-  by the current layout so skill installation is unchanged.
+  copies require normalization — before publishing through the durable
+  migration fence described below. Legacy `AUTONOMY.tsv` entries at the
+  configured planning path refuse the upgrade as `unsupported` with
+  `task loop` guidance, and the flagless preview keeps
+  `init --with-skills` on a layout 1 repository served by the current layout
+  so skill installation is unchanged.
+- A fully gated `taskrail init --apply` now publishes the exact previewed
+  layout 2 candidate through one durable, recoverable transaction: the marker
+  is fenced as layout 2 (with a `migration_fence` naming the transaction id)
+  after the originals are recorded and before any task, state, note, or skill
+  byte changes, the complete candidate publishes and post-validates, and the
+  strict final marker replaces the fence as the transaction's last operation.
+  The applied `InitResult` reports the same candidate paths and decisions the
+  preview reported, records the chosen continuation-note disposition, and
+  directs downgrade through complete Git reversion of the upgrade. Handled
+  failures roll every candidate-written byte back before restoring the
+  original marker; an interruption leaves the fence and the retained
+  transaction, every other command refuses (`recovery_pending` while the
+  transaction is retained, `migration_in_progress` naming `taskrail recover`
+  otherwise), and `taskrail recover` derives the single safe restore, accept,
+  or clear action — completing an interrupted migration's final marker from
+  retained transaction evidence.
 - `taskrail recover <transaction-id> [--apply] [--json]` is the one command the
   recovery admission fence admits: it previews the single mechanically safe
   action a retained durable transaction derives (`restore_original`,

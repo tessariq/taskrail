@@ -17,6 +17,7 @@ const (
 	MachineCodeInvalidArguments    = "invalid_arguments"
 	MachineCodeNotInitialized      = "not_initialized"
 	MachineCodeIncompatibleLayout  = "incompatible_layout"
+	MachineCodeMigrationInProgress = "migration_in_progress"
 	MachineCodeRepositoryInvalid   = "repository_invalid"
 	MachineCodeValidationFailed    = "validation_failed"
 	MachineCodeTaskNotFound        = "task_not_found"

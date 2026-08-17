@@ -61,6 +61,15 @@ type Member struct {
 	// It is ignored for an existing member, whose recorded original mode is
 	// preserved, so publication never silently changes a file's permissions.
 	Mode fs.FileMode
+	// Fence is the intermediate byte state exactly one published member may be
+	// temporarily published with after the originals are recorded durably and
+	// before any other semantic byte changes. Its final Content publishes as
+	// the transaction's last semantic operation, after post-publication
+	// validation. A fence member must sort before every other published member,
+	// so rollback and recovery restore its original last: while any candidate
+	// byte remains on disk, the fence member still fences the repository
+	// against readers and writers that predate the transaction.
+	Fence []byte
 }
 
 // Path is one consumed path. It participates in every whole-set comparison but
@@ -106,6 +115,11 @@ type Evidence struct {
 	OriginalSHA256  string
 	CandidateSHA256 string
 	CurrentSHA256   string
+	// FenceSHA256 is the digest of the fence member's intermediate bytes, empty
+	// for every member that publishes in one stage. The owning command's
+	// recovery validator uses it to recognize a validated candidate whose fence
+	// member has not yet published its final bytes.
+	FenceSHA256 string
 	// IdentityChanged reports that a member holding its recorded original bytes
 	// no longer holds the identity those bytes were recorded through. It is a
 	// substitution signal recovery reports rather than an action it derives:
@@ -118,6 +132,7 @@ const (
 	journalName         = "journal.json"
 	manifestName        = "manifest.json"
 	originalsDirName    = "originals"
+	finalsDirName       = "finals"
 	publishedDirName    = "published"
 	// maximumJournalBytes bounds every recovery document read. Journals are the
 	// state one interrupted command left behind, not a general storage format.
@@ -176,7 +191,57 @@ func (r Request) validate(repo repolock.Repository) error {
 			return err
 		}
 	}
+	return validateFenceOrder(membersOf(r.Members))
+}
+
+// membersOf projects request members onto the manifest member shape the fence
+// ordering rule shares between requests and decoded manifests.
+func membersOf(members []Member) []manifestMember {
+	out := make([]manifestMember, len(members))
+	for i, m := range members {
+		out[i] = manifestMember{Kind: m.Kind, Reported: m.Reported, Path: m.Path, Published: true}
+		if m.Fence != nil {
+			out[i].Fence = &fileState{}
+		}
+	}
+	return out
+}
+
+// validateFenceOrder enforces the two structural rules of a fenced transaction:
+// at most one fence member, and no published member sorting before it, which is
+// what makes every restore path return the fence member to its original last.
+func validateFenceOrder(members []manifestMember) error {
+	fenced := -1
+	for i, m := range members {
+		if m.Fence == nil {
+			continue
+		}
+		if fenced >= 0 {
+			return fmt.Errorf("durable transaction names fence members %q and %q", members[fenced].Reported, m.Reported)
+		}
+		fenced = i
+	}
+	if fenced < 0 {
+		return nil
+	}
+	for i, m := range members {
+		if i == fenced || !m.Published {
+			continue
+		}
+		if less(members[i], members[fenced]) {
+			return fmt.Errorf("published member %q sorts before fence member %q", m.Reported, members[fenced].Reported)
+		}
+	}
 	return nil
+}
+
+// less is the canonical member order prepareEntries sorts by: path kind, then
+// reported path.
+func less(a, b manifestMember) bool {
+	if a.Kind != b.Kind {
+		return string(a.Kind) < string(b.Kind)
+	}
+	return a.Reported < b.Reported
 }
 
 func recordUnique(repo repolock.Repository, reported, physical map[string]struct{}, kind PathKind, name, relative string) error {

@@ -24,6 +24,18 @@ const (
 )
 
 func DiscoverPaths(start string) (Paths, error) {
+	return discoverPaths(start, false)
+}
+
+// DiscoverRecoveryPaths resolves the repository for the shared recovery
+// boundary: the one reader a fenced migration marker must admit, because the
+// retained transaction it names is handed to exactly that command
+// (specs/v0.5.0.md#layout-compatibility-and-upgrade).
+func DiscoverRecoveryPaths(start string) (Paths, error) {
+	return discoverPaths(start, true)
+}
+
+func discoverPaths(start string, admitFence bool) (Paths, error) {
 	start, err := canonicalStart(start)
 	if err != nil {
 		return Paths{}, err
@@ -47,7 +59,7 @@ func DiscoverPaths(start string) (Paths, error) {
 		return Paths{}, WithMachineErrorCode(MachineCodeRepositoryInvalid,
 			fmt.Errorf("managed root %s does not match Git worktree root %s", root, git.WorktreeRoot))
 	}
-	cfg, storage, err := discoverLayout(root, markerFound)
+	cfg, storage, err := discoverLayout(root, markerFound, admitFence)
 	if err != nil {
 		return Paths{}, err
 	}
@@ -192,7 +204,7 @@ func resolveGitCommonDir(gitDir string) (string, error) {
 	return value, nil
 }
 
-func discoverLayout(root string, markerFound bool) (LayoutConfig, StorageContext, error) {
+func discoverLayout(root string, markerFound, admitFence bool) (LayoutConfig, StorageContext, error) {
 	if !markerFound {
 		return defaultLayoutConfig(), committedStorage(), nil
 	}
@@ -219,8 +231,16 @@ func discoverLayout(root string, markerFound bool) (LayoutConfig, StorageContext
 		return LayoutConfig{}, StorageContext{}, WithMachineErrorCode(MachineCodeRepositoryInvalid, err)
 	}
 	if cfg.MigrationFence != nil {
-		return LayoutConfig{}, StorageContext{}, WithMachineErrorCode(MachineCodeRepositoryInvalid,
-			fmt.Errorf("layout migration is in progress"))
+		if !admitFence {
+			transaction := cfg.MigrationFence.TransactionID
+			return LayoutConfig{}, StorageContext{}, WithMachineErrorCode(MachineCodeMigrationInProgress,
+				fmt.Errorf("layout migration is in progress (transaction %s); run taskrail recover %s to finish or undo it, or revert the upgrade through Git",
+					transaction, transaction))
+		}
+		// The recovery boundary reads the fenced marker as the layout-2
+		// committed context it pins, because the retained transaction beneath
+		// it is exactly what that boundary acts on.
+		return LayoutConfig{LayoutVersion: cfg.LayoutVersion, SpecsDir: cfg.SpecsDir, PlanningDir: cfg.PlanningDir}, committedStorage(), nil
 	}
 	storage := committedStorage()
 	if cfg.LayoutVersion == layout2Version && cfg.StorageMode == StorageLocal {

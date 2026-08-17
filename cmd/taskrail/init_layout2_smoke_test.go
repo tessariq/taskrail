@@ -105,7 +105,7 @@ func TestInitLayout2UpgradePreviewTextNamesTheGates(t *testing.T) {
 }
 
 func TestInitLayout2UpgradeApplyGatesCLI(t *testing.T) {
-	seedLayout1CLIRepo(t)
+	root := seedLayout1CLIRepo(t)
 
 	// Text mode classifies through the same error the machine mode publishes;
 	// the harness returns it rather than printing it.
@@ -117,12 +117,44 @@ func TestInitLayout2UpgradeApplyGatesCLI(t *testing.T) {
 		t.Fatalf("missing-quiescence refusal is not actionable: %v", err)
 	}
 
-	stdout, _, err := runRootSplit(t, "init", "--apply", "--confirm-quiescent", "--json")
-	if err == nil {
-		t.Fatal("fully gated apply must stop at the pending publisher")
+	stdout, err := runRoot(t, "init", "--apply", "--confirm-quiescent", "--json")
+	if err != nil {
+		t.Fatalf("fully gated apply: %v", err)
 	}
-	if failure := decodeMachineError(t, stdout); failure.Code != "unsupported" {
-		t.Fatalf("error code = %q, want unsupported", failure.Code)
+	var result struct {
+		Outcome string `json:"outcome"`
+		Applied bool   `json:"applied"`
+		To      int    `json:"to_version"`
+	}
+	decodeMachineResult(t, stdout, &result)
+	if result.Outcome != "migrated" || !result.Applied || result.To != 2 {
+		t.Fatalf("applied result = %+v, want the applied layout-2 migration", result)
+	}
+	marker, err := os.ReadFile(filepath.Join(root, ".taskrail", "config.yml"))
+	if err != nil || strings.Contains(string(marker), "migration_fence") {
+		t.Fatalf("published marker still fences: %s (%v)", marker, err)
+	}
+}
+
+// The applied layout-2 migration through the CLI names the Git-reversion
+// downgrade path rather than marker editing.
+func TestInitLayout2UpgradeAppliedSummaryCLI(t *testing.T) {
+	root := seedLayout1CLIRepo(t)
+	writeFileCLI(t, filepath.Join(root, "planning", "STATE.md"), strings.Replace(
+		readFileCLI(t, filepath.Join(root, "planning", "STATE.md")),
+		"continuation_notes: []", "continuation_notes:\n  - Authored note.", 1))
+	if err := os.Remove(filepath.Join(root, "planning", "NOTES.md")); err != nil {
+		t.Fatalf("remove notes sidecar: %v", err)
+	}
+
+	out, err := runRoot(t, "init", "--apply", "--confirm-quiescent", "--drop-continuation-notes")
+	if err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+	for _, want := range []string{"migrated layout 1 -> 2", "validation: valid", "reverting the complete upgrade commit"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("applied summary missing %q:\n%s", want, out)
+		}
 	}
 }
 
