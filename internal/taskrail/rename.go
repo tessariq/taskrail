@@ -1,14 +1,15 @@
 package taskrail
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
+
+	"github.com/tessariq/taskrail/internal/repotx"
 )
 
 // RenameTaskInput drives an atomic re-slug of a task id. Exactly one of Slug or
@@ -40,8 +41,8 @@ type RenameChange struct {
 
 // RenameTaskResult reports the re-slug the command planned (dry run) or applied.
 // Validation reflects the state the rename would produce — a dry run previews the
-// full change set in memory, an apply re-validates what landed — so a reviewer
-// always sees the resulting validity.
+// full change set in memory, an apply validates the exact candidate it publishes
+// — so a reviewer always sees the resulting validity.
 type RenameTaskResult struct {
 	OldID      string            `json:"old_id"`
 	NewID      string            `json:"new_id"`
@@ -56,11 +57,13 @@ type RenameTaskResult struct {
 // RenameTask atomically re-slugs a task: it rewrites the `id:` frontmatter,
 // renames the file to `<new-id>.md`, rewrites every inbound `dependencies:`
 // reference (and the STATE.md current_task pointer when it names the task), then
-// re-projects STATE.md and re-runs validation. A target id colliding with an
-// existing task fails before any write, so the tree is never left partially
-// renamed. It only re-encodes an identifier and the edges that name it — it never
+// re-projects STATE.md and re-runs validation. The rename publishes through one
+// normal transaction as filesystem operations — no Git staging — so a target id
+// colliding with an existing task, a concurrent edit to any written file, or a
+// handled publication failure leaves the tree either fully renamed or untouched.
+// It only re-encodes an identifier and the edges that name it — it never
 // advances a status or fabricates work.
-func (s *Service) RenameTask(input RenameTaskInput) (RenameTaskResult, error) {
+func (s *Service) RenameTask(input RenameTaskInput) (result RenameTaskResult, err error) {
 	oldID := input.OldID
 	if oldID == "" {
 		return RenameTaskResult{}, WithMachineErrorCode(MachineCodeInvalidArguments,
@@ -102,8 +105,10 @@ func (s *Service) RenameTask(input RenameTaskInput) (RenameTaskResult, error) {
 	newPath := filepath.Join(s.paths.TasksDir, newID+".md")
 	// Guard the physical destination too, not just the in-memory id index: a stray
 	// file whose id disagrees with its name (a filename!=id drift repair heals)
-	// escapes the taskByID check, and the plain-rename fallback would silently
-	// clobber it. Refuse before any write, so the tree is never partially renamed.
+	// escapes the taskByID check, and the transaction's no-clobber publication
+	// would refuse it only after the snapshot. Refuse before any write, so the
+	// tree is never partially renamed. Renaming onto the file's own drifted name
+	// is the heal and stays allowed.
 	if filepath.Clean(oldPath) != filepath.Clean(newPath) && fileExists(newPath) {
 		return RenameTaskResult{}, WithMachineErrorCode(MachineCodeDestinationExists,
 			fmt.Errorf("target file %s already exists", s.paths.logicalManagedPath(newPath)))
@@ -111,25 +116,62 @@ func (s *Service) RenameTask(input RenameTaskInput) (RenameTaskResult, error) {
 	inbound := inboundDependents(tasks, oldID)
 	changes := renameChanges(oldID, newID, s.paths.logicalManagedPath(oldPath), s.paths.logicalManagedPath(newPath), target.Body, inbound)
 
-	// Both branches report the state the rename *would* leave behind. Apply mode
-	// also uses this preview as its write gate, so a validation failure cannot
-	// leave the coupled rename applied. An operator re-slugging to heal a
-	// `filename must be <id>.md` drift is asking "would this fix it?", so validate
-	// the preview rather than the state being replaced.
-	validation := s.validateInMemory(renamePreview(state, tasks, target, inbound, oldID, newID, newPath))
-	if !input.DryRun {
-		if !validation.Valid {
-			return RenameTaskResult{}, WithMachineErrorCode(MachineCodeValidationFailed,
-				fmt.Errorf("rename would leave repository invalid: %s", strings.Join(validation.Violations, "; ")))
-		}
-		if err := s.applyRename(state, tasks, target, inbound, oldID, newID, oldPath, newPath); err != nil {
-			return RenameTaskResult{}, err
-		}
-		validation, err = s.validateAfterWrite()
-		if err != nil {
-			return RenameTaskResult{}, err
-		}
+	// Both branches report the state the rename *would* leave behind. The dry
+	// run is a read-only preview, so it takes no mutation lock — it publishes
+	// nothing to protect. Apply mode locks and validates the same candidate
+	// ledger it publishes, so a validation failure cannot leave the coupled
+	// rename applied. An operator re-slugging to heal a `filename must be
+	// <id>.md` drift is asking "would this fix it?", so validate the preview
+	// rather than the state being replaced.
+	previewState, previewTasks := renamePreview(state, tasks, target, inbound, oldID, newID, newPath)
+	if input.DryRun {
+		validation := s.validateInMemory(previewState, previewTasks)
+		return renameTaskResult(oldID, newID, false, changes, validation, slug, slugSource), nil
 	}
+
+	own, release, err := s.beginTaskWriterWrite(taskRenameWriter)
+	if err != nil {
+		return RenameTaskResult{}, err
+	}
+	defer func() {
+		if releaseErr := release(); releaseErr != nil && err == nil {
+			err = releaseErr
+		}
+	}()
+	// The corpus and baseline are observed under the lock: the transaction's
+	// recheck then refuses any candidate built from reads that predate it.
+	corpus, err := snapshotTaskCorpus(tasks)
+	if err != nil {
+		return RenameTaskResult{}, err
+	}
+	baseline := s.validateInMemory(state, tasks)
+
+	now := timestamp(s.now())
+	published, err := s.renameCandidates(target, inbound, oldID, newID, newPath, now)
+	if err != nil {
+		return RenameTaskResult{}, err
+	}
+	previewState.Frontmatter.UpdatedAt = now
+	previewState.Body = renderStateBody(previewState.Frontmatter, previewTasks)
+	written := append([]*Task{target}, inbound...)
+	validation, err := s.commitTaskWriter(own, taskRenameWriter, taskWriterLedger{
+		state:     previewState,
+		preview:   previewTasks,
+		published: published,
+		selected:  oldID,
+		tasks:     tasks,
+		written:   written,
+		corpus:    corpus,
+		baseline:  baseline,
+		strict:    true,
+	})
+	if err != nil {
+		return RenameTaskResult{}, err
+	}
+	return renameTaskResult(oldID, newID, true, changes, validation, slug, slugSource), nil
+}
+
+func renameTaskResult(oldID, newID string, applied bool, changes []RenameChange, validation ValidationResult, slug, slugSource string) RenameTaskResult {
 	var warnings []Warning
 	if slug == "" {
 		warnings = emptySlugWarnings(slugSource, newID)
@@ -137,11 +179,11 @@ func (s *Service) RenameTask(input RenameTaskInput) (RenameTaskResult, error) {
 	return RenameTaskResult{
 		OldID:      oldID,
 		NewID:      newID,
-		Applied:    !input.DryRun,
+		Applied:    applied,
 		Changes:    changes,
 		Validation: &validation,
 		Warnings:   warnings,
-	}, nil
+	}
 }
 
 // renameSlug resolves the new slug from exactly one selector, sharing slugify
@@ -191,8 +233,9 @@ func renameBodyHeading(body, oldID, newID string) (string, bool) {
 		return body, false
 	}
 	// Guard against a longer id sharing this one as a prefix: only a space (a title
-	// follows) or the end of the line ends the id token.
-	if rest != "" && !strings.HasPrefix(rest, " ") && !strings.HasPrefix(rest, "\n") {
+	// follows), a carriage return or newline (the line ends), or the end of the
+	// body ends the id token.
+	if rest != "" && !strings.HasPrefix(rest, " ") && !strings.HasPrefix(rest, "\n") && !strings.HasPrefix(rest, "\r") {
 		return body, false
 	}
 	return "# " + newID + rest, true
@@ -228,11 +271,11 @@ func renameChanges(oldID, newID, oldPath, newPath, body string, inbound []*Task)
 
 // renamePreview returns copies of state and the task set with the rename applied
 // in memory, so a dry run can validate the state the rename would produce while
-// writing nothing. It mirrors the coupled edits applyRename makes — the target's
-// id/filename/body heading, each inbound dependency edge, and the current_task
-// pointer when it names the task — but on copies: the caller still reports the old
-// id, and validateInMemory must see the pending change set, not a mutation of the
-// loaded tasks it previews.
+// writing nothing. It mirrors the coupled edits renameCandidates makes — the
+// target's id/filename/body heading, each inbound dependency edge, and the
+// current_task pointer when it names the task — but on copies: the caller still
+// reports the old id, and validateInMemory must see the pending change set, not a
+// mutation of the loaded tasks it previews.
 func renamePreview(state *State, tasks []*Task, target *Task, inbound []*Task, oldID, newID, newPath string) (*State, []*Task) {
 	preview := make([]*Task, len(tasks))
 	for i, task := range tasks {
@@ -241,7 +284,6 @@ func renamePreview(state *State, tasks []*Task, target *Task, inbound []*Task, o
 			edited := *task
 			edited.Frontmatter.ID = newID
 			edited.Filename = newPath
-			edited.Body, _ = renameBodyHeading(task.Body, oldID, newID)
 			preview[i] = &edited
 		case slices.Contains(inbound, task):
 			edited := *task
@@ -263,162 +305,156 @@ func renamePreview(state *State, tasks []*Task, target *Task, inbound []*Task, o
 	return &previewState, preview
 }
 
-// applyRename performs the coupled writes as one outcome: a failure partway
-// through unwinds every write already made, so the tree is either fully renamed
-// or untouched. Ordering keeps the tree as consistent as possible while the
-// writes run: move the file first (preserving git rename tracking), rewrite the
-// renamed task's id, rewrite each inbound dependency edge, then re-project
-// STATE.md.
-func (s *Service) applyRename(state *State, tasks []*Task, target *Task, inbound []*Task, oldID, newID, oldPath, newPath string) error {
-	undo := &renameUndo{root: s.paths.RepoRoot}
-	if err := s.renameWrites(undo, state, tasks, target, inbound, newID, oldPath, newPath); err != nil {
-		return renameFailure(oldID, newID, err, undo.run())
-	}
-	return nil
-}
-
-// renameWrites applies the coupled edits, registering each compensating action
-// with undo before the write it compensates. state and the task pointers are
-// mutated in place so the STATE.md projection reflects the new ids; those
-// in-memory edits are discarded with the loaded set when the rename fails.
-func (s *Service) renameWrites(undo *renameUndo, state *State, tasks []*Task, target *Task, inbound []*Task, newID, oldPath, newPath string) error {
-	oldID := target.Frontmatter.ID
-	if err := s.moveTaskFile(oldPath, newPath); err != nil {
-		return err
-	}
-	undo.push(func() error { return s.moveTaskFile(newPath, oldPath) })
-	now := timestamp(s.now())
-
-	if err := undo.snapshot(newPath); err != nil {
-		return err
-	}
-	target.Frontmatter.ID = newID
-	target.Frontmatter.UpdatedAt = now
-	target.Filename = newPath
-	target.Body, _ = renameBodyHeading(target.Body, oldID, newID)
-	if err := s.saveTask(target); err != nil {
-		return err
-	}
-
-	for _, task := range inbound {
-		if err := undo.snapshot(task.Filename); err != nil {
-			return err
-		}
-		for i, dep := range task.Frontmatter.Dependencies {
-			if dep == oldID {
-				task.Frontmatter.Dependencies[i] = newID
-			}
-		}
-		task.Frontmatter.UpdatedAt = now
-		if err := s.saveTask(task); err != nil {
-			return err
-		}
-	}
-
-	// The current_task pointer names the task by id, so a rename of the active task
-	// must repoint it or validate would flag a current_task/in_progress mismatch.
-	if state.Frontmatter.CurrentTask == oldID {
-		state.Frontmatter.CurrentTask = newID
-	}
-	state.Frontmatter.UpdatedAt = now
-	// Re-project the rendered body from the (in-place mutated) task set so the
-	// Current Focus section and counts stay consistent with the new ids, matching
-	// every other state-writing path.
-	state.Body = renderStateBody(state.Frontmatter, tasks)
-	if err := undo.snapshot(s.paths.StateFile); err != nil {
-		return err
-	}
-	return s.saveState(state)
-}
-
-// renameUndo collects the compensating actions for the writes a rename has
-// already made. Actions run last-in-first-out, so a file's content is restored
-// before the file itself is moved back. root anchors repo-relative paths in the
-// errors it emits (T-088).
-type renameUndo struct {
-	root    string
-	actions []func() error
-}
-
-func (u *renameUndo) push(action func() error) { u.actions = append(u.actions, action) }
-
-// snapshot captures path's current bytes and registers the action that restores
-// them. Callers must snapshot *before* the write it compensates: os.WriteFile
-// truncates first, so a write that fails partway still needs the original bytes.
-func (u *renameUndo) snapshot(path string) error {
-	before, err := os.ReadFile(path)
+// renameCandidates builds the rename's exact published set as bytes: the removal
+// of the old path, the renamed task (its id and updated_at frontmatter lines
+// patched and a leading H1 naming the old id repointed), and each inbound
+// dependency reference rewritten with its timestamp. Every other byte of every
+// written file — including fields no Taskrail struct models — survives exactly.
+func (s *Service) renameCandidates(target *Task, inbound []*Task, oldID, newID, newPath, now string) ([]repotx.Candidate, error) {
+	data, err := os.ReadFile(target.Filename)
 	if err != nil {
-		return fmt.Errorf("read %s: %w", relPath(u.root, path), fsCause(err))
+		return nil, fmt.Errorf("read task %s: %w", target.Path, fsCause(err))
 	}
-	u.push(func() error {
-		// A write that failed at open (permission denied, the failure mode this
-		// rollback exists for) never truncated the file, so its bytes still match
-		// the snapshot and rewriting them would fail for the same reason — turning
-		// a clean rollback into a spurious "may be partially renamed" report.
-		if current, err := os.ReadFile(path); err == nil && bytes.Equal(current, before) {
-			return nil
+	frontmatter, body, newline, err := splitTaskDocument(data, oldID)
+	if err != nil {
+		return nil, err
+	}
+	if frontmatter, err = replaceTaskField(frontmatter, newline, oldID, "id", newID); err != nil {
+		return nil, err
+	}
+	if frontmatter, err = replaceTaskField(frontmatter, newline, oldID, "updated_at", strconv.Quote(now)); err != nil {
+		return nil, err
+	}
+	// The raw body keeps whatever blank lines follow the frontmatter fence, so
+	// the heading rewrite runs past them and they survive in the published bytes.
+	trimmed := strings.TrimLeft(body, "\r\n")
+	leading := body[:len(body)-len(trimmed)]
+	rewrittenBody, _ := renameBodyHeading(trimmed, oldID, newID)
+
+	published := []repotx.Candidate{
+		managedCandidate(s.paths.logicalManagedPath(newPath), newPath, []byte(frontmatter+leading+rewrittenBody)),
+	}
+	// Healing a filename/id drift can rename the task onto the very file it
+	// already occupies; that case publishes one replacement, not a removal
+	// paired with a creation of the same path.
+	if filepath.Clean(target.Filename) != filepath.Clean(newPath) {
+		published = append(published, managedRemoval(s.paths.logicalManagedPath(target.Filename), target.Filename))
+	}
+	for _, task := range inbound {
+		candidate, err := s.renamedDependentCandidate(task, oldID, newID, now)
+		if err != nil {
+			return nil, err
 		}
-		if err := os.WriteFile(path, before, 0o644); err != nil {
-			return fmt.Errorf("restore %s: %w", relPath(u.root, path), fsCause(err))
+		published = append(published, candidate)
+	}
+	return published, nil
+}
+
+// renamedDependentCandidate patches one inbound task's dependencies references
+// and timestamp in place, preserving the field's layout byte for byte.
+func (s *Service) renamedDependentCandidate(task *Task, oldID, newID, now string) (repotx.Candidate, error) {
+	data, err := os.ReadFile(task.Filename)
+	if err != nil {
+		return repotx.Candidate{}, fmt.Errorf("read task %s: %w", task.Path, fsCause(err))
+	}
+	frontmatter, body, newline, err := splitTaskDocument(data, task.Frontmatter.ID)
+	if err != nil {
+		return repotx.Candidate{}, err
+	}
+	frontmatter, err = rewriteDependencyRefs(frontmatter, newline, task.Frontmatter.ID, oldID, newID)
+	if err != nil {
+		return repotx.Candidate{}, err
+	}
+	frontmatter, err = replaceTaskField(frontmatter, newline, task.Frontmatter.ID, "updated_at", strconv.Quote(now))
+	if err != nil {
+		return repotx.Candidate{}, err
+	}
+	return managedCandidate(task.Path, task.Filename, []byte(frontmatter+body)), nil
+}
+
+// rewriteDependencyRefs repoints every reference to oldID inside the
+// dependencies field — a `- <oldID>` block entry or an exact token in an inline
+// list — preserving the field's existing layout byte for byte so the rename
+// never reformats a dependent's frontmatter.
+func rewriteDependencyRefs(frontmatter, newline, taskID, oldID, newID string) (string, error) {
+	lines := strings.Split(frontmatter, newline)
+	start, end := -1, -1
+	inFrontmatter := false
+	for i, line := range lines {
+		if line == "---" {
+			if !inFrontmatter {
+				inFrontmatter = true
+				continue
+			}
+			if start >= 0 {
+				end = i
+			}
+			break
 		}
-		return nil
-	})
-	return nil
-}
-
-// run unwinds the recorded actions and reports the first failure, which is the
-// point where the tree stopped being restorable — later actions are still
-// attempted so as much of the tree as possible returns to its original shape.
-func (u *renameUndo) run() error {
-	var firstErr error
-	for i := len(u.actions) - 1; i >= 0; i-- {
-		if err := u.actions[i](); err != nil && firstErr == nil {
-			firstErr = err
+		if !inFrontmatter {
+			continue
+		}
+		if start < 0 && (line == "dependencies:" || strings.HasPrefix(line, "dependencies: ") || strings.HasPrefix(line, "dependencies:\t")) {
+			start = i
+			continue
+		}
+		if start >= 0 && line != "" && line[0] != ' ' && line[0] != '\t' {
+			end = i
+			break
 		}
 	}
-	return firstErr
-}
-
-// renameFailure composes the error a failed rename returns. A clean rollback
-// leaves the tree exactly as it was, so the operator only needs the cause; a
-// failed rollback may leave the tree half renamed, and the error is the only
-// signal they get — so it names the reconcile commands rather than letting the
-// drift be discovered by a later validate.
-func renameFailure(oldID, newID string, cause, undoErr error) error {
-	if undoErr == nil {
-		return fmt.Errorf("rename %s to %s failed, no changes were applied: %w", oldID, newID, cause)
+	if start < 0 || end < 0 {
+		return "", fmt.Errorf("task %s frontmatter has no bounded dependencies field", taskID)
 	}
-	return WithMachineErrorCode(MachineCodeRollbackFailed,
-		fmt.Errorf("rename %s to %s failed and the rollback failed (%v); the tree may be partially renamed — run `taskrail validate` then `taskrail repair --apply` to reconcile: %w",
-			oldID, newID, undoErr, cause))
-}
-
-// moveTaskFile renames the task file, preferring `git mv` when the repository is
-// under version control so the rename is staged and tracked. It falls back to a
-// plain rename when git is absent, the tree is not a real repository, or the file
-// is untracked (any of which makes `git mv` fail) so the re-slug still completes.
-func (s *Service) moveTaskFile(oldPath, newPath string) error {
-	if s.underVersionControl() {
-		if err := gitMove(s.paths.RepoRoot, oldPath, newPath); err == nil {
-			return nil
+	headerValue := strings.TrimSpace(strings.TrimPrefix(lines[start], "dependencies:"))
+	if headerValue != "" && !strings.HasPrefix(headerValue, "#") {
+		lines[start] = replaceIDTokens(lines[start], oldID, newID)
+		return strings.Join(lines, newline), nil
+	}
+	for i := start + 1; i < end; i++ {
+		if strings.TrimSpace(lines[i]) == "- "+oldID {
+			line := lines[i]
+			indent := line[:len(line)-len(strings.TrimLeft(line, " \t"))]
+			lines[i] = indent + "- " + newID
 		}
 	}
-	if err := os.Rename(oldPath, newPath); err != nil {
-		return fmt.Errorf("rename task file %s to %s: %w",
-			relPath(s.paths.RepoRoot, oldPath), relPath(s.paths.RepoRoot, newPath), fsCause(err))
-	}
-	return nil
+	return strings.Join(lines, newline), nil
 }
 
-func (s *Service) underVersionControl() bool {
-	_, err := os.Stat(filepath.Join(s.paths.RepoRoot, ".git"))
-	return err == nil
+// isIDByte reports whether b can appear inside a task id token: letters, digits,
+// and the hyphen a slug is built from. Everything else — brackets, commas,
+// spaces — ends a token, so an exact token match can never rewrite a longer id
+// that merely starts with the old one.
+func isIDByte(b byte) bool {
+	switch {
+	case b >= 'a' && b <= 'z', b >= 'A' && b <= 'Z', b >= '0' && b <= '9', b == '-':
+		return true
+	default:
+		return false
+	}
 }
 
-func gitMove(root, oldPath, newPath string) error {
-	cmd := exec.Command("git", "-C", root, "mv", oldPath, newPath)
-	if out, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("git mv: %w: %s", err, strings.TrimSpace(string(out)))
+// replaceIDTokens replaces every exact oldID token in text with newID, leaving
+// every separator and non-matching byte untouched. It is the inline-list
+// counterpart of the block-entry rewrite above.
+func replaceIDTokens(text, oldID, newID string) string {
+	var out strings.Builder
+	for i := 0; i < len(text); {
+		if !isIDByte(text[i]) {
+			out.WriteByte(text[i])
+			i++
+			continue
+		}
+		j := i
+		for j < len(text) && isIDByte(text[j]) {
+			j++
+		}
+		if text[i:j] == oldID {
+			out.WriteString(newID)
+		} else {
+			out.WriteString(text[i:j])
+		}
+		i = j
 	}
-	return nil
+	return out.String()
 }

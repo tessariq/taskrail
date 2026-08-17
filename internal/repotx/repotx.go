@@ -50,11 +50,17 @@ type Path struct {
 	Physical string
 }
 
-// Candidate is one published path plus the exact bytes this transaction commits
-// to it.
+// Candidate is one published path plus the exact bytes this transaction
+// commits to it — or, with Remove, the publication of that path's absence.
 type Candidate struct {
 	Path
 	Content []byte
+	// Remove publishes the path's absence instead of bytes: publication
+	// removes the file (an already-absent path is a no-op, mirroring
+	// restore's leniency), and a rollback restores the snapshot's original
+	// bytes. A removal candidate that also carries content is a defect no
+	// writer could have built and is rejected before the snapshot.
+	Remove bool
 }
 
 // Snapshot is the byte evidence one path contributes to a result or a failure.
@@ -102,6 +108,12 @@ func (r Request) validate() error {
 	}
 	if len(r.Published) == 0 {
 		return fmt.Errorf("transaction %q publishes nothing", r.Command)
+	}
+	for _, candidate := range r.Published {
+		if candidate.Remove && len(candidate.Content) > 0 {
+			return fmt.Errorf("transaction %q both removes and publishes bytes for %s path %q",
+				r.Command, candidate.Kind, candidate.Reported)
+		}
 	}
 	seenReported := make(map[string]struct{}, len(r.Consumed)+len(r.Published))
 	seenPhysical := make(map[string]struct{}, len(r.Consumed)+len(r.Published))

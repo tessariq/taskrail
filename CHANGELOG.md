@@ -6,6 +6,25 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ### Added
 
+- The inherited task mutation writers now publish through one locked normal
+  transaction each: `task new`, `task rename`, `task repoint`, and
+  `task dependency add|remove` acquire the repository mutation lock, snapshot
+  their complete consumed and collision set, validate the full candidate
+  ledger before the first write, and publish only their declared task and
+  state files. A concurrent edit to any file they read or write refuses with
+  `write_conflict` instead of being overwritten, a handled publication failure
+  rolls every published byte back, unrelated task files are never re-encoded,
+  and a delegated loop child invoking any of these commands is refused.
+- `task rename` publishes its coupled move by filesystem operations rather
+  than `git mv`: nothing is staged through the Git index, the old file's
+  removal and the renamed file's creation publish (and roll back) as one unit
+  alongside each rewritten inbound dependency reference and the re-projected
+  `STATE.md`. Renaming also preserves every other byte of the written task
+  files — including frontmatter fields no Taskrail struct models — instead of
+  re-encoding them, and healing a filename/id drift onto the task's own
+  current filename publishes one replacement rather than a remove-plus-create
+  of the same path. Rename and repoint `--dry-run` remain read-only previews
+  and no longer require a free mutation lock.
 - `taskrail init` on a layout 1 repository now reports a complete, read-only
   layout 2 upgrade preview (`migration_preview`, `from_version` 1,
   `to_version` 2): the validated candidate paths (marker, schema-2 state,

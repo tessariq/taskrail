@@ -427,7 +427,7 @@ func (s *Service) resolveAreaSpecRef(state *State, area string) (string, error) 
 // CreateTask scaffolds a well-formed task file with the next free id. It mirrors
 // the validation `validate` would apply (spec anchor, dependency existence,
 // priority) at creation time so an invalid task never lands on disk.
-func (s *Service) CreateTask(input CreateTaskInput) (CreateTaskResult, error) {
+func (s *Service) CreateTask(input CreateTaskInput) (result CreateTaskResult, err error) {
 	// Title is optional: a scaffold with neither a title nor a slug is a legitimate
 	// bare `T-<n>` task, matching the id form validate already accepts.
 	title := strings.TrimSpace(input.Title)
@@ -451,12 +451,27 @@ func (s *Service) CreateTask(input CreateTaskInput) (CreateTaskResult, error) {
 			errors.New("--area and --spec-ref are mutually exclusive"))
 	}
 
+	own, release, err := s.beginTaskWriterWrite(taskNewWriter)
+	if err != nil {
+		return CreateTaskResult{}, err
+	}
+	defer func() {
+		if releaseErr := release(); releaseErr != nil && err == nil {
+			err = releaseErr
+		}
+	}()
+
 	// Load first: a follow-up needs the parent task to inherit spec_ref and wire
 	// the dependency before the shared validation below runs.
 	state, tasks, err := s.loadStateAndTasks()
 	if err != nil {
 		return CreateTaskResult{}, err
 	}
+	corpus, err := snapshotTaskCorpus(tasks)
+	if err != nil {
+		return CreateTaskResult{}, err
+	}
+	baseline := s.validateInMemory(state, tasks)
 
 	// Resolve --area against STATE.md's active spec before follow-up inheritance so
 	// an explicit area overrides a parent's inherited ref.
@@ -511,20 +526,29 @@ func (s *Service) CreateTask(input CreateTaskInput) (CreateTaskResult, error) {
 			UpdatedAt:    now,
 		},
 		Body:     body,
+		Path:     s.paths.logicalManagedPath(filepath.Join(s.paths.TasksDir, nextID+".md")),
 		Filename: filepath.Join(s.paths.TasksDir, nextID+".md"),
 	}
-
-	// Write the durable task file first, then re-render STATE.md counts from the
-	// full set (existing task files are left untouched). Ordering the task write
-	// first means a failed state write leaves a real task with a stale count that
-	// the next state-writing command heals, never a counted-but-absent task.
-	if err := s.saveTask(newTask); err != nil {
+	taskBytes, err := marshalFrontmatter(newTask.Frontmatter, newTask.Body)
+	if err != nil {
 		return CreateTaskResult{}, err
 	}
+
+	// The fresh task and the re-projected state (counts from the full candidate
+	// corpus; existing task files untouched) publish as one transaction, so a
+	// handled failure leaves no counted-but-absent task behind.
+	preview := append(slices.Clone(tasks), newTask)
 	state.Frontmatter.UpdatedAt = now
-	state.Body = renderStateBody(state.Frontmatter, append(tasks, newTask))
-	if err := s.saveState(state); err != nil {
-		return CreateTaskResult{}, s.withWrittenPaths(err, newTask.Filename)
+	state.Body = renderStateBody(state.Frontmatter, preview)
+	if _, err := s.commitTaskWriter(own, taskNewWriter, taskWriterLedger{
+		state:     state,
+		preview:   preview,
+		published: []repotx.Candidate{managedCandidate(newTask.Path, newTask.Filename, taskBytes)},
+		tasks:     tasks,
+		corpus:    corpus,
+		baseline:  baseline,
+	}); err != nil {
+		return CreateTaskResult{}, err
 	}
 
 	return CreateTaskResult{

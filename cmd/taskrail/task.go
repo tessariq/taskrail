@@ -141,10 +141,11 @@ func newTaskRenameCmd() *cobra.Command {
 		Use:   "rename <id>",
 		Short: "Atomically re-slug a task's id, filename, and inbound dependency refs",
 		Long: "Re-slug an existing task: rewrite its id: frontmatter, rename the file " +
-			"to <new-id>.md (git mv under version control, plain rename otherwise), " +
+			"to <new-id>.md by filesystem operations (no Git staging), " +
 			"rewrite every inbound dependencies: reference from the old id to the new " +
 			"one, re-project planning/STATE.md, and re-run validation — all as one " +
-			"outcome.\n\n" +
+			"locked transaction that either fully applies or leaves the tree " +
+			"untouched.\n\n" +
 			"Exactly one of --slug or --title selects the new slug (--title derives it " +
 			"via the same slugify and length cap as `task new` and never rewrites the " +
 			"frontmatter title; --slug is written verbatim, uncapped). The numeric " +

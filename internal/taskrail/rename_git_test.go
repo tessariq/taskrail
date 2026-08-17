@@ -11,9 +11,8 @@ import (
 
 // realGitFixtureRepo seeds the standard fixture tree inside a real `git init`
 // root. The other rename tests use the stub .git directory from initGitRepo,
-// where `git mv` always fails and only the plain-rename fallback runs — these
-// tests exist to exercise the git path itself, so they need a genuine repo and
-// skip when git is unavailable.
+// so these tests exist to exercise rename's behavior inside a genuine Git
+// worktree, and skip when git is unavailable.
 func realGitFixtureRepo(t *testing.T) (string, func(args ...string) string) {
 	t.Helper()
 	git, err := exec.LookPath("git")
@@ -42,7 +41,10 @@ func realGitFixtureRepo(t *testing.T) (string, func(args ...string) string) {
 	return repo, runGit
 }
 
-func TestRenameTaskStagesGitRenameInRealRepo(t *testing.T) {
+// Rename publishes by filesystem operations rather than Git staging: the move
+// lands in the worktree with the index untouched, so the operator (or the
+// delivery runner that owns Git) stages it as one reviewed change.
+func TestRenameTaskPublishesByFilesystemOperationsInRealRepo(t *testing.T) {
 	t.Parallel()
 	repo, runGit := realGitFixtureRepo(t)
 	writeTask(t, repo, "T-001", "Base", "completed", "high", "specs/v0.1.0.md#summary", nil)
@@ -55,26 +57,35 @@ func TestRenameTaskStagesGitRenameInRealRepo(t *testing.T) {
 		t.Fatalf("rename: %v", err)
 	}
 
-	// `git mv` (not the plain-rename fallback) ran, so the move is staged as a
-	// rename rather than a delete plus an untracked add. The status code is `R`
-	// followed by the worktree column, which the post-move id rewrite makes `M`.
-	status := runGit("status", "--porcelain")
-	var staged bool
-	for _, line := range strings.Split(status, "\n") {
-		if strings.HasPrefix(line, "R") && strings.Contains(line, "planning/tasks/T-001.md -> planning/tasks/T-001-base.md") {
-			staged = true
-		}
+	// Nothing is staged: the index holds exactly the committed tree.
+	if staged := runGit("diff", "--cached", "--name-only"); strings.TrimSpace(staged) != "" {
+		t.Fatalf("rename staged changes through the Git index:\n%s", staged)
 	}
-	if !staged {
-		t.Fatalf("rename not staged as a git rename:\n%s", status)
+	// The worktree carries the whole coupled change: the old path deleted, the
+	// renamed task untracked, and the dependent's edge rewritten.
+	status := runGit("status", "--porcelain")
+	if !strings.Contains(status, " D planning/tasks/T-001.md") {
+		t.Fatalf("old task file not deleted in the worktree:\n%s", status)
+	}
+	if !strings.Contains(status, "?? planning/tasks/T-001-base.md") {
+		t.Fatalf("renamed task file absent from the worktree:\n%s", status)
+	}
+	dependent := readBytes(t, filepath.Join(repo, "planning", "tasks", "T-002.md"))
+	if !strings.Contains(dependent, "- T-001-base") {
+		t.Fatalf("dependent's edge not rewritten:\n%s", dependent)
 	}
 	if v, err := svc.Validate(); err != nil || !v.Valid {
 		t.Fatalf("validate after rename: valid=%v violations=%v err=%v", v.Valid, v.Violations, err)
 	}
 }
 
+// A handled publication failure rolls the worktree back to its exact original
+// bytes, so neither the worktree nor the Git index shows any residue.
 func TestRenameTaskRollbackLeavesGitIndexCleanInRealRepo(t *testing.T) {
 	t.Parallel()
+	if os.Geteuid() == 0 {
+		t.Skip("permission-based fault injection is ineffective as root")
+	}
 	repo, runGit := realGitFixtureRepo(t)
 	writeTask(t, repo, "T-001", "Base", "completed", "high", "specs/v0.1.0.md#summary", nil)
 	writeTask(t, repo, "T-002", "Dependent", "todo", "high", "specs/v0.1.0.md#summary", []string{"T-001"})
@@ -82,12 +93,18 @@ func TestRenameTaskRollbackLeavesGitIndexCleanInRealRepo(t *testing.T) {
 	runGit("commit", "-q", "-m", "seed")
 	svc := newTestService(t, repo, time.Date(2026, 7, 16, 12, 0, 0, 0, time.UTC))
 
-	// Under real version control the move runs through `git mv`, so the rollback
-	// must unstage it too: a plain move back would leave the rename staged in the
-	// index while the worktree shows the original name.
-	requireReadOnlyFileBlocksWrites(t, filepath.Join(repo, "planning", "tasks", "T-002.md"))
+	// Fail the first task publication after STATE.md has landed: the tasks
+	// directory is locked for the transaction's writes, and the rollback has to
+	// return the state file to its committed bytes.
+	tasksDir := filepath.Join(repo, "planning", "tasks")
+	installLifecycleHook(t, func() {
+		if err := os.Chmod(tasksDir, 0o500); err != nil {
+			t.Fatalf("lock tasks dir: %v", err)
+		}
+		t.Cleanup(func() { _ = os.Chmod(tasksDir, 0o755) })
+	})
 	if _, err := svc.RenameTask(RenameTaskInput{OldID: "T-001", Slug: "base"}); err == nil {
-		t.Fatal("expected rename to fail on the unwritable inbound task file")
+		t.Fatal("expected rename to fail on the locked tasks directory")
 	}
 	if status := runGit("status", "--porcelain"); strings.TrimSpace(status) != "" {
 		t.Fatalf("rollback left the git index or worktree dirty:\n%s", status)
@@ -101,8 +118,8 @@ func TestRenameTaskRefusesExistingDestinationInRealRepo(t *testing.T) {
 	t.Parallel()
 	repo, runGit := realGitFixtureRepo(t)
 	writeTask(t, repo, "T-001", "Base", "todo", "high", "specs/v0.1.0.md#summary", nil)
-	// A stray file already occupies the target path. `git mv` refuses such a
-	// destination, and the plain-rename fallback would silently clobber it.
+	// A stray file already occupies the target path; the rename must refuse it
+	// before any write rather than clobber the bytes.
 	stray := filepath.Join(repo, "planning", "tasks", "T-001-base.md")
 	writeFile(t, stray, strayTaskContent)
 	runGit("add", "-A")
@@ -120,20 +137,5 @@ func TestRenameTaskRefusesExistingDestinationInRealRepo(t *testing.T) {
 	}
 	if status := runGit("status", "--porcelain"); strings.TrimSpace(status) != "" {
 		t.Fatalf("refused rename still touched the tree:\n%s", status)
-	}
-
-	// The refusal above is Taskrail's guard, not git's: confirm git mv really does
-	// fail on an existing destination, so the fallback's masking of that failure
-	// stays a covered path. The assertion is on behaviour, not on git's message
-	// text, which is localized.
-	source := filepath.Join(repo, "planning", "tasks", "T-001.md")
-	if err := gitMove(repo, source, stray); err == nil {
-		t.Fatal("git mv accepted an existing destination")
-	}
-	if got := readBytes(t, stray); got != strayTaskContent {
-		t.Fatalf("failed git mv still overwrote the destination:\n%s", got)
-	}
-	if !fileExists(source) {
-		t.Fatal("failed git mv removed the source file")
 	}
 }

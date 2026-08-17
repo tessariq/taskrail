@@ -3,7 +3,11 @@ package taskrail
 import (
 	"errors"
 	"fmt"
+	"os"
+	"strconv"
 	"strings"
+
+	"github.com/tessariq/taskrail/internal/repotx"
 )
 
 // RepointTaskInput drives a spec_ref re-point of one open task. Exactly one of
@@ -35,7 +39,7 @@ type RepointTaskResult struct {
 // filename, title, status, or dependencies, and never another task file — and is
 // neither a status mutator nor a bulk migrator. An unresolvable target fails
 // before any write.
-func (s *Service) RepointTask(input RepointTaskInput) (RepointTaskResult, error) {
+func (s *Service) RepointTask(input RepointTaskInput) (result RepointTaskResult, err error) {
 	taskID := input.TaskID
 	if taskID == "" {
 		return RepointTaskResult{}, WithMachineErrorCode(MachineCodeInvalidArguments,
@@ -81,28 +85,69 @@ func (s *Service) RepointTask(input RepointTaskInput) (RepointTaskResult, error)
 		return RepointTaskResult{}, invalidArgumentsf("task %s already points at %s", taskID, specRef)
 	}
 
-	// Both branches report the post-apply state: an apply re-validates what
-	// actually landed on disk, while a dry run previews the same rules against
-	// the pending edit held in memory. An operator previewing a fix for a broken
-	// spec_ref is asking "would this make the repo valid?", so answering with the
-	// validity of the state being replaced would invert the answer.
-	var validation ValidationResult
+	// Both branches report the post-apply state: an apply validates the exact
+	// candidate it publishes, while a dry run previews the same rules against
+	// the pending edit held in memory. The dry run is read-only and takes no
+	// mutation lock. An operator previewing a fix for a broken spec_ref is
+	// asking "would this make the repo valid?", so answering with the validity
+	// of the state being replaced would invert the answer.
+	previewTasks := withSpecRef(tasks, target, specRef)
 	if input.DryRun {
-		validation = s.validateInMemory(state, withSpecRef(tasks, target, specRef))
-	} else {
-		if err := s.applyRepoint(state, tasks, target, specRef); err != nil {
-			return RepointTaskResult{}, err
+		validation := s.validateInMemory(state, previewTasks)
+		return RepointTaskResult{
+			TaskID:     taskID,
+			OldSpecRef: oldSpecRef,
+			NewSpecRef: specRef,
+			Applied:    false,
+			Validation: &validation,
+		}, nil
+	}
+
+	own, release, err := s.beginTaskWriterWrite(taskRepointWriter)
+	if err != nil {
+		return RepointTaskResult{}, err
+	}
+	defer func() {
+		if releaseErr := release(); releaseErr != nil && err == nil {
+			err = releaseErr
 		}
-		validation, err = s.validateAfterWrite()
-		if err != nil {
-			return RepointTaskResult{}, err
-		}
+	}()
+	// The corpus and baseline are observed under the lock: the transaction's
+	// recheck then refuses any candidate built from reads that predate it.
+	corpus, err := snapshotTaskCorpus(tasks)
+	if err != nil {
+		return RepointTaskResult{}, err
+	}
+	baseline := s.validateInMemory(state, tasks)
+
+	// One timestamp for the task file and the state projection, so a tick
+	// between two reads can never leave them disagreeing.
+	now := timestamp(s.now())
+	taskBytes, err := repointTaskBytes(target, specRef, now)
+	if err != nil {
+		return RepointTaskResult{}, err
+	}
+	stateCandidate := *state
+	stateCandidate.Frontmatter.UpdatedAt = now
+	stateCandidate.Body = renderStateBody(stateCandidate.Frontmatter, previewTasks)
+	validation, err := s.commitTaskWriter(own, taskRepointWriter, taskWriterLedger{
+		state:     &stateCandidate,
+		preview:   previewTasks,
+		published: []repotx.Candidate{managedCandidate(target.Path, target.Filename, taskBytes)},
+		selected:  taskID,
+		tasks:     tasks,
+		written:   []*Task{target},
+		corpus:    corpus,
+		baseline:  baseline,
+	})
+	if err != nil {
+		return RepointTaskResult{}, err
 	}
 	return RepointTaskResult{
 		TaskID:     taskID,
 		OldSpecRef: oldSpecRef,
 		NewSpecRef: specRef,
-		Applied:    !input.DryRun,
+		Applied:    true,
 		Validation: &validation,
 	}, nil
 }
@@ -143,22 +188,24 @@ func withSpecRef(tasks []*Task, target *Task, specRef string) []*Task {
 	return preview
 }
 
-// applyRepoint writes the single-field task edit, then re-projects STATE.md from
-// the in-memory task set (target is a member, so the projection sees the new
-// reference). The task file is written first so a failed state write leaves a
-// real edit with a stale projection the next state-writing command heals, never
-// a projection describing an edit that never landed.
-func (s *Service) applyRepoint(state *State, tasks []*Task, target *Task, specRef string) error {
-	now := timestamp(s.now())
-	target.Frontmatter.SpecRef = specRef
-	target.Frontmatter.UpdatedAt = now
-	if err := s.saveTask(target); err != nil {
-		return err
+// repointTaskBytes patches the selected task's spec_ref and updated_at lines in
+// place, so every other byte — including fields no Taskrail struct models —
+// survives the re-point exactly.
+func repointTaskBytes(target *Task, specRef, now string) ([]byte, error) {
+	data, err := os.ReadFile(target.Filename)
+	if err != nil {
+		return nil, fmt.Errorf("read task %s: %w", target.Path, fsCause(err))
 	}
-	state.Frontmatter.UpdatedAt = now
-	state.Body = renderStateBody(state.Frontmatter, tasks)
-	if err := s.saveState(state); err != nil {
-		return s.withWrittenPaths(err, target.Filename)
+	frontmatter, body, newline, err := splitTaskDocument(data, target.Frontmatter.ID)
+	if err != nil {
+		return nil, err
 	}
-	return nil
+	if frontmatter, err = replaceTaskField(frontmatter, newline, target.Frontmatter.ID, "spec_ref", specRef); err != nil {
+		return nil, err
+	}
+	frontmatter, err = replaceTaskField(frontmatter, newline, target.Frontmatter.ID, "updated_at", strconv.Quote(now))
+	if err != nil {
+		return nil, err
+	}
+	return []byte(frontmatter + body), nil
 }

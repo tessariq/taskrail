@@ -1,7 +1,6 @@
 package taskrail
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -41,35 +40,20 @@ type DependencyResult struct {
 // The task candidate replaces only the dependencies field bytes; STATE.md is a
 // generated projection and is published with it through one normal transaction.
 func (s *Service) EditDependency(input EditDependencyInput) (result DependencyResult, err error) {
-	command := "task dependency " + string(input.Operation)
 	if input.Operation != DependencyAdd && input.Operation != DependencyRemove {
 		return result, invalidArgumentsf("dependency operation must be add or remove")
 	}
 	if input.TaskID == "" || input.DependencyID == "" {
 		return result, invalidArgumentsf("task id and dependency id are required")
 	}
-	if delegatedInvocation() {
-		return result, WithMachineErrorCode(MachineCodeDelegatedRefused,
-			fmt.Errorf("delegated loop children cannot invoke %s", command))
-	}
-	if err := s.paths.ensureStorageCapability(); err != nil {
+	writer := dependencyTaskWriter(input.Operation)
+	own, release, err := s.beginTaskWriterWrite(writer)
+	if err != nil {
 		return result, err
 	}
-
-	lock, err := repolock.Acquire(context.Background(), repolock.Request{
-		Repository: s.paths.LockRepository(), Command: command,
-		Capability: repolock.Capability{Commands: []string{command}, TaskFields: []string{"dependencies"}},
-	})
-	if err != nil {
-		return result, writerLockError(err)
-	}
 	defer func() {
-		if releaseErr := lock.Release(); releaseErr != nil && err == nil {
-			err = WithMachineErrorCode(MachineCodeRepositoryInvalid, releaseErr)
-			return
-		}
-		if refreshErr := s.refreshRecoveryAfterLock(); refreshErr != nil && err == nil {
-			err = refreshErr
+		if releaseErr := release(); releaseErr != nil && err == nil {
+			err = releaseErr
 		}
 	}()
 
@@ -77,6 +61,11 @@ func (s *Service) EditDependency(input EditDependencyInput) (result DependencyRe
 	if err != nil {
 		return result, err
 	}
+	corpus, err := snapshotTaskCorpus(tasks)
+	if err != nil {
+		return result, err
+	}
+	baseline := s.validateInMemory(state, tasks)
 	target, err := exactTaskByID(tasks, input.TaskID)
 	if err != nil {
 		return result, err
@@ -121,32 +110,22 @@ func (s *Service) EditDependency(input EditDependencyInput) (result DependencyRe
 	stateCandidate := *state
 	stateCandidate.Frontmatter.UpdatedAt = timestamp(s.now())
 	stateCandidate.Body = renderStateBody(stateCandidate.Frontmatter, previewTasks)
-	stateBytes, err := marshalFrontmatter(stateCandidate.Frontmatter, stateCandidate.Body)
-	if err != nil {
-		return DependencyResult{}, err
-	}
 
-	consumed, err := writerConsumedPaths(s.paths, tasks, target)
+	validation, err = s.commitTaskWriter(own, writer, taskWriterLedger{
+		state:     &stateCandidate,
+		preview:   previewTasks,
+		published: []repotx.Candidate{managedCandidate(target.Path, target.Filename, taskCandidate)},
+		selected:  input.TaskID,
+		tasks:     tasks,
+		written:   []*Task{target},
+		corpus:    corpus,
+		baseline:  baseline,
+		strict:    true,
+	})
 	if err != nil {
 		return DependencyResult{}, err
 	}
-	request := repotx.Request{
-		Command: command, SelectedTask: input.TaskID, TaskFields: []string{"dependencies"},
-		Consumed: consumed,
-		Published: []repotx.Candidate{
-			managedCandidate(target.Path, target.Filename, taskCandidate),
-			managedCandidate(s.paths.logicalManagedPath(s.paths.StateFile), s.paths.StateFile, stateBytes),
-		},
-		Validate: func([]repotx.Snapshot) error {
-			if got := s.validateInMemory(&stateCandidate, previewTasks); !got.Valid {
-				return fmt.Errorf("dependency candidate failed validation: %s", strings.Join(got.Violations, "; "))
-			}
-			return nil
-		},
-	}
-	if _, err := repotx.Commit(context.Background(), lock, request); err != nil {
-		return DependencyResult{}, writerTransactionError(err)
-	}
+	result.Validation = &validation
 	result.Applied = true
 	return result, nil
 }
@@ -312,10 +291,20 @@ func replaceDependenciesField(data []byte, before, after []string) ([]byte, erro
 	return []byte(strings.Join(lines, "")), nil
 }
 
-func writerConsumedPaths(paths Paths, tasks []*Task, target *Task) ([]repotx.Path, error) {
+// writerConsumedPaths derives the consumed set a task writer's transaction
+// snapshots: every loaded task it does not itself publish, the spec files the
+// corpus anchors to, the specs index, and the repository config — the reads a
+// stale candidate could have been built from. written names the tasks the
+// writer's published set replaces; their paths become publication candidates
+// instead, which a transaction cannot also consume.
+func writerConsumedPaths(paths Paths, tasks []*Task, written ...*Task) ([]repotx.Path, error) {
+	published := make(map[*Task]struct{}, len(written))
+	for _, task := range written {
+		published[task] = struct{}{}
+	}
 	consumed := make([]repotx.Path, 0, len(tasks)+2)
 	for _, task := range tasks {
-		if task == target {
+		if _, ok := published[task]; ok {
 			continue
 		}
 		consumed = append(consumed, repotx.Path{Kind: repotx.Managed, Reported: task.Path, Physical: task.Filename})

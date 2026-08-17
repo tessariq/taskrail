@@ -1,12 +1,12 @@
 ---
 id: T-282-protect-inherited-task-mutation-writers
 title: Protect inherited task mutation writers transactionally
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#repository-discovery-locking-and-recovery
 dependencies:
     - T-233-protect-lifecycle-and-task-writers-transactionally
-updated_at: "2026-08-08T14:23:08Z"
+updated_at: "2026-08-17T22:14:39Z"
 ---
 
 # T-282-protect-inherited-task-mutation-writers Protect inherited task mutation writers transactionally
@@ -38,3 +38,6 @@ task authoring, release, and loop-policy semantics remain with their owning task
 - Assert delegated command/task/field negatives and an unchanged Git index.
 
 ## Implementation Notes
+
+- 2026-08-17T22:14:24Z: Routed task new, task rename, task repoint, and task dependency add/remove through the shared repository mutation lock and normal transaction substrate; rename now publishes by filesystem operations with removal-candidate support in repotx, and every writer preserves unmodeled task bytes.
+- 2026-08-17T22:14:39Z: verification pass

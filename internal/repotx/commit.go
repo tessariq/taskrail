@@ -217,16 +217,32 @@ func publish(ctx context.Context, root string, entries []*entry) error {
 			return failure(KindConflict, evidence(entries),
 				fmt.Errorf("%s changed between the recheck and its publication", e.path.Reported))
 		}
-		if err := publishTo(root, e.path, e.candidate.Content, publishMode(e)); err != nil {
+		if e.candidate.Remove {
+			// An already-absent path needs no unlink; every other error is a
+			// publication failure the caller's rollback compensates by
+			// restoring the snapshot's original bytes.
+			if err := os.Remove(e.path.Physical); err != nil && !errors.Is(err, os.ErrNotExist) {
+				return fmt.Errorf("remove %s: %w", e.path.Reported, fsCause(err))
+			}
+		} else if err := publishTo(root, e.path, e.candidate.Content, publishMode(e)); err != nil {
 			return err
 		}
 		e.published = true
-		e.current = pointer(digestOf(e.candidate.Content))
+		e.current = candidateDigest(e)
 		if testHookAfterPublish != nil {
 			testHookAfterPublish(e.path)
 		}
 	}
 	return nil
+}
+
+// candidateDigest is the digest a published entry now holds: nil for a
+// removal, whose published state is the path's absence.
+func candidateDigest(e *entry) *string {
+	if e.candidate.Remove {
+		return nil
+	}
+	return pointer(digestOf(e.candidate.Content))
 }
 
 // publishMode keeps an existing file's mode and gives a new one 0644, so
@@ -239,11 +255,21 @@ func publishMode(e *entry) fs.FileMode {
 	return 0o644
 }
 
+// holdsCandidate reports whether the path currently holds exactly what this
+// transaction last published: its candidate bytes, or for a removal, the
+// path's absence.
+func holdsCandidate(e *entry, state *fileState) bool {
+	if e.candidate.Remove {
+		return state == nil
+	}
+	return state != nil && state.digest == digestOf(e.candidate.Content)
+}
+
 // rollback undoes publication in reverse, one compare-and-swap at a time. A path
 // still holding this transaction's candidate is restored to its original bytes,
-// or removed when there were none. A path holding anything else belongs to
-// whoever wrote it: it is preserved, named, and reported as a rollback failure
-// rather than overwritten.
+// or removed when there were none; a removed path is recreated from its
+// snapshot. A path holding anything else belongs to whoever wrote it: it is
+// preserved, named, and reported as a rollback failure rather than overwritten.
 //
 // A directory publication had to create stays. It holds no semantic state, and
 // removing directories a concurrent writer may already be using would trade a
@@ -265,7 +291,7 @@ func rollback(root string, entries []*entry, cause error) *Error {
 			problems = append(problems, err)
 			continue
 		}
-		if state == nil || state.digest != digestOf(e.candidate.Content) {
+		if !holdsCandidate(e, state) {
 			preserved = append(preserved, e.path.Reported)
 			continue
 		}
@@ -324,7 +350,9 @@ func evidence(entries []*entry) []Snapshot {
 			OriginalSHA256: digestPointer(e.original),
 			CurrentSHA256:  e.current,
 		}
-		if e.candidate != nil {
+		// A removal's candidate is the path's absence, which the machine
+		// contract reports as no digest rather than a digest of no bytes.
+		if e.candidate != nil && !e.candidate.Remove {
 			snapshot.CandidateSHA256 = pointer(digestOf(e.candidate.Content))
 		}
 		snapshots = append(snapshots, snapshot)

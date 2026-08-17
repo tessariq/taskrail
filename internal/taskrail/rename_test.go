@@ -1,7 +1,6 @@
 package taskrail
 
 import (
-	"errors"
 	"os"
 	"path/filepath"
 	"slices"
@@ -742,31 +741,34 @@ func TestRenameTaskRewritesAllInboundDependents(t *testing.T) {
 	}
 }
 
-func TestRenameTaskRollsBackWhenInboundWriteFails(t *testing.T) {
+func TestRenameTaskRollsBackWhenTaskPublicationFails(t *testing.T) {
 	t.Parallel()
+	if os.Geteuid() == 0 {
+		t.Skip("permission-based fault injection is ineffective as root")
+	}
 	svc, repo := renameFixture(t)
 	tasksDir := filepath.Join(repo, "planning", "tasks")
 	source := filepath.Join(tasksDir, "T-001.md")
 	inbound := filepath.Join(tasksDir, "T-002.md")
 	stateFile := filepath.Join(repo, "planning", "STATE.md")
 
-	// Fail the rename *after* the file move and the target rewrite have landed:
-	// the inbound dependent is the third coupled write, so this is the exact
-	// partial-write window the atomicity contract has to close.
-	requireReadOnlyFileBlocksWrites(t, inbound)
+	// Fail the rename once publication reaches the tasks directory: STATE.md
+	// (which sorts first) has already landed, so the rollback must restore it
+	// and leave the rename's task files exactly where they started. This is
+	// the partial-write window the transaction's all-or-none promise closes.
+	installLifecycleHook(t, func() {
+		if err := os.Chmod(tasksDir, 0o500); err != nil {
+			t.Fatalf("lock tasks dir: %v", err)
+		}
+		t.Cleanup(func() { _ = os.Chmod(tasksDir, 0o755) })
+	})
 	sourceBefore, inboundBefore, stateBefore := readBytes(t, source), readBytes(t, inbound), readBytes(t, stateFile)
 
 	_, err := svc.RenameTask(RenameTaskInput{OldID: "T-001", Slug: "base"})
-	if err == nil {
-		t.Fatal("expected rename to fail on the unwritable inbound task file")
+	if err == nil || MachineFailureFor(err).Code != MachineCodePartialWrite {
+		t.Fatalf("rename with a failing task publication = %v, want partial_write", err)
 	}
 	assertNoRootLeak(t, repo, err)
-	// A permission-denied write never truncates, so restoring it is a no-op: the
-	// rollback fully succeeded and the operator must be told the tree is clean,
-	// not sent to repair for drift that does not exist.
-	if !strings.Contains(err.Error(), "no changes were applied") {
-		t.Fatalf("clean rollback reported as failed: %v", err)
-	}
 
 	if fileExists(filepath.Join(tasksDir, "T-001-base.md")) {
 		t.Fatal("renamed file left behind after rollback")
@@ -782,34 +784,6 @@ func TestRenameTaskRollsBackWhenInboundWriteFails(t *testing.T) {
 	}
 	if v, err := svc.Validate(); err != nil || !v.Valid {
 		t.Fatalf("tree not valid after rollback: valid=%v violations=%v err=%v", v.Valid, v.Violations, err)
-	}
-}
-
-func TestRenameFailureReportsRollbackOutcome(t *testing.T) {
-	t.Parallel()
-	cause := errors.New("write task file T-002.md: permission denied")
-
-	rolledBack := renameFailure("T-001", "T-001-base", cause, nil)
-	if !errors.Is(rolledBack, cause) {
-		t.Fatalf("cause not wrapped: %v", rolledBack)
-	}
-	if !strings.Contains(rolledBack.Error(), "no changes were applied") {
-		t.Fatalf("clean rollback must say the tree is unchanged: %v", rolledBack)
-	}
-	if strings.Contains(rolledBack.Error(), "repair") {
-		t.Fatalf("clean rollback must not send the operator to repair: %v", rolledBack)
-	}
-
-	// Rollback itself failed, so the tree may be half renamed: the error is the
-	// operator's only signal and must name the reconcile commands.
-	stuck := renameFailure("T-001", "T-001-base", cause, errors.New("restore T-001.md: read-only file system"))
-	if !errors.Is(stuck, cause) {
-		t.Fatalf("cause not wrapped: %v", stuck)
-	}
-	for _, want := range []string{"taskrail validate", "taskrail repair --apply", "restore T-001.md"} {
-		if !strings.Contains(stuck.Error(), want) {
-			t.Fatalf("rollback-failure error missing %q: %v", want, stuck)
-		}
 	}
 }
 

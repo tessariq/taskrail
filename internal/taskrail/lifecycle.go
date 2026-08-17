@@ -17,9 +17,10 @@ import (
 // validateAfterWrite re-runs validation once a write has committed. A read-back
 // failure here is the outcome of an operation that is already on disk, so it is
 // tagged applied — otherwise a committed transition would publish as a refusal
-// that changed nothing. The transactional lifecycle writers above no longer use
-// it: they validate the complete candidate before publication instead. The
-// writers not yet routed through the transaction substrate still do.
+// that changed nothing. The transactional writers (lifecycle, verification, and
+// the task mutation family in lifecycle_tx.go, verify_tx.go, and task_tx.go) no
+// longer use it: they validate the complete candidate before publication
+// instead. `spec activate` still does.
 func (s *Service) validateAfterWrite() (ValidationResult, error) {
 	validation, err := s.Validate()
 	if err != nil {

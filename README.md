@@ -161,8 +161,12 @@ tracked write.
 
 `next`, `start`, `complete`, `block`, `unblock`, and `verify` take the repository
 mutation lock and publish their exact state/task write set (plus verification
-artifacts and any `--create-followup` task) transactionally. A concurrent
-writer refuses with `lock_held`; unselected task bytes are never re-encoded.
+artifacts and any `--create-followup` task) transactionally. So do the task
+mutation writers — `task new`, `task rename`, `task repoint`, and
+`task dependency add/remove`: rename publishes its coupled move by filesystem
+operations (no `git mv` staging), and each writer publishes only the task and
+state files it declares. A concurrent writer refuses with `lock_held`; unselected
+task bytes are never re-encoded.
 
 All semantic command classes share one recovery admission fence: retained or
 malformed transaction state beneath the canonical repository runtime root makes

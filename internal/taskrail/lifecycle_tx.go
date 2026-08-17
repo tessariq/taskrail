@@ -76,24 +76,7 @@ func (s *Service) beginWriterWrite(w writerCommand, selectedTask string, writes 
 		}
 		return joined, func() error { return nil }, nil
 	}
-	lock, err := repolock.Acquire(context.Background(), repolock.Request{
-		Repository: s.paths.LockRepository(),
-		Command:    w.command,
-		Capability: repolock.Capability{Commands: []string{w.command}, TaskFields: w.taskFields},
-	})
-	if err != nil {
-		return nil, nil, writerLockError(err)
-	}
-	release := func() error {
-		if releaseErr := lock.Release(); releaseErr != nil {
-			return WithMachineErrorCode(MachineCodeRepositoryInvalid, releaseErr)
-		}
-		// Acquiring the lock may have created the shared runtime parent; the
-		// refreshed ancestor identity keeps the command boundary from mistaking
-		// this writer's own lock directory for recovery activity.
-		return s.refreshRecoveryAfterLock()
-	}
-	return lock, release, nil
+	return s.acquireWriterLock(w.command, w.taskFields)
 }
 
 // lifecycleLedger is the complete candidate set one lifecycle writer validated
@@ -231,39 +214,20 @@ func patchLifecycleTask(task *Task, fields map[string]string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	newline := "\n"
-	if strings.HasPrefix(string(data), "---\r\n") {
-		newline = "\r\n"
-	} else if !strings.HasPrefix(string(data), "---\n") {
-		return nil, fmt.Errorf("task %s has no frontmatter start", task.Frontmatter.ID)
+	frontmatter, rawBody, newline, err := splitTaskDocument(data, task.Frontmatter.ID)
+	if err != nil {
+		return nil, err
 	}
-	marker := newline + "---" + newline
-	end := strings.Index(string(data[len("---"+newline):]), marker)
-	if end < 0 {
-		return nil, fmt.Errorf("task %s has no frontmatter end", task.Frontmatter.ID)
-	}
-	end += len("---"+newline) + len(marker)
-	frontmatter := string(data[:end])
 	for field, value := range fields {
-		prefix := field + ":"
-		lines := strings.Split(frontmatter, newline)
-		matches := 0
-		for i, line := range lines {
-			if strings.HasPrefix(line, prefix) {
-				lines[i] = prefix + " " + value
-				matches++
-			}
+		frontmatter, err = replaceTaskField(frontmatter, newline, task.Frontmatter.ID, field, value)
+		if err != nil {
+			return nil, err
 		}
-		if matches != 1 {
-			return nil, fmt.Errorf("task %s has %d %s fields", task.Frontmatter.ID, matches, field)
-		}
-		frontmatter = strings.Join(lines, newline)
 	}
 	_, originalBody, err := parseFrontmatter[TaskFrontmatter](data)
 	if err != nil {
 		return nil, err
 	}
-	rawBody := string(data[end:])
 	if task.Body == originalBody {
 		return []byte(frontmatter + rawBody), nil
 	}

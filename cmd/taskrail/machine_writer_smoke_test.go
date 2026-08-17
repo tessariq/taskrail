@@ -399,42 +399,47 @@ func TestRefusedWritersChangeNothing(t *testing.T) {
 	}
 }
 
-// A3: a write that lands only part of its work reports partial_write with the
-// paths it wrote, and still says the complete operation never committed.
-func TestPartialWritePublishesItsWrittenPaths(t *testing.T) {
+// A3: a publication failure inside one transaction never tears the write.
+// `task new` publishes its task and the re-projected state as one unit, so a
+// failing task publication rolls the state back and the failure envelope
+// reports an uncommitted operation with nothing left on disk to reconcile.
+func TestPartialWriteRollsBackTheWholeTransaction(t *testing.T) {
 	if os.Geteuid() == 0 {
 		t.Skip("root ignores the file mode this test relies on")
 	}
 	root := setupRepo(t)
 	statePath := filepath.Join(root, "planning", "STATE.md")
-	if err := os.Chmod(statePath, 0o444); err != nil {
-		t.Fatalf("make STATE.md read-only: %v", err)
+	stateBefore, err := os.ReadFile(statePath)
+	if err != nil {
+		t.Fatalf("read state before: %v", err)
 	}
-	t.Cleanup(func() { _ = os.Chmod(statePath, 0o644) })
+	// STATE.md sorts before the task path, so it publishes first; a read-only
+	// tasks directory then fails the task publication mid-transaction.
+	tasksDir := filepath.Join(root, "planning", "tasks")
+	if err := os.Chmod(tasksDir, 0o500); err != nil {
+		t.Fatalf("lock tasks dir: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(tasksDir, 0o755) })
 
 	stdout, _, err := runRootSplit(t,
 		"task", "new", "--title", "Halfway", "--spec-ref", "specs/v0.1.0.md#summary", "--json")
 	if err == nil {
-		t.Fatalf("expected the blocked state write to fail, got %q", stdout)
+		t.Fatalf("expected the blocked task publication to fail, got %q", stdout)
 	}
 	failure := decodeMachineError(t, stdout)
 	if failure.Code != taskrail.MachineCodePartialWrite {
 		t.Fatalf("code = %q, want %q (message %q)", failure.Code, taskrail.MachineCodePartialWrite, failure.Message)
 	}
 	if failure.Details.Applied {
-		t.Error("a partial write reported applied = true")
+		t.Error("a rolled-back write reported applied = true")
 	}
-	// The task file did land while STATE.md kept its old counts: that is what
-	// makes the write partial rather than a refusal, so `paths` must name both
-	// files an agent has to reconcile, not only the write that failed.
-	want := []string{"planning/STATE.md", "planning/tasks/T-001-halfway.md"}
-	if !slices.Equal(failure.Details.Paths, want) {
-		t.Errorf("paths = %v, want %v", failure.Details.Paths, want)
+	// The transaction undid its own state publication: no half of the write is
+	// on disk, which is what makes this a refusal rather than a torn result.
+	if _, statErr := os.Stat(filepath.Join(root, "planning", "tasks", "T-001-halfway.md")); statErr == nil {
+		t.Error("rolled-back transaction left its task file on disk")
 	}
-	for _, path := range want {
-		if _, err := os.Stat(filepath.Join(root, path)); err != nil {
-			t.Errorf("reported path must exist on disk: %v", err)
-		}
+	if got, readErr := os.ReadFile(statePath); readErr != nil || string(got) != string(stateBefore) {
+		t.Errorf("STATE.md not restored to its original bytes (err %v):\n%s", readErr, got)
 	}
 }
 
