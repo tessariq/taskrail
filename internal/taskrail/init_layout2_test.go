@@ -255,6 +255,7 @@ func TestInitLayout2UpgradeSkillClassification(t *testing.T) {
 	t.Run("parity mirrors are preserved and demand no skill flags", func(t *testing.T) {
 		t.Parallel()
 		repo := seedLayout1Repo(t)
+		requireRecoveryDirectoryDurability(t, repo)
 		parityPath, stampedPath := seedUpgradeSkills(t, repo)
 		parityBytes, err := os.ReadFile(parityPath)
 		if err != nil {
@@ -536,6 +537,7 @@ func TestInitLayout2UpgradeInputGates(t *testing.T) {
 	t.Run("satisfied gates publish the migration and clear the fence", func(t *testing.T) {
 		t.Parallel()
 		repo := seedLayout1Repo(t)
+		requireRecoveryDirectoryDurability(t, repo)
 		_, err := layout1Service(t, repo).Init(InitInput{Apply: true, ConfirmQuiescent: true, DropContinuationNotes: true})
 		if err != nil {
 			t.Fatalf("apply: %v", err)
@@ -546,6 +548,7 @@ func TestInitLayout2UpgradeInputGates(t *testing.T) {
 	t.Run("the combined prescribed command publishes and normalizes skills", func(t *testing.T) {
 		t.Parallel()
 		repo := seedLayout1Repo(t)
+		requireRecoveryDirectoryDurability(t, repo)
 		_, stampedPath := seedUpgradeSkills(t, repo)
 		applied, err := layout1Service(t, repo).Init(InitInput{
 			Apply: true, ConfirmQuiescent: true, DropContinuationNotes: true,

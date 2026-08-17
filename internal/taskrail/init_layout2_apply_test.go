@@ -64,6 +64,7 @@ func TestApplyPublishesTheExactPreviewedCandidate(t *testing.T) {
 	t.Parallel()
 
 	repo := seedLayout1Repo(t)
+	requireRecoveryDirectoryDurability(t, repo)
 	writeTask(t, repo, "T-001-example", "Example", "todo", "high", "specs/v0.1.0.md#summary", nil)
 	taskBytes, err := os.ReadFile(filepath.Join(repo, "planning", "tasks", "T-001-example.md"))
 	if err != nil {
@@ -113,6 +114,7 @@ func TestApplyNoteDecisions(t *testing.T) {
 	t.Run("extract imports decoded notes verbatim in order", func(t *testing.T) {
 		t.Parallel()
 		repo := seedLayout1Repo(t)
+		requireRecoveryDirectoryDurability(t, repo)
 		replaceContinuationNotes(t, repo, "continuation_notes:\n  - first note\n  - \"second: note\"\n")
 		if _, err := layout1Service(t, repo).Init(InitInput{Apply: true, ConfirmQuiescent: true, ExtractContinuationNotes: true}); err != nil {
 			t.Fatalf("apply: %v", err)
@@ -132,6 +134,7 @@ func TestApplyNoteDecisions(t *testing.T) {
 	t.Run("an existing notes sidecar is preserved byte-for-byte", func(t *testing.T) {
 		t.Parallel()
 		repo := seedLayout1Repo(t)
+		requireRecoveryDirectoryDurability(t, repo)
 		writeFile(t, notesFile(repo), "# Human Notes\n\noperator prose\n")
 		before, err := os.ReadFile(notesFile(repo))
 		if err != nil {
@@ -150,6 +153,7 @@ func TestApplyNoteDecisions(t *testing.T) {
 	t.Run("a direct schema-2 source applies with no note decision", func(t *testing.T) {
 		t.Parallel()
 		repo := seedLayout1Repo(t)
+		requireRecoveryDirectoryDurability(t, repo)
 		writeSchema2State(t, repo)
 		if _, err := layout1Service(t, repo).Init(InitInput{Apply: true, ConfirmQuiescent: true}); err != nil {
 			t.Fatalf("apply: %v", err)
@@ -164,6 +168,7 @@ func TestApplyPreservesTaskLocalLoopPolicy(t *testing.T) {
 	t.Parallel()
 
 	repo := seedLayout1Repo(t)
+	requireRecoveryDirectoryDurability(t, repo)
 	path := filepath.Join(repo, "planning", "tasks", "T-001-example.md")
 	writeFile(t, path, `---
 id: T-001-example
@@ -233,6 +238,7 @@ func TestFencedMigrationBlocksOrdinaryCommands(t *testing.T) {
 	t.Parallel()
 
 	repo := seedLayout1Repo(t)
+	requireRecoveryDirectoryDurability(t, repo)
 	original, err := os.ReadFile(markerFile(repo))
 	if err != nil {
 		t.Fatal(err)
@@ -284,6 +290,7 @@ func TestRecoverCompletesInterruptedMigration(t *testing.T) {
 	t.Parallel()
 
 	repo := seedLayout1Repo(t)
+	requireRecoveryDirectoryDurability(t, repo)
 	original, err := os.ReadFile(markerFile(repo))
 	if err != nil {
 		t.Fatal(err)

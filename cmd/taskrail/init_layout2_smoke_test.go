@@ -117,6 +117,7 @@ func TestInitLayout2UpgradeApplyGatesCLI(t *testing.T) {
 		t.Fatalf("missing-quiescence refusal is not actionable: %v", err)
 	}
 
+	requireRecoveryDirectoryDurability(t, root)
 	stdout, err := runRoot(t, "init", "--apply", "--confirm-quiescent", "--json")
 	if err != nil {
 		t.Fatalf("fully gated apply: %v", err)
@@ -140,6 +141,7 @@ func TestInitLayout2UpgradeApplyGatesCLI(t *testing.T) {
 // downgrade path rather than marker editing.
 func TestInitLayout2UpgradeAppliedSummaryCLI(t *testing.T) {
 	root := seedLayout1CLIRepo(t)
+	requireRecoveryDirectoryDurability(t, root)
 	writeFileCLI(t, filepath.Join(root, "planning", "STATE.md"), strings.Replace(
 		readFileCLI(t, filepath.Join(root, "planning", "STATE.md")),
 		"continuation_notes: []", "continuation_notes:\n  - Authored note.", 1))
