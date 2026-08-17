@@ -74,12 +74,12 @@ func changedPaths(t *testing.T, before, after map[string]string) []string {
 	changed := make([]string, 0, len(after))
 	for path, content := range after {
 		if other, ok := before[path]; !ok || other != content {
-			changed = append(changed, path)
+			changed = append(changed, filepath.ToSlash(path))
 		}
 	}
 	for path := range before {
 		if _, ok := after[path]; !ok {
-			changed = append(changed, path)
+			changed = append(changed, filepath.ToSlash(path))
 		}
 	}
 	sortStrings(changed)
