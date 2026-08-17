@@ -209,6 +209,7 @@ type recoverResultJSON struct {
 
 func TestRecoverCommandPreviewsClearFenceReadOnlyThenApplies(t *testing.T) {
 	root := setupRepo(t)
+	requireRecoveryDirectoryDurability(t, root)
 	fabricateRetainedCLI(t, gitLockRepository(root), recoverTxID, "init", "prepared", "", []recoverMember{
 		{kind: durabletx.Managed, reported: "planning/A.md", path: "planning/A.md",
 			original: []byte("before"), candidate: []byte("after"), present: true, onDisk: []byte("before")},
@@ -251,6 +252,7 @@ func TestRecoverCommandPreviewsClearFenceReadOnlyThenApplies(t *testing.T) {
 
 func TestRecoverCommandRestoresMixedPublication(t *testing.T) {
 	root := setupRepo(t)
+	requireRecoveryDirectoryDurability(t, root)
 	exclusion := filepath.ToSlash(filepath.Join(root, ".git", "info", "exclude"))
 	fabricateRetainedCLI(t, gitLockRepository(root), recoverTxID, "init", "publishing", "", []recoverMember{
 		{kind: durabletx.Git, reported: exclusion, path: "info/exclude",
@@ -420,6 +422,7 @@ func TestRecoverCommandRefusesLockHolders(t *testing.T) {
 // completion already carries the owning command's validated decision.
 func TestRecoverCommandResumesCompletedAccept(t *testing.T) {
 	root := setupRepo(t)
+	requireRecoveryDirectoryDurability(t, root)
 	fabricateRetainedCLI(t, gitLockRepository(root), recoverTxID, "import", "recovery_accepting", "accept_candidate", []recoverMember{
 		{kind: durabletx.Managed, reported: "planning/A.md", path: "planning/A.md",
 			original: []byte("old-a"), candidate: []byte("new-a"), present: true, onDisk: []byte("new-a")},
@@ -455,6 +458,7 @@ func TestRecoverCommandResumesCompletedAccept(t *testing.T) {
 // `.taskrail/runtime/`, and recovery works there without Git metadata.
 func TestRecoverCommandWorksInANonGitRepository(t *testing.T) {
 	root := t.TempDir()
+	requireRecoveryDirectoryDurability(t, root)
 	if err := os.MkdirAll(filepath.Join(root, ".taskrail"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -487,6 +491,22 @@ func TestRecoverCommandWorksInANonGitRepository(t *testing.T) {
 	}
 	if _, err := os.Stat(retained); !os.IsNotExist(err) {
 		t.Fatal("non-Git recovery retained the fence")
+	}
+}
+
+func requireRecoveryDirectoryDurability(t *testing.T, root string) {
+	t.Helper()
+	directory, err := os.Open(root)
+	if err != nil {
+		t.Fatalf("open directory durability probe: %v", err)
+	}
+	syncErr := directory.Sync()
+	closeErr := directory.Close()
+	if syncErr != nil {
+		t.Skipf("filesystem does not support durable directory sync: %v", syncErr)
+	}
+	if closeErr != nil {
+		t.Fatalf("close directory durability probe: %v", closeErr)
 	}
 }
 

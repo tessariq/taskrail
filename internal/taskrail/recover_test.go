@@ -247,6 +247,7 @@ func TestRecoverTransactionUnknownIDRefuses(t *testing.T) {
 func TestRecoverTransactionClearsPreparedFence(t *testing.T) {
 	t.Parallel()
 	root := t.TempDir()
+	requireRecoveryDirectoryDurability(t, root)
 	seedFixtureTree(t, root)
 	paths := committedRecoverPaths(t, root)
 	fabricateRetained(t, paths.LockRepository(), recoverFixtureID, "init", "prepared", []recoverMember{
@@ -287,6 +288,7 @@ func TestRecoverTransactionClearsPreparedFence(t *testing.T) {
 func TestRecoverTransactionRestoresOnlyCandidateValuedComponents(t *testing.T) {
 	t.Parallel()
 	root := t.TempDir()
+	requireRecoveryDirectoryDurability(t, root)
 	paths := committedRecoverPaths(t, root)
 	repo := paths.LockRepository()
 	fabricateRetained(t, repo, recoverFixtureID, "init", "publishing", []recoverMember{
@@ -472,6 +474,7 @@ func TestRecoverTransactionRefusesAcceptWithoutRegisteredValidator(t *testing.T)
 func TestRecoverTransactionResumesCompletedAccept(t *testing.T) {
 	t.Parallel()
 	root := t.TempDir()
+	requireRecoveryDirectoryDurability(t, root)
 	paths := committedRecoverPaths(t, root)
 	repo := paths.LockRepository()
 	fabricateRetained(t, repo, recoverFixtureID, "import", "recovery_accepting", []recoverMember{
@@ -511,6 +514,7 @@ func TestRecoverTransactionResumesCompletedAccept(t *testing.T) {
 func TestRecoverTransactionRecoversMixedPathKindsInLocalStorage(t *testing.T) {
 	t.Parallel()
 	root := t.TempDir()
+	requireRecoveryDirectoryDurability(t, root)
 	if err := os.MkdirAll(filepath.Join(root, ".git"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -579,5 +583,21 @@ func TestRecoverTransactionRecoversMixedPathKindsInLocalStorage(t *testing.T) {
 	}
 	if _, statErr := os.Stat(filepath.Join(durabletx.TransactionsDir(repo), recoverFixtureID)); !os.IsNotExist(statErr) {
 		t.Fatalf("mixed recovery retained the fence: %v", statErr)
+	}
+}
+
+func requireRecoveryDirectoryDurability(t *testing.T, root string) {
+	t.Helper()
+	directory, err := os.Open(root)
+	if err != nil {
+		t.Fatalf("open directory durability probe: %v", err)
+	}
+	syncErr := directory.Sync()
+	closeErr := directory.Close()
+	if syncErr != nil {
+		t.Skipf("filesystem does not support durable directory sync: %v", syncErr)
+	}
+	if closeErr != nil {
+		t.Fatalf("close directory durability probe: %v", closeErr)
 	}
 }
