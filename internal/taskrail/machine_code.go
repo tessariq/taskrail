@@ -22,6 +22,8 @@ const (
 	MachineCodeTaskNotFound        = "task_not_found"
 	MachineCodeInvalidStatus       = "invalid_status"
 	MachineCodeInvalidReason       = "invalid_reason"
+	MachineCodeInvalidDigest       = "invalid_digest"
+	MachineCodeSourceChanged       = "source_changed"
 	MachineCodeInvalidProposal     = "invalid_proposal"
 	MachineCodeDestinationExists   = "destination_exists"
 	MachineCodePathBlocked         = "path_blocked"

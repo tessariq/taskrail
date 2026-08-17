@@ -135,7 +135,7 @@ Details: [docs/commands.md](docs/commands.md#next-task-selection-and-the-active-
 - **See where work stands** — `status`, `stats`, and `coverage` report a live snapshot, aggregate metrics, and advisory spec-linkage, all read-only. `status` also breaks down open work (`todo`/`in_progress`/`blocked`) by how much targets the active spec versus points away from it, listing the away tasks and their `spec_ref`; the away set matches the active-spec filter `next` uses for idle selection.
 - **Author and steer specs** — the `spec` family (`list`, `show`, `add`, `activate`, `diff`) inspects and evolves versioned specs; `spec diff` previews the mechanical area-set delta before activation.
 - **Draft missing work** — the optional `taskrail-decompose` and `taskrail-gap` skills turn uncovered areas and structural gap signals into reviewable proposals; only an explicit `task new` or `import --apply` writes tracked tasks.
-- **Handle the messy parts** — `block`/`unblock` park and resume work, `task new` scaffolds a task, `task rename` re-slugs it, `task repoint` moves its `spec_ref`, and `task dependency add|remove` changes one reviewed dependency edge.
+- **Handle the messy parts** — `block`/`unblock` park and resume work, `task new` scaffolds a task, `task rename` re-slugs it, `task repoint` moves its `spec_ref`, and `task dependency add|remove` changes one reviewed dependency edge. When a crashed writer leaves the repository mutation lock behind, `lock status` inspects it read-only and `lock clear` removes exactly the observed stale lock — never automatically, and never while its owner is provably alive on this host.
 
 Run `taskrail --help`, or `taskrail <command> --help`, for the full command list and every flag.
 
@@ -145,11 +145,12 @@ Taskrail commands intentionally use different write conventions based on risk:
 
 | Class | Current examples | Effect |
 |---|---|---|
-| Read-only | `validate`, `status`, `stats`, `coverage`, `spec list/show/diff` | Inspect only; never rewrite tracked planning state. |
+| Read-only | `validate`, `status`, `stats`, `coverage`, `spec list/show/diff`, `lock status` | Inspect only; never rewrite tracked planning state. |
 | Mode-dependent initialization | `init` | Fresh, unmarked-standard, and current-layout adoption/repair paths may write immediately; detected migration or retrofit paths preview unless `--apply` is supplied. In v0.4, `--with-skills` may also install skills after any successful init result. |
 | Preview by default | `retrofit`, `repair` | Report a candidate; `--apply` is the write opt-in. |
 | Apply with preview option | `task rename`, `task repoint`, `task dependency add/remove` | Write by default; `--dry-run` validates the candidate first. |
 | Lifecycle/state writers | `next`, `start`, `complete`, `block`, `unblock`, `verify`, `spec activate`, `task new` | Rewrite `STATE.md` and sometimes task files; inspect `git status` afterward. |
+| Operator lock recovery | `lock clear <lock-id> --expect-sha256 <digest>` | Removes only the unchanged mutation lock observed via `lock status`; refuses a provably live same-host owner and never touches retained transaction data. Never rewrites tracked planning state. |
 | Reviewed import writer | `import --apply <draft>` | Validates an external draft and writes its bounded task/spec/state set. |
 
 `next` is not a read-only selection probe: it persists `next_action` and

@@ -1,13 +1,13 @@
 ---
 id: T-231-inspect-and-clear-stale-repository-locks-safely
 title: Inspect and clear stale repository locks safely
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#repository-discovery-locking-and-recovery
 dependencies:
     - T-155-add-the-repository-mutation-lock-protocol
     - T-213-define-the-uniform-agent-machine-api
-updated_at: "2026-08-06T13:46:30Z"
+updated_at: "2026-08-17T11:22:48Z"
 ---
 
 # T-231-inspect-and-clear-stale-repository-locks-safely Inspect and clear stale repository locks safely
@@ -36,3 +36,6 @@ repository lock without treating PID, host, or age as an automatic lease.
   preservation.
 
 ## Implementation Notes
+
+- 2026-08-17T11:22:32Z: Added internal/repolock Clear (compare-and-delete with ErrChanged/ErrLiveOwner, cross-platform signal-0/OpenProcess liveness probes), Service LockStatus/LockClear with companion-exact LockStatusResult/LockClearResult and registered machine-code mapping, and the lock status/lock clear CLI subcommands migrated onto the schema-1 envelope; README/docs/CHANGELOG updated.
+- 2026-08-17T11:22:48Z: verification pass

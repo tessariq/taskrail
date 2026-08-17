@@ -6,6 +6,12 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ### Added
 
+- `taskrail lock status` inspects the repository mutation lock read-only
+  (absence, or exact owner metadata and raw-file digest) in Git and non-Git
+  repositories, and `taskrail lock clear <lock-id> --expect-sha256 <digest>`
+  removes exactly the observed stale lock — refusing a changed lock, a
+  provably live same-host owner, and ever touching retained transaction data.
+  Neither command exposes a delegation token; both publish the v0.5 envelope.
 - `taskrail task dependency add|remove <task-id> <dependency-id>` edits one
   exact-ID edge transactionally; `--dry-run` previews the validated candidate.
 - `taskrail init` and `retrofit --apply` create `planning/NOTES.md` for

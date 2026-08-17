@@ -98,6 +98,8 @@ func TestEveryConstructedSemanticCommandFamilyUsesRecoveryAdmission(t *testing.T
 		{name: "spec diff", args: []string{"spec", "diff", "v0.1.0", "v0.1.0"}},
 		{name: "spec activate", args: []string{"spec", "activate", "v0.1.0"}},
 		{name: "import", args: []string{"import", "README.md", "--to", "tasks"}},
+		{name: "lock status", args: []string{"lock", "status"}},
+		{name: "lock clear", args: []string{"lock", "clear", "0123456789abcdef0123456789abcdef", "--expect-sha256", strings.Repeat("a", 64)}},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

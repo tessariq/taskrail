@@ -131,7 +131,8 @@ func TestCheckMachineEntryPolicyRejectsPerturbedEntries(t *testing.T) {
 // common envelope today: every command the CLI constructs, since T-271 moved the
 // last of the inherited writers over. The planned commands publish nothing yet.
 var migratedCommands = []string{
-	"block", "complete", "coverage", "import", "init", "next", "repair", "retrofit",
+	"block", "complete", "coverage", "import", "init", "lock clear", "lock status",
+	"next", "repair", "retrofit",
 	"spec activate", "spec add", "spec diff", "spec list", "spec show", "start",
 	"stats", "status", "task new", "task rename", "task repoint", "unblock",
 	"task dependency add", "task dependency remove", "validate", "verify",

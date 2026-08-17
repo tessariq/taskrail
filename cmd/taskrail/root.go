@@ -35,6 +35,7 @@ func newRootCmd() *cobra.Command {
 		newVerifyCmd(),
 		newTaskCmd(),
 		newSpecCmd(),
+		newLockCmd(),
 		newImportCmd(),
 		newVersionCmd(),
 	)

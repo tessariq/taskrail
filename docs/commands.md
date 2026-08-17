@@ -43,6 +43,31 @@ and writers do not begin. Git linked worktrees and committed/local storage share
 the Git-common fence, while non-Git committed repositories use their root-local
 runtime directory.
 
+## Inspecting and clearing stale locks
+
+Every Taskrail semantic writer holds one repository mutation lock: Git
+worktrees place it beneath the Git common directory (so linked worktrees
+coordinate) and non-Git repositories beneath `.taskrail/runtime/`. A writer
+that dies abruptly leaves its lock behind, and Taskrail never clears a lock
+automatically — PID, host, and age are evidence about an owner, never a lease
+over it.
+
+`taskrail lock status` is read-only: it reports either absence or the exact
+owner metadata (lock ID, command, PID, host, start time, repository identity,
+transaction, and — for delegated owners — executable and delegation-token
+*digests*, never the token itself) plus the raw lock-file digest. It writes
+nothing, so it is always safe to run against a lock a live writer holds.
+
+`taskrail lock clear <lock-id> --expect-sha256 <digest>` is the guarded
+compare-and-delete for an abandoned lock: it removes only the unchanged lock
+record named by both the ID and the digest observed via `lock status`, refuses
+when the bytes moved on (`source_changed`), when no lock matches the expected
+digest (`invalid_digest`), and when the recorded owner is provably alive on
+this host (`lock_held`) — signal-level liveness, not an age heuristic.
+Clearing ownership never removes retained transaction data sharing the lock
+root, and a pending recovery fence fences the lock commands like every other
+semantic family (`recovery_pending`).
+
 ## Coverage vs gap analysis
 
 `coverage` and `coverage --gaps` sit one word apart and answer different
