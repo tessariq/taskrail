@@ -47,9 +47,27 @@ func runCommand(cmd *cobra.Command, produce func(*taskrail.Service) (commandResu
 	if err != nil {
 		return publishMachineError(cmd, err, nil)
 	}
+	return finishCommand(cmd, svc, produce, true)
+}
+
+// runUnfencedCommand runs `recover`, the one command retained transaction state
+// exists to be handed to. The service is constructed past the admission fence,
+// and no post-operation fence re-check runs, because a successful recovery is
+// exactly the snapshot change that check would refuse.
+func runUnfencedCommand(cmd *cobra.Command, produce func(*taskrail.Service) (commandResult, error)) error {
+	svc, err := taskrail.NewRecoveryService(".")
+	if err != nil {
+		return publishMachineError(cmd, err, nil)
+	}
+	return finishCommand(cmd, svc, produce, false)
+}
+
+func finishCommand(cmd *cobra.Command, svc *taskrail.Service, produce func(*taskrail.Service) (commandResult, error), fenced bool) error {
 	result, err := produce(svc)
-	if recoveryErr := svc.CheckRecovery(); recoveryErr != nil {
-		return publishMachineError(cmd, recoveryErr, result.warnings)
+	if fenced {
+		if recoveryErr := svc.CheckRecovery(); recoveryErr != nil {
+			return publishMachineError(cmd, recoveryErr, result.warnings)
+		}
 	}
 	// Advisories reach a human on stderr in either mode, including on the failure
 	// path: an advisory that explains a failure is exactly the one worth keeping.
@@ -95,13 +113,13 @@ func publishMachineError(cmd *cobra.Command, cause error, warnings []taskrail.Wa
 			Code:    failure.Code,
 			Message: cause.Error(),
 			Details: taskrail.MachineErrorDetails{
-				Applied:    failure.Applied,
-				Violations: []taskrail.MachineViolation{},
+				Applied: failure.Applied,
 				// append onto an empty slice, not slices.Clone: a required array
 				// is `[]` on the wire, and cloning nil would leave it null.
-				Paths:     append([]string{}, failure.Paths...),
-				Snapshots: append([]taskrail.MachineSnapshot{}, failure.Snapshots...),
-				Recovery:  failure.Recovery,
+				Violations: append([]taskrail.MachineViolation{}, failure.Violations...),
+				Paths:      append([]string{}, failure.Paths...),
+				Snapshots:  append([]taskrail.MachineSnapshot{}, failure.Snapshots...),
+				Recovery:   failure.Recovery,
 			},
 		},
 	}

@@ -1,13 +1,13 @@
 ---
 id: T-232-recover-v0-5-transactions-through-one-command
 title: Recover v0.5 transactions through one command
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#repository-discovery-locking-and-recovery
 dependencies:
     - T-277-add-durable-transaction-journals-and-recovery
     - T-213-define-the-uniform-agent-machine-api
-updated_at: "2026-08-06T13:46:30Z"
+updated_at: "2026-08-17T12:18:28Z"
 ---
 
 # T-232-recover-v0-5-transactions-through-one-command Recover v0.5 transactions through one command
@@ -42,3 +42,6 @@ without asking the operator or binary to choose semantic content.
   and effective Git exclusion snapshots in one recoverable transaction.
 
 ## Implementation Notes
+
+- 2026-08-17T12:18:12Z: Added the public recover boundary: taskrail recover <transaction-id> [--apply] [--json] previews and performs the single mechanically safe action the durable engine derives, acquires the mutation lock naming the transaction, maps engine refusals onto the registered machine codes with typed whole-set snapshot evidence, and reports logical managed, worktree-physical, and canonical absolute Git paths without conflating them. Accept without a shipped writer validator refuses validation_failed; the lock+fence crash combination (recover lock_held, lock clear fenced) is recorded as the created follow-up.
+- 2026-08-17T12:18:28Z: verification pass

@@ -53,6 +53,9 @@ type MachineFailure struct {
 	// Paths are the managed paths the failure implicates, such as the artifacts a
 	// partial write left behind.
 	Paths []string
+	// Violations carry subject-specific facts about the failure, which the
+	// companion places in the error details rather than in ad hoc members.
+	Violations []MachineViolation
 	// Snapshots carry normal-transaction byte evidence in deterministic order.
 	Snapshots []MachineSnapshot
 	// Recovery is present only when retained state strictly identifies one

@@ -304,7 +304,7 @@ var machineInventory = []MachineCommandEntry{
 		warns(), errs(readErrors)),
 	migrated("`lock clear`", "lock clear", []string{"LockClearResult"}, "never",
 		warns(), errs(readErrors, "invalid_digest", "source_changed", "lock_held", "write_conflict")),
-	planned("`recover`", "recover", []string{"RecoverResult"}, "never",
+	migrated("`recover`", "recover", []string{"RecoverResult"}, "never",
 		warns(), errs(writerErrors, "invalid_digest", "source_changed")),
 	planned("`loop` dry-run", "loop", []string{"LoopDryRunResult"}, "`action:invalid`",
 		warns(), errs(loopDryRunErrors)),

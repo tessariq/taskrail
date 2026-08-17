@@ -68,6 +68,33 @@ Clearing ownership never removes retained transaction data sharing the lock
 root, and a pending recovery fence fences the lock commands like every other
 semantic family (`recovery_pending`).
 
+## Recovering retained transactions
+
+`taskrail recover <transaction-id>` is the one command the recovery admission
+fence admits. It previews exactly one mechanically safe action derived from the
+retained journal evidence and the complete current snapshot set —
+`restore_original` (put back the recorded originals, changing only components
+still equal to the recorded candidate bytes), `accept_candidate` (keep a
+complete, command-validated candidate), or `clear_fence` (nothing semantic was
+published) — and never Git reset, checkout, or semantic inference. Preview is
+read-only and reports the typed whole-set evidence; `--apply` performs exactly
+the previewed action and is itself interruption-safe, so an interrupted apply
+can simply be retried.
+
+Recovery requires the repository mutation lock, acquired naming exactly the
+retained transaction: any holder — live or abandoned — refuses with `lock_held`
+before evidence is read, and the held lock is left untouched. Unexpected bytes,
+a substituted directory, or a mixed set that matches neither recorded state
+refuse with `write_conflict` and preserve every byte plus the complete
+evidence. An `accept_candidate` derivation additionally requires the owning
+command's registered recovery validator; a command that has not shipped one
+refuses with `validation_failed` rather than letting the binary choose
+semantic content on a writer's behalf. Snapshots carry each path class exactly:
+managed logical paths stay logical in local storage (a physical overlay
+location is never published as semantic data), skill and runtime destinations
+are worktree-physical, and Git metadata such as the exclusion store is a
+canonical absolute path.
+
 ## Coverage vs gap analysis
 
 `coverage` and `coverage --gaps` sit one word apart and answer different

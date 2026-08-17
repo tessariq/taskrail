@@ -54,12 +54,16 @@ type MachineViolation struct {
 	Path    *string
 }
 
+// MachineSnapshot is the common snapshot shape. Its JSON tags are the wire
+// member names, because a command-owned result payload that carries snapshots
+// (RecoverResult) marshals this type directly; the error details path keeps its
+// separate wire projection in machine_emit.go.
 type MachineSnapshot struct {
-	PathKind        string
-	Path            string
-	OriginalSHA256  *string
-	CandidateSHA256 *string
-	CurrentSHA256   *string
+	PathKind        string  `json:"path_kind"`
+	Path            string  `json:"path"`
+	OriginalSHA256  *string `json:"original_sha256"`
+	CandidateSHA256 *string `json:"candidate_sha256"`
+	CurrentSHA256   *string `json:"current_sha256"`
 }
 
 type MachineRecoveryRef struct {

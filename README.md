@@ -135,7 +135,7 @@ Details: [docs/commands.md](docs/commands.md#next-task-selection-and-the-active-
 - **See where work stands** — `status`, `stats`, and `coverage` report a live snapshot, aggregate metrics, and advisory spec-linkage, all read-only. `status` also breaks down open work (`todo`/`in_progress`/`blocked`) by how much targets the active spec versus points away from it, listing the away tasks and their `spec_ref`; the away set matches the active-spec filter `next` uses for idle selection.
 - **Author and steer specs** — the `spec` family (`list`, `show`, `add`, `activate`, `diff`) inspects and evolves versioned specs; `spec diff` previews the mechanical area-set delta before activation.
 - **Draft missing work** — the optional `taskrail-decompose` and `taskrail-gap` skills turn uncovered areas and structural gap signals into reviewable proposals; only an explicit `task new` or `import --apply` writes tracked tasks.
-- **Handle the messy parts** — `block`/`unblock` park and resume work, `task new` scaffolds a task, `task rename` re-slugs it, `task repoint` moves its `spec_ref`, and `task dependency add|remove` changes one reviewed dependency edge. When a crashed writer leaves the repository mutation lock behind, `lock status` inspects it read-only and `lock clear` removes exactly the observed stale lock — never automatically, and never while its owner is provably alive on this host.
+- **Handle the messy parts** — `block`/`unblock` park and resume work, `task new` scaffolds a task, `task rename` re-slugs it, `task repoint` moves its `spec_ref`, and `task dependency add|remove` changes one reviewed dependency edge. When a crashed writer leaves the repository mutation lock behind, `lock status` inspects it read-only and `lock clear` removes exactly the observed stale lock — never automatically, and never while its owner is provably alive on this host. When a crashed durable transaction leaves a recovery fence behind, `recover <transaction-id>` previews and — with `--apply` — performs the one mechanically safe action (restore originals, accept the validated candidate, or clear the fence).
 
 Run `taskrail --help`, or `taskrail <command> --help`, for the full command list and every flag.
 
@@ -151,6 +151,7 @@ Taskrail commands intentionally use different write conventions based on risk:
 | Apply with preview option | `task rename`, `task repoint`, `task dependency add/remove` | Write by default; `--dry-run` validates the candidate first. |
 | Lifecycle/state writers | `next`, `start`, `complete`, `block`, `unblock`, `verify`, `spec activate`, `task new` | Rewrite `STATE.md` and sometimes task files; inspect `git status` afterward. |
 | Operator lock recovery | `lock clear <lock-id> --expect-sha256 <digest>` | Removes only the unchanged mutation lock observed via `lock status`; refuses a provably live same-host owner and never touches retained transaction data. Never rewrites tracked planning state. |
+| Operator transaction recovery | `recover <transaction-id> [--apply]` | Previews the single safe action a retained durable transaction derives (restore-original, accept-candidate, clear-fence); `--apply` performs exactly that action. Requires a free mutation lock; any holder refuses. |
 | Reviewed import writer | `import --apply <draft>` | Validates an external draft and writes its bounded task/spec/state set. |
 
 `next` is not a read-only selection probe: it persists `next_action` and
@@ -159,7 +160,8 @@ tracked write.
 
 All semantic command classes share one recovery admission fence: retained or
 malformed transaction state beneath the canonical repository runtime root makes
-readers and writers fail with `recovery_pending`, and writers do not begin. See
+readers and writers fail with `recovery_pending`, and writers do not begin.
+`recover` is the one command the fence admits. See
 [docs/commands.md](docs/commands.md#recovery-admission-fence).
 
 ### Coverage vs gap analysis

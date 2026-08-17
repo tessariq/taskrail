@@ -6,6 +6,16 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ### Added
 
+- `taskrail recover <transaction-id> [--apply] [--json]` is the one command the
+  recovery admission fence admits: it previews the single mechanically safe
+  action a retained durable transaction derives (`restore_original`,
+  `accept_candidate`, or `clear_fence`) from journal evidence plus the complete
+  current snapshot set, and `--apply` performs exactly that action. It acquires
+  the mutation lock naming the transaction (any holder refuses `lock_held`),
+  refuses unexpected or substituted bytes with `write_conflict` while preserving
+  every byte and the typed snapshot evidence, and requires the owning command's
+  registered validator before accepting a candidate. It publishes the v0.5
+  envelope as `RecoverResult`.
 - `taskrail lock status` inspects the repository mutation lock read-only
   (absence, or exact owner metadata and raw-file digest) in Git and non-Git
   repositories, and `taskrail lock clear <lock-id> --expect-sha256 <digest>`
