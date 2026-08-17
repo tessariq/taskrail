@@ -23,17 +23,32 @@ func (s *Service) NextIncludingOffSpec() (NextResult, error) {
 	return s.next(true)
 }
 
-func (s *Service) next(includeOffSpec bool) (NextResult, error) {
+func (s *Service) next(includeOffSpec bool) (result NextResult, err error) {
+	own, release, err := s.beginLifecycleWrite(lifecycleNext, "", []string{s.reportedStatePath()})
+	if err != nil {
+		return NextResult{}, err
+	}
+	defer func() {
+		if releaseErr := release(); releaseErr != nil && err == nil {
+			err = releaseErr
+		}
+	}()
+
 	state, tasks, err := s.loadStateAndTasks()
 	if err != nil {
 		return NextResult{}, err
 	}
+	corpus, err := snapshotTaskCorpus(tasks)
+	if err != nil {
+		return NextResult{}, err
+	}
+	baseline := s.validateInMemory(state, tasks)
 
-	result := computeNext(state, tasks, includeOffSpec)
+	result = computeNext(state, tasks, includeOffSpec)
 	state.Frontmatter.UpdatedAt = timestamp(s.now())
 	state.Frontmatter.NextAction = nextAction(result)
 	state.Body = renderStateBody(state.Frontmatter, tasks)
-	if err := s.saveState(state); err != nil {
+	if _, err := s.commitLifecycle(own, lifecycleNext, lifecycleLedger{state: state, preview: tasks, corpus: corpus, baseline: baseline}); err != nil {
 		return NextResult{}, err
 	}
 	return result, nil

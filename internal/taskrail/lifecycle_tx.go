@@ -1,0 +1,286 @@
+package taskrail
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"os"
+	"path"
+	"strconv"
+	"strings"
+
+	"github.com/tessariq/taskrail/internal/repolock"
+	"github.com/tessariq/taskrail/internal/repotx"
+)
+
+// The lifecycle and state-selection transaction substrate
+// (specs/v0.5.0.md#repository-discovery-locking-and-recovery): `next`, `start`,
+// `complete`, `block`, and `unblock` publish through one normal transaction.
+// Each writer takes the discovered repository mutation lock, snapshots its
+// complete consumed and published set, validates the full candidate ledger
+// before the first write, and publishes only its declared task and state files
+// — never the save-all rewrite that re-encodes unselected task bytes.
+
+// testHookLifecycleValidated runs at the start of one lifecycle transaction's
+// candidate-validation phase: after the snapshot, before the recheck and the
+// first publication. Tests use it to change the repository mid-transaction —
+// the only window where a conflict or an invalid candidate is deterministically
+// reachable from this package — and to observe the lock a writer must hold. It
+// is nil outside tests.
+var testHookLifecycleValidated func()
+
+// lifecycleCommand names one lifecycle writer and the task fields it writes.
+// The fields double as the capability bound a delegated child is held to, so
+// every declared field must stay inside repolock's delegated field bound.
+type lifecycleCommand struct {
+	command    string
+	taskFields []string
+}
+
+var (
+	lifecycleNext = lifecycleCommand{command: "next"}
+	// A state-selection writer reads every task but writes none of them.
+	lifecycleStart = lifecycleCommand{command: "start", taskFields: []string{"status", "updated_at"}}
+	// Block also records the reason in the STATE.md blockers ledger, which the
+	// delegated field set names through its "blocker" member.
+	lifecycleComplete = lifecycleCommand{command: "complete", taskFields: []string{"status", "updated_at", "implementation_notes"}}
+	lifecycleBlock    = lifecycleCommand{command: "block", taskFields: []string{"status", "updated_at", "implementation_notes", "blocker"}}
+	lifecycleUnblock  = lifecycleCommand{command: "unblock", taskFields: []string{"status", "updated_at", "implementation_notes"}}
+)
+
+// beginLifecycleWrite takes the repository mutation lock for one lifecycle
+// writer. A direct operator acquires it bounded by the command it typed; a
+// delegated child joins its parent's already-held lock, arriving narrowed to
+// the selected task and the exact write set its grant authenticated. The
+// returned release retires only a directly acquired lock — a delegate never
+// releases ownership it does not hold.
+func (s *Service) beginLifecycleWrite(w lifecycleCommand, selectedTask string, writes []string) (repotx.Ownership, func() error, error) {
+	if err := s.paths.ensureStorageCapability(); err != nil {
+		return nil, nil, err
+	}
+	if delegatedInvocation() {
+		joined, err := repolock.Join(repolock.JoinRequest{
+			Repository:       s.paths.LockRepository(),
+			Command:          w.command,
+			Token:            os.Getenv("TASKRAIL_DELEGATION_TOKEN"),
+			ExecutableSHA256: os.Getenv("TASKRAIL_EXECUTABLE_SHA256"),
+			Grant:            repolock.Capability{SelectedTask: selectedTask, Writes: writes},
+			Capability:       repolock.Capability{Commands: []string{w.command}, TaskFields: w.taskFields, SelectedTask: selectedTask, Writes: writes},
+		})
+		if err != nil {
+			return nil, nil, WithMachineErrorCode(MachineCodeDelegatedRefused,
+				fmt.Errorf("delegated %s could not join its parent's repository lock: %w", w.command, err))
+		}
+		return joined, func() error { return nil }, nil
+	}
+	lock, err := repolock.Acquire(context.Background(), repolock.Request{
+		Repository: s.paths.LockRepository(),
+		Command:    w.command,
+		Capability: repolock.Capability{Commands: []string{w.command}, TaskFields: w.taskFields},
+	})
+	if err != nil {
+		return nil, nil, writerLockError(err)
+	}
+	release := func() error {
+		if releaseErr := lock.Release(); releaseErr != nil {
+			return WithMachineErrorCode(MachineCodeRepositoryInvalid, releaseErr)
+		}
+		// Acquiring the lock may have created the shared runtime parent; the
+		// refreshed ancestor identity keeps the command boundary from mistaking
+		// this writer's own lock directory for recovery activity.
+		return s.refreshRecoveryAfterLock()
+	}
+	return lock, release, nil
+}
+
+// lifecycleLedger is the complete candidate set one lifecycle writer validated
+// and published: the re-projected state, the one task file it owns (nil for
+// `next`), the mutated task set the render and the validation both saw, and the
+// pre-transition verdict. A lifecycle transition preserves violations that
+// already existed — it reports them rather than healing or refusing them — so
+// the baseline is what "the candidate introduced nothing new" is measured
+// against.
+type lifecycleLedger struct {
+	state    *State
+	task     *Task
+	preview  []*Task
+	corpus   []string
+	baseline ValidationResult
+}
+
+// candidateIntroducesViolations reports whether the candidate verdict contains
+// a violation the baseline lacked: a write that would make the repository worse
+// than it already was. Pre-existing violations pass through into the reported
+// result, matching the shipped lifecycle contract (a transition neither heals
+// nor is blocked by an already-invalid repository).
+func candidateIntroducesViolations(candidate, baseline ValidationResult) bool {
+	known := make(map[string]struct{}, len(baseline.Violations))
+	for _, violation := range baseline.Violations {
+		known[violation] = struct{}{}
+	}
+	for _, violation := range candidate.Violations {
+		if _, ok := known[violation]; !ok {
+			return true
+		}
+	}
+	return false
+}
+
+// commitLifecycle validates the complete candidate ledger and publishes it as
+// one normal transaction: the state file plus, when a task is selected, exactly
+// that task's file. The returned validation is the pre-publication verdict the
+// writer reports in its result.
+func (s *Service) commitLifecycle(own repotx.Ownership, w lifecycleCommand, ledger lifecycleLedger) (ValidationResult, error) {
+	validation := s.validateInMemory(ledger.state, ledger.preview)
+	if candidateIntroducesViolations(validation, ledger.baseline) {
+		return ValidationResult{}, WithMachineErrorCode(MachineCodeValidationFailed,
+			fmt.Errorf("%s candidate failed validation: %s", w.command, strings.Join(validation.Violations, "; ")))
+	}
+
+	stateBytes, err := marshalFrontmatter(ledger.state.Frontmatter, ledger.state.Body)
+	if err != nil {
+		return ValidationResult{}, err
+	}
+	published := []repotx.Candidate{
+		managedCandidate(s.reportedStatePath(), s.paths.StateFile, stateBytes),
+	}
+	selectedTask := ""
+	if ledger.task != nil {
+		taskBytes, err := patchLifecycleTask(ledger.task)
+		if err != nil {
+			return ValidationResult{}, err
+		}
+		published = append(published, managedCandidate(ledger.task.Path, ledger.task.Filename, taskBytes))
+		selectedTask = ledger.task.Frontmatter.ID
+	}
+	consumed, err := writerConsumedPaths(s.paths, ledger.preview, ledger.task)
+	if err != nil {
+		return ValidationResult{}, err
+	}
+
+	request := repotx.Request{
+		Command:      w.command,
+		SelectedTask: selectedTask,
+		TaskFields:   w.taskFields,
+		Consumed:     consumed,
+		Published:    published,
+		Validate: func([]repotx.Snapshot) error {
+			if testHookLifecycleValidated != nil {
+				testHookLifecycleValidated()
+			}
+			currentTasks, err := s.loadTasks()
+			if err != nil {
+				return err
+			}
+			if !sameTaskCorpus(ledger.corpus, currentTasks) {
+				return fmt.Errorf("%s task corpus changed during candidate validation", w.command)
+			}
+			// The candidate was proven valid above, but validation can take
+			// arbitrary time: re-prove it under the snapshot so a repository
+			// that changed in between is refused rather than published.
+			if got := s.validateInMemory(ledger.state, ledger.preview); candidateIntroducesViolations(got, ledger.baseline) {
+				return fmt.Errorf("%s candidate failed validation: %s", w.command, strings.Join(got.Violations, "; "))
+			}
+			return nil
+		},
+	}
+	if _, err := repotx.Commit(context.Background(), own, request); err != nil {
+		return ValidationResult{}, writerTransactionError(err)
+	}
+	return validation, nil
+}
+
+func snapshotTaskCorpus(tasks []*Task) ([]string, error) {
+	result := make([]string, len(tasks))
+	for i, task := range tasks {
+		frontmatter, err := json.Marshal(task.Frontmatter)
+		if err != nil {
+			return nil, err
+		}
+		result[i] = task.Path + "\x00" + task.Filename + "\x00" + string(frontmatter) + "\x00" + task.Body
+	}
+	return result, nil
+}
+
+func sameTaskCorpus(expected []string, current []*Task) bool {
+	got, err := snapshotTaskCorpus(current)
+	if err != nil || len(expected) != len(got) {
+		return false
+	}
+	for i := range expected {
+		if expected[i] != got[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// patchLifecycleTask changes only lifecycle-owned fields and the body while
+// preserving every unmodeled frontmatter byte on the selected task.
+func patchLifecycleTask(task *Task) ([]byte, error) {
+	data, err := os.ReadFile(task.Filename)
+	if err != nil {
+		return nil, err
+	}
+	newline := "\n"
+	if strings.HasPrefix(string(data), "---\r\n") {
+		newline = "\r\n"
+	} else if !strings.HasPrefix(string(data), "---\n") {
+		return nil, fmt.Errorf("task %s has no frontmatter start", task.Frontmatter.ID)
+	}
+	marker := newline + "---" + newline
+	end := strings.Index(string(data[len("---"+newline):]), marker)
+	if end < 0 {
+		return nil, fmt.Errorf("task %s has no frontmatter end", task.Frontmatter.ID)
+	}
+	end += len("---"+newline) + len(marker)
+	frontmatter := string(data[:end])
+	for field, value := range map[string]string{
+		"status":     task.Frontmatter.Status,
+		"updated_at": strconv.Quote(task.Frontmatter.UpdatedAt),
+	} {
+		prefix := field + ":"
+		lines := strings.Split(frontmatter, newline)
+		matches := 0
+		for i, line := range lines {
+			if strings.HasPrefix(line, prefix) {
+				lines[i] = prefix + " " + value
+				matches++
+			}
+		}
+		if matches != 1 {
+			return nil, fmt.Errorf("task %s has %d %s fields", task.Frontmatter.ID, matches, field)
+		}
+		frontmatter = strings.Join(lines, newline)
+	}
+	_, originalBody, err := parseFrontmatter[TaskFrontmatter](data)
+	if err != nil {
+		return nil, err
+	}
+	rawBody := string(data[end:])
+	if task.Body == originalBody {
+		return []byte(frontmatter + rawBody), nil
+	}
+	base := strings.TrimRight(originalBody, "\n")
+	if !strings.HasPrefix(task.Body, base) {
+		return nil, fmt.Errorf("task %s lifecycle body change is not append-only", task.Frontmatter.ID)
+	}
+	addition := task.Body[len(base):]
+	if newline == "\r\n" {
+		addition = strings.ReplaceAll(addition, "\n", newline)
+	}
+	return []byte(frontmatter + strings.TrimRight(rawBody, "\r\n") + addition), nil
+}
+
+// reportedStatePath is the state file's durable logical identity, the spelling
+// a delegated write set is granted and a transaction reports.
+func (s *Service) reportedStatePath() string {
+	return s.paths.logicalManagedPath(s.paths.StateFile)
+}
+
+// reportedTaskPath derives a task operand's logical path before any load proves
+// the task exists, so a delegated child can assert the grant it joins with from
+// exactly what the operator handed it.
+func (s *Service) reportedTaskPath(taskID string) string {
+	return path.Join(s.paths.LogicalPlanningDir, "tasks", taskID+".md")
+}

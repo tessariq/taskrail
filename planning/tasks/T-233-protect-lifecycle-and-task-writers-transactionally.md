@@ -1,13 +1,13 @@
 ---
 id: T-233-protect-lifecycle-and-task-writers-transactionally
 title: Protect lifecycle and state-selection writers transactionally
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#repository-discovery-locking-and-recovery
 dependencies:
     - T-156-protect-existing-semantic-writers-with-snapshot
     - T-157-upgrade-repositories-transactionally-to-layout-2
-updated_at: "2026-08-06T13:46:30Z"
+updated_at: "2026-08-17T20:29:56Z"
 ---
 
 # T-233-protect-lifecycle-and-task-writers-transactionally Protect lifecycle and state-selection writers transactionally
@@ -42,3 +42,7 @@ verification/follow-up and inherited task mutation writers are separate slices.
   cross-task mutation remains.
 
 ## Implementation Notes
+
+- 2026-08-17T20:29:03Z: Routed next, start, complete, block, and unblock through the repository mutation lock and normal transaction substrate with exact task/state publication, full candidate validation, semantic corpus rechecks, selected-task metadata preservation, delegated capability enforcement, and rollback/conflict evidence.
+- 2026-08-17T20:29:15Z: verification pass
+- 2026-08-17T20:29:56Z: verification pass

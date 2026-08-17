@@ -9,12 +9,17 @@ import (
 // The lifecycle writers: the transitions that move one task between statuses and
 // re-project STATE.md around it. They share finishTask, which owns the
 // completed/blocked write, and each reports the exact result fields its own v0.5
-// machine contract names (specs/v0.5.0.md#uniform-agent-machine-results).
+// machine contract names (specs/v0.5.0.md#uniform-agent-machine-results). Every
+// writer publishes through the shared normal transaction in lifecycle_tx.go,
+// so its bytes land under the repository mutation lock as one validated
+// candidate ledger rather than a save-all rewrite.
 
 // validateAfterWrite re-runs validation once a write has committed. A read-back
 // failure here is the outcome of an operation that is already on disk, so it is
 // tagged applied — otherwise a committed transition would publish as a refusal
-// that changed nothing.
+// that changed nothing. The transactional lifecycle writers above no longer use
+// it: they validate the complete candidate before publication instead. The
+// writers not yet routed through the transaction substrate still do.
 func (s *Service) validateAfterWrite() (ValidationResult, error) {
 	validation, err := s.Validate()
 	if err != nil {
@@ -24,11 +29,27 @@ func (s *Service) validateAfterWrite() (ValidationResult, error) {
 	return validation, nil
 }
 
-func (s *Service) Start(taskID string) (StartResult, error) {
+func (s *Service) Start(taskID string) (result StartResult, err error) {
+	own, release, err := s.beginLifecycleWrite(lifecycleStart, taskID,
+		[]string{s.reportedStatePath(), s.reportedTaskPath(taskID)})
+	if err != nil {
+		return StartResult{}, err
+	}
+	defer func() {
+		if releaseErr := release(); releaseErr != nil && err == nil {
+			err = releaseErr
+		}
+	}()
+
 	state, tasks, err := s.loadStateAndTasks()
 	if err != nil {
 		return StartResult{}, err
 	}
+	corpus, err := snapshotTaskCorpus(tasks)
+	if err != nil {
+		return StartResult{}, err
+	}
+	baseline := s.validateInMemory(state, tasks)
 	if state.Frontmatter.CurrentTask != "" {
 		return StartResult{}, WithMachineErrorCode(MachineCodeInvalidStatus,
 			fmt.Errorf("task %s is already active", state.Frontmatter.CurrentTask))
@@ -64,11 +85,7 @@ func (s *Service) Start(taskID string) (StartResult, error) {
 	state.Frontmatter.NextAction = fmt.Sprintf("Implement %s and run targeted tests", task.Frontmatter.ID)
 	state.Body = renderStateBody(state.Frontmatter, tasks)
 
-	if err := s.saveAll(state, tasks); err != nil {
-		return StartResult{}, err
-	}
-
-	validation, err := s.validateAfterWrite()
+	validation, err := s.commitLifecycle(own, lifecycleStart, lifecycleLedger{state: state, task: task, preview: tasks, corpus: corpus, baseline: baseline})
 	if err != nil {
 		return StartResult{}, err
 	}
@@ -81,7 +98,7 @@ func (s *Service) Start(taskID string) (StartResult, error) {
 }
 
 func (s *Service) Complete(taskID, note string) (CompleteResult, error) {
-	out, err := s.finishTask(taskID, "completed", strings.TrimSpace(note))
+	out, err := s.finishTask(lifecycleComplete, taskID, "completed", strings.TrimSpace(note))
 	if err != nil {
 		return CompleteResult{}, err
 	}
@@ -100,7 +117,7 @@ func (s *Service) Block(taskID, reason string) (BlockResult, error) {
 		return BlockResult{}, WithMachineErrorCode(MachineCodeInvalidReason,
 			errors.New("block reason must not be empty"))
 	}
-	out, err := s.finishTask(taskID, "blocked", reason)
+	out, err := s.finishTask(lifecycleBlock, taskID, "blocked", reason)
 	if err != nil {
 		return BlockResult{}, err
 	}
@@ -119,11 +136,27 @@ func (s *Service) Block(taskID, reason string) (BlockResult, error) {
 // Implementation Notes line — the reason is never re-added to the blockers list.
 // It then re-renders STATE.md and re-runs validation, reporting the result
 // (mirrors ActivateSpec per specs/v0.3.0.md#task-unblocking).
-func (s *Service) Unblock(taskID, reason string) (UnblockResult, error) {
+func (s *Service) Unblock(taskID, reason string) (result UnblockResult, err error) {
+	own, release, err := s.beginLifecycleWrite(lifecycleUnblock, taskID,
+		[]string{s.reportedStatePath(), s.reportedTaskPath(taskID)})
+	if err != nil {
+		return UnblockResult{}, err
+	}
+	defer func() {
+		if releaseErr := release(); releaseErr != nil && err == nil {
+			err = releaseErr
+		}
+	}()
+
 	state, tasks, err := s.loadStateAndTasks()
 	if err != nil {
 		return UnblockResult{}, err
 	}
+	corpus, err := snapshotTaskCorpus(tasks)
+	if err != nil {
+		return UnblockResult{}, err
+	}
+	baseline := s.validateInMemory(state, tasks)
 	task, err := exactTaskByID(tasks, taskID)
 	if err != nil {
 		return UnblockResult{}, err
@@ -158,11 +191,7 @@ func (s *Service) Unblock(taskID, reason string) (UnblockResult, error) {
 	}
 	state.Body = renderStateBody(state.Frontmatter, tasks)
 
-	if err := s.saveAll(state, tasks); err != nil {
-		return UnblockResult{}, err
-	}
-
-	validation, err := s.validateAfterWrite()
+	validation, err := s.commitLifecycle(own, lifecycleUnblock, lifecycleLedger{state: state, task: task, preview: tasks, corpus: corpus, baseline: baseline})
 	if err != nil {
 		return UnblockResult{}, err
 	}
@@ -194,11 +223,27 @@ type transitionOutcome struct {
 	validation ValidationResult
 }
 
-func (s *Service) finishTask(taskID, status, note string) (transitionOutcome, error) {
+func (s *Service) finishTask(w lifecycleCommand, taskID, status, note string) (outcome transitionOutcome, err error) {
+	own, release, err := s.beginLifecycleWrite(w, taskID,
+		[]string{s.reportedStatePath(), s.reportedTaskPath(taskID)})
+	if err != nil {
+		return transitionOutcome{}, err
+	}
+	defer func() {
+		if releaseErr := release(); releaseErr != nil && err == nil {
+			err = releaseErr
+		}
+	}()
+
 	state, tasks, err := s.loadStateAndTasks()
 	if err != nil {
 		return transitionOutcome{}, err
 	}
+	corpus, err := snapshotTaskCorpus(tasks)
+	if err != nil {
+		return transitionOutcome{}, err
+	}
+	baseline := s.validateInMemory(state, tasks)
 	task, err := exactTaskByID(tasks, taskID)
 	if err != nil {
 		return transitionOutcome{}, err
@@ -245,11 +290,7 @@ func (s *Service) finishTask(taskID, status, note string) (transitionOutcome, er
 	}
 	state.Body = renderStateBody(state.Frontmatter, tasks)
 
-	if err := s.saveAll(state, tasks); err != nil {
-		return transitionOutcome{}, err
-	}
-
-	validation, err := s.validateAfterWrite()
+	validation, err := s.commitLifecycle(own, w, lifecycleLedger{state: state, task: task, preview: tasks, corpus: corpus, baseline: baseline})
 	if err != nil {
 		return transitionOutcome{}, err
 	}

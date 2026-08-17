@@ -61,7 +61,7 @@ func (s *Service) EditDependency(input EditDependencyInput) (result DependencyRe
 		Capability: repolock.Capability{Commands: []string{command}, TaskFields: []string{"dependencies"}},
 	})
 	if err != nil {
-		return result, dependencyLockError(err)
+		return result, writerLockError(err)
 	}
 	defer func() {
 		if releaseErr := lock.Release(); releaseErr != nil && err == nil {
@@ -126,7 +126,7 @@ func (s *Service) EditDependency(input EditDependencyInput) (result DependencyRe
 		return DependencyResult{}, err
 	}
 
-	consumed, err := dependencyConsumedPaths(s.paths, tasks, target)
+	consumed, err := writerConsumedPaths(s.paths, tasks, target)
 	if err != nil {
 		return DependencyResult{}, err
 	}
@@ -145,7 +145,7 @@ func (s *Service) EditDependency(input EditDependencyInput) (result DependencyRe
 		},
 	}
 	if _, err := repotx.Commit(context.Background(), lock, request); err != nil {
-		return DependencyResult{}, dependencyTransactionError(err)
+		return DependencyResult{}, writerTransactionError(err)
 	}
 	result.Applied = true
 	return result, nil
@@ -312,7 +312,7 @@ func replaceDependenciesField(data []byte, before, after []string) ([]byte, erro
 	return []byte(strings.Join(lines, "")), nil
 }
 
-func dependencyConsumedPaths(paths Paths, tasks []*Task, target *Task) ([]repotx.Path, error) {
+func writerConsumedPaths(paths Paths, tasks []*Task, target *Task) ([]repotx.Path, error) {
 	consumed := make([]repotx.Path, 0, len(tasks)+2)
 	for _, task := range tasks {
 		if task == target {
@@ -347,7 +347,7 @@ func managedCandidate(reported, physical string, content []byte) repotx.Candidat
 	return repotx.Candidate{Path: repotx.Path{Kind: repotx.Managed, Reported: filepath.ToSlash(reported), Physical: physical}, Content: content}
 }
 
-func dependencyLockError(err error) error {
+func writerLockError(err error) error {
 	if errors.Is(err, repolock.ErrHeld) || errors.Is(err, repolock.ErrSameProcess) {
 		return WithMachineErrorCode(MachineCodeLockHeld, err)
 	}
@@ -357,7 +357,7 @@ func dependencyLockError(err error) error {
 	return WithMachineErrorCode(MachineCodeRepositoryInvalid, err)
 }
 
-func dependencyTransactionError(err error) error {
+func writerTransactionError(err error) error {
 	var txErr *repotx.Error
 	if errors.As(err, &txErr) {
 		if code, ok := txErr.MachineCode(); ok {

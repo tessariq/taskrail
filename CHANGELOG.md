@@ -63,6 +63,22 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ### Changed
 
+- `next`, `start`, `complete`, `block`, and `unblock` now publish through the
+  repository mutation lock as one normal transaction: they snapshot their
+  complete consumed and published set, validate the full candidate ledger
+  before the first write, and replace only their declared task and state files
+  instead of re-encoding every task file. A concurrent holder of the mutation
+  lock refuses with `lock_held`, an external edit landing mid-transaction
+  refuses with `write_conflict` while preserving the edited bytes, and a
+  handled publication failure rolls the write back to the original bytes with
+  `partial_write` evidence. Candidate validation refuses a transition that
+  would introduce a validation violation the repository did not already carry,
+  while pre-existing violations are preserved and reported in the result as
+  before. Delegated loop children join their parent's lock narrowed to the
+  selected task and the exact write set: `start`, `complete`, `block`, and
+  `unblock` within that bound publish normally, while `next`, another task, a
+  wider field set, or an unauthenticated join refuses with
+  `delegated_write_refused` without writing.
 - Layout-2 migration now defaults implementation review to one broad round. The
   `1..2` policy range and three-reviewer ceiling remain available, while the
   canonical workflow uses one focused reviewer by default and permits objective
