@@ -109,14 +109,16 @@ type WriteEntry struct {
 	Action string `json:"action"`
 }
 
-// The WriteEntry kinds and actions this version emits. Init writes layout
-// content only, so `task`, `review`, `runtime`, and `remove` belong to other
-// producers; installed skills are reported through `skills`, which is its own
-// array with its own action vocabulary.
+// The WriteEntry kinds and actions this version emits. The layout-2 upgrade
+// preview carries task files forward byte-for-byte as `task` preserve entries;
+// `review` and `runtime` belong to other producers; installed skills are
+// reported through `skills`, which is its own array with its own action
+// vocabulary.
 const (
 	writeKindConfig = "config"
 	writeKindSpec   = "spec"
 	writeKindState  = "state"
+	writeKindTask   = "task"
 	writeKindNote   = "note"
 
 	writeActionCreate   = "create"
@@ -182,12 +184,23 @@ type InitSkillExclusion struct {
 
 // InitInput selects what one init invocation does. Skills are opt-in: without
 // WithSkills no assistant directory is touched and both skill inventories are
-// empty.
+// empty. The three layout-upgrade inputs exist only for the layout-2 migration
+// flow; every other outcome rejects them as inapplicable.
 type InitInput struct {
 	Apply        bool
 	WithSkills   bool
 	ForceSkills  bool
 	SkillVersion string
+	// ConfirmQuiescent is the operator's assertion that every older Taskrail
+	// process able to touch this repository has stopped. The layout-upgrade
+	// apply requires it; preview and every other outcome reject it.
+	ConfirmQuiescent bool
+	// ExtractContinuationNotes/DropContinuationNotes record the operator's
+	// choice for legacy decoded continuation notes. Exactly one is required at
+	// upgrade apply when the decoded list is non-empty, and both are rejected
+	// when there is nothing to decide.
+	ExtractContinuationNotes bool
+	DropContinuationNotes    bool
 }
 
 // InitResult reports what version-aware init observed and did, in the exact
@@ -215,6 +228,21 @@ type InitResult struct {
 	// owns the published installation, so neither belongs on init's wire shape.
 	Mapping      []RetrofitMapping  `json:"-"`
 	SkillInstall SkillInstallResult `json:"-"`
+
+	// Layout2Facts carries the layout-2 upgrade preview's human-facing decisions
+	// the frozen wire shape does not model: the candidate's default broad
+	// review-round maximum and the configured logical directories with the
+	// physical root they resolve beneath. Like Mapping, it is never serialized.
+	Layout2Facts *Layout2UpgradeFacts `json:"-"`
+}
+
+// Layout2UpgradeFacts complements the migration-preview result for the text
+// summary without touching the machine contract.
+type Layout2UpgradeFacts struct {
+	ReviewMaxRounds int
+	StorageRoot     string
+	SpecsDir        string
+	PlanningDir     string
 }
 
 type StateFrontmatter struct {

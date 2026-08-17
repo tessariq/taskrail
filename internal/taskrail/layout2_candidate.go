@@ -55,6 +55,7 @@ type Layout2MigrationCandidate struct {
 	StateBytes           []byte
 	TaskBytes            map[string][]byte
 	ContinuationNotes    []string
+	SourceStateSchema    int
 	NotesPath            string
 	NotesPresent         bool
 	NotesTemplateBytes   []byte
@@ -339,7 +340,7 @@ func buildLayout2MigrationCandidate(root string) (*Layout2MigrationCandidate, er
 
 	stateData, err := os.ReadFile(paths.StateFile)
 	if err != nil {
-		return nil, fmt.Errorf("read state: %w", fsCause(err))
+		return nil, fmt.Errorf("read state %s: %w", relPath(root, paths.StateFile), fsCause(err))
 	}
 	decodedState, _, err := decodeStateStrict(stateData)
 	if err != nil {
@@ -373,7 +374,8 @@ func buildLayout2MigrationCandidate(root string) (*Layout2MigrationCandidate, er
 		Marker:     Layout2Config{LayoutVersion: 2, SpecsDir: sourceMarker.SpecsDir, PlanningDir: sourceMarker.PlanningDir, StorageMode: StorageCommitted, ImplementationReviewMaxRounds: 1},
 		MarkerPath: markerRelPath(), StatePath: path.Join(paths.LogicalPlanningDir, "STATE.md"),
 		TaskBytes: taskBytes, ContinuationNotes: slices.Clone(decodedState.ContinuationNotes),
-		NotesPath: path.Join(paths.LogicalPlanningDir, notesFileName), NotesPresent: notesPresent,
+		SourceStateSchema: decodedState.SourceSchema,
+		NotesPath:         path.Join(paths.LogicalPlanningDir, notesFileName), NotesPresent: notesPresent,
 	}
 	if !notesPresent && len(decodedState.ContinuationNotes) > 0 {
 		candidate.NotesExtractionBytes, err = notesExtractionCandidate(root, paths.PlanningDir, decodedState.ContinuationNotes)
@@ -563,7 +565,11 @@ func refuseLegacyPolicyPath(root, planningDir string) error {
 	if err != nil {
 		return fmt.Errorf("inspect unsupported legacy input %s: %w", relPath(root, legacy), fsCause(err))
 	}
-	return fmt.Errorf("unsupported legacy input %s: remove it and record intended policy with taskrail task loop", relPath(root, legacy))
+	// The registry's `unsupported` names an input this binary will never act on:
+	// the entry is not parsed, migrated, or preserved, only removed by its owner.
+	return WithMachineErrorCode(MachineCodeUnsupported, fmt.Errorf(
+		"unsupported legacy input %s: remove it and record intended policy with taskrail task loop",
+		relPath(root, legacy)))
 }
 
 func renderStateBodyV2(state stateV2Frontmatter, tasks []*Task) string {

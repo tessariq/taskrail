@@ -214,7 +214,8 @@ func assertPathBlocked(t *testing.T, err error) {
 
 // The destination follows the configured planning directory, so a repository
 // that keeps planning elsewhere gets its sidecar there and never at the root
-// default.
+// default. The install request routes through the ordinary current-layout flow:
+// a plain apply would gate on the pending layout-2 upgrade instead.
 func TestNotesDestinationFollowsConfiguredPlanningDir(t *testing.T) {
 	t.Parallel()
 
@@ -222,7 +223,7 @@ func TestNotesDestinationFollowsConfiguredPlanningDir(t *testing.T) {
 	writeFile(t, markerFile(repo), "layout_version: 1\nspecs_dir: docs/specs\nplanning_dir: docs/planning\n")
 
 	svc := newTestService(t, repo, time.Date(2026, 3, 31, 12, 0, 0, 0, time.UTC))
-	if _, err := svc.Init(InitInput{Apply: true}); err != nil {
+	if _, err := svc.Init(InitInput{WithSkills: true, SkillVersion: "v0.1.0"}); err != nil {
 		t.Fatalf("init: %v", err)
 	}
 	if got := readFileString(t, filepath.Join(repo, "docs", "planning", notesFileName)); got != starterNotes() {

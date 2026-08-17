@@ -1,12 +1,12 @@
 ---
 id: T-279-preview-complete-layout-2-migration-decisions
 title: Preview complete layout 2 migration decisions
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#layout-compatibility-and-upgrade
 dependencies:
     - T-157-upgrade-repositories-transactionally-to-layout-2
-updated_at: "2026-08-08T14:23:08Z"
+updated_at: "2026-08-17T15:55:22Z"
 ---
 
 # T-279-preview-complete-layout-2-migration-decisions Preview complete layout 2 migration decisions
@@ -50,3 +50,6 @@ refresh eligibility, compatibility blockers, and quiescence requirements.
   verify quiescence is required only for a real upgrade.
 
 ## Implementation Notes
+
+- 2026-08-17T15:55:07Z: Exposed the complete read-only layout-2 upgrade preview through init on layout-1 repositories, with every operator gate (quiescence, continuation-note selection, combined skill refresh) validated before the pending durable publisher refuses to write.
+- 2026-08-17T15:55:22Z: verification pass

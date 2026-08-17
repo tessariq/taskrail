@@ -32,6 +32,7 @@ From there, the daily loop is `next → start → complete → verify` (see [Com
 - [Install](#install)
 - [Commands](#commands)
 - [Quickstart](#quickstart)
+- [Layout Upgrades](#layout-upgrades)
 - [What a Verification Leaves Behind](#what-a-verification-leaves-behind)
 - [State Contract](#state-contract)
 - [Repository Layout](#repository-layout)
@@ -146,7 +147,7 @@ Taskrail commands intentionally use different write conventions based on risk:
 | Class | Current examples | Effect |
 |---|---|---|
 | Read-only | `validate`, `status`, `stats`, `coverage`, `spec list/show/diff`, `lock status` | Inspect only; never rewrite tracked planning state. |
-| Mode-dependent initialization | `init` | Fresh, unmarked-standard, and current-layout adoption/repair paths may write immediately; detected migration or retrofit paths preview unless `--apply` is supplied. In v0.4, `--with-skills` may also install skills after any successful init result. |
+| Mode-dependent initialization | `init` | Fresh, unmarked-standard, and current-layout adoption/repair paths may write immediately; detected migration or retrofit paths preview unless `--apply` is supplied. In v0.4, `--with-skills` may also install skills after any successful init result. A repository at layout 1 reports the read-only layout 2 upgrade preview instead: the flagless invocation writes nothing, and `--apply` requires `--confirm-quiescent` plus the note and skill decisions the preview names. |
 | Preview by default | `retrofit`, `repair` | Report a candidate; `--apply` is the write opt-in. |
 | Apply with preview option | `task rename`, `task repoint`, `task dependency add/remove` | Write by default; `--dry-run` validates the candidate first. |
 | Lifecycle/state writers | `next`, `start`, `complete`, `block`, `unblock`, `verify`, `spec activate`, `task new` | Rewrite `STATE.md` and sometimes task files; inspect `git status` afterward. |
@@ -374,6 +375,31 @@ Typical flow:
 3. `next` to select deterministically, then `start`.
 4. `complete` the implementation.
 5. `verify` to record the outcome and leave artifacts — opening follow-up tasks as needed.
+
+## Layout Upgrades
+
+A repository whose layout marker sits at layout 1 has a read-only layout 2
+upgrade preview: plain `taskrail init` reports every operator decision the
+upgrade resolves before anything can apply — the complete candidate paths
+(marker, schema-2 state, preserved task files, notes sidecar), committed
+storage, the default broad review-round maximum, decoded continuation notes
+with their applicable `extract`/`drop` choices, and each installed skill's
+classification (parity mirrors stay marker-free; stamped copies normalize
+through a forced refresh). The preview writes nothing, and a blocking state —
+an `AUTONOMY.tsv` legacy entry at the configured planning path, an unsafe
+notes destination, or a divergent or conflicting skill copy — refuses with
+actionable guidance instead.
+
+Applying the upgrade is gated: `taskrail init --apply` requires
+`--confirm-quiescent` (your assertion that every older Taskrail process able
+to touch this repository or its linked-worktree storage has stopped), exactly
+one of `--extract-continuation-notes` or `--drop-continuation-notes` when
+decoded notes exist and neither when they do not, and the combined
+`--with-skills --force` whenever stamped skill copies require normalization.
+Until the durable migration publisher ships, a fully gated apply stops at an
+explicit refusal rather than writing anything. An explicit
+`init --with-skills` request on a layout 1 repository is served by the current
+layout, so skill installation keeps working independently of the upgrade.
 
 ## What a Verification Leaves Behind
 

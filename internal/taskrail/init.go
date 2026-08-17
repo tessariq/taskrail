@@ -29,6 +29,16 @@ func (s *Service) Init(in InitInput) (InitResult, error) {
 	if err != nil {
 		return InitResult{}, err
 	}
+	// An upgradable current layout routes to the layout-2 upgrade flow, with one
+	// interim bridge: an explicit skill-install request cannot be a write-free
+	// preview, so it keeps the ordinary current-layout flow adopters already
+	// rely on until the durable migration publisher owns the combined refresh.
+	if hasMarker && upgradableCurrentLayout(cfg) && (in.Apply || !in.WithSkills) {
+		return s.initLayout2Upgrade(in)
+	}
+	if err := rejectUpgradeOnlyInputs(in); err != nil {
+		return InitResult{}, err
+	}
 	plan := s.planInit(cfg, hasMarker, in.Apply)
 	result, err := s.reportInit(plan)
 	if err != nil {

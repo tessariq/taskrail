@@ -6,6 +6,23 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ### Added
 
+- `taskrail init` on a layout 1 repository now reports a complete, read-only
+  layout 2 upgrade preview (`migration_preview`, `from_version` 1,
+  `to_version` 2): the validated candidate paths (marker, schema-2 state,
+  byte-preserved task files, notes sidecar), committed storage mode, the
+  default broad review-round maximum, every decoded continuation note in order
+  with its applicable `extract`/`drop` choices, each installed skill's
+  classification, and the candidate's validation outcome — without changing
+  repository bytes. `init --apply` for the upgrade validates every operator
+  gate first — `--confirm-quiescent`, the continuation-note selection the
+  source makes applicable (unnecessary or already-schema-2 selections are
+  refused), and the combined `--with-skills --force` whenever stamped skill
+  copies require normalization — and until the durable migration publisher
+  ships it stops there with an explicit `unsupported` refusal instead of
+  writing. Legacy `AUTONOMY.tsv` entries at the configured planning path now
+  refuse the upgrade as `unsupported` with `task loop` guidance, and the
+  flagless preview keeps `init --with-skills` on a layout 1 repository served
+  by the current layout so skill installation is unchanged.
 - `taskrail recover <transaction-id> [--apply] [--json]` is the one command the
   recovery admission fence admits: it previews the single mechanically safe
   action a retained durable transaction derives (`restore_original`,

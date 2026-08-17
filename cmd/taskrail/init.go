@@ -12,6 +12,9 @@ func newInitCmd() *cobra.Command {
 	var apply bool
 	var withSkills bool
 	var forceSkills bool
+	var confirmQuiescent bool
+	var extractContinuationNotes bool
+	var dropContinuationNotes bool
 	cmd := &cobra.Command{
 		Use:   "init",
 		Short: "Initialize or upgrade Taskrail structure in the current repository",
@@ -22,21 +25,29 @@ func newInitCmd() *cobra.Command {
 			"dry run; pass --apply to write the changes. Retrofit scaffolds the " +
 			"Taskrail layout without moving existing content. Pass --with-skills to " +
 			"install the embedded repo-agnostic tracked-work skills; installing " +
-			"agent-tool directories is opt-in and never happens on a default init.",
+			"agent-tool directories is opt-in and never happens on a default init. " +
+			"A repository at layout 1 previews the read-only layout 2 upgrade: the " +
+			"preview resolves every operator decision before apply, and apply " +
+			"requires --confirm-quiescent plus the note and skill decisions the " +
+			"preview reports.",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return runCommand(cmd, func(svc *taskrail.Service) (commandResult, error) {
 				result, err := svc.Init(taskrail.InitInput{
-					Apply:        apply,
-					WithSkills:   withSkills,
-					ForceSkills:  forceSkills,
-					SkillVersion: version,
+					Apply:                    apply,
+					WithSkills:               withSkills,
+					ForceSkills:              forceSkills,
+					SkillVersion:             version,
+					ConfirmQuiescent:         confirmQuiescent,
+					ExtractContinuationNotes: extractContinuationNotes,
+					DropContinuationNotes:    dropContinuationNotes,
 				})
 				if err != nil {
-					if withSkills {
+					if withSkills && skillsTouched(result.SkillInstall) {
 						// Report what was installed before the failure so the user
 						// knows the partial state, then propagate the error. The
 						// layout is already on disk and the skill set is not, so
-						// this is a partial write rather than a refusal.
+						// this is a partial write rather than a refusal. A refusal
+						// before any install produced nothing to report.
 						fmt.Fprintln(cmd.ErrOrStderr(), skillsSummary(result.SkillInstall))
 					}
 					return commandResult{}, err
@@ -53,7 +64,17 @@ func newInitCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&apply, "apply", false, "apply a pending layout migration instead of a dry run")
 	cmd.Flags().BoolVar(&withSkills, "with-skills", false, "install the embedded repo-agnostic tracked-work skills (opt-in; installed paths are reported in both text and --json output)")
 	cmd.Flags().BoolVar(&forceSkills, "force", false, "with --with-skills, reinstall embedded skills over existing copies, backing up locally-modified files first")
+	cmd.Flags().BoolVar(&confirmQuiescent, "confirm-quiescent", false, "with --apply, assert every older Taskrail process able to touch this repository has stopped (required by the layout 2 upgrade)")
+	cmd.Flags().BoolVar(&extractContinuationNotes, "extract-continuation-notes", false, "with the layout 2 upgrade apply, import decoded continuation notes into the planning NOTES.md sidecar")
+	cmd.Flags().BoolVar(&dropContinuationNotes, "drop-continuation-notes", false, "with the layout 2 upgrade apply, drop decoded continuation notes instead of importing them")
 	return cmd
+}
+
+// skillsTouched reports whether an install attempt actually wrote, overwrote,
+// or backed up anything: only then is a failure path's summary evidence of a
+// partial install rather than a false claim about work that never ran.
+func skillsTouched(res taskrail.SkillInstallResult) bool {
+	return len(res.Written) > 0 || len(res.Overwritten) > 0 || len(res.BackedUp) > 0
 }
 
 // skillsSummary reports what --with-skills changed. Without --force a re-run is
@@ -84,26 +105,95 @@ func skillsSummary(res taskrail.SkillInstallResult) string {
 // re-run reminder when a migration is pending. The diff is rendered from the
 // reported write inventory, so a human and an agent read one set of facts.
 func initSummary(result taskrail.InitResult) string {
-	switch result.Outcome {
-	case taskrail.InitAdopted:
+	switch {
+	case result.Outcome == taskrail.InitMigrationPreview && result.ToVersion == 2 && result.FromVersion == 1:
+		return layout2PreviewSummary(result)
+	case result.Outcome == taskrail.InitAdopted:
 		return fmt.Sprintf("adopted existing layout; wrote marker (layout_version %d)", result.ToVersion)
-	case taskrail.InitCurrent:
+	case result.Outcome == taskrail.InitCurrent:
 		return fmt.Sprintf("taskrail structure already current (layout_version %d)", result.ToVersion)
-	case taskrail.InitMigrationPreview:
+	case result.Outcome == taskrail.InitMigrationPreview:
 		return fmt.Sprintf("migration available %d -> %d (dry run)\n%sre-run with --apply to migrate",
 			result.FromVersion, result.ToVersion, writeLines(result))
-	case taskrail.InitMigrated:
+	case result.Outcome == taskrail.InitMigrated:
 		return fmt.Sprintf("migrated layout %d -> %d\n%svalidation: %s",
 			result.FromVersion, result.ToVersion, writeLines(result), validationLabel(result.Validation))
-	case taskrail.InitRetrofitPreview:
+	case result.Outcome == taskrail.InitRetrofitPreview:
 		return fmt.Sprintf("non-standard layout detected; proposed mapping (dry run)\n%s%sexisting content is not moved; re-run with --apply to retrofit",
 			mappingLines(result.Mapping), writeLines(result))
-	case taskrail.InitRetrofitApplied:
+	case result.Outcome == taskrail.InitRetrofitApplied:
 		return fmt.Sprintf("retrofit applied (existing content was not moved)\n%s%svalidation: %s",
 			mappingLines(result.Mapping), writeLines(result), validationLabel(result.Validation))
 	default:
 		return "initialized taskrail structure"
 	}
+}
+
+// layout2PreviewSummary renders the complete layout-2 upgrade preview a human
+// acts on: what the migration would rewrite, the note decision it waits for,
+// which installed skills move with it, and every gate the apply demands.
+func layout2PreviewSummary(result taskrail.InitResult) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "layout 2 upgrade available %d -> %d (dry run)\n", result.FromVersion, result.ToVersion)
+	if result.Layout2Facts != nil {
+		fmt.Fprintf(&b, "storage: %s (specs at %s/, planning at %s/ beneath %s); implementation review rounds: %d\n",
+			result.StorageMode, result.Layout2Facts.SpecsDir, result.Layout2Facts.PlanningDir,
+			result.Layout2Facts.StorageRoot, result.Layout2Facts.ReviewMaxRounds)
+	}
+	b.WriteString(changeLines(upgradeChangeLines(result)))
+	if note := result.Notes[0]; len(note.ContinuationChoices) > 0 {
+		fmt.Fprintf(&b, "continuation notes: %d decoded; apply requires one of %s\n",
+			len(result.ContinuationNotes), strings.Join(flagNames(note.ContinuationChoices), " or "))
+	} else {
+		fmt.Fprintf(&b, "continuation notes: none to decide\n")
+	}
+	for _, skill := range result.Skills {
+		detail := ""
+		if skill.Action == "refresh" {
+			detail = " (apply requires --with-skills --force)"
+		}
+		fmt.Fprintf(&b, "  - %s %s%s\n", skill.Action, skill.Path, detail)
+	}
+	b.WriteString("apply requires --confirm-quiescent (all older Taskrail processes stopped)")
+	return b.String()
+}
+
+// upgradeChangeLines names the candidate paths the migration itself rewrites or
+// creates; preserved task files are summarized by count rather than listed,
+// because the answer to "what changes here?" must stay readable. The marker
+// rewrite changes layout_version while the state rewrite publishes state schema
+// 2, so each line names the version that actually moves.
+func upgradeChangeLines(result taskrail.InitResult) []string {
+	var changes []string
+	preserved := 0
+	for _, write := range result.Writes {
+		switch {
+		case write.Action == "create":
+			changes = append(changes, "create "+write.Path)
+		case write.Action == "refresh" && write.Kind == "state":
+			// The state rewrite publishes state schema 2 — the layout-2 preview
+			// this summary serves is defined by that schema, not by whichever
+			// layout version happens to pair with it.
+			changes = append(changes, fmt.Sprintf("update %s to state schema 2", write.Path))
+		case write.Action == "refresh":
+			changes = append(changes, fmt.Sprintf("update %s layout_version %d -> %d",
+				write.Path, result.FromVersion, result.ToVersion))
+		case write.Action == "preserve" && write.Kind == "task":
+			preserved++
+		}
+	}
+	if preserved > 0 {
+		changes = append(changes, fmt.Sprintf("preserve %d task file(s) byte-for-byte", preserved))
+	}
+	return changes
+}
+
+func flagNames(choices []string) []string {
+	names := make([]string, 0, len(choices))
+	for _, choice := range choices {
+		names = append(names, "--"+choice+"-continuation-notes")
+	}
+	return names
 }
 
 // writeLines lists the paths the outcome creates or rewrites. Paths it leaves
