@@ -5,6 +5,13 @@ Task: `{{TASK_ID}}`
 This is headless. Nobody can answer questions. Work only on this task, never run
 `taskrail next`, continue another task, or edit `scripts/autonomous-loop/`.
 
+You may be executing inside a private clone created by the runner's opt-in
+`--parallel` batch. Nothing about your contract changes: same scope,
+verification, lifecycle, and delivery-metadata rules, and the parent runner
+still owns Git delivery and queue mutation, refuses publication drift, and
+never retries workers. That temporary batch satisfies none of T-333, T-334, or
+T-335.
+
 Track these concise checkpoints with the available task-list tool. Do not mark a
 checkpoint complete without the evidence it names:
 

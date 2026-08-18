@@ -1,11 +1,11 @@
 ---
 id: T-336-run-bounded-parallel-batches-in-the-temporary-loop
 title: Run bounded parallel batches in the temporary loop
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#source-checkout-bootstrap-loop-retirement
 dependencies: []
-updated_at: "2026-08-18T22:30:19Z"
+updated_at: "2026-08-18T23:29:23Z"
 ---
 
 # T-336-run-bounded-parallel-batches-in-the-temporary-loop Run bounded parallel batches in the temporary loop
@@ -84,3 +84,6 @@ contracts, stays opt-in, and never claims product acceptance.
   with `plan.md` and `report.md`.
 
 ## Implementation Notes
+
+- 2026-08-18T23:28:15Z: Backported the bounded parallel batch onto the temporary loop: run.sh gains frozen --parallel/--clone-depth/--keep-workspaces flags with effective width min(parallel, iteration budget); parallel.sh implements frontier selection with per-row exclusion reasons, isolated shallow --no-local worker clones with seeded verified binaries, contained never-retried workers, serial cherry-pick replay with taskrail repair --apply STATE re-projection, one bounded integration child per semantic conflict, a full gate over the integration head, drift-refusing single fast-forward publication, retention-policy reporting, and post-batch hold-operator follow-up queue appends. Extracted queue.sh (and test-parallel.sh for fixtures) to respect the file-size ceiling; AGENTS.md and prompt.md document the batch and that it satisfies none of T-333, T-334, or T-335.
+- 2026-08-18T23:29:23Z: verification pass

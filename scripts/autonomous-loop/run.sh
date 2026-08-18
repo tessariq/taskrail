@@ -19,6 +19,12 @@ MODEL=""
 MODEL_SET=0
 EFFORT=""
 EFFORT_SET=0
+PARALLEL=1
+PARALLEL_SET=0
+CLONE_DEPTH=1
+CLONE_DEPTH_SET=0
+KEEP_WORKSPACES=failure
+KEEP_WORKSPACES_SET=0
 TMP_DIR=""
 CHILD_DIR=""
 LOCK_DIR=""
@@ -27,6 +33,8 @@ ACTIVE_PGID=""
 ACTIVE_WATCHDOG=""
 RUN_LOG=""
 INTERRUPTED=""
+WORKSPACE_ROOT=""
+BATCH_OUTCOME=""
 
 log() {
   printf '[autonomous-loop] %s\n' "$*"
@@ -47,12 +55,16 @@ cleanup() {
   fi
   [[ -z "$CHILD_DIR" ]] || rm -rf "$CHILD_DIR"
   [[ -z "$TMP_DIR" ]] || rm -rf "$TMP_DIR"
+  [[ -z "$WORKSPACE_ROOT" ]] || apply_workspace_retention
 }
 trap cleanup EXIT
 
 handle_interrupt() {
   INTERRUPTED="$1"
   [[ -z "$RUN_LOG" ]] || printf '[autonomous-loop] interrupted by %s\n' "$1" >>"$RUN_LOG"
+  if [[ -n "$WORKSPACE_ROOT" ]]; then
+    terminate_batch_workers
+  fi
   if [[ -n "$ACTIVE_PGID" ]]; then
     terminate_process_group "$ACTIVE_PGID"
     return
@@ -71,6 +83,7 @@ trap 'handle_interrupt HUP' HUP
 usage() {
   printf '%s\n' \
     'Usage: scripts/autonomous-loop/run.sh [--backend <claude|opencode>] [--model <model>] [--effort <level>] [--timeout <duration>] [--dry-run] [--max-iterations <n>]' \
+    '                                      [--parallel <n> [--clone-depth <positive|full>] [--keep-workspaces <never|failure|always>]]' \
     '       scripts/autonomous-loop/run.sh --resume-delivery <bundle-path>' \
     '       scripts/autonomous-loop/run.sh --check-queue' \
     '' \
@@ -133,6 +146,38 @@ while (($#)); do
       MAX_ITERATIONS="$2"
       shift 2
       ;;
+    --parallel)
+      (($# >= 2)) && [[ "$2" =~ ^[1-9][0-9]*$ ]] || die "--parallel requires a positive integer" 2
+      if [[ $PARALLEL_SET -eq 1 && "$PARALLEL" != "$2" ]]; then
+        die "conflicting --parallel values: $PARALLEL and $2" 2
+      fi
+      PARALLEL="$2"
+      PARALLEL_SET=1
+      shift 2
+      ;;
+    --clone-depth)
+      (($# >= 2)) && [[ "$2" == "full" || "$2" =~ ^[1-9][0-9]*$ ]] || \
+        die "--clone-depth requires a positive integer or full" 2
+      if [[ $CLONE_DEPTH_SET -eq 1 && "$CLONE_DEPTH" != "$2" ]]; then
+        die "conflicting --clone-depth values: $CLONE_DEPTH and $2" 2
+      fi
+      CLONE_DEPTH="$2"
+      CLONE_DEPTH_SET=1
+      shift 2
+      ;;
+    --keep-workspaces)
+      (($# >= 2)) || die "--keep-workspaces requires never, failure, or always" 2
+      case "$2" in
+        never|failure|always) ;;
+        *) die "invalid --keep-workspaces value '$2': expected never, failure, or always" 2 ;;
+      esac
+      if [[ $KEEP_WORKSPACES_SET -eq 1 && "$KEEP_WORKSPACES" != "$2" ]]; then
+        die "conflicting --keep-workspaces values: $KEEP_WORKSPACES and $2" 2
+      fi
+      KEEP_WORKSPACES="$2"
+      KEEP_WORKSPACES_SET=1
+      shift 2
+      ;;
     -h|--help)
       usage
       exit 0
@@ -145,6 +190,15 @@ done
 
 [[ "$MAX_ITERATIONS" =~ ^[1-9][0-9]*$ ]] || die "--max-iterations must be a positive integer" 2
 [[ $CHECK_QUEUE -eq 0 || $DRY_RUN -eq 0 ]] || die "--check-queue and --dry-run are mutually exclusive" 2
+# The frozen effective width composes --parallel with the remaining iteration
+# budget; width 1 must stay byte-identical to the sequential invocation.
+EFFECTIVE_WIDTH=$((MAX_ITERATIONS < PARALLEL ? MAX_ITERATIONS : PARALLEL))
+if ((EFFECTIVE_WIDTH == 1)); then
+  [[ $CLONE_DEPTH_SET -eq 0 ]] || die "--clone-depth requires an effective parallel width greater than 1" 2
+  [[ $KEEP_WORKSPACES_SET -eq 0 ]] || die "--keep-workspaces requires an effective parallel width greater than 1" 2
+else
+  [[ $CHECK_QUEUE -eq 0 ]] || die "--check-queue and --parallel are mutually exclusive" 2
+fi
 
 parse_duration() {
   local value="$1" digits amount unit multiplier
@@ -163,123 +217,11 @@ parse_duration() {
 }
 
 parse_duration "$TIMEOUT" || die "--timeout must be a positive duration using s, m, or h" 2
-if [[ -n "$RESUME_BUNDLE" && ($DRY_RUN -eq 1 || $CHECK_QUEUE -eq 1 || $BACKEND_SET -eq 1 || "$MAX_ITERATIONS" != "1" || "$TIMEOUT" != "2h") ]]; then
+if [[ -n "$RESUME_BUNDLE" && ($DRY_RUN -eq 1 || $CHECK_QUEUE -eq 1 || $BACKEND_SET -eq 1 || "$MAX_ITERATIONS" != "1" || "$TIMEOUT" != "2h" || $PARALLEL_SET -eq 1 || $CLONE_DEPTH_SET -eq 1 || $KEEP_WORKSPACES_SET -eq 1) ]]; then
   die "--resume-delivery cannot be combined with execution options" 2
 fi
 
-task_file() {
-  printf '%s/planning/tasks/%s.md\n' "$ROOT" "$1"
-}
-
-task_key() {
-  local id="$1"
-  [[ "$id" =~ ^(T-[0-9]+)(-|$) ]] || die "task id has no short task key: $id" 2
-  printf '%s\n' "${BASH_REMATCH[1]}"
-}
-
-task_field() {
-  local id="$1" field="$2" file
-  file="$(task_file "$id")"
-  [[ -f "$file" ]] || return 0
-  awk -v field="$field" '$1 == field ":" { sub(/^[^:]+:[[:space:]]*/, ""); print; exit }' "$file"
-}
-
-task_dependencies() {
-  local file
-  file="$(task_file "$1")"
-  [[ -f "$file" ]] || return 0
-  awk '
-    /^dependencies:[[:space:]]*\[\][[:space:]]*$/ { exit }
-    /^dependencies:[[:space:]]*$/ { in_dependencies = 1; next }
-    in_dependencies && /^[[:space:]]+-[[:space:]]+/ {
-      sub(/^[[:space:]]+-[[:space:]]+/, "")
-      print
-      next
-    }
-    in_dependencies { exit }
-  ' "$file"
-}
-
-declare -a QUEUE_IDS=()
-declare -A QUEUE_MODE=()
-declare -A QUEUE_REASON=()
-declare -A QUEUE_INDEX=()
-
-validate_queue() {
-  local header line line_no=1 id mode reason extra status spec_ref dep dep_status file open_count=0
-  QUEUE_IDS=()
-  QUEUE_MODE=()
-  QUEUE_REASON=()
-  QUEUE_INDEX=()
-
-  [[ -f "$QUEUE" ]] || die "queue missing: ${QUEUE#$ROOT/}" 2
-  IFS= read -r header <"$QUEUE" || die "queue is empty" 2
-  [[ "$header" == $'task_id\tmode\treason' ]] || die "invalid queue header" 2
-
-  while IFS= read -r line || [[ -n "$line" ]]; do
-    line_no=$((line_no + 1))
-    [[ -z "$line" || "$line" == \#* ]] && continue
-    [[ "$line" != *$'\r'* ]] || die "queue line $line_no contains CR bytes" 2
-    IFS=$'\t' read -r id mode reason extra <<<"$line"
-    [[ -n "$id" && -n "$mode" && -n "$reason" && -z "${extra:-}" ]] || \
-      die "queue line $line_no must contain exactly three non-empty tab-separated fields" 2
-    [[ -z "${QUEUE_INDEX[$id]+x}" ]] || die "duplicate task id in queue: $id" 2
-    [[ -f "$(task_file "$id")" ]] || die "queue task is missing: $id" 2
-    spec_ref="$(task_field "$id" spec_ref)"
-    [[ "${spec_ref%%#*}" == "specs/v0.5.0.md" ]] || die "queue task is off v0.5.0: $id" 2
-    case "$mode" in
-      run)
-        [[ "$reason" == "-" ]] || die "run row $id must use '-' reason" 2
-        # A child may not edit this directory, so a task scoped to it can only
-        # ever block. Catch it here instead of spending an agent attempt on it.
-        # Purely mechanical: the literal path in the task file, nothing inferred.
-        status="$(task_field "$id" status)"
-        if [[ "$status" != "completed" && "$status" != "cancelled" ]] &&
-          grep -qF 'scripts/autonomous-loop' "$(task_file "$id")"; then
-          die "run row $id is scoped to scripts/autonomous-loop, which a delegated child may not edit; make it hold-operator with a reason" 2
-        fi
-        ;;
-      hold-operator|hold-self-removal)
-        [[ "$reason" != "-" ]] || die "held row $id requires a reason" 2
-        ;;
-      *)
-        die "invalid queue mode for $id: $mode" 2
-        ;;
-    esac
-    QUEUE_INDEX["$id"]="${#QUEUE_IDS[@]}"
-    QUEUE_IDS+=("$id")
-    QUEUE_MODE["$id"]="$mode"
-    QUEUE_REASON["$id"]="$reason"
-  done < <(sed '1d' "$QUEUE")
-
-  ((${#QUEUE_IDS[@]} > 0)) || die "queue contains no task rows" 2
-
-  shopt -s nullglob
-  for file in "$ROOT"/planning/tasks/*.md; do
-    id="$(awk '$1 == "id:" { print $2; exit }' "$file")"
-    status="$(awk '$1 == "status:" { print $2; exit }' "$file")"
-    spec_ref="$(awk '$1 == "spec_ref:" { print $2; exit }' "$file")"
-    if [[ "${spec_ref%%#*}" == "specs/v0.5.0.md" && "$status" != "completed" && "$status" != "cancelled" ]]; then
-      open_count=$((open_count + 1))
-      [[ -n "${QUEUE_INDEX[$id]+x}" ]] || die "open v0.5.0 task missing from queue: $id" 2
-    fi
-  done
-  shopt -u nullglob
-
-  for id in "${QUEUE_IDS[@]}"; do
-    while IFS= read -r dep; do
-      [[ -n "$dep" ]] || continue
-      dep_status="$(task_field "$dep" status)"
-      [[ -n "$dep_status" ]] || die "$id has missing dependency $dep" 2
-      if [[ "$dep_status" != "completed" ]]; then
-        [[ -n "${QUEUE_INDEX[$dep]+x}" ]] || die "$id has unqueued incomplete dependency $dep" 2
-        ((${QUEUE_INDEX[$dep]} < ${QUEUE_INDEX[$id]})) || die "$id appears before incomplete dependency $dep" 2
-      fi
-    done < <(task_dependencies "$id")
-  done
-
-  log "queue valid: ${#QUEUE_IDS[@]} row(s), $open_count open v0.5.0 task(s)"
-}
+source "$LOOP_DIR/queue.sh"
 
 remote_main() {
   local output
@@ -431,6 +373,24 @@ git_control_snapshot() {
   } | sha256sum | awk '{print $1}'
 }
 
+build_agent_command() {
+  case "$BACKEND" in
+    claude)
+      agent_command=(
+        claude -p --permission-mode auto --add-dir "$CHILD_DIR"
+        --allowedTools "Bash($CHILD_DIR/taskrail-writer *)"
+      )
+      [[ -z "$MODEL" ]] || agent_command+=(--model "$MODEL")
+      [[ -z "$EFFORT" ]] || agent_command+=(--effort "$EFFORT")
+      ;;
+    opencode)
+      agent_command=(opencode run --auto)
+      [[ -z "$MODEL" ]] || agent_command+=(--model "$MODEL")
+      [[ -z "$EFFORT" ]] || agent_command+=(--variant "$EFFORT")
+      ;;
+  esac
+}
+
 write_taskrail_wrapper() {
   cat >"$CHILD_DIR/taskrail-writer" <<'EOF'
 #!/usr/bin/env bash
@@ -480,6 +440,7 @@ run_agent() {
     "${agent_command[@]}" <"$prompt" >"$output_fifo" 2>&1 &
   child_pid=$!
   ACTIVE_PGID="$child_pid"
+  [[ -z "${WORKER_PGID_FILE:-}" ]] || printf '%s\n' "$child_pid" >"$WORKER_PGID_FILE"
   runner_log "child pid=$child_pid backend=$BACKEND timeout=$TIMEOUT"
   setsid bash -c '
     sleep "$1"
@@ -518,6 +479,7 @@ candidate_tree() {
 }
 
 source "$LOOP_DIR/recovery.sh"
+source "$LOOP_DIR/parallel.sh"
 
 task_manifest() {
   local path
@@ -536,7 +498,7 @@ assert_other_tasks_unchanged() {
   done <"$manifest"
 }
 
-accept_followup() {
+validate_followup_shape() {
   local parent="$1" followup="$2" before_manifest="$3" path new_paths parent_spec before_paths
   local -a dependencies=()
   before_paths="$TMP_DIR/task-paths-before"
@@ -555,9 +517,19 @@ accept_followup() {
   mapfile -t dependencies < <(task_dependencies "$followup")
   [[ ${#dependencies[@]} -eq 1 && "${dependencies[0]}" == "$parent" ]] || die "$parent follow-up must depend only on its parent"
   ! grep -qE '^loop_(policy|reason):' "$path" || die "$parent follow-up must remain implicitly held"
+}
+
+append_followup_row() {
+  local parent="$1" followup="$2"
   printf '%s\t%s\t%s\n' "$followup" "hold-operator" "Verification follow-up from $parent; operator review required" >>"$QUEUE"
   validate_queue
   runner_log "queued held follow-up: $followup"
+}
+
+accept_followup() {
+  local parent="$1" followup="$2" before_manifest="$3"
+  validate_followup_shape "$parent" "$followup" "$before_manifest"
+  [[ -z "$followup" ]] || append_followup_row "$parent" "$followup"
 }
 
 run_iteration() {
@@ -588,21 +560,7 @@ run_iteration() {
   stamp="$(date -u +%Y%m%dT%H%M%SZ)"
   RUN_LOG="$RUNS_DIR/$stamp-$id-$$.log"
 
-  case "$BACKEND" in
-    claude)
-      agent_command=(
-        claude -p --permission-mode auto --add-dir "$CHILD_DIR"
-        --allowedTools "Bash($CHILD_DIR/taskrail-writer *)"
-      )
-      [[ -z "$MODEL" ]] || agent_command+=(--model "$MODEL")
-      [[ -z "$EFFORT" ]] || agent_command+=(--effort "$EFFORT")
-      ;;
-    opencode)
-      agent_command=(opencode run --auto)
-      [[ -z "$MODEL" ]] || agent_command+=(--model "$MODEL")
-      [[ -z "$EFFORT" ]] || agent_command+=(--variant "$EFFORT")
-      ;;
-  esac
+  build_agent_command
   command -v "${agent_command[0]}" >/dev/null 2>&1 || die "$BACKEND CLI not found"
   command -v setsid >/dev/null 2>&1 || die "setsid is required for bounded child execution" 2
 
@@ -714,6 +672,10 @@ else
   chmod 700 "$TMP_DIR" || die "cannot secure private runtime directory" 2
 fi
 preflight
+if ((EFFECTIVE_WIDTH > 1)); then
+  run_parallel_batch
+  exit 0
+fi
 select_task
 if [[ -z "$SELECTED_ID" ]]; then
   log "queue exhausted"

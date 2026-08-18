@@ -19,6 +19,41 @@
   provider-specific `--variant`, and leaves value validation to the selected CLI.
   For example, use `--backend claude --model opus --effort high` or
   `--backend opencode --model anthropic/claude-opus-4-1 --effort high`.
+- `--parallel <n>` opts into one bounded batch per invocation. The effective
+  width is the smaller of `<n>` and the `--max-iterations` budget; width `1` is
+  byte-identical to the sequential invocation and rejects the parallel-only
+  `--clone-depth` and `--keep-workspaces` flags. A batch selects one
+  dependency-ready frontier from `run` rows in queue order (todo status,
+  completed dependencies, never held rows), and refuses before creating any
+  workspace, clone, or child when the checkout is dirty, detached, bare, off
+  `main`, has a branch tip differing from `HEAD`, or fails the existing binary
+  freshness and queue preconditions. `--dry-run --parallel <n>` prints the
+  exact frontier, effective width, frozen base, workspace/clone/retention
+  policy, and the per-row reason every other open row was excluded, creating
+  nothing.
+- Each selected task runs in one private shallow clone (`--no-local
+  --single-branch --no-tags --depth 1`, overridable with `--clone-depth
+  <positive|full>`) beneath an invocation-private workspace root outside the
+  worktree. Workers never select work, never reach the source checkout or
+  another clone, and are never retried; the first failure launches no
+  replacement and no new frontier. Delivery is serial and local: one
+  integration clone at the frozen base replays accepted candidates in frontier
+  order into one commit each, re-projects `planning/STATE.md` through
+  `taskrail repair --apply`, and permits exactly one bounded integration child
+  per semantic conflict (which may not drop acceptance, delete a detecting
+  test, or integrate another candidate). The repository's full gate runs once
+  over the final integration head; publication re-verifies source cleanliness,
+  attached ref, and base `HEAD`, performs one non-force fast-forward plus the
+  ordinary push, and refuses on drift without reset, checkout overwrite,
+  rebase, or stash. Zero accepted candidates is a failed batch; failed
+  workspaces are retained per `--keep-workspaces never|failure|always`
+  (default `failure`) and retained paths never enter committed state. Queue
+  mutation stays parent-owned and post-batch: only exact fresh
+  verification-created follow-ups are appended as `hold-operator` inside the
+  owning candidate's integration commit. This bootstrap batch satisfies none
+  of T-333, T-334, or T-335; the product parallel tasks and tests remain
+  independently required, and the batch is removed with this directory at
+  retirement.
 - Agent attempts default to a two-hour timeout; override it with `--timeout 30m`
   or another positive `s`, `m`, or `h` duration. Timeout never retries. A valid
   terminal outcome interrupted before delivery names a private XDG-state bundle;
@@ -49,6 +84,9 @@
   temporary storage.
 - `recovery.sh` is sourced by the runner and contains only explicit XDG bundle
   publication and delivery-resume checks; it never launches or resumes an agent.
+- `queue.sh` (task-file parsing and queue validation) and `parallel.sh` (the
+  opt-in bounded batch) are likewise sourced by the runner; `test-parallel.sh`
+  is sourced by `test.sh` and holds the batch fixtures.
 - Keep the runner finite and fail-closed. Never add retries, automatic recovery,
   existing-task continuation, hook bypass, force push, fetch/pull/rebase, amend,
   reset, or hidden queue mutation. Delivery recovery is explicit, bundle-bound,

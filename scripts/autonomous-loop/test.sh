@@ -92,6 +92,8 @@ assert_review_prompt() {
   assert_contains "$name same-process correction" "$value" "inside this one child process; it is not another child launch or autonomous retry"
   assert_contains "$name child task key check" "$value" '[[ "$commit_subject" == *"(T-900)" ]]'
   assert_contains "$name parent validation backstop" "$value" "The parent independently revalidates both conditions"
+  assert_contains "$name batch clone context" "$value" "You may be executing inside a private clone"
+  assert_contains "$name batch non-satisfaction" "$value" "satisfies none of T-333, T-334, or T-335"
 }
 
 create_fixture() {
@@ -104,11 +106,13 @@ create_fixture() {
   cp "$PROMPT" "$root/scripts/autonomous-loop/prompt.md"
   cp "$SCRIPT_DIR/check-report.go" "$root/scripts/autonomous-loop/check-report.go"
   cp "$SCRIPT_DIR/recovery.sh" "$root/scripts/autonomous-loop/recovery.sh"
+  cp "$SCRIPT_DIR/queue.sh" "$root/scripts/autonomous-loop/queue.sh"
+  cp "$SCRIPT_DIR/parallel.sh" "$root/scripts/autonomous-loop/parallel.sh"
   cp "$SCRIPT_DIR/AGENTS.md" "$root/scripts/autonomous-loop/AGENTS.md"
   cp "$SCRIPT_DIR/CLAUDE.md" "$root/scripts/autonomous-loop/CLAUDE.md"
   cp "$SCRIPT_DIR/../check-commit-msg.sh" "$root/scripts/check-commit-msg.sh"
 
-  printf '%s\n' 'planning/artifacts/' >"$root/.gitignore"
+  printf '%s\n' 'planning/artifacts/' 'captures/' >"$root/.gitignore"
   printf '%s\n' '# Taskrail v0.5.0' '## Test Area' >"$root/specs/v0.5.0.md"
   printf '%s\n' 'id: T-900-fixture-task' 'status: todo' 'spec_ref: specs/v0.5.0.md#test-area' 'dependencies: []' >"$root/planning/tasks/T-900-fixture-task.md"
   printf '%s\n' 'id: T-901' 'status: todo' 'spec_ref: specs/v0.5.0.md#test-area' 'dependencies:' '    - T-900-fixture-task' >"$root/planning/tasks/T-901.md"
@@ -121,6 +125,10 @@ if [[ "${1:-}" == "validate" ]]; then
   printf '%s\n' 'state valid'
   exit 0
 fi
+if [[ "${1:-}" == "repair" && "${2:-}" == "--apply" ]]; then
+  printf '%s\n' 'active_spec_path: specs/v0.5.0.md' 'current_task: ""' 'projection: taskrail-repair' >planning/STATE.md
+  exit 0
+fi
 printf 'unexpected taskrail invocation: %s\n' "$*" >&2
 exit 2
 EOF
@@ -131,6 +139,13 @@ if [[ "$*" == *" go run "* ]]; then
   while [[ "${1:-}" != "go" ]]; do shift; done
   exec "$@"
 fi
+case " $* " in
+  *" gofmt -l "*) exit 0 ;;
+  *" go vet "* | *" go test "*)
+    printf '%s\n' "$*" >>"$AUTONOMOUS_TEST_ROOT/captures/gate-commands"
+    exit 0
+    ;;
+esac
 out=""
 while (($#)); do
   if [[ "$1" == "-o" ]]; then
@@ -149,6 +164,10 @@ if [[ "$*" == "taskrail:check" ]]; then
   [[ ! -e "$AUTONOMOUS_TEST_ROOT/captures/freshness-fail" ]]
   exit
 fi
+if [[ "$*" == "check:skills" || "$*" == "check:task-bodies" ]]; then
+  printf '%s\n' "$*" >>"$AUTONOMOUS_TEST_ROOT/captures/gate-commands"
+  exit 0
+fi
 printf 'unexpected task invocation: %s\n' "$*" >&2
 exit 2
 EOF
@@ -157,8 +176,32 @@ EOF
 #!/usr/bin/env bash
 printf '%s\n' "${AUTONOMOUS_TEST_BACKEND:-opencode}" >"$AUTONOMOUS_TEST_ROOT/captures/backend"
 printf '%s\n' "$*" >"$AUTONOMOUS_TEST_ROOT/captures/agent-args"
-cat >"$AUTONOMOUS_TEST_ROOT/captures/prompt"
+prompt="$(cat)"
+printf '%s\n' "$prompt" >"$AUTONOMOUS_TEST_ROOT/captures/prompt"
+if [[ "$prompt" == "You are resolving one Git cherry-pick conflict"* ]]; then
+  printf '%s\n' "$AUTONOMOUS_TASK_ID" >>"$AUTONOMOUS_TEST_ROOT/captures/integration-invocations"
+  if [[ "${AUTONOMOUS_TEST_ACTION:-}" == "conflict-unresolved" ]]; then
+    exit 0
+  fi
+  git diff --name-only --diff-filter=U | while IFS= read -r conflicted; do
+    printf 'merged %s\n' "$conflicted" >"$conflicted"
+  done
+  exit 0
+fi
 printf '%s\n' "$AUTONOMOUS_TASK_ID" >>"$AUTONOMOUS_TEST_ROOT/captures/agent-invocations"
+printf '%s\n' "$PWD" >>"$AUTONOMOUS_TEST_ROOT/captures/agent-cwd"
+id="$AUTONOMOUS_TASK_ID"
+if [[ "$id" =~ ^(T-[0-9]+) ]]; then key="${BASH_REMATCH[1]}"; else key="$id"; fi
+repo="$PWD"
+if [[ -n "${AUTONOMOUS_TEST_FAIL_TASK:-}" && "$id" == "$AUTONOMOUS_TEST_FAIL_TASK" ]]; then
+  exit 7
+fi
+if [[ -n "${AUTONOMOUS_TEST_HANG_TASK:-}" && "$id" == "$AUTONOMOUS_TEST_HANG_TASK" ]]; then
+  sleep 300 &
+  printf '%s\n' "$$ $!" >>"$AUTONOMOUS_TEST_ROOT/captures/hang-pids"
+  touch "$AUTONOMOUS_TEST_ROOT/captures/hang-ready"
+  wait
+fi
 if [[ "${AUTONOMOUS_TEST_AGENT_EXIT:-0}" != "0" ]]; then
   exit "$AUTONOMOUS_TEST_AGENT_EXIT"
 fi
@@ -171,28 +214,34 @@ case "${AUTONOMOUS_TEST_OUTCOME:-completed}" in
   *) status=completed; result=pass ;;
 esac
 if [[ "${AUTONOMOUS_TEST_ACTION:-}" == "in-progress-hang" ]]; then
-  printf '%s\n' 'id: T-900-fixture-task' 'status: in_progress' 'spec_ref: specs/v0.5.0.md#test-area' 'dependencies: []' >"$AUTONOMOUS_TEST_ROOT/planning/tasks/T-900-fixture-task.md"
-  printf '%s\n' 'active_spec_path: specs/v0.5.0.md' 'current_task: T-900-fixture-task' 'last_verification_result: none' >"$AUTONOMOUS_TEST_ROOT/planning/STATE.md"
+  printf '%s\n' "id: $id" 'status: in_progress' 'spec_ref: specs/v0.5.0.md#test-area' 'dependencies: []' >"$repo/planning/tasks/$id.md"
+  printf '%s\n' 'active_spec_path: specs/v0.5.0.md' "current_task: $id" 'last_verification_result: none' >"$repo/planning/STATE.md"
   sleep 300 &
   printf '%s\n' "$$ $!" >"$AUTONOMOUS_TEST_ROOT/captures/hang-pids"
   touch "$AUTONOMOUS_TEST_ROOT/captures/hang-ready"
   wait
 fi
-printf '%s\n' 'id: T-900-fixture-task' "status: $status" 'spec_ref: specs/v0.5.0.md#test-area' 'dependencies: []' >"$AUTONOMOUS_TEST_ROOT/planning/tasks/T-900-fixture-task.md"
-printf '%s\n' 'active_spec_path: specs/v0.5.0.md' 'current_task:' "last_verification_result: $result for T-900-fixture-task at 2026-08-08T00:00:00Z" >"$AUTONOMOUS_TEST_ROOT/planning/STATE.md"
+printf '%s\n' "id: $id" "status: $status" 'spec_ref: specs/v0.5.0.md#test-area' 'dependencies: []' >"$repo/planning/tasks/$id.md"
+printf '%s\n' 'active_spec_path: specs/v0.5.0.md' 'current_task:' "last_verification_result: $result for $id at 2026-08-08T00:00:00Z" >"$repo/planning/STATE.md"
+if [[ "${AUTONOMOUS_TEST_ACTION:-}" == "conflict" || "${AUTONOMOUS_TEST_ACTION:-}" == "conflict-unresolved" ]]; then
+  printf '%s\n' "content from $id" >"$repo/shared.txt"
+fi
+if [[ "${AUTONOMOUS_TEST_ACTION:-}" == "source-drift" ]]; then
+  printf '%s\n' drift >"$AUTONOMOUS_TEST_ROOT/drift.txt"
+fi
 if [[ "${AUTONOMOUS_TEST_ACTION:-}" == "index-refresh" ]]; then
-  touch -d '@1' "$AUTONOMOUS_TEST_ROOT/.gitignore"
+  touch -d '@1' "$repo/.gitignore"
   git status --short >/dev/null
 fi
 if [[ "${AUTONOMOUS_TEST_ACTION:-}" == "index-flag" ]]; then
   git update-index --assume-unchanged .gitignore
 fi
 if [[ "${AUTONOMOUS_TEST_ACTION:-}" == "unrelated-task" || "${AUTONOMOUS_TEST_ACTION:-}" == "unrelated-terminal-hang" ]]; then
-  printf '%s\n' 'id: T-901' 'status: todo' 'spec_ref: specs/v0.5.0.md#test-area' 'dependencies: []' >"$AUTONOMOUS_TEST_ROOT/planning/tasks/T-901.md"
+  printf '%s\n' 'id: T-901' 'status: todo' 'spec_ref: specs/v0.5.0.md#test-area' 'dependencies: []' >"$repo/planning/tasks/T-901.md"
 fi
-mkdir -p "$AUTONOMOUS_TEST_ROOT/planning/artifacts/verify/T-900-fixture-task/20260808T000000Z"
+mkdir -p "$repo/planning/artifacts/verify/$id/20260808T000000Z"
 if [[ "${AUTONOMOUS_TEST_ACTION:-}" == "forged-report" ]]; then
-  extra=',"unexpected":"pass for T-900-fixture-task"'
+  extra=",\"unexpected\":\"pass for $id\""
 elif [[ "${AUTONOMOUS_TEST_ACTION:-}" == "followup" ]]; then
   extra=',"details":"follow-up recommendation: run - independently useful fixture remediation","followup_task_id":"T-902"'
 elif [[ "${AUTONOMOUS_TEST_ACTION:-}" == "inline-followup" ]]; then
@@ -203,18 +252,23 @@ elif [[ "${AUTONOMOUS_TEST_ACTION:-}" == "unsupported-recommendation" ]]; then
   extra=',"details":"reviewed. follow-up recommendation: maybe - undecided mode","followup_task_id":"T-902"'
 elif [[ "${AUTONOMOUS_TEST_ACTION:-}" == "empty-recommendation" ]]; then
   extra=',"details":"reviewed. follow-up recommendation: hold - ","followup_task_id":"T-902"'
+elif [[ -n "${AUTONOMOUS_TEST_FOLLOWUP_TASK:-}" && "$id" == "$AUTONOMOUS_TEST_FOLLOWUP_TASK" ]]; then
+  extra=',"details":"follow-up recommendation: hold - operator review required","followup_task_id":"T-902"'
 else
   extra=''
 fi
-printf '%s\n' "{\"schema_version\":1,\"task_id\":\"T-900-fixture-task\",\"task_title\":\"Fixture\",\"result\":\"$result\",\"summary\":\"fixture\",\"generated_at\":\"2026-08-08T00:00:00Z\",\"spec_ref\":\"specs/v0.5.0.md#test-area\",\"artifacts\":[]$extra}" >"$AUTONOMOUS_TEST_ROOT/planning/artifacts/verify/T-900-fixture-task/20260808T000000Z/report.json"
+printf '%s\n' "{\"schema_version\":1,\"task_id\":\"$id\",\"task_title\":\"Fixture\",\"result\":\"$result\",\"summary\":\"fixture\",\"generated_at\":\"2026-08-08T00:00:00Z\",\"spec_ref\":\"specs/v0.5.0.md#test-area\",\"artifacts\":[]$extra}" >"$repo/planning/artifacts/verify/$id/20260808T000000Z/report.json"
+create_followup=0
 case "${AUTONOMOUS_TEST_ACTION:-}" in
   followup | unreported-followup | inline-followup | duplicate-recommendation | unsupported-recommendation | empty-recommendation) create_followup=1 ;;
-  *) create_followup=0 ;;
 esac
-if ((create_followup == 1)); then
-  printf '%s\n' 'id: T-902' 'status: todo' 'spec_ref: specs/v0.5.0.md#test-area' 'dependencies:' '    - T-900-fixture-task' >"$AUTONOMOUS_TEST_ROOT/planning/tasks/T-902.md"
+if [[ -n "${AUTONOMOUS_TEST_FOLLOWUP_TASK:-}" && "$id" == "$AUTONOMOUS_TEST_FOLLOWUP_TASK" ]]; then
+  create_followup=1
 fi
-printf '%s\n\n%s\n' "test: deliver $status fixture task (T-900)" \
+if ((create_followup == 1)); then
+  printf '%s\n' 'id: T-902' 'status: todo' 'spec_ref: specs/v0.5.0.md#test-area' 'dependencies:' "    - $id" >"$repo/planning/tasks/T-902.md"
+fi
+printf '%s\n\n%s\n' "test: deliver $status fixture task ($key)" \
   "Exercise the fixture's delivery path and preserve its expected outcome." >"$AUTONOMOUS_COMMIT_MESSAGE_FILE"
 if [[ "${AUTONOMOUS_TEST_ACTION:-}" == "invalid-commit-body" ]]; then
   printf '%s\n\n%073d\n' "test: reject invalid metadata (T-900)" 0 >"$AUTONOMOUS_COMMIT_MESSAGE_FILE"
@@ -449,7 +503,14 @@ rm "$root/fake-bin/opencode"
 git -C "$root" add fake-bin/opencode
 git -C "$root" commit -q -m 'test: remove OpenCode CLI'
 git -C "$root" push -q
-output="$(AUTONOMOUS_TEST_PATH="$root/fake-bin:/usr/bin:/bin" run_fixture "$root" --backend opencode --max-iterations 1)"
+# Build a restricted PATH that keeps the harness toolchain (modern bash, GNU
+# coreutils, setsid) but is guaranteed to lack an opencode binary.
+sysbin="$TMP_ROOT/sysbin-missing-backend-cli"
+mkdir -p "$sysbin"
+for tool in bash git sha256sum stat setsid mktemp sleep tee env; do
+  tool_path="$(command -v "$tool")" && ln -s "$tool_path" "$sysbin/$tool"
+done
+output="$(AUTONOMOUS_TEST_PATH="$root/fake-bin:$sysbin:/usr/bin:/bin" run_fixture "$root" --backend opencode --max-iterations 1)"
 rc=$?
 [[ $rc -eq 1 ]] || fail "missing backend CLI expected exit 1, got $rc"
 assert_contains "missing backend CLI" "$output" "opencode CLI not found"
@@ -822,6 +883,8 @@ rc=$?
 [[ $rc -eq 1 ]] || fail "child failure expected exit 1, got $rc"
 assert_contains "child failure backend" "$output" "claude exited 7"
 [[ "$(git -C "$root" rev-parse HEAD)" == "$before_head" ]] || fail "child failure created a commit"
+
+source "$SCRIPT_DIR/test-parallel.sh"
 
 if ((failures)); then
   printf '%d test(s) failed\n' "$failures" >&2
