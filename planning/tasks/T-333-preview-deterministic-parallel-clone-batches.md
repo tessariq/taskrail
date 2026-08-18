@@ -6,6 +6,7 @@ priority: high
 spec_ref: specs/v0.5.0.md#parallel-isolated-clone-batches
 dependencies:
     - T-308-publish-deterministic-loop-selection-and-dry-run
+    - T-314-integrate-loop-continuation-and-terminal
 updated_at: "2026-08-18T15:50:07Z"
 ---
 
