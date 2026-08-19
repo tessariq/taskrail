@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"os"
-	"path"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -351,10 +350,9 @@ func TestInitRefusesBlockedNotesDestination(t *testing.T) {
 	}
 }
 
-// A skill installation that fails partway is a partial write, and its envelope
-// has to name the files that landed: an agent reading only `--json` otherwise
-// has to scan the assistant directories to discover them.
-func TestInitPartialSkillInstallNamesTheWrittenPaths(t *testing.T) {
+// A blocked skill destination is discovered by the shared transaction before
+// publication. No earlier skill, backup, marker, or scaffold may leak out.
+func TestInitBlockedSkillInstallPublishesNothing(t *testing.T) {
 	repo := initGitRepo(t)
 	names, err := packagedSkillNames()
 	if err != nil {
@@ -365,12 +363,8 @@ func TestInitPartialSkillInstallNamesTheWrittenPaths(t *testing.T) {
 	}
 	first, second := names[0], names[1]
 
-	// The installer walks packaged file by packaged file, writing each into both
-	// assistant roots. Diverging the first skill's copy in the first root makes
-	// the forced refresh back it up and overwrite it; blocking only the second
-	// skill's subtree in the second root then fails the run after three
-	// destinations have already landed — out of path order, and with a backup
-	// beside them.
+	// Diverging one skill would normally create a backup and replacement. A later
+	// blocked subtree must prevent both from publishing.
 	diverged := filepath.Join(repo, shippableSkillTargets[0], first, skillFileName)
 	writeFile(t, diverged, "---\nname: edited\ndescription: edited\n---\n")
 	blocked := filepath.Join(repo, shippableSkillTargets[1], second)
@@ -383,37 +377,22 @@ func TestInitPartialSkillInstallNamesTheWrittenPaths(t *testing.T) {
 	requireReadOnlyDirBlocksWrites(t, blocked)
 	svc := newTestService(t, repo, time.Date(2026, 3, 31, 12, 0, 0, 0, time.UTC))
 
-	result, err := svc.Init(InitInput{WithSkills: true, ForceSkills: true, SkillVersion: "v9.9.9"})
+	before, readErr := os.ReadFile(diverged)
+	if readErr != nil {
+		t.Fatalf("read diverged skill: %v", readErr)
+	}
+	_, err = svc.Init(InitInput{WithSkills: true, ForceSkills: true, SkillVersion: "v9.9.9"})
 	if err == nil {
 		t.Fatal("a blocked skill subtree must fail the installation")
 	}
-	failure := MachineFailureFor(err)
-	if failure.Code != MachineCodePartialWrite {
-		t.Fatalf("error code = %q, want %q", failure.Code, MachineCodePartialWrite)
+	after, readErr := os.ReadFile(diverged)
+	if readErr != nil || !slices.Equal(before, after) {
+		t.Fatalf("diverged skill changed: err=%v", readErr)
 	}
-	if failure.Applied {
-		t.Fatal("a partial installation never reports the complete operation as committed")
+	if backups, globErr := filepath.Glob(diverged + ".bak.*"); globErr != nil || len(backups) != 0 {
+		t.Fatalf("failed transaction left backups %v, err=%v", backups, globErr)
 	}
-	// Exactly the destinations that landed, in path order — not the order the
-	// installer happened to reach them in, and not the recovery copy it took of
-	// the file it replaced.
-	want := []string{
-		path.Join(filepath.ToSlash(shippableSkillTargets[0]), first, skillFileName),
-		path.Join(filepath.ToSlash(shippableSkillTargets[0]), second, skillFileName),
-		path.Join(filepath.ToSlash(shippableSkillTargets[1]), first, skillFileName),
-	}
-	if !slices.Equal(failure.Paths, want) {
-		t.Fatalf("reported paths = %v, want %v (installed %+v)", failure.Paths, want, result.SkillInstall)
-	}
-	if len(result.SkillInstall.BackedUp) != 1 {
-		t.Fatalf("scenario did not produce the backup it relies on: %+v", result.SkillInstall)
-	}
-	for _, reported := range failure.Paths {
-		if strings.Contains(reported, ".bak.") {
-			t.Fatalf("reported path %q is a recovery copy, not a written destination", reported)
-		}
-		if _, statErr := os.Stat(filepath.Join(repo, filepath.FromSlash(reported))); statErr != nil {
-			t.Fatalf("reported path %q is not on disk: %v", reported, statErr)
-		}
+	if _, statErr := os.Stat(markerFile(repo)); !os.IsNotExist(statErr) {
+		t.Fatalf("failed transaction published marker: %v", statErr)
 	}
 }

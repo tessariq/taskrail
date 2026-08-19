@@ -6,6 +6,12 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ### Added
 
+- Fresh/adopted `taskrail init` and `taskrail retrofit --apply` now publish
+  their complete marker, scaffold, note, and optional skill sets through one
+  repository-locked normal transaction. Concurrent destination or source edits
+  refuse with `write_conflict`, handled publication failures restore original
+  bytes without overwriting external edits, and previews recheck their inputs
+  while remaining free of lock and transaction artifacts.
 - The inherited task mutation writers now publish through one locked normal
   transaction each: `task new`, `task rename`, `task repoint`, and
   `task dependency add|remove` acquire the repository mutation lock, snapshot

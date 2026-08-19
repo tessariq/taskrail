@@ -58,8 +58,18 @@ func TestStatusReportsExplicitLocalStorage(t *testing.T) {
 // tasks; the machine contract here only needs a context to report through.
 func newLocalTestService(t *testing.T, repo string, now time.Time) *Service {
 	t.Helper()
+	git, err := discoverGitWorktree(repo)
+	if err != nil {
+		t.Fatalf("discover lock context: %v", err)
+	}
+	paths := pathsFromLayout(repo, defaultLayoutConfig(), localStorage())
+	paths.ManagedRoot = repo
+	paths.WorktreeRoot = git.WorktreeRoot
+	paths.GitDir = git.GitDir
+	paths.GitCommonDir = git.GitCommonDir
+	paths.LockRoot = filepath.Join(git.GitCommonDir, "taskrail")
 	return &Service{
-		paths: pathsFromLayout(repo, defaultLayoutConfig(), localStorage()),
+		paths: paths,
 		now:   func() time.Time { return now },
 	}
 }

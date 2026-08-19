@@ -1,13 +1,13 @@
 ---
 id: T-234-protect-repository-and-planning-writers
 title: Protect init and retrofit writers transactionally
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#repository-discovery-locking-and-recovery
 dependencies:
     - T-277-add-durable-transaction-journals-and-recovery
     - T-157-upgrade-repositories-transactionally-to-layout-2
-updated_at: "2026-08-06T13:46:30Z"
+updated_at: "2026-08-19T23:19:29Z"
 ---
 
 # T-234-protect-repository-and-planning-writers Protect init and retrofit writers transactionally
@@ -40,3 +40,6 @@ durability. Repair/spec and ImportDraft v1 publication are separate slices.
 - Compare filesystem, Git index, and lock-root digests around every preview path.
 
 ## Implementation Notes
+
+- 2026-08-19T23:19:17Z: Published fresh/adopted init and retrofit scaffolds through locked normal transactions with stable previews, pre-publication validation, conflict-safe rollback, and backup-first skill refresh.
+- 2026-08-19T23:19:29Z: verification pass

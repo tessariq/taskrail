@@ -202,7 +202,7 @@ func recheck(entries []*entry) error {
 // the recheck but before this file's turn would otherwise be overwritten with no
 // trace. A mismatch aborts, and the caller rolls back what already landed.
 func publish(ctx context.Context, root string, entries []*entry) error {
-	for _, e := range entries {
+	for _, e := range publicationPlan(entries) {
 		if e.candidate == nil {
 			continue
 		}
@@ -234,6 +234,19 @@ func publish(ctx context.Context, root string, entries []*entry) error {
 		}
 	}
 	return nil
+}
+
+func publicationPlan(entries []*entry) []*entry {
+	ordered := make([]*entry, 0, len(entries))
+	for _, entry := range entries {
+		if entry.candidate != nil {
+			ordered = append(ordered, entry)
+		}
+	}
+	slices.SortStableFunc(ordered, func(a, b *entry) int {
+		return a.candidate.PublishPriority - b.candidate.PublishPriority
+	})
+	return ordered
 }
 
 // candidateDigest is the digest a published entry now holds: nil for a
@@ -277,8 +290,9 @@ func holdsCandidate(e *entry, state *fileState) bool {
 func rollback(root string, entries []*entry, cause error) *Error {
 	preserved := make([]string, 0)
 	problems := []error{cause}
-	for i := len(entries) - 1; i >= 0; i-- {
-		e := entries[i]
+	ordered := publicationPlan(entries)
+	for i := len(ordered) - 1; i >= 0; i-- {
+		e := ordered[i]
 		if !e.published {
 			continue
 		}

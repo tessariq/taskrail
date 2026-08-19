@@ -55,6 +55,9 @@ type Path struct {
 type Candidate struct {
 	Path
 	Content []byte
+	// PublishPriority orders semantic publication without changing snapshot and
+	// diagnostic ordering. Lower priorities publish first and roll back last.
+	PublishPriority int
 	// Remove publishes the path's absence instead of bytes: publication
 	// removes the file (an already-absent path is a no-op, mirroring
 	// restore's leniency), and a rollback restores the snapshot's original
@@ -110,6 +113,9 @@ func (r Request) validate() error {
 		return fmt.Errorf("transaction %q publishes nothing", r.Command)
 	}
 	for _, candidate := range r.Published {
+		if candidate.PublishPriority < 0 {
+			return fmt.Errorf("transaction %q assigns negative publication priority to %s", r.Command, candidate.Reported)
+		}
 		if candidate.Remove && len(candidate.Content) > 0 {
 			return fmt.Errorf("transaction %q both removes and publishes bytes for %s path %q",
 				r.Command, candidate.Kind, candidate.Reported)

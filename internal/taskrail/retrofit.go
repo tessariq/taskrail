@@ -2,6 +2,7 @@ package taskrail
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 )
 
@@ -14,7 +15,8 @@ import (
 // validation. It defaults to a dry run and never overwrites existing files.
 
 // RetrofitInput drives one guided retrofit. NotesPath is an optional human-notes
-// markdown file (repo-relative or absolute) imported as a planning bootstrap;
+// markdown file (repo-relative or an absolute path within the repository)
+// imported as a planning bootstrap;
 // Apply switches from the default dry run to writing the scaffold.
 type RetrofitInput struct {
 	NotesPath string
@@ -41,6 +43,13 @@ type RetrofitResult struct {
 // files under specs/ and planning/ survive untouched, and the notes file is only
 // read.
 func (s *Service) Retrofit(input RetrofitInput) (RetrofitResult, error) {
+	if err := s.validateRetrofitNotesSource(input.NotesPath); err != nil {
+		return RetrofitResult{}, err
+	}
+	previewSnapshot, err := s.snapshotInitPreview(input.NotesPath)
+	if err != nil {
+		return RetrofitResult{}, err
+	}
 	_, hasMarker, err := readMarker(s.paths.RepoRoot)
 	if err != nil {
 		return RetrofitResult{}, err
@@ -65,33 +74,31 @@ func (s *Service) Retrofit(input RetrofitInput) (RetrofitResult, error) {
 	changes := append(pending, markerWriteChange())
 
 	if !input.Apply {
+		if testHookInitPreviewBuilt != nil {
+			testHookInitPreviewBuilt()
+		}
+		if err := s.recheckInitPreview(previewSnapshot, input.NotesPath); err != nil {
+			return RetrofitResult{}, err
+		}
 		return RetrofitResult{Mapping: mapping, Bootstrap: bootstrap, Changes: changes}, nil
 	}
-
-	validation, err := s.applyLayout(defaultLayoutConfig())
-	if err != nil {
-		return RetrofitResult{}, err
-	}
-	return RetrofitResult{
-		Applied:    true,
-		Mapping:    mapping,
-		Bootstrap:  bootstrap,
-		Changes:    changes,
-		Validation: &validation,
-	}, nil
+	return s.applyRetrofitTransaction(input)
 }
 
-// applyLayout is retrofit's apply tail: create the current layout idempotently,
-// persist the given marker, and re-run validation. It only ever adds missing
-// content, so human-authored files survive.
-func (s *Service) applyLayout(marker LayoutConfig) (ValidationResult, error) {
-	if err := s.ensureLayout(); err != nil {
-		return ValidationResult{}, err
+func (s *Service) validateRetrofitNotesSource(source string) error {
+	if strings.TrimSpace(source) == "" {
+		return nil
 	}
-	if err := writeMarker(s.paths.RepoRoot, marker); err != nil {
-		return ValidationResult{}, err
+	physical := source
+	if !filepath.IsAbs(physical) {
+		physical = filepath.Join(s.paths.RepoRoot, physical)
 	}
-	return s.Validate()
+	relative, err := filepath.Rel(s.paths.RepoRoot, filepath.Clean(physical))
+	if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+		return WithMachineErrorCode(MachineCodePathBlocked,
+			fmt.Errorf("retrofit notes source must be within the repository"))
+	}
+	return nil
 }
 
 // markerWriteChange describes writing the current marker, used in dry-run diffs.

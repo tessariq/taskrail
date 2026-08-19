@@ -25,6 +25,10 @@ import (
 // The reported plan is computed before the first write, which is what lets a
 // preview and the apply that follows it name the same candidate paths.
 func (s *Service) Init(in InitInput) (InitResult, error) {
+	previewSnapshot, err := s.snapshotInitPreview("")
+	if err != nil {
+		return InitResult{}, err
+	}
 	cfg, hasMarker, err := readMarker(s.paths.RepoRoot)
 	if err != nil {
 		return InitResult{}, err
@@ -34,7 +38,17 @@ func (s *Service) Init(in InitInput) (InitResult, error) {
 	// preview, so it keeps the ordinary current-layout flow adopters already
 	// rely on until the durable migration publisher owns the combined refresh.
 	if hasMarker && upgradableCurrentLayout(cfg) && (in.Apply || !in.WithSkills) {
-		return s.initLayout2Upgrade(in)
+		result, err := s.initLayout2Upgrade(in)
+		if err != nil || result.Applied {
+			return result, err
+		}
+		if testHookInitPreviewBuilt != nil {
+			testHookInitPreviewBuilt()
+		}
+		if err := s.recheckInitPreview(previewSnapshot, ""); err != nil {
+			return InitResult{}, err
+		}
+		return result, nil
 	}
 	if err := rejectUpgradeOnlyInputs(in); err != nil {
 		return InitResult{}, err
@@ -44,12 +58,16 @@ func (s *Service) Init(in InitInput) (InitResult, error) {
 	if err != nil {
 		return InitResult{}, err
 	}
-	validation, err := s.applyInitPlan(plan)
-	if err != nil {
-		return InitResult{}, err
+	if !plan.applied {
+		if testHookInitPreviewBuilt != nil {
+			testHookInitPreviewBuilt()
+		}
+		if err := s.recheckInitPreview(previewSnapshot, ""); err != nil {
+			return InitResult{}, err
+		}
+		return result, nil
 	}
-	result.Validation = validation
-	return s.installInitSkills(in, result)
+	return s.applyInitTransaction(in)
 }
 
 // initPlan is everything init decided from the pre-write repository: which
@@ -163,31 +181,6 @@ func migratedMarker(cfg LayoutConfig) LayoutConfig {
 		migrated.PlanningDir = defaultPlanningDir
 	}
 	return migrated
-}
-
-// applyInitPlan performs the writes the plan selected and returns the validation
-// the outcome re-runs, or nil where it runs none. Both write steps only add
-// missing content or rewrite the machine-owned marker, so human-authored files
-// survive every outcome.
-func (s *Service) applyInitPlan(plan initPlan) (*ValidationResult, error) {
-	if plan.scaffolds {
-		if err := s.ensureLayout(); err != nil {
-			return nil, err
-		}
-	}
-	if plan.writesMarker {
-		if err := writeMarker(s.paths.RepoRoot, plan.marker); err != nil {
-			return nil, err
-		}
-	}
-	if !plan.validates {
-		return nil, nil
-	}
-	validation, err := s.Validate()
-	if err != nil {
-		return nil, err
-	}
-	return &validation, nil
 }
 
 // reportInit builds the machine result from the pre-write repository. Every
@@ -377,42 +370,6 @@ func (s *Service) continuationNotes() []string {
 		return []string{}
 	}
 	return append([]string{}, state.Frontmatter.ContinuationNotes...)
-}
-
-// installInitSkills materializes the packaged skills when they were asked for,
-// and reports the resulting inventory. A failed installation is a partial write,
-// never a successful outcome carrying a refusal: the caller receives the partial
-// result alongside the error so it can report what landed.
-func (s *Service) installInitSkills(in InitInput, result InitResult) (InitResult, error) {
-	if !in.WithSkills {
-		return result, nil
-	}
-	installed, installErr := s.WriteShippableSkills(in.SkillVersion, in.ForceSkills)
-	result.SkillInstall = installed
-	skills, exclusions, err := s.skillReport(installed)
-	if err != nil {
-		return result, err
-	}
-	result.Skills, result.SkillExclusions = skills, exclusions
-	if installErr != nil {
-		// The envelope names the skill files that landed before the failure, so an
-		// agent reading only `--json` learns the partial state instead of having to
-		// scan the assistant directories for it.
-		return result, WithMachineFailure(MachineFailure{
-			Code:  MachineCodePartialWrite,
-			Paths: installedSkillPaths(installed),
-		}, installErr)
-	}
-	return result, nil
-}
-
-// installedSkillPaths are the destinations this installation actually wrote,
-// created and refreshed alike. Backups are deliberately excluded: they are
-// recovery copies of what was there before, not part of the interrupted write.
-func installedSkillPaths(installed SkillInstallResult) []string {
-	paths := append(slices.Clone(installed.Written), installed.Overwritten...)
-	slices.Sort(paths)
-	return paths
 }
 
 // retrofitCandidates lists the source directory names a non-standard repository

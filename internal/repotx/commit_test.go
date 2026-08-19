@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/tessariq/taskrail/internal/repolock"
@@ -65,6 +66,33 @@ func TestCommitPublishesTheCompleteWriteSet(t *testing.T) {
 		t.Fatal("a consumed path reported a candidate digest")
 	}
 	wantDigest(t, spec.CurrentSHA256, "spec", "consumed current")
+}
+
+func TestCommitHonorsPublicationPriorityWithoutChangingEvidenceOrder(t *testing.T) {
+	repo := newRepository(t)
+	lock := acquire(t, repo, ownerCapability())
+	seed(t, repo, "skills/SKILL.md.aaa", "consumed")
+	backup := managed(repo, "skills/SKILL.md.bak", "original")
+	replacement := managed(repo, "skills/SKILL.md", "replacement")
+	replacement.PublishPriority = 1
+	var published []string
+	testHookAfterPublish = func(path Path) { published = append(published, path.Reported) }
+	t.Cleanup(func() { testHookAfterPublish = nil })
+
+	result, err := Commit(context.Background(), lock, Request{
+		Command:   "complete",
+		Consumed:  []Path{{Kind: Managed, Reported: "skills/SKILL.md.aaa", Physical: filepath.Join(repo.Root, "skills", "SKILL.md.aaa")}},
+		Published: []Candidate{replacement, backup},
+	})
+	if err != nil {
+		t.Fatalf("commit: %v", err)
+	}
+	if got, want := published, []string{"skills/SKILL.md.bak", "skills/SKILL.md"}; !slices.Equal(got, want) {
+		t.Fatalf("publication order = %v, want %v", got, want)
+	}
+	if result.Snapshots[0].Path != "skills/SKILL.md" || result.Snapshots[1].Path != "skills/SKILL.md.aaa" || result.Snapshots[2].Path != "skills/SKILL.md.bak" {
+		t.Fatalf("evidence order changed: %+v", result.Snapshots)
+	}
 }
 
 // A1: the complete candidate is validated before the first write, and the
