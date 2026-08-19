@@ -47,7 +47,11 @@
   ordinary push, and refuses on drift without reset, checkout overwrite,
   rebase, or stash. Zero accepted candidates is a failed batch; failed
   workspaces are retained per `--keep-workspaces never|failure|always`
-  (default `failure`) and retained paths never enter committed state. Queue
+  (default `failure`) and retained paths never enter committed state. Worker
+  transcripts are copied to ignored `planning/artifacts/runs/` after
+  termination and again during cleanup, so interruption preserves every started
+  worker's available agent messages and tool output even when retention is `never`.
+  Queue
   mutation stays parent-owned and post-batch: only exact fresh
   verification-created follow-ups are appended as `hold-operator` inside the
   owning candidate's integration commit. This bootstrap batch satisfies none

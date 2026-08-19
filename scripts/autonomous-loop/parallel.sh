@@ -28,6 +28,16 @@ terminate_batch_workers() {
   done
 }
 
+archive_batch_worker_logs() {
+  local id ws
+  [[ -n "$BATCH_STAMP" && -d "$RUNS_DIR" ]] || return 0
+  for id in "${FRONTIER[@]}"; do
+    ws="${WORKSPACE_FOR[$id]:-}"
+    [[ -n "$ws" && -f "$ws/worker.log" ]] || continue
+    cp "$ws/worker.log" "$RUNS_DIR/$BATCH_STAMP-worker-$id.log" 2>/dev/null || true
+  done
+}
+
 apply_workspace_retention() {
   local id ws keep_root=0
   [[ -n "$WORKSPACE_ROOT" && -d "$WORKSPACE_ROOT" ]] || return 0
@@ -172,7 +182,7 @@ create_batch_clone() {
     # OpenCode records the attached HEAD here before running. Seed the exact
     # marker before the worker freezes Git control state so all later changes
     # remain fail-closed instead of rejecting OpenCode's deterministic marker.
-    printf '%s\n' "$BATCH_BASE_HEAD" >"$ws/clone/.git/opencode" || \
+    printf '%s' "$BATCH_BASE_HEAD" >"$ws/clone/.git/opencode" || \
       die "cannot seed OpenCode Git marker for $id" 2
   fi
   mkdir -p "$ws/clone/bin" || die "cannot seed clone binary directory for $id" 2

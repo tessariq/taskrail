@@ -198,6 +198,40 @@ assert_pids_dead "batch timeout" "$root/captures/hang-pids"
 [[ "$(git -C "$root" rev-list --count "$before_head..HEAD")" == "1" ]] || fail "batch timeout did not deliver the surviving candidate"
 [[ "$(wc -l <"$root/captures/agent-invocations")" == "2" ]] || fail "batch timeout retried a worker"
 
+root="$(create_fixture batch-interruption-logs)"
+prepare_batch_fixture "$root"
+before_head="$(git -C "$root" rev-parse HEAD)"
+fixture_path="$root/fake-bin:$PATH"
+PATH="$fixture_path" AUTONOMOUS_TEST_ROOT="$root" XDG_STATE_HOME="$TMP_ROOT/xdg-batch-interruption-logs" \
+  AUTONOMOUS_TEST_BINARY="$root/bin/taskrail" AUTONOMOUS_TEST_AGENT_EXIT=0 \
+  AUTONOMOUS_TEST_OUTCOME=completed AUTONOMOUS_TEST_ACTION='' AUTONOMOUS_TEST_HANG_TASK=T-903 \
+  "$root/scripts/autonomous-loop/run.sh" --parallel 2 --max-iterations 2 --timeout 30s \
+  --keep-workspaces never >"$TMP_ROOT/batch-interruption-output" 2>&1 &
+runner_pid=$!
+for _ in $(seq 1 100); do
+  [[ -e "$root/captures/hang-ready" ]] && break
+  sleep 0.1
+done
+[[ -e "$root/captures/hang-ready" ]] || fail "batch interruption fixture did not become ready"
+kill -TERM "$runner_pid" 2>/dev/null || true
+wait "$runner_pid"
+rc=$?
+[[ $rc -ne 0 ]] || fail "interrupted batch unexpectedly succeeded"
+output="$(<"$TMP_ROOT/batch-interruption-output")"
+batch_log="$(printf '%s\n' "$root"/planning/artifacts/runs/*-batch-*.log)"
+[[ -f "$batch_log" ]] || fail "interrupted batch did not preserve its coordinator log"
+if [[ -f "$batch_log" ]]; then
+  assert_contains "batch interruption" "$(<"$batch_log")" "interrupted by TERM"
+fi
+assert_pids_dead "batch interruption" "$root/captures/hang-pids"
+interrupted_log="$(printf '%s\n' "$root"/planning/artifacts/runs/*-worker-T-903.log)"
+[[ -f "$interrupted_log" ]] || fail "interrupted batch did not archive the running worker transcript"
+if [[ -f "$interrupted_log" ]]; then
+  assert_contains "batch interruption transcript" "$(<"$interrupted_log")" "fixture transcript before hang: T-903"
+fi
+[[ "$(git -C "$root" rev-parse HEAD)" == "$before_head" ]] || fail "batch interruption created a commit"
+assert_not_contains "batch interruption retention" "$output" "retained failed workspace"
+
 root="$(create_fixture batch-conflict)"
 prepare_batch_fixture "$root"
 before_head="$(git -C "$root" rev-parse HEAD)"

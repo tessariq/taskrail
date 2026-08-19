@@ -55,7 +55,10 @@ cleanup() {
   fi
   [[ -z "$CHILD_DIR" ]] || rm -rf "$CHILD_DIR"
   [[ -z "$TMP_DIR" ]] || rm -rf "$TMP_DIR"
-  [[ -z "$WORKSPACE_ROOT" ]] || apply_workspace_retention
+  if [[ -n "$WORKSPACE_ROOT" ]]; then
+    archive_batch_worker_logs
+    apply_workspace_retention
+  fi
 }
 trap cleanup EXIT
 

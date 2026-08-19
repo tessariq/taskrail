@@ -198,6 +198,7 @@ if [[ -n "${AUTONOMOUS_TEST_FAIL_TASK:-}" && "$id" == "$AUTONOMOUS_TEST_FAIL_TAS
   exit 7
 fi
 if [[ -n "${AUTONOMOUS_TEST_HANG_TASK:-}" && "$id" == "$AUTONOMOUS_TEST_HANG_TASK" ]]; then
+  printf 'fixture transcript before hang: %s\n' "$id"
   sleep 300 &
   printf '%s\n' "$$ $!" >>"$AUTONOMOUS_TEST_ROOT/captures/hang-pids"
   touch "$AUTONOMOUS_TEST_ROOT/captures/hang-ready"
@@ -210,7 +211,7 @@ if [[ "${AUTONOMOUS_TEST_ACTION:-}" == "git-config" ]]; then
   git config user.name Mutated
 fi
 if [[ "${AUTONOMOUS_TEST_ACTION:-}" == "opencode-marker" ]]; then
-  printf '%s\n' "$(git rev-parse HEAD)" >.git/opencode
+  printf '%s' "$(git rev-parse HEAD)" >.git/opencode
 fi
 case "${AUTONOMOUS_TEST_OUTCOME:-completed}" in
   blocked) status=blocked; result=fail ;;
