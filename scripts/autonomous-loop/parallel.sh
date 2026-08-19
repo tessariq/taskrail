@@ -537,6 +537,7 @@ run_parallel_batch() {
   runner_log "parallel batch: width ${#FRONTIER[@]} of requested $PARALLEL at base $BATCH_BASE_HEAD"
 
   WORKSPACE_ROOT="$(mktemp -d)" || die "cannot create batch workspace root" 2
+  WORKSPACE_ROOT="$(cd "$WORKSPACE_ROOT" && pwd -P)" || die "cannot canonicalize batch workspace root" 2
   chmod 700 "$WORKSPACE_ROOT"
 
   # Every clone is created and proven isolated before any worker launches, so
