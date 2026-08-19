@@ -175,7 +175,9 @@ recommendation, and unresolved risks. Do not quote reviewer responses verbatim.
 Leave intended code, tests, docs, task files, and CLI-regenerated `planning/STATE.md`
 in the worktree. Do not stage, commit, push, fetch, pull, merge, rebase, amend,
 reset, create refs, alter Git identity/configuration, bypass hooks, or modify loop
-controls. The parent runner owns Git delivery.
+controls. Do not use stash, checkout, reset, or another temporary Git-control
+mutation for testing or review; use a copied diff or external temporary directory
+instead. The parent runner owns Git delivery.
 
 Write exactly one valid Conventional Commit message to
 `$AUTONOMOUS_COMMIT_MESSAGE_FILE` before the final response. Its subject must end

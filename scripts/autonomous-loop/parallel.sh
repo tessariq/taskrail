@@ -168,6 +168,13 @@ create_batch_clone() {
   git clone --quiet --no-local --single-branch --no-tags "${depth_args[@]}" --branch main -- \
     "$ROOT" "$ws/clone" || die "cannot create private clone for $id" 2
   verify_clone_isolation "$id" "$ws/clone" "$depth"
+  if [[ "$BACKEND" == "opencode" ]]; then
+    # OpenCode records the attached HEAD here before running. Seed the exact
+    # marker before the worker freezes Git control state so all later changes
+    # remain fail-closed instead of rejecting OpenCode's deterministic marker.
+    printf '%s\n' "$BATCH_BASE_HEAD" >"$ws/clone/.git/opencode" || \
+      die "cannot seed OpenCode Git marker for $id" 2
+  fi
   mkdir -p "$ws/clone/bin" || die "cannot seed clone binary directory for $id" 2
   cp "$ROOT/bin/taskrail" "$ws/clone/bin/taskrail" || die "cannot seed clone binary for $id" 2
   chmod 755 "$ws/clone/bin/taskrail"

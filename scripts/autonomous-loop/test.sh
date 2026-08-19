@@ -85,6 +85,7 @@ assert_review_prompt() {
   assert_contains "$name blocked follow-up" "$value" "A blocked run may create one follow-up"
   assert_contains "$name held follow-up" "$value" "parent runner always queues it as held"
   assert_contains "$name parent Git ownership" "$value" "The parent runner owns Git delivery"
+  assert_contains "$name no temporary Git mutation" "$value" "Do not use stash, checkout, reset, or another temporary Git-control mutation"
   assert_contains "$name no timeout retry" "$value" "Timeout never retries"
   assert_contains "$name commit body" "$value" "intent, context, and non-obvious decisions"
   assert_contains "$name child commit checker" "$value" 'scripts/check-commit-msg.sh "$AUTONOMOUS_COMMIT_MESSAGE_FILE"'
@@ -207,6 +208,9 @@ if [[ "${AUTONOMOUS_TEST_AGENT_EXIT:-0}" != "0" ]]; then
 fi
 if [[ "${AUTONOMOUS_TEST_ACTION:-}" == "git-config" ]]; then
   git config user.name Mutated
+fi
+if [[ "${AUTONOMOUS_TEST_ACTION:-}" == "opencode-marker" ]]; then
+  printf '%s\n' "$(git rev-parse HEAD)" >.git/opencode
 fi
 case "${AUTONOMOUS_TEST_OUTCOME:-completed}" in
   blocked) status=blocked; result=fail ;;
