@@ -115,7 +115,8 @@ mark_delivered() {
 
 check_report() {
   local report="$1" id="$2" result="$3" output="$TMP_DIR/report-fields"
-  if ! CGO_ENABLED=0 GOCACHE="$TMP_DIR/gocache" mise exec -- go run "$LOOP_DIR/check-report.go" "$report" "$id" "$result" >"$output"; then
+  if ! MISE_TRUSTED_CONFIG_PATHS="$ROOT/mise.toml" CGO_ENABLED=0 GOCACHE="$TMP_DIR/gocache" \
+    mise exec -- go run "$LOOP_DIR/check-report.go" "$report" "$id" "$result" >"$output"; then
     return 1
   fi
   mapfile -t REPORT_FIELDS <"$output"

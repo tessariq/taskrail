@@ -454,6 +454,7 @@ run_batch_gate() {
   (
     ROOT="$iclone"
     cd "$ROOT" || die "cannot enter integration clone for the gate" 2
+    export MISE_TRUSTED_CONFIG_PATHS="$ROOT/mise.toml"
     local fmt
     fmt="$(mise exec -- gofmt -l . 2>&1)" || die "batch gate could not run gofmt"
     [[ -z "$fmt" ]] || die "batch gate found unformatted files: $fmt"

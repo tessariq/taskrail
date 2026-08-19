@@ -399,7 +399,9 @@ write_taskrail_wrapper() {
 #!/usr/bin/env bash
 set -euo pipefail
 : "${AUTONOMOUS_TASKRAIL_BINARY:?}"
-TASKRAIL="$AUTONOMOUS_TASKRAIL_BINARY" task taskrail:check >/dev/null
+repo_root="$(cd "$(dirname "$AUTONOMOUS_TASKRAIL_BINARY")/.." && pwd -P)"
+MISE_TRUSTED_CONFIG_PATHS="$repo_root/mise.toml" TASKRAIL="$AUTONOMOUS_TASKRAIL_BINARY" \
+  mise exec -- task taskrail:check >/dev/null
 exec "$AUTONOMOUS_TASKRAIL_BINARY" "$@"
 EOF
   chmod +x "$CHILD_DIR/taskrail-writer"
@@ -438,7 +440,8 @@ run_agent() {
   mkfifo "$output_fifo" || return 1
   tee "$RUN_LOG" <"$output_fifo" &
   tee_pid=$!
-  setsid env TASKRAIL="$CHILD_DIR/taskrail-writer" AUTONOMOUS_TASKRAIL_BINARY="$ROOT/bin/taskrail" \
+  setsid env MISE_TRUSTED_CONFIG_PATHS="$ROOT/mise.toml" TASKRAIL="$CHILD_DIR/taskrail-writer" \
+    AUTONOMOUS_TASKRAIL_BINARY="$ROOT/bin/taskrail" \
     AUTONOMOUS_TASK_ID="$SELECTED_ID" AUTONOMOUS_COMMIT_MESSAGE_FILE="$COMMIT_MESSAGE" \
     "${agent_command[@]}" <"$prompt" >"$output_fifo" 2>&1 &
   child_pid=$!

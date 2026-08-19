@@ -115,6 +115,7 @@ create_fixture() {
   cp "$SCRIPT_DIR/../check-commit-msg.sh" "$root/scripts/check-commit-msg.sh"
 
   printf '%s\n' 'planning/artifacts/' 'captures/' >"$root/.gitignore"
+  printf '%s\n' '[tools]' 'go = "1.26"' >"$root/mise.toml"
   printf '%s\n' '# Taskrail v0.5.0' '## Test Area' >"$root/specs/v0.5.0.md"
   printf '%s\n' 'id: T-900-fixture-task' 'status: todo' 'spec_ref: specs/v0.5.0.md#test-area' 'dependencies: []' >"$root/planning/tasks/T-900-fixture-task.md"
   printf '%s\n' 'id: T-901' 'status: todo' 'spec_ref: specs/v0.5.0.md#test-area' 'dependencies:' '    - T-900-fixture-task' >"$root/planning/tasks/T-901.md"
@@ -137,6 +138,11 @@ EOF
 
   cat >"$root/fake-bin/mise" <<'EOF'
 #!/usr/bin/env bash
+if [[ "$PWD" != "$AUTONOMOUS_TEST_ROOT" && "${MISE_TRUSTED_CONFIG_PATHS:-}" != "$PWD/mise.toml" ]]; then
+  printf '%s\n' "untrusted clone config: $PWD/mise.toml" >&2
+  exit 86
+fi
+export AUTONOMOUS_TEST_MISE_ACTIVE=1
 if [[ "$*" == *" go run "* ]]; then
   while [[ "${1:-}" != "go" ]]; do shift; done
   exec "$@"
@@ -163,6 +169,7 @@ EOF
   cat >"$root/fake-bin/task" <<'EOF'
 #!/usr/bin/env bash
 if [[ "$*" == "taskrail:check" ]]; then
+  [[ "${AUTONOMOUS_TEST_MISE_ACTIVE:-}" == "1" ]] || exit 86
   [[ ! -e "$AUTONOMOUS_TEST_ROOT/captures/freshness-fail" ]]
   exit
 fi
