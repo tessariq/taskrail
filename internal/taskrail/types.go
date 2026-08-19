@@ -375,9 +375,7 @@ type CompleteResult struct {
 	TaskID    string `json:"task_id"`
 	Status    string `json:"status"`
 	UpdatedAt string `json:"updated_at"`
-	// CompletionID is the completed task's persisted completion identity. It is
-	// empty until T-158 creates one; complete reports whatever the task carries
-	// rather than inventing an identity here.
+	// CompletionID is the completed task's newly persisted completion identity.
 	CompletionID string           `json:"completion_id"`
 	Validation   ValidationResult `json:"validation"`
 }

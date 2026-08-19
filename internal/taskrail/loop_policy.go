@@ -100,6 +100,18 @@ func (f *TaskFrontmatter) UnmarshalYAML(node *yaml.Node) error {
 			f.policyPresent = true
 		case "loop_reason":
 			f.reasonPresent = true
+		case "completion_id":
+			f.completionIDPresent = true
+		case "last_verification_id":
+			f.lastVerificationIDPresent = true
+		case "last_verification_previous_id":
+			f.lastVerificationPreviousIDPresent = true
+		case "last_verification_result":
+			f.lastVerificationResultPresent = true
+		case "last_verified_at":
+			f.lastVerifiedAtPresent = true
+		case "last_verified_completion_id":
+			f.lastVerifiedCompletionIDPresent = true
 		}
 	}
 	return nil

@@ -221,6 +221,12 @@ func TestLifecycleResultsCarryTheirExactFields(t *testing.T) {
 			if result["task_id"] != "T-100" {
 				t.Errorf("task_id = %v, want T-100", result["task_id"])
 			}
+			if tc.name == "complete" {
+				completionID, ok := result["completion_id"].(string)
+				if !ok || !regexp.MustCompile(`^[0-9a-f]{32}$`).MatchString(completionID) {
+					t.Errorf("completion_id = %v, want lower-case 32-hex", result["completion_id"])
+				}
+			}
 			validation, ok := result["validation"].(map[string]any)
 			if !ok {
 				t.Fatalf("validation is not an object: %v", result["validation"])

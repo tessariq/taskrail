@@ -360,6 +360,8 @@ func TestLifecyclePublicationFailureRollsBack(t *testing.T) {
 			statePath := filepath.Join(repo, "planning", "STATE.md")
 			tasksDir := filepath.Join(repo, "planning", "tasks")
 			stateBefore := readBytes(t, statePath)
+			taskPath := filepath.Join(tasksDir, "T-002.md")
+			taskBefore := readBytes(t, taskPath)
 			// STATE.md sorts before the task file, so it publishes first; a
 			// read-only tasks directory then fails the task publication.
 			if err := os.Chmod(tasksDir, 0o500); err != nil {
@@ -373,6 +375,9 @@ func TestLifecyclePublicationFailureRollsBack(t *testing.T) {
 			}
 			if got := readBytes(t, statePath); got != stateBefore {
 				t.Fatalf("%s left STATE.md rolled forward:\n%s", command, got)
+			}
+			if got := readBytes(t, taskPath); got != taskBefore {
+				t.Fatalf("%s left selected-task metadata partially published:\n%s", command, got)
 			}
 		})
 	}

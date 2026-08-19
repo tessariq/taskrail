@@ -36,10 +36,14 @@ var delegatedCommands = []string{"block", "complete", "start", "unblock", "verif
 
 // delegatedTaskFields is the exact task write set a delegate may touch. It
 // mirrors the fields a loop iteration is allowed to change — canonical lifecycle
-// status, its timestamp, the blocker reason, and Implementation Notes — so
-// identity, ranking, spec anchoring, dependencies, and loop policy are all
-// unreachable from a delegated write.
-var delegatedTaskFields = []string{"blocker", "implementation_notes", "status", "updated_at"}
+// status, its timestamp, completion/verification binding metadata, the blocker
+// reason, and Implementation Notes — so task identity, ranking, spec anchoring,
+// dependencies, and loop policy are all unreachable from a delegated write.
+var delegatedTaskFields = []string{
+	"blocker", "completion_id", "implementation_notes", "last_verification_id",
+	"last_verification_previous_id", "last_verification_result", "last_verified_at",
+	"last_verified_completion_id", "status", "updated_at",
+}
 
 // DelegatedCapability is the fixed command and field upper bound on any
 // delegated join. The owner's selected task and write set are authenticated by

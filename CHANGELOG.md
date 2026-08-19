@@ -88,6 +88,12 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ### Changed
 
+- `complete` now atomically creates and returns a fresh random lower-case 32-hex
+  `completion_id`, persists it on the selected completed task, and clears that
+  task's prior verification tuple and completion binding. Lifecycle metadata is
+  decoded as a closed persisted shape: malformed IDs, partial tuples, explicit
+  null or empty optional fields, and status-incompatible combinations are
+  reported invalid, while other lifecycle writers preserve existing metadata.
 - `verify`, including `--create-followup`, now publishes through the repository
   mutation lock as one normal transaction: it snapshots its selected task,
   state, task ledger, and artifact destination, validates the complete

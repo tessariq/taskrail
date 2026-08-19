@@ -168,6 +168,11 @@ operations (no `git mv` staging), and each writer publishes only the task and
 state files it declares. A concurrent writer refuses with `lock_held`; unselected
 task bytes are never re-encoded.
 
+Each successful `complete` also creates a fresh random lower-case 32-hex
+`completion_id`, persists it on the completed task, and returns that exact value.
+Completing again replaces the identity, and completion clears prior task-level
+verification metadata without changing repository-level verification history.
+
 All semantic command classes share one recovery admission fence: retained or
 malformed transaction state beneath the canonical repository runtime root makes
 readers and writers fail with `recovery_pending`, and writers do not begin.

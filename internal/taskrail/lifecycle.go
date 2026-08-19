@@ -258,6 +258,16 @@ func (s *Service) finishTask(w writerCommand, taskID, status, note string) (outc
 	if err := ensurePortableNote(label, note); err != nil {
 		return transitionOutcome{}, WithMachineErrorCode(code, err)
 	}
+	if status == "completed" {
+		completionID, err := s.freshCompletionID(tasks)
+		if err != nil {
+			return transitionOutcome{}, err
+		}
+		task.Frontmatter.CompletionVerificationMetadata = CompletionVerificationMetadata{
+			CompletionID:        completionID,
+			completionIDPresent: true,
+		}
+	}
 
 	now := timestamp(s.now())
 	task.Frontmatter.Status = status

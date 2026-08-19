@@ -43,7 +43,7 @@ var (
 	lifecycleStart = writerCommand{command: "start", taskFields: []string{"status", "updated_at"}}
 	// Block also records the reason in the STATE.md blockers ledger, which the
 	// delegated field set names through its "blocker" member.
-	lifecycleComplete = writerCommand{command: "complete", taskFields: []string{"status", "updated_at", "implementation_notes"}}
+	lifecycleComplete = writerCommand{command: "complete", taskFields: []string{"status", "updated_at", "implementation_notes", "completion_id", "last_verification_id", "last_verification_previous_id", "last_verification_result", "last_verified_at", "last_verified_completion_id"}}
 	lifecycleBlock    = writerCommand{command: "block", taskFields: []string{"status", "updated_at", "implementation_notes", "blocker"}}
 	lifecycleUnblock  = writerCommand{command: "unblock", taskFields: []string{"status", "updated_at", "implementation_notes"}}
 	// Verify records its result in the task's Implementation Notes and stamp,
@@ -139,6 +139,12 @@ func (s *Service) commitLifecycle(own repotx.Ownership, w writerCommand, ledger 
 		if err != nil {
 			return ValidationResult{}, err
 		}
+		if w.command == lifecycleComplete.command {
+			taskBytes, err = patchCompletionMetadata(taskBytes, ledger.task)
+			if err != nil {
+				return ValidationResult{}, err
+			}
+		}
 		published = append(published, managedCandidate(ledger.task.Path, ledger.task.Filename, taskBytes))
 		selectedTask = ledger.task.Frontmatter.ID
 	}
@@ -177,6 +183,61 @@ func (s *Service) commitLifecycle(own repotx.Ownership, w writerCommand, ledger 
 		return ValidationResult{}, writerTransactionError(err)
 	}
 	return validation, nil
+}
+
+func patchCompletionMetadata(data []byte, task *Task) ([]byte, error) {
+	frontmatter, body, newline, err := splitTaskDocument(data, task.Frontmatter.ID)
+	if err != nil {
+		return nil, err
+	}
+	completion := strconv.Quote(task.Frontmatter.CompletionID)
+	frontmatter, err = rewriteOptionalTaskField(frontmatter, newline, task.Frontmatter.ID, "completion_id", &completion)
+	if err != nil {
+		return nil, err
+	}
+	for _, field := range []string{"last_verification_id", "last_verification_previous_id", "last_verification_result", "last_verified_at", "last_verified_completion_id"} {
+		frontmatter, err = rewriteOptionalTaskField(frontmatter, newline, task.Frontmatter.ID, field, nil)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return []byte(frontmatter + body), nil
+}
+
+func rewriteOptionalTaskField(frontmatter, newline, taskID, field string, value *string) (string, error) {
+	prefix := field + ":"
+	lines := strings.Split(frontmatter, newline)
+	match := -1
+	for i, line := range lines {
+		if strings.HasPrefix(line, prefix) {
+			if match >= 0 {
+				return "", fmt.Errorf("task %s has multiple %s fields", taskID, field)
+			}
+			match = i
+		}
+	}
+	if match >= 0 {
+		if value == nil {
+			lines = append(lines[:match], lines[match+1:]...)
+		} else {
+			lines[match] = prefix + " " + *value
+		}
+		return strings.Join(lines, newline), nil
+	}
+	if value == nil {
+		return frontmatter, nil
+	}
+	end := len(lines) - 1
+	for end >= 0 && lines[end] != "---" {
+		end--
+	}
+	if end < 1 {
+		return "", fmt.Errorf("task %s has no frontmatter end", taskID)
+	}
+	lines = append(lines, "")
+	copy(lines[end+1:], lines[end:])
+	lines[end] = prefix + " " + *value
+	return strings.Join(lines, newline), nil
 }
 
 func snapshotTaskCorpus(tasks []*Task) ([]string, error) {

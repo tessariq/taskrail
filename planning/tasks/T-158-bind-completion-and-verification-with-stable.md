@@ -1,13 +1,14 @@
 ---
 id: T-158-bind-completion-and-verification-with-stable
 title: Persist stable completion identities legally
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#canonical-transition-order
 dependencies:
     - T-229-canonicalize-v0-5-lifecycle-and-task-identities
     - T-233-protect-lifecycle-and-task-writers-transactionally
-updated_at: "2026-08-04T21:32:13Z"
+updated_at: "2026-08-19T23:06:42Z"
+completion_id: "e7c6426f8750d03c3d9d18c10b545296"
 ---
 
 # T-158-bind-completion-and-verification-with-stable Persist stable completion identities legally
@@ -46,3 +47,6 @@ dependent outcomes.
   inject complete publication failures to prove no ID is partially persisted.
 
 ## Implementation Notes
+
+- 2026-08-19T23:06:41Z: Implemented atomic stable completion identities, strict lifecycle metadata validation, preservation semantics, and regression coverage.
+- 2026-08-19T23:06:42Z: verification pass

@@ -141,11 +141,17 @@ func TestLifecycleCapabilities(t *testing.T) {
 
 func TestValidateCompletionVerificationMetadata(t *testing.T) {
 	t.Parallel()
+	const (
+		completion1   = "11111111111111111111111111111111"
+		completion2   = "22222222222222222222222222222222"
+		verification1 = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+		verification2 = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	)
 
 	verification := func(result string) CompletionVerificationMetadata {
 		return CompletionVerificationMetadata{
-			LastVerificationID:         "verification-2",
-			LastVerificationPreviousID: "verification-1",
+			LastVerificationID:         verification2,
+			LastVerificationPreviousID: verification1,
 			LastVerificationResult:     result,
 			LastVerifiedAt:             "2026-08-08T00:00:00Z",
 		}
@@ -159,35 +165,35 @@ func TestValidateCompletionVerificationMetadata(t *testing.T) {
 		{"legacy todo", "todo", CompletionVerificationMetadata{}, true},
 		{"legacy completed", "completed", CompletionVerificationMetadata{}, true},
 		{"non-completed fail", "in_progress", verification("fail"), true},
-		{"newly completed", "completed", CompletionVerificationMetadata{CompletionID: "completion-1"}, true},
+		{"newly completed", "completed", CompletionVerificationMetadata{CompletionID: completion1}, true},
 		{"completed fail", "completed", func() CompletionVerificationMetadata {
 			m := verification("fail")
-			m.CompletionID = "completion-1"
+			m.CompletionID = completion1
 			return m
 		}(), true},
 		{"completed bound pass", "completed", func() CompletionVerificationMetadata {
 			m := verification("pass")
-			m.CompletionID = "completion-1"
-			m.LastVerifiedCompletionID = "completion-1"
+			m.CompletionID = completion1
+			m.LastVerifiedCompletionID = completion1
 			return m
 		}(), true},
-		{"partial tuple", "in_progress", CompletionVerificationMetadata{LastVerificationID: "verification-1"}, false},
-		{"non-completed completion", "blocked", CompletionVerificationMetadata{CompletionID: "completion-1"}, false},
+		{"partial tuple", "in_progress", CompletionVerificationMetadata{LastVerificationID: verification1}, false},
+		{"non-completed completion", "blocked", CompletionVerificationMetadata{CompletionID: completion1}, false},
 		{"fail binding", "completed", func() CompletionVerificationMetadata {
 			m := verification("fail")
-			m.CompletionID = "completion-1"
-			m.LastVerifiedCompletionID = "completion-1"
+			m.CompletionID = completion1
+			m.LastVerifiedCompletionID = completion1
 			return m
 		}(), false},
 		{"mismatched binding", "completed", func() CompletionVerificationMetadata {
 			m := verification("pass")
-			m.CompletionID = "completion-1"
-			m.LastVerifiedCompletionID = "completion-2"
+			m.CompletionID = completion1
+			m.LastVerifiedCompletionID = completion2
 			return m
 		}(), false},
 		{"unbound pass", "completed", func() CompletionVerificationMetadata {
 			m := verification("pass")
-			m.CompletionID = "completion-1"
+			m.CompletionID = completion1
 			return m
 		}(), true},
 		{"pass without completion", "completed", verification("pass"), false},
@@ -203,8 +209,8 @@ func TestValidateCompletionVerificationMetadata(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			var chain []VerificationChainLink
-			if tt.name != "missing predecessor evidence" && tt.meta.LastVerificationPreviousID == "verification-1" {
-				chain = []VerificationChainLink{{ID: "verification-1"}, {ID: "verification-2", PreviousID: "verification-1"}}
+			if tt.name != "missing predecessor evidence" && tt.meta.LastVerificationPreviousID == verification1 {
+				chain = []VerificationChainLink{{ID: verification1}, {ID: verification2, PreviousID: verification1}}
 			}
 			violations := ValidateCompletionVerificationMetadata(tt.status, tt.meta, chain...)
 			if got := len(violations) == 0; got != tt.valid {
