@@ -22,8 +22,9 @@ repository to human-invoked task execution before cross-surface and release gate
 ## Acceptance
 
 - Remove `scripts/autonomous-loop/` in full, including runner, queue, prompt,
-  tests, and local guidance; remove every live documentation, task-runner, and
-  check reference that treats it as executable tooling.
+  parent-agent operator bridge, delivery-recovery guidance, tests, and local
+  guidance; remove every live documentation, task-runner, and check reference
+  that treats it as executable tooling.
 - Preserve only historical task/spec statements needed to explain that bootstrap
   tooling was retired; no release or adopter guidance can instruct its use.
 - T-225 evidence proves the product loop before cleanup, but the v0.5 source-
@@ -34,8 +35,9 @@ repository to human-invoked task execution before cross-surface and release gate
 
 ## Verification Notes
 
-- Search tracked files for the removed path and command names, then run full
-  formatting, vet, tests, task-body hygiene, skill parity, and Taskrail validation.
+- Search tracked files for the removed path, operator bridge, recovery-bundle
+  guidance, and command names, then run full formatting, vet, tests, task-body
+  hygiene, skill parity, and Taskrail validation.
 - Inspect release artifacts to prove no deleted bootstrap file is packaged.
 
 ## Implementation Notes

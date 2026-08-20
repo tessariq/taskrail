@@ -1,6 +1,6 @@
 ---
 schema_version: 1
-updated_at: "2026-08-20T18:17:16Z"
+updated_at: "2026-08-20T19:22:21Z"
 active_spec_version: v0.5.0
 active_spec_path: specs/v0.5.0.md
 current_task: ""
@@ -8,7 +8,7 @@ current_task_title: ""
 status_summary: idle
 blockers: []
 next_action: Select the next eligible task
-last_verification_result: pass for T-336-run-bounded-parallel-batches-in-the-temporary-loop at 2026-08-18T23:29:23Z
+last_verification_result: pass for T-338-guide-temporary-loop-orchestration-and-delivery at 2026-08-20T19:22:21Z
 relevant_artifacts: []
 continuation_notes:
     - This repository is temporarily dogfooding bootstrap workflow tooling until Taskrail v0.1.0 exists.
@@ -34,7 +34,7 @@ continuation_notes:
 
 ## Last Verification
 
-- pass for T-336-run-bounded-parallel-batches-in-the-temporary-loop at 2026-08-18T23:29:23Z
+- pass for T-338-guide-temporary-loop-orchestration-and-delivery at 2026-08-20T19:22:21Z
 
 ## Next Action
 
@@ -50,8 +50,8 @@ continuation_notes:
 
 ## Task Counts
 
-- todo: 130
+- todo: 129
 - in_progress: 0
-- completed: 207
+- completed: 208
 - blocked: 0
 - cancelled: 0

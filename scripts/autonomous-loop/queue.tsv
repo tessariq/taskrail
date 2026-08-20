@@ -112,9 +112,6 @@ T-315-promote-local-packaged-skills-with-explicit	run	-
 T-246-classify-every-v0-5-writer-transaction-and	run	-
 T-167-add-active-spec-scoped-statistics	run	-
 T-256-retire-bootstrap-planning-reviews	hold-operator	Requires deliberate bootstrap-evidence disposition
-T-173-check-cross-surface-workflow-contract-integrity	run	-
-T-248-run-cross-platform-workflow-contract-tests-in-ci	run	-
-T-174-run-the-v0-5-0-gap-and-drift-release-gate	hold-operator	Maintainer-owned final release gate
 T-316-harden-temporary-autonomous-loop-timeout-and	hold-operator	Operator-owned temporary loop timeout and recovery hardening
 T-317-bind-delegated-grants-to-the-owner-s-declared-task	hold-operator	Verification follow-up from T-156-protect-existing-semantic-writers-with-snapshot; operator review required
 T-319-reject-run-mode-queue-rows-scoped-to-the-loop	hold-operator	Verification follow-up from T-318-accept-inline-loop-follow-up-recommendations; operator review required
@@ -133,3 +130,6 @@ T-334-deliver-parallel-clone-batches-locally	run	-
 T-335-deliver-parallel-batches-through-review-adapters	run	-
 T-336-run-bounded-parallel-batches-in-the-temporary-loop	hold-operator	Operator-owned temporary-loop parallel batch backport
 T-337-ship-the-interactive-loop-operator-skill	run	-
+T-173-check-cross-surface-workflow-contract-integrity	run	-
+T-248-run-cross-platform-workflow-contract-tests-in-ci	run	-
+T-174-run-the-v0-5-0-gap-and-drift-release-gate	hold-operator	Maintainer-owned final release gate

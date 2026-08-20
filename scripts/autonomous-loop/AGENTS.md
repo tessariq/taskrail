@@ -2,6 +2,13 @@
 
 - These files are temporary operator-owned source-checkout controls, not Taskrail
   product behavior or adopter guidance.
+- `operator.sh` and `OPERATOR.md` are the temporary parent-agent bridge for
+  interactively configuring, dry-running, confirming, and supervising one runner
+  invocation plus delivery-only recovery and exact-head remote CI observation.
+  The bridge is operator-owned, provider-specific only through caller choices,
+  outside every shipped or committed packaged skill, and removed in full with
+  this directory by T-258. It never receives the runner's Git, planning,
+  integration, queue, delivery, retry, or agent-resume authority.
 - Ordinary queued tasks must not modify this directory. A `run` row whose open
   task file names `scripts/autonomous-loop` is rejected by queue validation before
   any agent launches, because such a task can only block; make it `hold-operator`
@@ -90,7 +97,8 @@
   publication and delivery-resume checks; it never launches or resumes an agent.
 - `queue.sh` (task-file parsing and queue validation) and `parallel.sh` (the
   opt-in bounded batch) are likewise sourced by the runner; `test-parallel.sh`
-  is sourced by `test.sh` and holds the batch fixtures.
+  and `test-operator.sh` are sourced by `test.sh` and hold the batch and bridge
+  fixtures.
 - Keep the runner finite and fail-closed. Never add retries, automatic recovery,
   existing-task continuation, hook bypass, force push, fetch/pull/rebase, amend,
   reset, or hidden queue mutation. Delivery recovery is explicit, bundle-bound,

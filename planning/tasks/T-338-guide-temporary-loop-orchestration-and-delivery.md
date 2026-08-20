@@ -1,12 +1,13 @@
 ---
 id: T-338-guide-temporary-loop-orchestration-and-delivery
 title: Guide temporary loop orchestration and delivery recovery
-status: todo
+status: completed
 priority: medium
 spec_ref: specs/v0.5.0.md#source-checkout-bootstrap-loop-retirement
 dependencies:
     - T-336-run-bounded-parallel-batches-in-the-temporary-loop
-updated_at: "2026-08-20T11:58:47Z"
+updated_at: "2026-08-20T19:22:21Z"
+completion_id: "9c29e21f7585d5a16fb85cb2fb33321f"
 ---
 
 # T-338-guide-temporary-loop-orchestration-and-delivery Guide temporary loop orchestration and delivery recovery
@@ -108,3 +109,6 @@ with `scripts/autonomous-loop/` when T-258 retires the bootstrap loop.
   bridge is held, source-checkout-only, and removed with the temporary directory.
 
 ## Implementation Notes
+
+- 2026-08-20T19:21:59Z: Added the temporary parent-agent operator bridge with confirmed dry-run snapshot binding, one-shot runner supervision, ranked integration and gate reporting, stable exact-head GitHub workflow observation, strict delivery-only XDG recovery inspection, attributed quota accounting, and fixture/manual coverage; extended T-258 retirement scope.
+- 2026-08-20T19:22:21Z: verification pass

@@ -898,6 +898,7 @@ assert_contains "child failure backend" "$output" "claude exited 7"
 [[ "$(git -C "$root" rev-parse HEAD)" == "$before_head" ]] || fail "child failure created a commit"
 
 source "$SCRIPT_DIR/test-parallel.sh"
+source "$SCRIPT_DIR/test-operator.sh"
 
 if ((failures)); then
   printf '%d test(s) failed\n' "$failures" >&2

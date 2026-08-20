@@ -617,6 +617,7 @@ run_parallel_batch() {
   fi
 
   run_batch_gate "$iclone" || die "batch gate failed over the final integration head"
+  runner_log "local aggregate gate: pass"
   publish_batch "$iclone"
 
   print_batch_report
