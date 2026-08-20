@@ -7,6 +7,7 @@ spec_ref: specs/v0.5.0.md#source-checkout-bootstrap-loop-retirement
 dependencies:
     - T-225-prove-local-autonomous-delivery-across-git
     - T-257-add-the-temporary-source-checkout-autonomous-loop
+    - T-338-guide-temporary-loop-orchestration-and-delivery
 updated_at: "2026-08-08T11:19:52Z"
 ---
 
