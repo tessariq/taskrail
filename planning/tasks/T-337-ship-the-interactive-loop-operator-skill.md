@@ -65,6 +65,25 @@ reprojects state, updates refs, and publishes results.
   `completed_unverified` to verification-only recovery and never repeats complete,
   clears a lock, applies recovery, reuses a failed candidate, or retries work
   automatically.
+- When a caller-owned adapter, provider CLI, or operator reports quota
+  exhaustion, the skill labels that condition and any stated reset as attributed
+  external evidence rather than Taskrail attestation. It keeps supervising the
+  one running coordinator so already-launched siblings drain and ordinary
+  integration, delivery, and unpublished-candidate results settle; it does not
+  interrupt the coordinator, replace a worker, launch another frontier, skip an
+  aggregate gate, or treat free-form output as authority over Taskrail's terminal
+  result.
+- The skill preserves available coordinator and worker streams only in a safe
+  caller-owned destination outside committed state, warns that provider output
+  may be sensitive and incomplete, and reports preservation failure explicitly.
+  It quotes reset information with its source and supplied timezone/offset, never
+  invents a reset instant, refunds or carries forward the consumed attempt budget,
+  or conflates agent execution with delivery-only or transaction recovery.
+- Post-reset work is offered only as a new invocation with a fresh result
+  destination, exact dry-run and preflight, current retained/unpublished-work
+  explanation, newly explicit finite iteration/parallel budget, and fresh operator
+  confirmation. The skill never sleeps in the background, persists launch intent,
+  resumes a worker/session or `in_progress` outcome, or automatically relaunches.
 - The skill concludes with separate worker, integration, delivery, local-gate,
   remote-CI, result-file, and recovery statuses. It claims success only when the
   operator's confirmed delivery and CI policy are satisfied, and labels any
@@ -94,5 +113,13 @@ reprojects state, updates refs, and publishes results.
   lock-held and mixed-byte refusal, completed-unverified verify-only guidance, and
   assertions that no retry, lock clear, recovery apply, or temporary-loop bundle
   handling occurs without its exact authorization.
+- Quota fixtures cover attributed sequential failure; parallel failure with
+  completion order differing from rank and an independently successful sibling;
+  ordinary integration and unpublished candidates; absent, malformed, relative,
+  timezone-free, and already-past reset text; stream-preservation failure; exact
+  consumed-attempt reporting; and fresh dry-run, budget, result destination, and
+  confirmation before a later invocation. Negative assertions prove no provider
+  parser, authoritative quota outcome, interruption, retry, budget refund,
+  background wait, or automatic relaunch.
 
 ## Implementation Notes

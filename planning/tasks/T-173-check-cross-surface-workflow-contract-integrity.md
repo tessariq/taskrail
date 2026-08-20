@@ -12,6 +12,7 @@ dependencies:
     - T-249-allow-explicit-skill-evaluation-release-waivers
     - T-256-retire-bootstrap-planning-reviews
     - T-258-retire-the-temporary-source-checkout-autonomous
+    - T-337-ship-the-interactive-loop-operator-skill
 updated_at: "2026-08-08T08:40:49Z"
 ---
 

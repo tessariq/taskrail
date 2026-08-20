@@ -49,6 +49,19 @@ with `scripts/autonomous-loop/` when T-258 retires the bootstrap loop.
   repository/task/outcome/base/report/message/candidate identities and current
   source preconditions, and explains that it resumes parent-owned delivery only;
   it never treats a retained workspace or free-form child output as a bundle.
+- When the selected backend or operator reports quota exhaustion, the bridge
+  labels that interpretation and any stated reset as attributed external,
+  potentially heuristic evidence. It continues supervising the current runner so
+  already-launched siblings drain and script-owned integration, delivery, and
+  unpublished-candidate outcomes settle; it does not interrupt the runner,
+  replace a worker, launch another frontier, mutate the queue, skip a gate, or
+  reinterpret the ordinary terminal result.
+- Quota handling preserves available coordinator, worker, and wrapper diagnostics
+  under ignored artifacts or external storage, warns that provider output may be
+  sensitive and incomplete, and reports preservation failure. The bridge quotes
+  reset information with its source and supplied timezone/offset, never invents a
+  reset instant, and never refunds or carries forward the current invocation's
+  finite budget.
 - A valid undelivered bundle is offered to the operator with the exact
   `scripts/autonomous-loop/run.sh --resume-delivery <absolute-bundle-path>` command
   only after explicit confirmation. The bridge never edits bundle bytes, relaunches
@@ -56,6 +69,11 @@ with `scripts/autonomous-loop/` when T-258 retires the bootstrap loop.
   a lock, resets/rebases/stashes, bypasses hooks, force-pushes, or automatically
   retries after refused resume. Successful resume is followed by source/remote
   identity checks and the same exact-head GitHub workflow wait.
+- Execution after a reported reset is offered only through a new dry-run, fresh
+  source and binary preflight, newly explicit finite budget, and fresh operator
+  confirmation. It never uses `--resume-delivery` to relaunch an agent, resumes a
+  worker/session or `in_progress` outcome, sleeps or schedules in the background,
+  persists future launch intent, or automatically invokes the runner.
 - `scripts/autonomous-loop/AGENTS.md` identifies the bridge as temporary,
   operator-owned, provider-specific only through caller choices, and outside the
   shipped skill package. Queue policy keeps this task `hold-operator`; ordinary
@@ -80,6 +98,12 @@ with `scripts/autonomous-loop/` when T-258 retires the bootstrap loop.
   bundles, explicit confirmation, successful resume without agent invocation,
   resume refusal without retry, and post-resume CI waiting. Bundle and workspace
   paths remain absent from committed state.
+- Quota fixtures cover sequential backend failure, parallel failure with a
+  successful sibling, sibling draining and ordinary partial integration, wrapper
+  diagnostics, absent/malformed/relative/timezone-free reset text, preservation
+  failure, exact attempt accounting, and a newly confirmed post-reset invocation.
+  Negative assertions prove no interruption, queue mutation, replacement,
+  delivery-resume misuse, budget refund, background wait, or automatic relaunch.
 - Task-body, queue, Taskrail validation, and retirement-reference checks prove the
   bridge is held, source-checkout-only, and removed with the temporary directory.
 
