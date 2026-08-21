@@ -8,6 +8,8 @@ import (
 	"errors"
 	"fmt"
 	"path"
+	"path/filepath"
+	"strings"
 	"unicode/utf8"
 
 	"github.com/tessariq/taskrail/internal/durablefs"
@@ -75,7 +77,7 @@ func (s *Service) PromptList() (PromptListResult, error) {
 }
 
 func (s *Service) promptListSnapshot() (PromptListResult, error) {
-	replacements, err := s.committedPromptReplacements(false)
+	replacements, err := s.promptReplacements(false)
 	if err != nil {
 		return PromptListResult{}, err
 	}
@@ -115,7 +117,7 @@ func (s *Service) promptShowSnapshot(definition promptDefinition, builtinOnly bo
 	source := "builtin"
 	var replacementPath *string
 	if !builtinOnly {
-		replacements, err := s.committedPromptReplacements(true)
+		replacements, err := s.promptReplacements(true)
 		if err != nil {
 			return PromptContentResult{}, err
 		}
@@ -148,8 +150,15 @@ type promptReplacement struct {
 	data        []byte
 }
 
-func (s *Service) committedPromptReplacements(allowPathBlocked bool) (map[string]promptReplacement, error) {
-	tree, err := durablefs.ObserveTree(s.paths.ManagedRoot, s.paths.LogicalPromptsDir)
+func (s *Service) promptReplacements(allowPathBlocked bool) (map[string]promptReplacement, error) {
+	root, replacementDir := s.paths.ManagedRoot, s.paths.LogicalPromptsDir
+	if s.paths.Storage.Mode == StorageLocal {
+		if err := s.validateLocalPromptReplacementSource(allowPathBlocked); err != nil {
+			return nil, err
+		}
+		root, replacementDir = s.paths.StorageRoot, "prompts"
+	}
+	tree, err := durablefs.ObserveTree(root, replacementDir)
 	if err != nil {
 		return nil, promptReadError("inspect prompt replacements", err, allowPathBlocked)
 	}
@@ -158,6 +167,12 @@ func (s *Service) committedPromptReplacements(allowPathBlocked bool) (map[string
 	}
 	replacements := make(map[string]promptReplacement, len(tree.Entries))
 	for _, entry := range tree.Entries {
+		if s.paths.Storage.Mode == StorageLocal && !entry.Directory {
+			physical := filepath.Join(s.paths.PromptsDir, filepath.FromSlash(entry.Path))
+			if err := s.validateLocalPromptReplacementPath(filepath.ToSlash(relPath(s.paths.WorktreeRoot, physical)), allowPathBlocked); err != nil {
+				return nil, err
+			}
+		}
 		if entry.Path == "v1" && entry.Directory {
 			continue
 		}
@@ -173,8 +188,11 @@ func (s *Service) committedPromptReplacements(allowPathBlocked bool) (map[string
 				return nil, WithMachineErrorCode(MachineCodePromptInvalid, fmt.Errorf("unknown prompt replacement %q", path.Join(s.paths.LogicalPromptsDir, entry.Path)))
 			}
 			logical := path.Join(s.paths.LogicalPromptsDir, entry.Path)
-			data, _, err := durablefs.ReadFile(s.paths.ManagedRoot, logical, promptReplacementLimit+1)
+			data, _, err := durablefs.ReadFile(root, path.Join(replacementDir, entry.Path), promptReplacementLimit+1)
 			if err != nil {
+				if errors.Is(err, durablefs.ErrUnsupported) {
+					return nil, WithMachineErrorCode(MachineCodePromptInvalid, fmt.Errorf("invalid prompt replacement %s: replacement exceeds %d bytes", logical, promptReplacementLimit))
+				}
 				return nil, promptReadError("read prompt replacement "+logical, err, allowPathBlocked)
 			}
 			if err := validatePromptReplacement(data); err != nil {
@@ -192,6 +210,33 @@ func (s *Service) committedPromptReplacements(allowPathBlocked bool) (map[string
 		return nil, WithMachineErrorCode(MachineCodePromptInvalid, fmt.Errorf("unknown prompt contract entry %q", path.Join(s.paths.LogicalPromptsDir, entry.Path)))
 	}
 	return replacements, nil
+}
+
+// validateLocalPromptReplacementSource keeps overlay ownership distinct from the
+// committed namespace before local bytes can affect a prompt binding.
+func (s *Service) validateLocalPromptReplacementSource(allowPathBlocked bool) error {
+	committed, err := durablefs.ObserveTree(s.paths.ManagedRoot, s.paths.LogicalPromptsDir)
+	if err != nil {
+		return promptReadError("inspect committed prompt replacements", err, allowPathBlocked)
+	}
+	if committed.Present {
+		return promptPathError(allowPathBlocked, "committed prompt replacements conflict with local storage")
+	}
+	localPath := filepath.ToSlash(relPath(s.paths.WorktreeRoot, s.paths.StorageRoot))
+	if output, err := gitCommand(s.paths.WorktreeRoot, "ls-files", "--error-unmatch", "--", localPath); err == nil && strings.TrimSpace(output) != "" {
+		return promptPathError(allowPathBlocked, "Git tracks local prompt replacements")
+	}
+	if _, err := gitCommand(s.paths.WorktreeRoot, "diff", "--cached", "--quiet", "--", localPath); err != nil {
+		return promptPathError(allowPathBlocked, "Git index contains local prompt replacements")
+	}
+	return nil
+}
+
+func (s *Service) validateLocalPromptReplacementPath(localPath string, allowPathBlocked bool) error {
+	if _, err := gitCommand(s.paths.WorktreeRoot, "check-ignore", "-q", "--no-index", localPath); err != nil {
+		return promptPathError(allowPathBlocked, "local prompt replacement %q is not effectively ignored", localPath)
+	}
+	return nil
 }
 
 func promptReadError(action string, err error, allowPathBlocked bool) error {

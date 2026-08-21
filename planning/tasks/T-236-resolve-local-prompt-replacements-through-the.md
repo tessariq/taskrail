@@ -1,13 +1,18 @@
 ---
 id: T-236-resolve-local-prompt-replacements-through-the
 title: Resolve local prompt replacements through the overlay
-status: todo
+status: completed
 priority: medium
 spec_ref: specs/v0.5.0.md#workflow-prompt-catalog-and-overrides
 dependencies:
     - T-159-add-a-versioned-workflow-prompt-catalog
     - T-222-initialize-and-discover-ignored-local-taskrail
-updated_at: "2026-08-06T13:46:30Z"
+updated_at: "2026-08-21T13:34:32Z"
+completion_id: "6e77f928649d64055b64a31fc8a90d72"
+last_verification_id: "1c050c74df98ed32a882bc9580c71e14"
+last_verification_result: pass
+last_verified_at: "2026-08-21T13:34:32Z"
+last_verified_completion_id: "6e77f928649d64055b64a31fc8a90d72"
 ---
 
 # T-236-resolve-local-prompt-replacements-through-the Resolve local prompt replacements through the overlay
@@ -37,3 +42,6 @@ catalog's public path, validation, authorization, or whole-file replacement mode
   later byte-preserving promotion; T-255 owns publication-time replacement races.
 
 ## Implementation Notes
+
+- 2026-08-21T13:34:18Z: Resolved local prompt replacements through the ignored overlay with logical-path reporting and fail-closed source checks.
+- 2026-08-21T13:34:32Z: verification pass id 1c050c74df98ed32a882bc9580c71e14 previous none completion 6e77f928649d64055b64a31fc8a90d72
