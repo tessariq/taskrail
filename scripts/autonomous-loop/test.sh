@@ -255,6 +255,12 @@ fi
 mkdir -p "$repo/planning/artifacts/verify/$id/20260808T000000Z"
 if [[ "${AUTONOMOUS_TEST_ACTION:-}" == "forged-report" ]]; then
   extra=",\"unexpected\":\"pass for $id\""
+elif [[ "${AUTONOMOUS_TEST_ACTION:-}" == "identity-report" ]]; then
+  extra=',"verification_id":"0123456789abcdef0123456789abcdef","previous_verification_id":null,"observed_completion_id":null'
+elif [[ "${AUTONOMOUS_TEST_ACTION:-}" == "invalid-identity-report" ]]; then
+  extra=',"verification_id":"NOT-LOWER-CASE-32-HEX","previous_verification_id":null,"observed_completion_id":null'
+elif [[ "${AUTONOMOUS_TEST_ACTION:-}" == "orphan-predecessor-report" ]]; then
+  extra=',"previous_verification_id":"0123456789abcdef0123456789abcdef"'
 elif [[ "${AUTONOMOUS_TEST_ACTION:-}" == "followup" ]]; then
   extra=',"details":"follow-up recommendation: run - independently useful fixture remediation","followup_task_id":"T-902"'
 elif [[ "${AUTONOMOUS_TEST_ACTION:-}" == "inline-followup" ]]; then
@@ -710,6 +716,28 @@ rc=$?
 [[ $rc -eq 1 ]] || fail "forged report expected exit 1, got $rc"
 assert_contains "forged report" "$output" "invalid pass verification report"
 [[ "$(git -C "$root" rev-parse HEAD)" == "$before_head" ]] || fail "forged report created a commit"
+
+root="$(create_fixture identity-report)"
+output="$(AUTONOMOUS_TEST_ACTION=identity-report run_fixture "$root")"
+rc=$?
+[[ $rc -eq 0 ]] || fail "identity report expected success, got $rc: $output"
+assert_contains "identity report" "$output" "completed and pushed: T-900-fixture-task"
+
+root="$(create_fixture invalid-identity-report)"
+before_head="$(git -C "$root" rev-parse HEAD)"
+output="$(AUTONOMOUS_TEST_ACTION=invalid-identity-report run_fixture "$root")"
+rc=$?
+[[ $rc -eq 1 ]] || fail "invalid identity report expected exit 1, got $rc"
+assert_contains "invalid identity report" "$output" "invalid pass verification report"
+[[ "$(git -C "$root" rev-parse HEAD)" == "$before_head" ]] || fail "invalid identity report created a commit"
+
+root="$(create_fixture orphan-predecessor-report)"
+before_head="$(git -C "$root" rev-parse HEAD)"
+output="$(AUTONOMOUS_TEST_ACTION=orphan-predecessor-report run_fixture "$root")"
+rc=$?
+[[ $rc -eq 1 ]] || fail "orphan predecessor report expected exit 1, got $rc"
+assert_contains "orphan predecessor report" "$output" "invalid pass verification report"
+[[ "$(git -C "$root" rev-parse HEAD)" == "$before_head" ]] || fail "orphan predecessor report created a commit"
 
 root="$(create_fixture followup-held)"
 before_head="$(git -C "$root" rev-parse HEAD)"

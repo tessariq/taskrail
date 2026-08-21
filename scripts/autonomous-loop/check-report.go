@@ -9,16 +9,19 @@ import (
 )
 
 type report struct {
-	SchemaVersion  int      `json:"schema_version"`
-	TaskID         string   `json:"task_id"`
-	TaskTitle      string   `json:"task_title"`
-	Result         string   `json:"result"`
-	Summary        string   `json:"summary"`
-	Details        string   `json:"details,omitempty"`
-	GeneratedAt    string   `json:"generated_at"`
-	SpecRef        string   `json:"spec_ref"`
-	Artifacts      []string `json:"artifacts"`
-	FollowupTaskID string   `json:"followup_task_id,omitempty"`
+	SchemaVersion          int      `json:"schema_version"`
+	TaskID                 string   `json:"task_id"`
+	TaskTitle              string   `json:"task_title"`
+	Result                 string   `json:"result"`
+	VerificationID         *string  `json:"verification_id,omitempty"`
+	PreviousVerificationID *string  `json:"previous_verification_id,omitempty"`
+	ObservedCompletionID   *string  `json:"observed_completion_id,omitempty"`
+	Summary                string   `json:"summary"`
+	Details                string   `json:"details,omitempty"`
+	GeneratedAt            string   `json:"generated_at"`
+	SpecRef                string   `json:"spec_ref"`
+	Artifacts              []string `json:"artifacts"`
+	FollowupTaskID         string   `json:"followup_task_id,omitempty"`
 }
 
 func main() {
@@ -49,6 +52,18 @@ func main() {
 		got.TaskTitle == "" || got.Summary == "" || got.GeneratedAt == "" || got.SpecRef == "" || got.Artifacts == nil {
 		fail(fmt.Errorf("report fields do not match the expected verification"))
 	}
+	if got.VerificationID == nil && (got.PreviousVerificationID != nil || got.ObservedCompletionID != nil) {
+		fail(fmt.Errorf("verification predecessor or completion identity requires verification_id"))
+	}
+	for name, value := range map[string]*string{
+		"verification_id":          got.VerificationID,
+		"previous_verification_id": got.PreviousVerificationID,
+		"observed_completion_id":   got.ObservedCompletionID,
+	} {
+		if value != nil && !lowerHex32(*value) {
+			fail(fmt.Errorf("%s must be lower-case 32-hex", name))
+		}
+	}
 	recommendation := ""
 	if got.FollowupTaskID != "" {
 		var err error
@@ -57,6 +72,18 @@ func main() {
 		}
 	}
 	fmt.Printf("%s\n%s\n%s\n", got.GeneratedAt, got.FollowupTaskID, recommendation)
+}
+
+func lowerHex32(value string) bool {
+	if len(value) != 32 {
+		return false
+	}
+	for _, r := range value {
+		if (r < '0' || r > '9') && (r < 'a' || r > 'f') {
+			return false
+		}
+	}
+	return true
 }
 
 const recommendationMarker = "follow-up recommendation: "

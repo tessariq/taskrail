@@ -1,6 +1,6 @@
 ---
 schema_version: 1
-updated_at: "2026-08-21T08:58:43Z"
+updated_at: "2026-08-21T09:17:18Z"
 active_spec_version: v0.5.0
 active_spec_path: specs/v0.5.0.md
 current_task: ""
@@ -8,7 +8,7 @@ current_task_title: ""
 status_summary: idle
 blockers: []
 next_action: Select the next eligible task
-last_verification_result: pass for T-339-gate-local-init-success-test-on-directory at 2026-08-21T08:58:43Z
+last_verification_result: pass for T-340-accept-verification-identity-reports-in-temporary at 2026-08-21T09:17:18Z
 relevant_artifacts: []
 continuation_notes:
     - This repository is temporarily dogfooding bootstrap workflow tooling until Taskrail v0.1.0 exists.
@@ -34,7 +34,7 @@ continuation_notes:
 
 ## Last Verification
 
-- pass for T-339-gate-local-init-success-test-on-directory at 2026-08-21T08:58:43Z
+- pass for T-340-accept-verification-identity-reports-in-temporary at 2026-08-21T09:17:18Z
 
 ## Next Action
 
@@ -52,6 +52,6 @@ continuation_notes:
 
 - todo: 126
 - in_progress: 0
-- completed: 212
+- completed: 213
 - blocked: 0
 - cancelled: 0

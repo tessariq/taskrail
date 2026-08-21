@@ -180,6 +180,12 @@ All notable user-visible changes to Taskrail will be documented in this file.
   prose in fresh `STATE.md` files; packaged workflow guidance keeps durable task
   context in task notes, blockers, verification reports, or follow-up tasks.
 
+### Fixed
+
+- The temporary source-checkout autonomous loop now recognizes and validates the
+  stable verification identity fields introduced by T-285 while retaining strict
+  rejection of malformed identities and unrelated report fields.
+
 ## v0.4.0 - 2026-07-30
 
 Fourth release. Taskrail makes active-spec work safer to author and
