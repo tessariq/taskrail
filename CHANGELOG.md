@@ -6,6 +6,10 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ### Added
 
+- `taskrail task show <task-id>` now returns the exact persisted Markdown for
+  one exact task ID through the active storage context. Text preserves the task
+  bytes; `--json` returns its logical path, content, and SHA-256 digest without
+  exposing local-overlay paths or changing repository state.
 - Read-only `prompt list` and `prompt show` now expose the ordered v1 embedded
   workflow-prompt catalog through text and common-envelope JSON. Complete
   committed replacements under `.taskrail/prompts/v1/` are validated before

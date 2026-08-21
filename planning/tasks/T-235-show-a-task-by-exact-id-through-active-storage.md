@@ -1,13 +1,18 @@
 ---
 id: T-235-show-a-task-by-exact-id-through-active-storage
 title: Show a task by exact ID through active storage
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#workflow-prompt-catalog-and-overrides
 dependencies:
     - T-157-upgrade-repositories-transactionally-to-layout-2
     - T-223-run-every-v0-5-command-against-local-storage
-updated_at: "2026-08-06T13:46:30Z"
+updated_at: "2026-08-21T14:03:50Z"
+completion_id: "a0cdff9f82beb395047decacefaadff3"
+last_verification_id: "127a1ad9f0280f88a1242fcc973d6ad1"
+last_verification_result: pass
+last_verified_at: "2026-08-21T14:03:50Z"
+last_verified_completion_id: "a0cdff9f82beb395047decacefaadff3"
 ---
 
 # T-235-show-a-task-by-exact-id-through-active-storage Show a task by exact ID through active storage
@@ -34,3 +39,6 @@ logical task path directly or expose the local physical overlay.
 - A3: output sentinels assert no `.taskrail/local/` or unrelated body leakage.
 
 ## Implementation Notes
+
+- 2026-08-21T14:03:33Z: Added read-only task show through active storage with exact bytes and digest.
+- 2026-08-21T14:03:50Z: verification pass id 127a1ad9f0280f88a1242fcc973d6ad1 previous none completion a0cdff9f82beb395047decacefaadff3

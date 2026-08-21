@@ -258,7 +258,7 @@ var machineInventory = []MachineCommandEntry{
 		warns(warnsBootstrap), errs(lifecycleErrors, "path_blocked")),
 	planned("`task release`", "task release", []string{"TaskReleaseResult"}, "never",
 		warns(warnsBootstrap), errs(taskReleaseErrors)),
-	planned("`task show`", "task show", []string{"TaskShowResult"}, "never",
+	migrated("`task show`", "task show", []string{"TaskShowResult"}, "never",
 		warns(), errs(readErrors, "task_not_found")),
 	planned("`task author`", "task author", []string{"TaskAuthorResult"}, "never",
 		warns(warnsBootstrap), errs(taskAuthorErrors)),

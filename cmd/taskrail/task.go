@@ -14,9 +14,29 @@ func newTaskCmd() *cobra.Command {
 		Short: "Manage Taskrail task files",
 	}
 	cmd.AddCommand(newTaskNewCmd())
+	cmd.AddCommand(newTaskShowCmd())
 	cmd.AddCommand(newTaskRenameCmd())
 	cmd.AddCommand(newTaskRepointCmd())
 	cmd.AddCommand(newTaskDependencyCmd())
+	return cmd
+}
+
+func newTaskShowCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "show <task-id>",
+		Short: "Print one exact task's persisted Markdown (read-only)",
+		Args:  machineArgs(cobra.ExactArgs(1)),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runCommand(cmd, func(svc *taskrail.Service) (commandResult, error) {
+				result, err := svc.TaskShow(args[0])
+				if err != nil {
+					return commandResult{}, err
+				}
+				return commandResult{shape: "TaskShowResult", value: result, text: result.Content, exactText: true}, nil
+			})
+		},
+	}
+	addMachineJSONFlag(cmd)
 	return cmd
 }
 
