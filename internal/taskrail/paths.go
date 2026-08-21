@@ -63,6 +63,12 @@ func discoverPaths(start string, admitFence bool) (Paths, error) {
 	if err != nil {
 		return Paths{}, err
 	}
+	if admitFence && !markerFound && exists(filepath.Join(root, filepath.FromSlash(localStorageRoot))) {
+		// An interrupted fresh local init can retain its transaction before the
+		// marker lands. Recovery is the only reader allowed to treat that exact
+		// overlay shape as local while it derives the journal's safe action.
+		storage = localStorage()
+	}
 	if storage.Mode == StorageLocal && git.WorktreeRoot == "" {
 		return Paths{}, WithMachineErrorCode(MachineCodeRepositoryInvalid,
 			fmt.Errorf("local storage mode requires a Git worktree"))
@@ -328,7 +334,7 @@ func readLayoutFile(root, label string) (LayoutConfig, bool, error) {
 // binary cannot model is worse than a refusal
 // (specs/v0.4.0.md#layout-compatibility-beyond-init).
 func ensureSupportedLayoutVersion(cfg LayoutConfig) error {
-	if cfg.LayoutVersion <= currentLayoutVersion {
+	if cfg.LayoutVersion <= layout2Version {
 		return nil
 	}
 	return WithMachineErrorCode(MachineCodeIncompatibleLayout,

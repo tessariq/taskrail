@@ -12,6 +12,7 @@ func newInitCmd() *cobra.Command {
 	var apply bool
 	var withSkills bool
 	var forceSkills bool
+	var local bool
 	var confirmQuiescent bool
 	var extractContinuationNotes bool
 	var dropContinuationNotes bool
@@ -36,6 +37,7 @@ func newInitCmd() *cobra.Command {
 					Apply:                    apply,
 					WithSkills:               withSkills,
 					ForceSkills:              forceSkills,
+					Local:                    local,
 					SkillVersion:             version,
 					ConfirmQuiescent:         confirmQuiescent,
 					ExtractContinuationNotes: extractContinuationNotes,
@@ -63,6 +65,7 @@ func newInitCmd() *cobra.Command {
 	addMachineJSONFlag(cmd)
 	cmd.Flags().BoolVar(&apply, "apply", false, "apply a pending layout migration instead of a dry run")
 	cmd.Flags().BoolVar(&withSkills, "with-skills", false, "install the embedded repo-agnostic tracked-work skills (opt-in; installed paths are reported in both text and --json output)")
+	cmd.Flags().BoolVar(&local, "local", false, "initialize ignored local planning storage in this Git worktree")
 	cmd.Flags().BoolVar(&forceSkills, "force", false, "with --with-skills, reinstall embedded skills over existing copies, backing up locally-modified files first")
 	cmd.Flags().BoolVar(&confirmQuiescent, "confirm-quiescent", false, "with --apply, assert every older Taskrail process able to touch this repository has stopped (required by the layout 2 upgrade)")
 	cmd.Flags().BoolVar(&extractContinuationNotes, "extract-continuation-notes", false, "with the layout 2 upgrade apply, import decoded continuation notes into the planning NOTES.md sidecar")

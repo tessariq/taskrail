@@ -70,6 +70,12 @@ type Member struct {
 	// byte remains on disk, the fence member still fences the repository
 	// against readers and writers that predate the transaction.
 	Fence []byte
+	// PreSemantic members publish after durable preparation and before ordinary
+	// candidates, so a writer can verify a required environment first.
+	PreSemantic bool
+	// PreSemanticPriority orders pre-semantic members without changing normal
+	// canonical transaction ordering. Lower values publish first.
+	PreSemanticPriority int
 }
 
 // Path is one consumed path. It participates in every whole-set comparison but
@@ -98,6 +104,9 @@ type Request struct {
 	// candidate an interruption left behind, so it must be a pure function of the
 	// published bytes.
 	Validate func([]Evidence) error
+	// ValidateBeforeCandidates runs after pre-semantic members publish and before
+	// ordinary candidate publication.
+	ValidateBeforeCandidates func([]Evidence) error
 }
 
 // Result is a committed durable transaction.

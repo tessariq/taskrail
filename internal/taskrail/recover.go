@@ -132,6 +132,9 @@ func (s *Service) recoveredValidation(recovered durabletx.RecoveryResult) (Valid
 	if !recovered.Applied || recovered.Command != initMigrationCommand || recovered.Action != durabletx.AcceptCandidate {
 		return s.Validate()
 	}
+	if s.paths.Storage.Mode == StorageLocal {
+		return s.Validate()
+	}
 	violations := strictLayout2Violations(s.paths.RepoRoot, s.paths.LogicalPlanningDir)
 	return ValidationResult{Valid: len(violations) == 0, Violations: violations}, nil
 }

@@ -70,9 +70,10 @@ func (p Paths) LockRepository() repolock.Repository {
 // that a repository is Taskrail-managed, pins the layout version for upgrades,
 // and records where the human-facing directories live.
 type LayoutConfig struct {
-	LayoutVersion int    `yaml:"layout_version" json:"layout_version"`
-	SpecsDir      string `yaml:"specs_dir" json:"specs_dir"`
-	PlanningDir   string `yaml:"planning_dir" json:"planning_dir"`
+	LayoutVersion int         `yaml:"layout_version" json:"layout_version"`
+	SpecsDir      string      `yaml:"specs_dir" json:"specs_dir"`
+	PlanningDir   string      `yaml:"planning_dir" json:"planning_dir"`
+	StorageMode   StorageMode `yaml:"storage_mode,omitempty" json:"storage_mode,omitempty"`
 }
 
 // InitOutcome classifies what version-aware init did to a repository.
@@ -191,6 +192,9 @@ type InitInput struct {
 	WithSkills   bool
 	ForceSkills  bool
 	SkillVersion string
+	// Local selects the explicit, ignored overlay layout. It is intentionally
+	// separate from --with-skills: plain local init never touches assistant roots.
+	Local bool
 	// ConfirmQuiescent is the operator's assertion that every older Taskrail
 	// process able to touch this repository has stopped. The layout-upgrade
 	// apply requires it; preview and every other outcome reject it.

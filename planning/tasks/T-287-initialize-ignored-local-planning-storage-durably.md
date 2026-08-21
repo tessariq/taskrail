@@ -1,13 +1,14 @@
 ---
 id: T-287-initialize-ignored-local-planning-storage-durably
 title: Initialize ignored local planning storage durably
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#local-planning-mode
 dependencies:
     - T-222-initialize-and-discover-ignored-local-taskrail
     - T-234-protect-repository-and-planning-writers
-updated_at: "2026-08-08T14:23:08Z"
+updated_at: "2026-08-21T08:37:05Z"
+completion_id: "e316f4b552ebf9c6a417081c9c6284cc"
 ---
 
 # T-287-initialize-ignored-local-planning-storage-durably Initialize ignored local planning storage durably
@@ -45,3 +46,6 @@ T-247 and T-245.
   originals/candidates without manual cleanup.
 
 ## Implementation Notes
+
+- 2026-08-21T08:36:45Z: Implemented durable explicit local initialization with ignored overlay storage and origin metadata.
+- 2026-08-21T08:37:05Z: verification pass

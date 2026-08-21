@@ -334,6 +334,20 @@ func strictLayout2Violations(root, planningDir string) []string {
 // re-derived repository content.
 func (s *Service) validateInitRecovery(transactionID string, snapshots []durabletx.Evidence) error {
 	markerReported := markerRelPath()
+	for _, snapshot := range snapshots {
+		if snapshot.Kind != durabletx.Worktree || snapshot.Reported != markerReported || snapshot.CandidateSHA256 == "" {
+			continue
+		}
+		data, err := os.ReadFile(s.paths.ConfigFile)
+		if err != nil || digestBytes(data) != snapshot.CandidateSHA256 {
+			return fmt.Errorf("local init marker no longer matches retained candidate")
+		}
+		marker, err := decodeLayoutMarkerStrict(data)
+		if err != nil || marker.StorageMode != StorageLocal || marker.MigrationFence != nil {
+			return fmt.Errorf("retained local init marker is invalid")
+		}
+		return nil
+	}
 	var found bool
 	for _, snapshot := range snapshots {
 		if snapshot.Kind != durabletx.Managed || snapshot.Reported != markerReported {

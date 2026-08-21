@@ -25,6 +25,9 @@ import (
 // The reported plan is computed before the first write, which is what lets a
 // preview and the apply that follows it name the same candidate paths.
 func (s *Service) Init(in InitInput) (InitResult, error) {
+	if in.Local {
+		return s.initLocal(in)
+	}
 	previewSnapshot, err := s.snapshotInitPreview("")
 	if err != nil {
 		return InitResult{}, err
@@ -103,7 +106,7 @@ type initPlan struct {
 // is nothing pre-existing for a dry run to protect.
 func (s *Service) planInit(cfg LayoutConfig, hasMarker bool, apply bool) initPlan {
 	if hasMarker {
-		if cfg.LayoutVersion != currentLayoutVersion {
+		if cfg.LayoutVersion != currentLayoutVersion && cfg.LayoutVersion != layout2Version {
 			return initPlan{
 				outcome:       pickOutcome(apply, InitMigrated, InitMigrationPreview),
 				fromVersion:   cfg.LayoutVersion,

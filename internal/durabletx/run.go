@@ -21,8 +21,10 @@ type transactionEntry struct {
 	original  []byte
 	// fence holds the writer's fence bytes in memory; only their digest and
 	// mode are recorded in the manifest, exactly like the final candidate.
-	fence    []byte
-	observed observation
+	fence               []byte
+	preSemantic         bool
+	preSemanticPriority int
+	observed            observation
 }
 
 type observation struct {
@@ -98,9 +100,32 @@ func Run(ctx context.Context, own Ownership, repo repolock.Repository, req Reque
 	if err := recheckAfterFence(store, entries); err != nil {
 		return Result{}, recoverRunFailure(store, id, doc, entries, err)
 	}
-	doc, err = advancePhase(store, id, doc, PhasePublishing)
-	if err != nil {
-		return Result{}, failure(KindRecovery, id, doc.Phase, evidence(entries), err)
+	preSemantic := hasPreSemantic(entries)
+	if preSemantic {
+		// Pre-semantic members are candidate bytes, so recovery must see the
+		// publishing phase before the first one can reach disk.
+		doc, err = advancePhase(store, id, doc, PhasePublishing)
+		if err != nil {
+			return Result{}, failure(KindRecovery, id, doc.Phase, evidence(entries), err)
+		}
+		if err := publishPreSemantic(ctx, store, entries); err != nil {
+			return Result{}, recoverRunFailure(store, id, doc, entries, err)
+		}
+	}
+	if preSemantic && req.ValidateBeforeCandidates != nil {
+		current, observeErr := observeEntries(store, entries)
+		if observeErr != nil {
+			return Result{}, recoverRunFailure(store, id, doc, entries, observeErr)
+		}
+		if err := req.ValidateBeforeCandidates(evidenceFrom(entries, current)); err != nil {
+			return Result{}, recoverRunFailure(store, id, doc, entries, err)
+		}
+	}
+	if !preSemantic {
+		doc, err = advancePhase(store, id, doc, PhasePublishing)
+		if err != nil {
+			return Result{}, failure(KindRecovery, id, doc.Phase, evidence(entries), err)
+		}
 	}
 	if err := publishCandidates(ctx, store, entries); err != nil {
 		return Result{}, recoverRunFailure(store, id, doc, entries, err)
@@ -160,6 +185,15 @@ func Run(ctx context.Context, own Ownership, repo repolock.Repository, req Reque
 	return Result{TransactionID: id, Phase: PhaseCandidatePublished, Members: evidenceFrom(entries, current)}, nil
 }
 
+func hasPreSemantic(entries []*transactionEntry) bool {
+	for _, entry := range entries {
+		if entry.preSemantic {
+			return true
+		}
+	}
+	return false
+}
+
 func repositoryMatches(own Ownership, repo repolock.Repository) error {
 	owner := own.Owner()
 	if owner.RepositoryRoot != repo.Root || owner.StorageMode != repo.Mode || owner.StorageRoot != repo.StorageRoot() {
@@ -178,7 +212,7 @@ func prepareEntries(store *store, req Request) ([]*transactionEntry, error) {
 	}
 	for _, member := range req.Members {
 		entry := &transactionEntry{manifest: manifestMember{Kind: member.Kind, Reported: member.Reported, Path: member.Path, Published: true},
-			candidate: slices.Clone(member.Content)}
+			candidate: slices.Clone(member.Content), preSemantic: member.PreSemantic, preSemanticPriority: member.PreSemanticPriority}
 		if member.Fence != nil {
 			entry.fence = slices.Clone(member.Fence)
 		}
@@ -319,7 +353,7 @@ func publishCandidates(ctx context.Context, store *store, entries []*transaction
 	for _, entry := range entries {
 		// A fence member's final candidate publishes as the transaction's last
 		// semantic operation, after post-publication validation.
-		if !entry.manifest.Published || entry.manifest.Fence != nil {
+		if !entry.manifest.Published || entry.manifest.Fence != nil || entry.preSemantic {
 			continue
 		}
 		if err := ctx.Err(); err != nil {
@@ -336,6 +370,35 @@ func publishCandidates(ctx context.Context, store *store, entries []*transaction
 			if err := testHookAfterMember(PhasePublishing, entry.manifest.Reported); err != nil {
 				return err
 			}
+		}
+	}
+	return nil
+}
+
+func publishPreSemantic(ctx context.Context, store *store, entries []*transactionEntry) error {
+	ordered := make([]*transactionEntry, 0, len(entries))
+	for _, entry := range entries {
+		if !entry.preSemantic {
+			continue
+		}
+		ordered = append(ordered, entry)
+	}
+	slices.SortFunc(ordered, func(a, b *transactionEntry) int {
+		if a.preSemanticPriority != b.preSemanticPriority {
+			return a.preSemanticPriority - b.preSemanticPriority
+		}
+		return strings.Compare(a.manifest.Reported, b.manifest.Reported)
+	})
+	for _, entry := range ordered {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		current, _, err := observe(store, entry.manifest.Kind, entry.manifest.Path)
+		if err != nil || !sameOriginal(entry, current) {
+			return fmt.Errorf("%s changed before pre-semantic publication: %w", entry.manifest.Reported, err)
+		}
+		if err := put(store, entry, current, entry.candidate, entry.manifest.Candidate.mode()); err != nil {
+			return err
 		}
 	}
 	return nil
