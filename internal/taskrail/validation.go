@@ -88,8 +88,8 @@ func (s *Service) validateState(state *State) []string {
 		violations = append(violations, "state status_summary must not be empty")
 	}
 	if state.Frontmatter.LastVerificationID == "" {
-		if state.Frontmatter.LastVerificationPreviousID != "" {
-			violations = append(violations, "state last_verification_previous_id requires last_verification_id")
+		if state.Frontmatter.LastVerificationPreviousID != "" || state.Frontmatter.LastVerifiedCompletionID != "" {
+			violations = append(violations, "state verification predecessor and completion binding require last_verification_id")
 		}
 	} else {
 		if !lowerHex32.MatchString(state.Frontmatter.LastVerificationID) {
@@ -101,6 +101,9 @@ func (s *Service) validateState(state *State) []string {
 		}
 		if previous := state.Frontmatter.LastVerificationPreviousID; previous != "" && (!lowerHex32.MatchString(previous) || previous == state.Frontmatter.LastVerificationID) {
 			violations = append(violations, "state last_verification_previous_id must be a distinct lower-case 32-hex")
+		}
+		if completion := state.Frontmatter.LastVerifiedCompletionID; completion != "" && (!lowerHex32.MatchString(completion) || match == nil || match[1] != "pass") {
+			violations = append(violations, "state last_verified_completion_id requires a passing verification and lower-case 32-hex")
 		}
 	}
 	violations = append(violations, stateArtifactRefsForPrefix(state.Frontmatter, s.logicalArtifactPrefix())...)

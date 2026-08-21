@@ -37,7 +37,7 @@ func (s *Service) validateVerificationEvidence(state *State, tasks []*Task) []st
 		match := canonicalStateVerification.FindStringSubmatch(state.Frontmatter.LastVerificationResult)
 		if match != nil {
 			task := byID[match[2]]
-			if task == nil || task.Frontmatter.LastVerificationID != verificationID || task.Frontmatter.LastVerificationPreviousID != state.Frontmatter.LastVerificationPreviousID {
+			if task == nil || task.Frontmatter.LastVerificationID != verificationID || task.Frontmatter.LastVerificationPreviousID != state.Frontmatter.LastVerificationPreviousID || task.Frontmatter.LastVerifiedCompletionID != state.Frontmatter.LastVerifiedCompletionID {
 				violations = append(violations, "state verification tuple must match the task latest verification tuple")
 			}
 		}
@@ -90,7 +90,20 @@ func validateTaskVerificationReports(task *Task, reports map[string]Verification
 	if report.TaskID != task.Frontmatter.ID || report.Result != meta.LastVerificationResult || report.GeneratedAt != meta.LastVerifiedAt {
 		return fmt.Errorf("latest verification report does not match the task tuple")
 	}
-	if note := verificationNoteLine(meta.LastVerifiedAt, meta.LastVerificationResult, meta.LastVerificationID, meta.LastVerificationPreviousID); !containsLine(task.Body, note) {
+	observed := ""
+	if meta.LastVerificationResult == "pass" && meta.LastVerifiedCompletionID == meta.CompletionID {
+		observed = meta.LastVerifiedCompletionID
+	}
+	if !sameVerificationID(report.ObservedCompletionID, optionalVerificationID(observed)) {
+		return fmt.Errorf("latest verification report completion binding does not match the task tuple")
+	}
+	if meta.LastVerificationResult == "fail" && task.Frontmatter.Status == "completed" && meta.LastVerificationPreviousID != "" {
+		prior, ok := reports[meta.LastVerificationPreviousID]
+		if ok && prior.Result == "pass" && !sameVerificationID(prior.ObservedCompletionID, optionalVerificationID(meta.CompletionID)) {
+			return fmt.Errorf("completed audit fail must directly follow the current bound pass")
+		}
+	}
+	if note := verificationNoteLine(meta.LastVerifiedAt, meta.LastVerificationResult, meta.LastVerificationID, meta.LastVerificationPreviousID, observed); !containsLine(task.Body, note) {
 		return fmt.Errorf("latest verification task note does not match the task tuple")
 	}
 	previous := meta.LastVerificationPreviousID
@@ -113,6 +126,13 @@ func validateTaskVerificationReports(task *Task, reports map[string]Verification
 		previous = *prior.PreviousVerificationID
 	}
 	return nil
+}
+
+func sameVerificationID(left, right *string) bool {
+	if left == nil || right == nil {
+		return left == right
+	}
+	return *left == *right
 }
 
 func containsLine(body, want string) bool {

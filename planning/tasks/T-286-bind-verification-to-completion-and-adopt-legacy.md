@@ -1,12 +1,17 @@
 ---
 id: T-286-bind-verification-to-completion-and-adopt-legacy
 title: Bind verification to completion and adopt legacy history
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#canonical-transition-order
 dependencies:
     - T-285-add-stable-verification-identities-and-predecessor
-updated_at: "2026-08-08T14:23:08Z"
+updated_at: "2026-08-21T12:27:37Z"
+completion_id: "e6275fffc2e3f59f88984f8f9d222028"
+last_verification_id: "05de1c58cd45f96720789849073aa8e8"
+last_verification_result: pass
+last_verified_at: "2026-08-21T12:27:37Z"
+last_verified_completion_id: "e6275fffc2e3f59f88984f8f9d222028"
 ---
 
 # T-286-bind-verification-to-completion-and-adopt-legacy Bind verification to completion and adopt legacy history
@@ -44,3 +49,6 @@ across all verification surfaces, not base ID generation or predecessor chaining
   completion ID or partial binding survives.
 
 ## Implementation Notes
+
+- 2026-08-21T12:27:26Z: Bound completed verification to exact completion evidence and preserved legacy adoption through migration.
+- 2026-08-21T12:27:37Z: verification pass id 05de1c58cd45f96720789849073aa8e8 previous none completion e6275fffc2e3f59f88984f8f9d222028

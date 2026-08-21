@@ -91,6 +91,35 @@ relevant_artifacts: []
 	}
 }
 
+func TestDecodeStateV1PreservesVerificationCompletionBinding(t *testing.T) {
+	state := `---
+schema_version: 1
+updated_at: "2026-08-14T00:00:00Z"
+active_spec_version: v0.5.0
+active_spec_path: specs/v0.5.0.md
+current_task: ""
+current_task_title: ""
+status_summary: idle
+blockers: []
+next_action: Select the next eligible task
+last_verification_result: pass for T-001-example at 2026-08-14T00:00:00Z id 0123456789abcdef0123456789abcdef
+last_verification_id: 0123456789abcdef0123456789abcdef
+last_verified_completion_id: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+relevant_artifacts: []
+continuation_notes: []
+---
+
+# STATE
+`
+	decoded, _, err := decodeStateStrict([]byte(state))
+	if err != nil {
+		t.Fatalf("decode schema 1 bound pass: %v", err)
+	}
+	if decoded.Frontmatter.LastVerifiedCompletionID != "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" {
+		t.Fatalf("migrated completion binding = %q", decoded.Frontmatter.LastVerifiedCompletionID)
+	}
+}
+
 func TestDecodeMigrationTaskStrict(t *testing.T) {
 	t.Parallel()
 

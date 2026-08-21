@@ -262,6 +262,7 @@ type StateFrontmatter struct {
 	LastVerificationResult     string   `yaml:"last_verification_result" json:"last_verification_result"`
 	LastVerificationID         string   `yaml:"last_verification_id,omitempty" json:"last_verification_id,omitempty"`
 	LastVerificationPreviousID string   `yaml:"last_verification_previous_id,omitempty" json:"last_verification_previous_id,omitempty"`
+	LastVerifiedCompletionID   string   `yaml:"last_verified_completion_id,omitempty" json:"last_verified_completion_id,omitempty"`
 	RelevantArtifacts          []string `yaml:"relevant_artifacts" json:"relevant_artifacts"`
 	ContinuationNotes          []string `yaml:"continuation_notes" json:"continuation_notes"`
 }
@@ -420,6 +421,7 @@ type VerifyResult struct {
 	VerificationID         string    `json:"verification_id"`
 	PreviousVerificationID *string   `json:"previous_verification_id"`
 	Result                 string    `json:"result"`
+	ObservedCompletionID   *string   `json:"observed_completion_id"`
 	ArtifactDir            string    `json:"artifact_dir"`
 	PlanPath               string    `json:"plan_path"`
 	ReportPath             string    `json:"report_path"`
@@ -435,6 +437,7 @@ type VerificationArtifact struct {
 	VerificationID         string   `json:"verification_id"`
 	PreviousVerificationID *string  `json:"previous_verification_id"`
 	Result                 string   `json:"result"`
+	ObservedCompletionID   *string  `json:"observed_completion_id"`
 	Summary                string   `json:"summary"`
 	Details                string   `json:"details,omitempty"`
 	GeneratedAt            string   `json:"generated_at"`

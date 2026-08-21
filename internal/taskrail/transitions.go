@@ -234,26 +234,29 @@ func nextAction(result NextResult) string {
 // summary stay portable: they record result and timestamp without a path into
 // gitignored artifacts; local evidence still lives under
 // planning/artifacts/verify/ for the producer (see VerifyResult).
-func recordVerification(state *State, task *Task, input VerifyInput, verificationID, previousVerificationID, followupTaskID, nowText string, preview []*Task) {
+func recordVerification(state *State, task *Task, input VerifyInput, verificationID, previousVerificationID, observedCompletionID, followupTaskID, nowText string, preview []*Task) {
 	task.Frontmatter.CompletionVerificationMetadata = CompletionVerificationMetadata{
 		CompletionID:                      task.Frontmatter.CompletionID,
 		LastVerificationID:                verificationID,
 		LastVerificationPreviousID:        previousVerificationID,
 		LastVerificationResult:            input.Result,
 		LastVerifiedAt:                    nowText,
+		LastVerifiedCompletionID:          observedCompletionID,
 		completionIDPresent:               task.Frontmatter.completionIDPresent || task.Frontmatter.CompletionID != "",
 		lastVerificationIDPresent:         true,
 		lastVerificationPreviousIDPresent: previousVerificationID != "",
 		lastVerificationResultPresent:     true,
 		lastVerifiedAtPresent:             true,
+		lastVerifiedCompletionIDPresent:   observedCompletionID != "",
 	}
-	appendTaskNote(task, verificationNoteLine(nowText, input.Result, verificationID, previousVerificationID))
+	appendTaskNote(task, verificationNoteLine(nowText, input.Result, verificationID, previousVerificationID, observedCompletionID))
 	task.Frontmatter.UpdatedAt = nowText
 
 	state.Frontmatter.UpdatedAt = nowText
 	state.Frontmatter.LastVerificationResult = fmt.Sprintf("%s for %s at %s id %s", input.Result, task.Frontmatter.ID, nowText, verificationID)
 	state.Frontmatter.LastVerificationID = verificationID
 	state.Frontmatter.LastVerificationPreviousID = previousVerificationID
+	state.Frontmatter.LastVerifiedCompletionID = observedCompletionID
 	state.Frontmatter.RelevantArtifacts = nil
 	if input.Result == "fail" && followupTaskID != "" {
 		state.Frontmatter.NextAction = fmt.Sprintf("Review follow-up task %s", followupTaskID)
@@ -324,6 +327,23 @@ func (s *Service) Verify(input VerifyInput) (result VerifyResult, err error) {
 		return VerifyResult{}, fmt.Errorf("generate verification id: preflight identity %s was published before the verification lock", verificationID)
 	}
 	previousVerificationID := task.Frontmatter.LastVerificationID
+	if input.Result == "fail" && task.Frontmatter.Status == "completed" && previousVerificationID != "" && task.Frontmatter.LastVerificationResult == "pass" &&
+		(task.Frontmatter.LastVerifiedCompletionID == "" || task.Frontmatter.LastVerifiedCompletionID != task.Frontmatter.CompletionID) {
+		return VerifyResult{}, WithMachineErrorCode(MachineCodeInvalidArguments,
+			fmt.Errorf("completed audit fail must directly follow the current bound pass"))
+	}
+	observedCompletionID := ""
+	if input.Result == "pass" && task.Frontmatter.Status == "completed" {
+		if task.Frontmatter.CompletionID == "" {
+			completionID, err := s.freshCompletionID(tasks)
+			if err != nil {
+				return VerifyResult{}, err
+			}
+			task.Frontmatter.CompletionID = completionID
+			task.Frontmatter.completionIDPresent = true
+		}
+		observedCompletionID = task.Frontmatter.CompletionID
+	}
 	artifactDir := filepath.Join(s.paths.VerifyDir, task.Frontmatter.ID, ts+"-"+verificationID)
 	planPath := filepath.Join(artifactDir, "plan.md")
 	reportPath := filepath.Join(artifactDir, "report.json")
@@ -354,6 +374,7 @@ func (s *Service) Verify(input VerifyInput) (result VerifyResult, err error) {
 		VerificationID:         verificationID,
 		PreviousVerificationID: optionalVerificationID(previousVerificationID),
 		Result:                 input.Result,
+		ObservedCompletionID:   optionalVerificationID(observedCompletionID),
 		Summary:                strings.TrimSpace(input.Summary),
 		Details:                strings.TrimSpace(input.Details),
 		GeneratedAt:            timestamp(now),
@@ -368,7 +389,7 @@ func (s *Service) Verify(input VerifyInput) (result VerifyResult, err error) {
 	reportMarkdown := renderVerificationReportMarkdown(report)
 
 	nowText := timestamp(now)
-	recordVerification(state, task, input, verificationID, previousVerificationID, followupTaskID, nowText, preview)
+	recordVerification(state, task, input, verificationID, previousVerificationID, observedCompletionID, followupTaskID, nowText, preview)
 
 	ledger := verifyLedger{
 		state:     state,
@@ -393,6 +414,7 @@ func (s *Service) Verify(input VerifyInput) (result VerifyResult, err error) {
 		VerificationID:         verificationID,
 		PreviousVerificationID: optionalVerificationID(previousVerificationID),
 		Result:                 input.Result,
+		ObservedCompletionID:   optionalVerificationID(observedCompletionID),
 		ArtifactDir:            relPath(s.paths.RepoRoot, artifactDir),
 		PlanPath:               relPlan,
 		ReportPath:             relReport,

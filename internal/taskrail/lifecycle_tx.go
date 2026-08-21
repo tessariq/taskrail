@@ -48,7 +48,7 @@ var (
 	lifecycleUnblock  = writerCommand{command: "unblock", taskFields: []string{"status", "updated_at", "implementation_notes"}}
 	// Verify records its immutable identity tuple without changing lifecycle
 	// status; its follow-up publication is owned by verify_tx.go.
-	lifecycleVerify = writerCommand{command: "verify", taskFields: []string{"updated_at", "implementation_notes", "last_verification_id", "last_verification_previous_id", "last_verification_result", "last_verified_at"}}
+	lifecycleVerify = writerCommand{command: "verify", taskFields: []string{"updated_at", "implementation_notes", "completion_id", "last_verification_id", "last_verification_previous_id", "last_verification_result", "last_verified_at", "last_verified_completion_id"}}
 )
 
 // beginWriterWrite takes the repository mutation lock for one tracked-work
@@ -211,12 +211,14 @@ func patchVerificationMetadata(data []byte, task *Task) ([]byte, error) {
 	}
 	meta := task.Frontmatter.CompletionVerificationMetadata
 	values := map[string]*string{
+		"completion_id":                 optionalQuotedString(meta.CompletionID),
 		"last_verification_id":          verificationFieldPointer(strconv.Quote(meta.LastVerificationID)),
 		"last_verification_previous_id": optionalQuotedString(meta.LastVerificationPreviousID),
 		"last_verification_result":      verificationFieldPointer(meta.LastVerificationResult),
 		"last_verified_at":              verificationFieldPointer(strconv.Quote(meta.LastVerifiedAt)),
+		"last_verified_completion_id":   optionalQuotedString(meta.LastVerifiedCompletionID),
 	}
-	for _, field := range []string{"last_verification_id", "last_verification_previous_id", "last_verification_result", "last_verified_at"} {
+	for _, field := range []string{"completion_id", "last_verification_id", "last_verification_previous_id", "last_verification_result", "last_verified_at", "last_verified_completion_id"} {
 		frontmatter, err = rewriteOptionalTaskField(frontmatter, newline, task.Frontmatter.ID, field, values[field])
 		if err != nil {
 			return nil, err

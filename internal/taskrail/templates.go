@@ -142,6 +142,11 @@ func renderVerificationPlan(task *Task, input VerifyInput, verificationID, previ
 	builder.WriteString(fmt.Sprintf("- Title: %s\n", task.Frontmatter.Title))
 	builder.WriteString(fmt.Sprintf("- Requested result: %s\n", input.Result))
 	builder.WriteString(fmt.Sprintf("- Verification ID: %s\n", verificationID))
+	if task.Frontmatter.Status == "completed" && input.Result == "pass" {
+		builder.WriteString(fmt.Sprintf("- Observed completion ID: %s\n", task.Frontmatter.CompletionID))
+	} else {
+		builder.WriteString("- Observed completion ID: none\n")
+	}
 	if previousVerificationID == "" {
 		previousVerificationID = "none"
 	}
@@ -163,6 +168,11 @@ func renderVerificationReportMarkdown(report VerificationArtifact) string {
 	builder.WriteString(fmt.Sprintf("- Title: %s\n", report.TaskTitle))
 	builder.WriteString(fmt.Sprintf("- Result: %s\n", report.Result))
 	builder.WriteString(fmt.Sprintf("- Verification ID: %s\n", report.VerificationID))
+	if report.ObservedCompletionID == nil {
+		builder.WriteString("- Observed completion ID: none\n")
+	} else {
+		builder.WriteString(fmt.Sprintf("- Observed completion ID: %s\n", *report.ObservedCompletionID))
+	}
 	if report.PreviousVerificationID == nil {
 		builder.WriteString("- Previous verification ID: none\n")
 	} else {

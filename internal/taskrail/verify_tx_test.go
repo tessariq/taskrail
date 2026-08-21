@@ -632,6 +632,7 @@ func TestDelegatedVerifyWrites(t *testing.T) {
 
 	t.Run("only canonical verify fields change", func(t *testing.T) {
 		svc, repo, delegation := verifyDelegationFixture(t, "T-002", delegatedVerifyWrites(""))
+		svc.completionID = func() (string, error) { return firstCompletionID, nil }
 		asVerifyDelegate(t, delegation)
 		selected := filepath.Join(repo, "planning", "tasks", "T-002.md")
 		writeFile(t, selected, strings.Replace(readBytes(t, selected),
@@ -645,7 +646,7 @@ func TestDelegatedVerifyWrites(t *testing.T) {
 		if !strings.Contains(after, "selected_sentinel: must-survive") || !strings.Contains(after, "loop_policy: null") {
 			t.Fatalf("delegated verify widened its field reach:\n%s", after)
 		}
-		// Verify owns its timestamp, identity tuple, and append-only note; identity,
+		// Verify owns its timestamp, completion/identity tuple, and append-only note; identity,
 		// ranking, anchoring, dependencies, and policy fields all survive untouched.
 		const stamp = "updated_at: \"2026-08-17T09:00:00Z\""
 		lines := strings.Split(before, "\n")
@@ -655,8 +656,8 @@ func TestDelegatedVerifyWrites(t *testing.T) {
 			}
 		}
 		want := strings.TrimRight(strings.Join(lines, "\n"), "\n")
-		want = strings.Replace(want, stamp, stamp+"\nlast_verification_id: \""+delegatedVerificationID+"\"\nlast_verification_result: pass\nlast_verified_at: \"2026-08-17T09:00:00Z\"", 1) +
-			"\n\n## Implementation Notes\n\n- 2026-08-17T09:00:00Z: verification pass id " + delegatedVerificationID + " previous none completion none\n"
+		want = strings.Replace(want, stamp, stamp+"\ncompletion_id: \""+firstCompletionID+"\"\nlast_verification_id: \""+delegatedVerificationID+"\"\nlast_verification_result: pass\nlast_verified_at: \"2026-08-17T09:00:00Z\"\nlast_verified_completion_id: \""+firstCompletionID+"\"", 1) +
+			"\n\n## Implementation Notes\n\n- 2026-08-17T09:00:00Z: verification pass id " + delegatedVerificationID + " previous none completion " + firstCompletionID + "\n"
 		if after != want {
 			t.Fatalf("delegated verify changed an owned line:\nwant:\n%s\ngot:\n%s", want, after)
 		}
