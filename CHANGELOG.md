@@ -6,6 +6,10 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ### Added
 
+- Fresh `taskrail init --local` now creates the ignored local
+  `planning/tasks` directory as part of initialization, so an empty local task
+  corpus is immediately usable by readers, structural writers, and task
+  authoring without creating committed planning state.
 - Legacy `taskrail import --apply` now builds its complete spec, task, and
   `STATE.md` candidate under the repository mutation lock and publishes it
   through one normal transaction. Source or destination races refuse with

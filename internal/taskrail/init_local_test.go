@@ -2,6 +2,7 @@ package taskrail
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -42,6 +43,23 @@ func TestInitLocalCreatesIgnoredOverlay(t *testing.T) {
 			t.Fatalf("committed scaffold %s unexpectedly exists: %v", logical, err)
 		}
 	}
+	localTasks := filepath.Join(repo, ".taskrail", "local", "planning", "tasks")
+	if info, err := os.Stat(localTasks); err != nil || !info.IsDir() {
+		t.Fatalf("local tasks directory: info=%v err=%v", info, err)
+	}
+	if _, err := os.Stat(filepath.Join(repo, "planning", "tasks")); !os.IsNotExist(err) {
+		t.Fatalf("committed tasks directory unexpectedly exists: %v", err)
+	}
+	local, err := NewService(repo)
+	if err != nil {
+		t.Fatalf("rediscover local service: %v", err)
+	}
+	if _, err := local.AddSpec("v0.2.0"); err != nil {
+		t.Fatalf("add spec after local init: %v", err)
+	}
+	if _, err := local.CreateTask(CreateTaskInput{Title: "First local task", SpecRef: "specs/v0.1.0.md#summary"}); err != nil {
+		t.Fatalf("create task after local init: %v", err)
+	}
 	marker, err := os.ReadFile(filepath.Join(repo, ".taskrail", "config.yml"))
 	if err != nil {
 		t.Fatal(err)
@@ -81,6 +99,25 @@ func TestInitLocalCreatesIgnoredOverlay(t *testing.T) {
 	output := gitOutput(t, repo, "status", "--porcelain")
 	if output != "" {
 		t.Fatalf("git status = %q, want clean", output)
+	}
+}
+
+func TestInitLocalRemovesEmptyTaskDirectoryOnPrepublicationFailure(t *testing.T) {
+	repo := t.TempDir()
+	initLocalGitRepo(t, repo)
+	requireRecoveryDirectoryDurability(t, repo)
+	testHookLocalTasksCreated = func() error { return errors.New("injected after local tasks creation") }
+	t.Cleanup(func() { testHookLocalTasksCreated = nil })
+
+	_, err := newTestService(t, repo, time.Now()).Init(InitInput{Local: true})
+	if err == nil || !strings.Contains(err.Error(), "injected after local tasks creation") {
+		t.Fatalf("init local error = %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(repo, ".taskrail")); !os.IsNotExist(err) {
+		t.Fatalf("failed local init retained scaffold: %v", err)
+	}
+	if output := gitOutput(t, repo, "status", "--porcelain"); output != "" {
+		t.Fatalf("failed local init changed Git status: %q", output)
 	}
 }
 

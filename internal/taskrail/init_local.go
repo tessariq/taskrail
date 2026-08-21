@@ -21,6 +21,8 @@ const localInitCommand = "init"
 const localExcludeBegin = "# taskrail local planning begin"
 const localExcludeEnd = "# taskrail local planning end"
 
+var testHookLocalTasksCreated func() error
+
 type localOrigin struct {
 	SchemaVersion int     `json:"schema_version"`
 	WorktreeRoot  string  `json:"worktree_root"`
@@ -121,11 +123,21 @@ func (s *Service) applyLocalInit() (result InitResult, err error) {
 	committed := false
 	defer func() {
 		if !committed && err != nil {
-			// Never recurse through a path another actor could have populated. A
-			// rollback leaves this root empty; retained recovery evidence keeps it.
-			_ = os.Remove(s.paths.StorageRoot)
+			s.cleanupEmptyLocalInitDirectories()
 		}
 	}()
+	// The state and notes publications below durably sync PlanningDir, which also
+	// makes this pre-created empty child's namespace entry durable. Creating it
+	// before durabletx keeps every normal reader and writer usable immediately;
+	// the failure cleanup removes only known-empty directories and never recurses.
+	if err := os.MkdirAll(s.paths.TasksDir, 0o755); err != nil {
+		return InitResult{}, fmt.Errorf("create local tasks directory: %w", err)
+	}
+	if testHookLocalTasksCreated != nil {
+		if err := testHookLocalTasksCreated(); err != nil {
+			return InitResult{}, err
+		}
+	}
 
 	marker := Layout2Config{
 		LayoutVersion: layout2Version, SpecsDir: defaultSpecsDir, PlanningDir: defaultPlanningDir,
@@ -193,6 +205,19 @@ func (s *Service) applyLocalInit() (result InitResult, err error) {
 		Validation: &ValidationResult{Valid: true, Violations: []string{}},
 	}
 	return result, nil
+}
+
+func (s *Service) cleanupEmptyLocalInitDirectories() {
+	for _, directory := range []string{
+		s.paths.TasksDir,
+		s.paths.PlanningDir,
+		s.paths.SpecsDir,
+		s.paths.RuntimeDir,
+		s.paths.StorageRoot,
+		filepath.Join(s.paths.RepoRoot, taskrailConfigDir),
+	} {
+		_ = os.Remove(directory)
+	}
 }
 
 func (s *Service) localInitWrites() []WriteEntry {
