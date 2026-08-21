@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -100,6 +101,217 @@ func TestInitLocalRejectsUpgradeOnlyInputsBeforeWriting(t *testing.T) {
 	}
 	if output := gitOutput(t, repo, "status", "--porcelain"); output != "" {
 		t.Fatalf("rejected local init changed Git status: %q", output)
+	}
+}
+
+func TestLocalStatusAndPathReportOneReadOnlyLocalContext(t *testing.T) {
+	t.Parallel()
+
+	repo := t.TempDir()
+	if output, err := exec.Command("git", "init", "--quiet", repo).CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v (%s)", err, output)
+	}
+	if _, err := newTestService(t, repo, time.Now()).Init(InitInput{Local: true}); err != nil {
+		t.Fatalf("init local: %v", err)
+	}
+	svc, err := NewService(repo)
+	if err != nil {
+		t.Fatalf("new local service: %v", err)
+	}
+	before := snapshotTree(t, repo)
+
+	status, err := svc.LocalStatus()
+	if err != nil {
+		t.Fatalf("local status: %v", err)
+	}
+	paths, err := svc.LocalPath()
+	if err != nil {
+		t.Fatalf("local path: %v", err)
+	}
+	if status.Mode != string(StorageLocal) || status.StorageRoot != localStorageRoot ||
+		status.LogicalRoot != repo || status.WorktreeRoot != repo || status.GitCommonDir == "" {
+		t.Fatalf("local status identity = %+v", status)
+	}
+	if !status.PromotionReady || len(status.Violations) != 0 {
+		t.Fatalf("local status readiness = %+v", status)
+	}
+	storage := svc.storageSnapshot()
+	if paths.Mode != string(StorageLocal) || paths.ConfigPath != ".taskrail/config.yml" ||
+		paths.StorageRoot != localStorageRoot || paths.SpecsDir != "specs" ||
+		paths.PlanningDir != "planning" || paths.PromptsDir != ".taskrail/local/prompts" ||
+		paths.ArtifactsDir != storage.ArtifactsDir || paths.RuntimeDir != ".taskrail/local/runtime" {
+		t.Fatalf("local paths = %+v; status storage = %+v", paths, storage)
+	}
+	if got := snapshotTree(t, repo); !reflect.DeepEqual(got, before) {
+		t.Fatal("local inspection changed fixture bytes")
+	}
+}
+
+func TestLocalInspectionRefusesMarkerChangedAfterDiscovery(t *testing.T) {
+	t.Parallel()
+
+	repo := t.TempDir()
+	if output, err := exec.Command("git", "init", "--quiet", repo).CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v (%s)", err, output)
+	}
+	if _, err := newTestService(t, repo, time.Now()).Init(InitInput{Local: true}); err != nil {
+		t.Fatalf("init local: %v", err)
+	}
+	svc, err := NewService(repo)
+	if err != nil {
+		t.Fatalf("new local service: %v", err)
+	}
+	writeFile(t, filepath.Join(repo, ".taskrail", "config.yml"), "layout_version: 2\nspecs_dir: specs\nplanning_dir: planning\nstorage_mode: committed\nimplementation_review_max_rounds: 1\n")
+
+	if _, err := svc.LocalStatus(); err == nil || MachineFailureFor(err).Code != MachineCodeUnsupported {
+		t.Fatalf("local status error = %v, want unsupported", err)
+	}
+	if _, err := svc.LocalPath(); err == nil || MachineFailureFor(err).Code != MachineCodeUnsupported {
+		t.Fatalf("local path error = %v, want unsupported", err)
+	}
+}
+
+func TestLocalStatusIncludesInstalledSkillExclusions(t *testing.T) {
+	t.Parallel()
+
+	repo := t.TempDir()
+	if output, err := exec.Command("git", "init", "--quiet", repo).CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v (%s)", err, output)
+	}
+	if _, err := newTestService(t, repo, time.Now()).Init(InitInput{Local: true}); err != nil {
+		t.Fatalf("init local: %v", err)
+	}
+	svc, err := NewService(repo)
+	if err != nil {
+		t.Fatalf("new local service: %v", err)
+	}
+	installed, err := svc.WriteShippableSkills("v9.9.9", false)
+	if err != nil {
+		t.Fatalf("install local skills: %v", err)
+	}
+	skillPath := filepath.ToSlash(filepath.Dir(installed.Written[0]))
+	excludePath := filepath.Join(repo, ".git", "info", "exclude")
+	exclude, err := os.ReadFile(excludePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, excludePath, strings.Replace(string(exclude), localExcludeEnd, skillPath+"\n"+localExcludeEnd, 1))
+
+	svc, err = NewService(repo)
+	if err != nil {
+		t.Fatalf("new local service: %v", err)
+	}
+	status, err := svc.LocalStatus()
+	if err != nil {
+		t.Fatalf("local status: %v", err)
+	}
+	for _, exclusion := range status.Exclusions {
+		if exclusion.Path == skillPath && exclusion.Source == "managed" && exclusion.Effective {
+			return
+		}
+	}
+	t.Fatalf("local status exclusions = %+v, want installed skill %s", status.Exclusions, skillPath)
+}
+
+func TestLocalInspectionRefusesUninitializedAndMalformedOrigins(t *testing.T) {
+	t.Parallel()
+
+	uninitialized := t.TempDir()
+	initLocalGitRepo(t, uninitialized)
+	svc, err := NewService(uninitialized)
+	if err != nil {
+		t.Fatalf("new uninitialized service: %v", err)
+	}
+	if _, err := svc.LocalStatus(); err == nil || MachineFailureFor(err).Code != MachineCodeUnsupported {
+		t.Fatalf("uninitialized local status error = %v, want unsupported", err)
+	}
+	if _, err := svc.LocalPath(); err == nil || MachineFailureFor(err).Code != MachineCodeUnsupported {
+		t.Fatalf("uninitialized local path error = %v, want unsupported", err)
+	}
+	if _, err := os.Stat(filepath.Join(uninitialized, ".taskrail")); !os.IsNotExist(err) {
+		t.Fatalf("uninitialized inspection created local storage: %v", err)
+	}
+
+	repo := t.TempDir()
+	initLocalGitRepo(t, repo)
+	if _, err := newTestService(t, repo, time.Now()).Init(InitInput{Local: true}); err != nil {
+		t.Fatalf("init local: %v", err)
+	}
+	svc, err = NewService(repo)
+	if err != nil {
+		t.Fatalf("new local service: %v", err)
+	}
+	writeFile(t, filepath.Join(repo, ".taskrail", "local", "runtime", "origin.json"), "{}")
+	if _, err := svc.LocalStatus(); err == nil || MachineFailureFor(err).Code != MachineCodeRepositoryInvalid {
+		t.Fatalf("malformed origin error = %v, want repository_invalid", err)
+	}
+}
+
+func TestLocalStatusDiscoversDescendantAndLinkedWorktreeScopes(t *testing.T) {
+	t.Parallel()
+
+	repo := t.TempDir()
+	initLocalGitRepo(t, repo)
+	if _, err := newTestService(t, repo, time.Now()).Init(InitInput{Local: true}); err != nil {
+		t.Fatalf("init local: %v", err)
+	}
+	descendant := filepath.Join(repo, "nested", "directory")
+	if err := os.MkdirAll(descendant, 0o755); err != nil {
+		t.Fatalf("create descendant: %v", err)
+	}
+	svc, err := NewService(descendant)
+	if err != nil {
+		t.Fatalf("new descendant service: %v", err)
+	}
+	status, err := svc.LocalStatus()
+	if err != nil {
+		t.Fatalf("descendant local status: %v", err)
+	}
+	if status.LogicalRoot != repo || status.WorktreeRoot != repo || status.GitCommonDir != filepath.Join(repo, ".git") {
+		t.Fatalf("descendant scope = %+v", status)
+	}
+
+	linkedSource := t.TempDir()
+	initLocalGitRepo(t, linkedSource)
+	writeFile(t, filepath.Join(linkedSource, "README.md"), "# source\n")
+	runLocalGit(t, linkedSource, "add", "README.md")
+	runLocalGit(t, linkedSource, "-c", "user.name=Taskrail", "-c", "user.email=taskrail@example.test", "commit", "-qm", "initial")
+	linked := t.TempDir()
+	if err := os.Remove(linked); err != nil {
+		t.Fatalf("remove linked-worktree target: %v", err)
+	}
+	runLocalGit(t, linkedSource, "worktree", "add", "--detach", linked)
+	linkedSvc, err := NewService(linked)
+	if err != nil {
+		t.Fatalf("new linked service: %v", err)
+	}
+	if _, err := linkedSvc.Init(InitInput{Local: true}); err != nil {
+		t.Fatalf("init linked local storage: %v", err)
+	}
+	linkedSvc, err = NewService(linked)
+	if err != nil {
+		t.Fatalf("rediscover linked service: %v", err)
+	}
+	linkedStatus, err := linkedSvc.LocalStatus()
+	if err != nil {
+		t.Fatalf("linked local status: %v", err)
+	}
+	if linkedStatus.WorktreeRoot != linked || linkedStatus.GitCommonDir != filepath.Join(linkedSource, ".git") {
+		t.Fatalf("linked scope = %+v", linkedStatus)
+	}
+}
+
+func initLocalGitRepo(t *testing.T, repo string) {
+	t.Helper()
+	if output, err := exec.Command("git", "init", "--quiet", repo).CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v (%s)", err, output)
+	}
+}
+
+func runLocalGit(t *testing.T, repo string, args ...string) {
+	t.Helper()
+	if output, err := exec.Command("git", append([]string{"-C", repo}, args...)...).CombinedOutput(); err != nil {
+		t.Fatalf("git %v: %v (%s)", args, err, output)
 	}
 }
 

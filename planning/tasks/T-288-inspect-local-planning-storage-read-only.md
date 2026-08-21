@@ -1,12 +1,13 @@
 ---
 id: T-288-inspect-local-planning-storage-read-only
 title: Inspect local planning storage read-only
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#local-planning-mode
 dependencies:
     - T-287-initialize-ignored-local-planning-storage-durably
-updated_at: "2026-08-08T14:23:08Z"
+updated_at: "2026-08-21T09:50:50Z"
+completion_id: "406f8d82b8c29fd5eacfe2d353251290"
 ---
 
 # T-288-inspect-local-planning-storage-read-only Inspect local planning storage read-only
@@ -44,3 +45,6 @@ files directly.
   refusal, and injected snapshot race.
 
 ## Implementation Notes
+
+- 2026-08-21T09:50:33Z: Added read-only local storage status and path inspection with race-safe snapshots.
+- 2026-08-21T09:50:50Z: verification pass

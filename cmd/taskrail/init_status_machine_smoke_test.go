@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"os/exec"
 	"strings"
 	"testing"
 )
@@ -115,5 +116,46 @@ func TestStatusJSONReportsTheActiveStorage(t *testing.T) {
 	if result.Storage.Mode != "committed" || result.Storage.Root != "." ||
 		result.Storage.ArtifactsDir != "planning/artifacts" {
 		t.Fatalf("storage = %+v", result.Storage)
+	}
+}
+
+func TestLocalInspectionJSONReportsTheActiveLocalContext(t *testing.T) {
+	root := t.TempDir()
+	if output, err := exec.Command("git", "init", "--quiet", root).CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v (%s)", err, output)
+	}
+	t.Chdir(root)
+	if _, err := runRoot(t, "init", "--local"); err != nil {
+		t.Fatalf("init --local: %v", err)
+	}
+
+	stdout, _, err := runRootSplit(t, "local", "status", "--json")
+	if err != nil {
+		t.Fatalf("local status --json: %v", err)
+	}
+	var status struct {
+		Mode           string `json:"mode"`
+		StorageRoot    string `json:"storage_root"`
+		PromotionReady bool   `json:"promotion_ready"`
+		Violations     []any  `json:"violations"`
+	}
+	decodeMachineResult(t, stdout, &status)
+	if status.Mode != "local" || status.StorageRoot != ".taskrail/local" || !status.PromotionReady || status.Violations == nil || len(status.Violations) != 0 {
+		t.Fatalf("local status = %+v", status)
+	}
+
+	stdout, _, err = runRootSplit(t, "local", "path", "--json")
+	if err != nil {
+		t.Fatalf("local path --json: %v", err)
+	}
+	var paths struct {
+		Mode         string `json:"mode"`
+		SpecsDir     string `json:"specs_dir"`
+		PlanningDir  string `json:"planning_dir"`
+		ArtifactsDir string `json:"artifacts_dir"`
+	}
+	decodeMachineResult(t, stdout, &paths)
+	if paths.Mode != "local" || paths.SpecsDir != "specs" || paths.PlanningDir != "planning" || paths.ArtifactsDir != ".taskrail/local/planning/artifacts" {
+		t.Fatalf("local paths = %+v", paths)
 	}
 }

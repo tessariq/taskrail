@@ -132,7 +132,7 @@ func TestCheckMachineEntryPolicyRejectsPerturbedEntries(t *testing.T) {
 // last of the inherited writers over. The planned commands publish nothing yet.
 var migratedCommands = []string{
 	"block", "complete", "coverage", "import", "init", "lock clear", "lock status",
-	"next", "recover", "repair", "retrofit",
+	"local path", "local status", "next", "recover", "repair", "retrofit",
 	"spec activate", "spec add", "spec diff", "spec list", "spec show", "start",
 	"stats", "status", "task new", "task rename", "task repoint", "unblock",
 	"task dependency add", "task dependency remove", "validate", "verify",

@@ -134,3 +134,4 @@ T-173-check-cross-surface-workflow-contract-integrity	run	-
 T-248-run-cross-platform-workflow-contract-tests-in-ci	run	-
 T-340-accept-verification-identity-reports-in-temporary	hold-operator	Operator-owned temporary-loop report compatibility repair
 T-174-run-the-v0-5-0-gap-and-drift-release-gate	hold-operator	Maintainer-owned final release gate
+T-341-support-empty-local-planning-task-directories	hold-operator	Verification follow-up from T-288-inspect-local-planning-storage-read-only; operator review required
