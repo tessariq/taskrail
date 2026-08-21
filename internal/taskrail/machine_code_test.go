@@ -16,6 +16,7 @@ func TestMachineCodesAreRegistered(t *testing.T) {
 		MachineCodeRepositoryInvalid,
 		MachineCodeValidationFailed,
 		MachineCodeTaskNotFound,
+		MachineCodeReviewNotFound,
 		MachineCodeInvalidStatus,
 		MachineCodeInvalidReason,
 		MachineCodeInvalidProposal,

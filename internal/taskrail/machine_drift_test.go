@@ -133,7 +133,7 @@ func TestCheckMachineEntryPolicyRejectsPerturbedEntries(t *testing.T) {
 var migratedCommands = []string{
 	"block", "complete", "coverage", "import", "init", "lock clear", "lock status",
 	"local path", "local status", "next", "recover", "repair", "retrofit",
-	"prompt list", "prompt show", "review publish", "spec activate", "spec add", "spec diff", "spec list", "spec show", "start",
+	"prompt list", "prompt show", "review publish", "review show", "spec activate", "spec add", "spec diff", "spec list", "spec show", "start",
 	"stats", "status", "task new", "task rename", "task repoint", "task show", "unblock",
 	"task dependency add", "task dependency remove", "validate", "verify",
 }

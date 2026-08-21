@@ -93,6 +93,7 @@ func TestEveryConstructedSemanticCommandFamilyUsesRecoveryAdmission(t *testing.T
 		{name: "task rename", args: []string{"task", "rename", "T-001-fenced", "--slug", "renamed"}},
 		{name: "task repoint", args: []string{"task", "repoint", "T-001-fenced", "--area", "summary"}},
 		{name: "task show", args: []string{"task", "show", "T-001-fenced"}},
+		{name: "review show", args: []string{"review", "show", "planning/reviews/spec/v0.1.0/session/report.json"}},
 		{name: "spec list", args: []string{"spec", "list"}},
 		{name: "spec show", args: []string{"spec", "show", "v0.1.0"}},
 		{name: "spec add", args: []string{"spec", "add", "v0.2.0"}},

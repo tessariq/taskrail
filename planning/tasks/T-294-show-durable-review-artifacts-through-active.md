@@ -1,12 +1,17 @@
 ---
 id: T-294-show-durable-review-artifacts-through-active
 title: Show durable review artifacts through active storage
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#safe-review-artifact-publication
 dependencies:
     - T-223-run-every-v0-5-command-against-local-storage
-updated_at: "2026-08-08T14:23:08Z"
+updated_at: "2026-08-21T14:38:20Z"
+completion_id: "ff0734d6a8dde14a516479923daefca1"
+last_verification_id: "b9b1230eba7c020f50c15091c7450b6c"
+last_verification_result: pass
+last_verified_at: "2026-08-21T14:38:20Z"
+last_verified_completion_id: "ff0734d6a8dde14a516479923daefca1"
 ---
 
 # T-294-show-durable-review-artifacts-through-active Show durable review artifacts through active storage
@@ -37,3 +42,6 @@ file through the active committed or local storage context.
   historical retrieval without physical-path disclosure.
 
 ## Implementation Notes
+
+- 2026-08-21T14:38:08Z: Added read-only durable review retrieval with storage-safe exact bytes and machine errors.
+- 2026-08-21T14:38:20Z: verification pass id b9b1230eba7c020f50c15091c7450b6c previous none completion ff0734d6a8dde14a516479923daefca1

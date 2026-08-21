@@ -6,8 +6,9 @@ import (
 )
 
 func newReviewCmd() *cobra.Command {
-	cmd := &cobra.Command{Use: "review", Short: "Publish reviewed planning evidence"}
+	cmd := &cobra.Command{Use: "review", Short: "Inspect and publish durable review artifacts"}
 	cmd.AddCommand(newReviewPublishCmd())
+	cmd.AddCommand(newReviewShowCmd())
 	return cmd
 }
 
@@ -40,6 +41,25 @@ func newReviewPublishCmd() *cobra.Command {
 	_ = cmd.MarkFlagRequired("task")
 	_ = cmd.MarkFlagRequired("expect-task-sha256")
 	_ = cmd.MarkFlagRequired("expect-spec-sha256")
+	addMachineJSONFlag(cmd)
+	return cmd
+}
+
+func newReviewShowCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "show <logical-review-path>",
+		Short: "Print one exact durable review artifact (read-only)",
+		Args:  machineArgs(cobra.ExactArgs(1)),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runCommand(cmd, func(svc *taskrail.Service) (commandResult, error) {
+				result, err := svc.ReviewShow(args[0])
+				if err != nil {
+					return commandResult{}, err
+				}
+				return commandResult{shape: "ReviewShowResult", value: result, text: result.Content, exactText: true}, nil
+			})
+		},
+	}
 	addMachineJSONFlag(cmd)
 	return cmd
 }

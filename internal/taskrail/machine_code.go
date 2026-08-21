@@ -21,6 +21,7 @@ const (
 	MachineCodeRepositoryInvalid   = "repository_invalid"
 	MachineCodeValidationFailed    = "validation_failed"
 	MachineCodeTaskNotFound        = "task_not_found"
+	MachineCodeReviewNotFound      = "review_not_found"
 	MachineCodePromptNotFound      = "prompt_not_found"
 	MachineCodePromptInvalid       = "prompt_invalid"
 	MachineCodeInvalidStatus       = "invalid_status"
