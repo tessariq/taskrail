@@ -18,6 +18,7 @@ func TestInitLocalCreatesIgnoredOverlay(t *testing.T) {
 	if output, err := command.CombinedOutput(); err != nil {
 		t.Fatalf("git init: %v (%s)", err, output)
 	}
+	requireRecoveryDirectoryDurability(t, repo)
 	svc := newTestService(t, repo, time.Date(2026, 8, 21, 12, 0, 0, 0, time.UTC))
 	result, err := svc.Init(InitInput{Local: true})
 	if err != nil {
