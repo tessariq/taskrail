@@ -277,7 +277,7 @@ chmod 700 "$xdg_root" "$xdg_root/taskrail" "$xdg_root/taskrail/autonomous-loop" 
 base_head="$(git -C "$operator_fixture" rev-parse HEAD)"
 base_index="$(git -C "$operator_fixture" write-tree)"
 printf '%s\n' 'fixture candidate' >"$operator_fixture/README.md"
-printf '%s\n' 'last_verification_result: pass for T-900 at 2026-08-20T00:00:00Z (verification_id=0123456789abcdef0123456789abcdef)' >"$operator_fixture/planning/STATE.md"
+printf '%s\n' 'last_verification_result: pass for T-900 at 2026-08-20T00:00:00Z id 0123456789abcdef0123456789abcdef' >"$operator_fixture/planning/STATE.md"
 candidate_index="$TMP_ROOT/operator-candidate-index"
 cp "$(git -C "$operator_fixture" rev-parse --git-path index)" "$candidate_index"
 GIT_INDEX_FILE="$candidate_index" git -C "$operator_fixture" add -A

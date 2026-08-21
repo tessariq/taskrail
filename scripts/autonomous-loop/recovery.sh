@@ -125,7 +125,7 @@ check_report() {
 verification_summary() {
   local result="$1" id="$2" generated="$3" verification_id="${4:-}"
   printf '%s for %s at %s' "$result" "$id" "$generated"
-  [[ -z "$verification_id" ]] || printf ' (verification_id=%s)' "$verification_id"
+  [[ -z "$verification_id" ]] || printf ' id %s' "$verification_id"
 }
 
 validate_report_binding() {

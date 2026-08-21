@@ -152,6 +152,13 @@ On success, run `${TASKRAIL:-taskrail} complete {{TASK_ID}} --note "..."`, then
 "..."`. Add follow-up flags to that verification only when one valid separate
 follow-up is required. Never verify pass before completion.
 
+For the entire child execution, publish exactly one verification report for the
+selected tracked task: the terminal command described above. Do not invoke
+`verify {{TASK_ID}}` earlier for manual testing, intermediate evidence, or to
+exercise predecessor chains. Repeated-verification behavior must be exercised in
+focused tests or an isolated sandbox whose reports are outside this checkout's
+tracked-task verification tree.
+
 If implementation cannot safely proceed, run `${TASKRAIL:-taskrail} block
 {{TASK_ID}} --reason "..."`, then `${TASKRAIL:-taskrail} verify {{TASK_ID}}
 --result fail --summary "..." --details "..."`. Never verify fail while leaving

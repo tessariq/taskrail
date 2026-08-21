@@ -83,6 +83,8 @@ assert_review_prompt() {
   assert_contains "$name unresolved judgment rework" "$value" "cannot be demonstrated adequately by deterministic evidence"
   assert_contains "$name no budget follow-up" "$value" "review-round limit never turns current work into a follow-up"
   assert_contains "$name terminal outcome set" "$value" "parent accepts only completed/pass, blocked/fail, or in-progress/fail"
+  assert_contains "$name one tracked verification" "$value" "publish exactly one verification report for the selected tracked task"
+  assert_contains "$name repeated verification sandbox" "$value" "Repeated-verification behavior must be exercised in focused tests or an isolated sandbox"
   assert_contains "$name blocked follow-up" "$value" "A blocked run may create one follow-up"
   assert_contains "$name held follow-up" "$value" "parent runner always queues it as held"
   assert_contains "$name parent Git ownership" "$value" "The parent runner owns Git delivery"
@@ -237,8 +239,8 @@ fi
 printf '%s\n' "id: $id" "status: $status" 'spec_ref: specs/v0.5.0.md#test-area' 'dependencies: []' >"$repo/planning/tasks/$id.md"
 verification_suffix=''
 case "${AUTONOMOUS_TEST_ACTION:-}" in
-  identity-report | final-outcome-hang) verification_suffix=' (verification_id=0123456789abcdef0123456789abcdef)' ;;
-  identity-mismatch) verification_suffix=' (verification_id=fedcba9876543210fedcba9876543210)' ;;
+  identity-report | final-outcome-hang) verification_suffix=' id 0123456789abcdef0123456789abcdef' ;;
+  identity-mismatch) verification_suffix=' id fedcba9876543210fedcba9876543210' ;;
 esac
 printf '%s\n' 'active_spec_path: specs/v0.5.0.md' 'current_task:' "last_verification_result: $result for $id at 2026-08-08T00:00:00Z$verification_suffix" >"$repo/planning/STATE.md"
 if [[ "${AUTONOMOUS_TEST_ACTION:-}" == "conflict" || "${AUTONOMOUS_TEST_ACTION:-}" == "conflict-unresolved" ]]; then

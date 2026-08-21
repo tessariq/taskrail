@@ -137,3 +137,4 @@ T-174-run-the-v0-5-0-gap-and-drift-release-gate	hold-operator	Maintainer-owned f
 T-341-support-empty-local-planning-task-directories	hold-operator	Verification follow-up from T-288-inspect-local-planning-storage-read-only; operator review required
 T-342-bind-verification-identities-across-temporary-loop	hold-operator	Operator-owned temporary-loop state/report identity binding repair
 T-343-make-local-inspection-tests-portable	hold-operator	Operator-owned cross-platform CI repair for T-288
+T-344-align-temporary-loop-with-canonical-verification	hold-operator	Operator-owned canonical verification evidence repair

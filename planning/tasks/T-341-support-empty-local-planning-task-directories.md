@@ -13,13 +13,21 @@ updated_at: "2026-08-21T09:50:50Z"
 
 ## Description
 
-Make a freshly initialized local planning store usable by ordinary readers and task authoring when it has no task files, without creating committed state or weakening local ignore guarantees.
+Make a freshly initialized local planning store usable by ordinary readers,
+structural writers, and task authoring when it has no task files, without creating
+committed state or weakening local ignore guarantees.
 
 ## Acceptance
 
-- The follow-up issue described by verification is resolved.
-- Verification evidence is updated.
+- Explicit `init --local` durably creates the physical local `planning/tasks`
+  directory even when the initial task corpus is empty.
+- Empty-task readers and structural writers treat the initialized directory as a
+  valid empty corpus rather than returning `not_initialized`.
+- Initialization remains ignored and leaves ordinary Git status clean without
+  creating a committed `planning/tasks` directory.
+- Fault injection retains all-or-nothing local initialization behavior.
 
 ## Verification Notes
 
-- Re-run task-scoped verification after implementing the fix.
+- Exercise fresh local init followed by status/path, spec add/activate, repair,
+  and task authoring; run focused durability tests and the full repository gates.

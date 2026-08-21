@@ -441,7 +441,7 @@ inspect_recovery_bundle() {
   [[ "$generated" == "$expected_generated" ]] || return 1
   verification="$(awk '$1 == "last_verification_result:" { sub(/^[^:]+:[[:space:]]*/, ""); print; exit }' "$ROOT/planning/STATE.md")"
   expected_message="$report_result for $id at $generated"
-  [[ -z "$verification_id" ]] || expected_message+=" (verification_id=$verification_id)"
+  [[ -z "$verification_id" ]] || expected_message+=" id $verification_id"
   [[ "$verification" == "$expected_message" ]] || return 1
   bundle_value "$bundle" commit_message_sha256; message_hash="$BUNDLE_VALUE"
   [[ -f "$bundle/commit-message" && "$(sha256sum "$bundle/commit-message" | awk '{print $1}')" == "$message_hash" ]] || return 1
