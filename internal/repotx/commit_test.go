@@ -168,6 +168,54 @@ func TestCommitRefusesWhenTheSnapshotWentStale(t *testing.T) {
 	wantDigest(t, snapshot.CurrentSHA256, "someone else's edit", "conflict current")
 }
 
+// A no-clobber publication point is stronger than the normal snapshot recheck:
+// a creator that arrives after the final observation but before rename must keep
+// its file rather than losing it to the transaction.
+func TestCommitNoClobberPreservesLateDestination(t *testing.T) {
+	repo := newRepository(t)
+	lock := acquire(t, repo, ownerCapability())
+	candidate := managed(repo, "specs/v0.2.0.md", "Taskrail scaffold")
+	candidate.NoClobber = true
+	testHookBeforeMkdir = func(path Path) {
+		if path.Reported == candidate.Reported {
+			seed(t, repo, candidate.Reported, "external spec")
+		}
+	}
+	t.Cleanup(func() { testHookBeforeMkdir = nil })
+
+	_, err := Commit(context.Background(), lock, Request{Command: "complete", Published: []Candidate{candidate}})
+	txErr := txError(t, err)
+	if txErr.Kind != KindConflict {
+		t.Fatalf("kind = %q, want %q", txErr.Kind, KindConflict)
+	}
+	wantMachineCode(t, txErr, "write_conflict")
+	if got, _ := readManaged(t, repo, candidate.Reported); got != "external spec" {
+		t.Fatalf("late destination = %q, want external bytes", got)
+	}
+	snapshot := snapshotFor(t, txErr.Snapshots(), candidate.Reported)
+	wantDigest(t, snapshot.CurrentSHA256, "external spec", "late destination current")
+}
+
+func TestCommitNoClobberCleanupFailureDoesNotUndoPublishedDestination(t *testing.T) {
+	repo := newRepository(t)
+	lock := acquire(t, repo, ownerCapability())
+	candidate := managed(repo, "specs/v0.2.0.md", "Taskrail scaffold")
+	candidate.NoClobber = true
+	testHookAfterNoClobberLink = func(staged string) {
+		if err := os.Remove(staged); err != nil {
+			t.Fatalf("remove staged hard link: %v", err)
+		}
+	}
+	t.Cleanup(func() { testHookAfterNoClobberLink = nil })
+
+	if _, err := Commit(context.Background(), lock, Request{Command: "complete", Published: []Candidate{candidate}}); err != nil {
+		t.Fatalf("commit with staging cleanup failure: %v", err)
+	}
+	if got, _ := readManaged(t, repo, candidate.Reported); got != "Taskrail scaffold" {
+		t.Fatalf("published destination = %q, want candidate", got)
+	}
+}
+
 // cancelAfterFirstPublish interrupts publication once one path has landed, which
 // is the handled multi-file failure the rollback contract is written for.
 func cancelAfterFirstPublish(t *testing.T, cancel context.CancelFunc, extra func()) {

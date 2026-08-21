@@ -55,6 +55,10 @@ type Path struct {
 type Candidate struct {
 	Path
 	Content []byte
+	// NoClobber publishes only to a path that was absent in the snapshot. It is
+	// for publication points such as a newly versioned spec: a late creator must
+	// win rather than be overwritten by the transaction's atomic replacement.
+	NoClobber bool
 	// PublishPriority orders semantic publication without changing snapshot and
 	// diagnostic ordering. Lower priorities publish first and roll back last.
 	PublishPriority int
@@ -118,6 +122,10 @@ func (r Request) validate() error {
 		}
 		if candidate.Remove && len(candidate.Content) > 0 {
 			return fmt.Errorf("transaction %q both removes and publishes bytes for %s path %q",
+				r.Command, candidate.Kind, candidate.Reported)
+		}
+		if candidate.Remove && candidate.NoClobber {
+			return fmt.Errorf("transaction %q both removes and no-clobber publishes %s path %q",
 				r.Command, candidate.Kind, candidate.Reported)
 		}
 	}

@@ -52,6 +52,10 @@ func (s *Service) SpecList() (SpecListResult, error) {
 	if err := s.paths.ensureStorageCapability(); err != nil {
 		return SpecListResult{}, err
 	}
+	return stableRead(s.specListSnapshot)
+}
+
+func (s *Service) specListSnapshot() (SpecListResult, error) {
 	active, err := s.activeSpecVersion()
 	if err != nil {
 		return SpecListResult{}, err
@@ -105,6 +109,12 @@ func (s *Service) SpecShow(version string, anchorsOnly bool) (SpecShowResult, er
 	if !specVersionPattern.MatchString(version) {
 		return SpecShowResult{}, invalidArgumentsf("invalid spec version %q: expected a versioned name like v0.3.0", version)
 	}
+	return stableRead(func() (SpecShowResult, error) {
+		return s.specShowSnapshot(version, anchorsOnly)
+	})
+}
+
+func (s *Service) specShowSnapshot(version string, anchorsOnly bool) (SpecShowResult, error) {
 	specFile := filepath.Join(s.paths.SpecsDir, version+".md")
 	data, err := os.ReadFile(specFile)
 	if err != nil {

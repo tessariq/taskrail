@@ -3,6 +3,8 @@ package taskrail
 import (
 	"path/filepath"
 	"regexp"
+
+	"github.com/tessariq/taskrail/internal/repotx"
 )
 
 // specVersionPattern is the versioned-specs naming convention: a leading "v"
@@ -35,10 +37,19 @@ type SpecActivateResult struct {
 // exists, rejecting a bad target with no write. On success it rewrites only
 // STATE.md (never task files or status fields), then re-runs validation and
 // returns its result. Activation repoints the active spec and nothing else.
-func (s *Service) ActivateSpec(version string) (SpecActivateResult, error) {
+func (s *Service) ActivateSpec(version string) (result SpecActivateResult, err error) {
 	if !specVersionPattern.MatchString(version) {
 		return SpecActivateResult{}, invalidArgumentsf("invalid spec version %q: expected a versioned name like v0.3.0", version)
 	}
+	own, release, err := s.beginStructuralWriterWrite(specActivateWriter)
+	if err != nil {
+		return SpecActivateResult{}, err
+	}
+	defer func() {
+		if releaseErr := release(); releaseErr != nil && err == nil {
+			err = releaseErr
+		}
+	}()
 	specFile := filepath.Join(s.paths.SpecsDir, version+".md")
 	if !fileExists(specFile) {
 		return SpecActivateResult{}, invalidArgumentsf("spec file %s does not exist", relPath(s.paths.RepoRoot, specFile))
@@ -56,23 +67,21 @@ func (s *Service) ActivateSpec(version string) (SpecActivateResult, error) {
 	state.Frontmatter.ActiveSpecPath = relPath(s.paths.RepoRoot, specFile)
 	state.Frontmatter.UpdatedAt = timestamp(s.now())
 	state.Body = renderStateBody(state.Frontmatter, tasks)
-	if err := s.saveState(state); err != nil {
-		return SpecActivateResult{}, err
-	}
-
-	validation, err := s.validateAfterWrite()
+	stateBytes, err := marshalFrontmatter(state.Frontmatter, state.Body)
 	if err != nil {
 		return SpecActivateResult{}, err
 	}
-	// Coverage of the just-repointed spec, computed via the shared T-059
-	// capability against the in-memory state/tasks (activation never rewrites
-	// task files). Informational only: activation already succeeded above.
 	coverage, err := s.coverageFor(state, tasks)
 	if err != nil {
-		// The repoint is already on disk, so this reporting failure must not read
-		// back as a refusal that changed nothing.
-		return SpecActivateResult{}, WithMachineFailure(
-			MachineFailure{Code: MachineCodeRepositoryInvalid, Applied: true}, err)
+		return SpecActivateResult{}, err
+	}
+	validation, err := s.commitStructuralWriter(own, specActivateWriter, state, tasks, []repotx.Candidate{
+		managedCandidate(s.reportedStatePath(), s.paths.StateFile, stateBytes),
+	}, []repotx.Path{{
+		Kind: repotx.Managed, Reported: s.paths.logicalManagedPath(specFile), Physical: specFile,
+	}})
+	if err != nil {
+		return SpecActivateResult{}, err
 	}
 	return SpecActivateResult{
 		ActiveSpecVersion:   version,

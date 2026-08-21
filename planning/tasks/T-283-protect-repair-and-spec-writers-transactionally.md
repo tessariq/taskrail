@@ -1,12 +1,13 @@
 ---
 id: T-283-protect-repair-and-spec-writers-transactionally
 title: Protect repair and spec writers transactionally
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#repository-discovery-locking-and-recovery
 dependencies:
     - T-234-protect-repository-and-planning-writers
-updated_at: "2026-08-08T14:23:08Z"
+updated_at: "2026-08-21T07:46:58Z"
+completion_id: "d71b2ce4b1d59d4503e336244d48c143"
 ---
 
 # T-283-protect-repair-and-spec-writers-transactionally Protect repair and spec writers transactionally
@@ -39,3 +40,6 @@ preserving repair/spec read-only forms as stable snapshots.
 - Compare repository and lock-root digests around repair/spec read-only forms.
 
 ## Implementation Notes
+
+- 2026-08-21T07:46:58Z: Published repair and spec writers through normal transactions with no-clobber spec creation and stable read snapshots.
+- 2026-08-21T07:46:58Z: verification pass

@@ -30,11 +30,26 @@ type SpecDiffResult struct {
 // non-conforming version fails before any diffing work. It is strictly read-only:
 // it never writes STATE.md or task files.
 func (s *Service) SpecDiff(from, to string) (SpecDiffResult, error) {
-	fromSpec, err := s.SpecShow(from, true)
+	if err := s.paths.ensureStorageCapability(); err != nil {
+		return SpecDiffResult{}, err
+	}
+	if !specVersionPattern.MatchString(from) {
+		return SpecDiffResult{}, invalidArgumentsf("invalid spec version %q: expected a versioned name like v0.3.0", from)
+	}
+	if !specVersionPattern.MatchString(to) {
+		return SpecDiffResult{}, invalidArgumentsf("invalid spec version %q: expected a versioned name like v0.3.0", to)
+	}
+	return stableRead(func() (SpecDiffResult, error) {
+		return s.specDiffSnapshot(from, to)
+	})
+}
+
+func (s *Service) specDiffSnapshot(from, to string) (SpecDiffResult, error) {
+	fromSpec, err := s.specShowSnapshot(from, true)
 	if err != nil {
 		return SpecDiffResult{}, err
 	}
-	toSpec, err := s.SpecShow(to, true)
+	toSpec, err := s.specShowSnapshot(to, true)
 	if err != nil {
 		return SpecDiffResult{}, err
 	}

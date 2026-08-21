@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/tessariq/taskrail/internal/repotx"
 )
 
 // readingOrderEntryPattern matches a numbered reading-order entry naming a
@@ -32,10 +34,19 @@ type SpecAddResult struct {
 // zero coverable areas and coverage reports N/A rather than a false gap. A
 // version that already exists or violates the versioned-specs convention is
 // rejected before any write.
-func (s *Service) AddSpec(version string) (SpecAddResult, error) {
+func (s *Service) AddSpec(version string) (result SpecAddResult, err error) {
 	if !specVersionPattern.MatchString(version) {
 		return SpecAddResult{}, invalidArgumentsf("invalid spec version %q: expected a versioned name like v0.3.0", version)
 	}
+	own, release, err := s.beginStructuralWriterWrite(specAddWriter)
+	if err != nil {
+		return SpecAddResult{}, err
+	}
+	defer func() {
+		if releaseErr := release(); releaseErr != nil && err == nil {
+			err = releaseErr
+		}
+	}()
 	specFile := filepath.Join(s.paths.SpecsDir, version+".md")
 	if fileExists(specFile) {
 		return SpecAddResult{}, WithMachineErrorCode(MachineCodeDestinationExists,
@@ -51,15 +62,20 @@ func (s *Service) AddSpec(version string) (SpecAddResult, error) {
 		return SpecAddResult{}, fmt.Errorf("read specs README %s: %w", relPath(s.paths.RepoRoot, readmePath), fsCause(err))
 	}
 
-	if err := os.WriteFile(specFile, []byte(scaffoldSpec(version)), 0o644); err != nil {
-		return SpecAddResult{}, s.managedWriteFailure(specFile,
-			fmt.Errorf("write spec file %s: %w", relPath(s.paths.RepoRoot, specFile), fsCause(err)))
+	state, tasks, err := s.loadStateAndTasks()
+	if err != nil {
+		return SpecAddResult{}, err
 	}
-	if err := os.WriteFile(readmePath, []byte(updateReadingOrder(string(readme), version)), 0o644); err != nil {
-		// The spec file is already scaffolded by here, so a failed reading-order
-		// update leaves it listed nowhere.
-		return SpecAddResult{}, s.withWrittenPaths(s.managedWriteFailure(readmePath,
-			fmt.Errorf("update specs README %s: %w", relPath(s.paths.RepoRoot, readmePath), fsCause(err))), specFile)
+	published := []repotx.Candidate{
+		func() repotx.Candidate {
+			candidate := managedCandidate(s.paths.logicalManagedPath(specFile), specFile, []byte(scaffoldSpec(version)))
+			candidate.NoClobber = true
+			return candidate
+		}(),
+		managedCandidate(s.paths.logicalManagedPath(readmePath), readmePath, []byte(updateReadingOrder(string(readme), version))),
+	}
+	if _, err := s.commitStructuralWriter(own, specAddWriter, state, tasks, published, nil); err != nil {
+		return SpecAddResult{}, err
 	}
 
 	return SpecAddResult{

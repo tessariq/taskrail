@@ -224,7 +224,16 @@ func publish(ctx context.Context, root string, entries []*entry) error {
 			if err := os.Remove(e.path.Physical); err != nil && !errors.Is(err, os.ErrNotExist) {
 				return fmt.Errorf("remove %s: %w", e.path.Reported, fsCause(err))
 			}
-		} else if err := publishTo(root, e.path, e.candidate.Content, publishMode(e)); err != nil {
+		} else if err := publishTo(root, e.path, e.candidate.Content, publishMode(e), e.candidate.NoClobber); err != nil {
+			if e.candidate.NoClobber && errors.Is(err, fs.ErrExist) {
+				// Link-or-create refused because another writer won after this
+				// path's final CAS check. Refresh evidence before returning so the
+				// conflict reports that writer's bytes rather than stale absence.
+				if _, observeErr := observe(e); observeErr != nil {
+					return withEvidence(observeErr, entries)
+				}
+				return failure(KindConflict, evidence(entries), fmt.Errorf("%s was created before its no-clobber publication", e.path.Reported))
+			}
 			return err
 		}
 		e.published = true
@@ -347,7 +356,7 @@ func restore(root string, e *entry) error {
 		}
 		return nil
 	}
-	if err := publishTo(root, e.path, e.original.content, e.original.mode); err != nil {
+	if err := publishTo(root, e.path, e.original.content, e.original.mode, false); err != nil {
 		return fmt.Errorf("roll back %s: %w", e.path.Reported, fsCause(err))
 	}
 	return nil

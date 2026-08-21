@@ -9,6 +9,10 @@ import (
 	"strings"
 )
 
+// testHookAfterNoClobberLink simulates staging cleanup failures after the
+// destination link has succeeded. It is nil outside tests.
+var testHookAfterNoClobberLink func(string)
+
 // This file is the transaction's filesystem half: how one path is read, proven
 // to be inside the repository it claims, and replaced atomically. Everything
 // here is deliberately plain — the normal transaction promises nothing about
@@ -54,7 +58,7 @@ func inside(root, path string) bool {
 // repository. Git metadata is exempt for the same reason it is exempt there.
 // Errors name the reported path, never the caller's absolute repository
 // location, so a failure stays portable across machines (the T-088 contract).
-func publishTo(root string, p Path, content []byte, mode fs.FileMode) error {
+func publishTo(root string, p Path, content []byte, mode fs.FileMode, noClobber bool) error {
 	directory := filepath.Dir(p.Physical)
 	// Prove containment before creating anything: a planted link partway down the
 	// path would otherwise have directories made through it, outside the
@@ -76,7 +80,7 @@ func publishTo(root string, p Path, content []byte, mode fs.FileMode) error {
 	if err := proveContained(root, p, directory); err != nil {
 		return err
 	}
-	return writeFile(p.Reported, p.Physical, content, mode)
+	return writeFile(p.Reported, p.Physical, content, mode, noClobber)
 }
 
 // proveContained refuses a directory that really lives outside the repository,
@@ -186,7 +190,7 @@ func sameState(a, b *fileState) bool {
 // the whole previous file or the whole new one. reported is the portable
 // spelling every error names; the staged sibling's own name is an
 // implementation detail the caller never needs.
-func writeFile(reported, physical string, content []byte, mode fs.FileMode) error {
+func writeFile(reported, physical string, content []byte, mode fs.FileMode, noClobber bool) error {
 	directory := filepath.Dir(physical)
 	file, err := os.CreateTemp(directory, "."+filepath.Base(physical)+".repotx-*")
 	if err != nil {
@@ -196,6 +200,19 @@ func writeFile(reported, physical string, content []byte, mode fs.FileMode) erro
 	removeStaged := func() error { return fsCause(os.Remove(staged)) }
 	if err := stage(file, content, mode); err != nil {
 		return errors.Join(err, removeStaged())
+	}
+	if noClobber {
+		if err := os.Link(staged, physical); err != nil {
+			return errors.Join(fmt.Errorf("publish %s: %w", reported, fsCause(err)), removeStaged())
+		}
+		if testHookAfterNoClobberLink != nil {
+			testHookAfterNoClobberLink(staged)
+		}
+		// The destination is already atomically published. A best-effort cleanup
+		// failure leaves only a private staged hard link, not semantic state, and
+		// must not make Commit attempt rollback before marking publication.
+		_ = removeStaged()
+		return nil
 	}
 	if err := os.Rename(staged, physical); err != nil {
 		return errors.Join(fmt.Errorf("publish %s: %w", reported, fsCause(err)), removeStaged())

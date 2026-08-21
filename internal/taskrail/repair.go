@@ -3,6 +3,8 @@ package taskrail
 import (
 	"fmt"
 	"strings"
+
+	"github.com/tessariq/taskrail/internal/repotx"
 )
 
 // RepairInput drives the conservative state-repair surface. Repair defaults to a
@@ -40,37 +42,64 @@ type RepairResult struct {
 // violation it cannot mechanically resolve (missing spec_ref, dependency cycles,
 // multiple in_progress tasks) is left for the reviewer and surfaced through
 // Validation rather than guessed at.
-func (s *Service) Repair(input RepairInput) (RepairResult, error) {
+func (s *Service) Repair(input RepairInput) (result RepairResult, err error) {
+	if input.Apply {
+		own, release, err := s.beginStructuralWriterWrite(repairWriter)
+		if err != nil {
+			return RepairResult{}, err
+		}
+		defer func() {
+			if releaseErr := release(); releaseErr != nil && err == nil {
+				err = releaseErr
+			}
+		}()
+		return s.repairApply(own)
+	}
+	return stableRead(func() (RepairResult, error) {
+		state, tasks, err := s.loadStateAndTasks()
+		if err != nil {
+			return RepairResult{}, err
+		}
+		corrected := state.Frontmatter
+		changes := repairCurrentTask(&corrected, tasks)
+		changes = append(changes, repairStatusSummary(&corrected, tasks)...)
+		newBody := renderStateBody(corrected, tasks)
+		validation := s.validateInMemory(state, tasks)
+		return RepairResult{Changes: changes, BodyDiff: lineDiff(state.Body, newBody), Validation: &validation}, nil
+	})
+}
+
+func (s *Service) repairApply(own repotx.Ownership) (RepairResult, error) {
 	state, tasks, err := s.loadStateAndTasks()
 	if err != nil {
 		return RepairResult{}, err
 	}
-
 	corrected := state.Frontmatter
 	changes := repairCurrentTask(&corrected, tasks)
 	changes = append(changes, repairStatusSummary(&corrected, tasks)...)
 	newBody := renderStateBody(corrected, tasks)
 	bodyDiff := lineDiff(state.Body, newBody)
-
-	// Apply only when there is something mechanical to fix, so a no-op repair never
-	// dirties updated_at. All three paths (no-op, dry run, apply) close with the
-	// same validate-and-report tail.
-	applied := false
-	if input.Apply && (len(changes) > 0 || len(bodyDiff) > 0) {
-		corrected.UpdatedAt = timestamp(s.now())
-		state.Frontmatter = corrected
-		state.Body = newBody
-		if err := s.saveState(state); err != nil {
+	if len(changes) == 0 && len(bodyDiff) == 0 {
+		validation, err := s.Validate()
+		if err != nil {
 			return RepairResult{}, err
 		}
-		applied = true
+		return RepairResult{Changes: changes, BodyDiff: bodyDiff, Validation: &validation}, nil
 	}
-
-	validation, err := s.Validate()
+	corrected.UpdatedAt = timestamp(s.now())
+	state.Frontmatter = corrected
+	state.Body = newBody
+	stateBytes, err := marshalFrontmatter(state.Frontmatter, state.Body)
 	if err != nil {
 		return RepairResult{}, err
 	}
-	return RepairResult{Applied: applied, Changes: changes, BodyDiff: bodyDiff, Validation: &validation}, nil
+	validation, err := s.commitStructuralWriter(own, repairWriter, state, tasks, []repotx.Candidate{
+		managedCandidate(s.reportedStatePath(), s.paths.StateFile, stateBytes),
+	}, nil)
+	if err != nil {
+		return RepairResult{}, err
+	}
+	return RepairResult{Applied: true, Changes: changes, BodyDiff: bodyDiff, Validation: &validation}, nil
 }
 
 // repairCurrentTask reconciles the current_task pointer with the task files,
