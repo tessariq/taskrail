@@ -239,7 +239,7 @@ remove rejects an absent edge. Both operations preserve all other task bytes,
 transactionally publish the task with a reprojected `STATE.md`, and support the
 common `--json` envelope.
 
-## Import drafts and partial writes
+## Import drafts
 
 Bootstrap drafts from rough notes without any LLM — preview first, then apply:
 
@@ -249,9 +249,9 @@ taskrail import notes.md --to tasks --emit-prompt  # print an agent prompt for a
 taskrail import --apply draft.json                 # validate an agent draft and write real files
 ```
 
-An apply that fails during writing exits non-zero and still reports what it wrote
-or may have touched — the spec and task paths in text mode, and with `--json` a
-`partial_write` error whose `details.paths` name them. Review those paths before
-retrying: a failed spec write may leave an empty or truncated file, and
-re-applying the same draft creates any already-written tasks a second time under
-new ids.
+Apply holds the repository mutation lock, snapshots the draft and every consumed
+or destination path, validates the complete spec/task/state candidate, and then
+publishes it as one transaction. A source or destination race refuses with
+`write_conflict`; handled publication failures roll back unchanged candidates
+and preserve any external edits with common transaction evidence. A successful
+result names only the spec and tasks that were committed.

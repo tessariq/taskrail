@@ -1,12 +1,13 @@
 ---
 id: T-284-protect-importdraft-v1-publication-transactionally
 title: Protect ImportDraft v1 publication transactionally
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#repository-discovery-locking-and-recovery
 dependencies:
     - T-234-protect-repository-and-planning-writers
-updated_at: "2026-08-08T14:23:08Z"
+updated_at: "2026-08-21T07:53:10Z"
+completion_id: "2714f191f837641aed26190eba742ff0"
 ---
 
 # T-284-protect-importdraft-v1-publication-transactionally Protect ImportDraft v1 publication transactionally
@@ -40,3 +41,6 @@ stay compatible; this task owns only validated all-or-none publication.
   unchanged by the transaction integration.
 
 ## Implementation Notes
+
+- 2026-08-21T07:52:57Z: Published legacy import apply as a normal transaction with race-safe validation and rollback.
+- 2026-08-21T07:53:10Z: verification pass

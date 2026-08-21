@@ -6,6 +6,11 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ### Added
 
+- Legacy `taskrail import --apply` now builds its complete spec, task, and
+  `STATE.md` candidate under the repository mutation lock and publishes it
+  through one normal transaction. Source or destination races refuse with
+  `write_conflict`; handled failures roll back unchanged candidates and retain
+  common conflict evidence instead of returning a partial-success result.
 - The temporary source-checkout autonomous loop now includes an operator-owned
   parent-agent bridge that elicits finite runner choices, requires an exact
   dry-run and confirmation, supervises ranked batch and delivery outcomes,
@@ -167,8 +172,6 @@ All notable user-visible changes to Taskrail will be documented in this file.
 - Warnings are published only in the envelope's `warnings` array; commands no
   longer repeat them inside their result payloads. Text output still shows them
   on stderr, and they never change the exit status.
-- `taskrail import --apply` now reports a partial apply as a `partial_write`
-  error naming the paths it wrote, replacing the `"partial": true` result.
 - Task operands now require the exact full persisted ID, and `taskrail validate`
   rejects broken v0.5 completion and verification metadata chains.
 - `taskrail init --with-skills` now installs Agent Skills-compliant copies with

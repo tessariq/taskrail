@@ -173,10 +173,9 @@ func TestApplyImportDraftWritesSpecSections(t *testing.T) {
 	}
 }
 
-// os.WriteFile may fail after touching its destination. The apply result must
-// therefore identify the attempted spec path as partial state instead of hiding
-// possible repository movement behind a zero-value result.
-func TestApplyImportDraftReportsFailedSpecWriteAsPartial(t *testing.T) {
+// A destination that cannot be snapshotted rejects the complete candidate before
+// publication. Import never reports an attempted spec as a partial success.
+func TestApplyImportDraftRefusesFailedSpecDestinationBeforePublication(t *testing.T) {
 	t.Parallel()
 	svc := applyFixture(t)
 
@@ -198,11 +197,11 @@ func TestApplyImportDraftReportsFailedSpecWriteAsPartial(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected imported spec write to fail")
 	}
-	if !result.Partial || result.SpecPath != "specs/failed.md" {
-		t.Fatalf("failed spec write must report its path as partial state, got %+v", result)
+	if result.SpecPath != "" || len(result.Tasks) != 0 {
+		t.Fatalf("failed publication must not report partial output, got %+v", result)
 	}
-	if !strings.Contains(err.Error(), "partial apply") || !strings.Contains(err.Error(), result.SpecPath) {
-		t.Fatalf("error must direct the operator to the touched path, got %v", err)
+	if _, statErr := os.Stat(filepath.Join(svc.paths.RepoRoot, "specs", "failed.md")); statErr != nil {
+		t.Fatalf("blocked destination must remain untouched: %v", statErr)
 	}
 }
 
@@ -327,11 +326,9 @@ func TestApplyImportDraftLeavesRepoUnchangedOnUnportableTitle(t *testing.T) {
 	}
 }
 
-// Pre-flight cannot cover a mid-write I/O failure, so that residual path must
-// still report what it landed: the tasks written before the failure have to reach
-// result.Tasks and the partial-apply wrapper, or an operator retries against a
-// repository that already moved.
-func TestApplyImportDraftReportsPartiallyCreatedTasksOnMidWriteFailure(t *testing.T) {
+// A collision anywhere in the planned import is found during the transaction
+// snapshot, before the state, spec, or preceding task can be published.
+func TestApplyImportDraftRefusesTaskCollisionBeforePublication(t *testing.T) {
 	t.Parallel()
 	svc := applyFixture(t)
 
@@ -358,27 +355,96 @@ func TestApplyImportDraftReportsPartiallyCreatedTasksOnMidWriteFailure(t *testin
 	if err == nil {
 		t.Fatal("expected error when a task file write fails mid-loop")
 	}
-	if len(result.Tasks) != 1 || result.Tasks[0].TaskID != "T-001-alpha-task" {
-		t.Fatalf("partial apply must report the task it already wrote, got %+v", result.Tasks)
+	if result.SpecPath != "" || len(result.Tasks) != 0 {
+		t.Fatalf("collision must not report partial output, got %+v", result)
 	}
-	// The marker is what lets a caller print this result without a script mistaking
-	// it for a clean apply.
-	if !result.Partial {
-		t.Fatalf("a result carrying written artifacts must be marked partial, got %+v", result)
-	}
-	msg := err.Error()
-	if !strings.Contains(msg, "partial apply already wrote") {
-		t.Fatalf("error must carry the partial-apply wrapper, got %v", err)
-	}
-	if !strings.Contains(msg, "T-001-alpha-task") || !strings.Contains(msg, result.SpecPath) {
-		t.Fatalf("wrapper must name the written task ids and spec path, got %v", err)
+	if _, statErr := os.Stat(filepath.Join(svc.paths.RepoRoot, "specs", "notes.md")); !os.IsNotExist(statErr) {
+		t.Fatalf("no spec may be published before a task collision: %v", statErr)
 	}
 	_, tasks, err := svc.loadStateAndTasks()
 	if err != nil {
 		t.Fatalf("load tasks: %v", err)
 	}
-	if len(tasks) != 1 {
-		t.Fatalf("expected exactly the one task written before the failure, got %d", len(tasks))
+	if len(tasks) != 0 {
+		t.Fatalf("no task may be published before a task collision, got %d", len(tasks))
+	}
+}
+
+func TestApplyImportDraftRefusesSourceChangeBeforePublication(t *testing.T) {
+	svc := applyFixture(t)
+	draft := ImportDraft{
+		SchemaVersion: importDraftSchemaVersion,
+		Target:        "planning",
+		Source:        "feature.md",
+		SpecSections:  []SpecSectionDraft{{Heading: "Overview", Body: "x"}},
+		Tasks:         []TaskDraft{{Key: "task", Title: "Task", SpecRef: "specs/feature.md#overview"}},
+	}
+	rel := writeDraftFile(t, svc.paths.RepoRoot, "planning/imports/race.json", draft)
+	called := false
+	installLifecycleHook(t, func() {
+		called = true
+		if err := os.WriteFile(filepath.Join(svc.paths.RepoRoot, rel), []byte(`{"schema_version":1,"target":"tasks","source":"changed.md","tasks":[{"key":"changed","title":"Changed","spec_ref":"specs/v0.1.0.md#summary"}]}`), 0o644); err != nil {
+			t.Fatalf("change source draft: %v", err)
+		}
+	})
+
+	result, err := svc.ApplyImportDraft(ApplyDraftInput{DraftPath: rel})
+	if err == nil {
+		t.Fatal("expected source race to refuse publication")
+	}
+	if !called {
+		t.Fatal("import did not validate its candidate under the transaction")
+	}
+	if failure := MachineFailureFor(err); failure.Code != MachineCodeWriteConflict {
+		t.Fatalf("source race code = %q, want %q", failure.Code, MachineCodeWriteConflict)
+	}
+	if result.SpecPath != "" || len(result.Tasks) != 0 {
+		t.Fatalf("source race must not report publication, got %+v", result)
+	}
+	if _, statErr := os.Stat(filepath.Join(svc.paths.RepoRoot, "specs", "feature.md")); !os.IsNotExist(statErr) {
+		t.Fatalf("source race published a spec: %v", statErr)
+	}
+	if _, tasks, loadErr := svc.loadStateAndTasks(); loadErr != nil || len(tasks) != 0 {
+		t.Fatalf("source race published tasks: tasks=%d err=%v", len(tasks), loadErr)
+	}
+}
+
+func TestApplyImportDraftRefusesDestinationChangeBeforeTransactionSnapshot(t *testing.T) {
+	svc := applyFixture(t)
+	draft := ImportDraft{
+		SchemaVersion: importDraftSchemaVersion,
+		Target:        "spec",
+		Source:        "feature.md",
+		SpecSections:  []SpecSectionDraft{{Heading: "Overview", Body: "candidate"}},
+	}
+	rel := writeDraftFile(t, svc.paths.RepoRoot, "planning/imports/destination-race.json", draft)
+	called := false
+	testHookImportCandidateBuilt = func() {
+		called = true
+		if err := os.WriteFile(filepath.Join(svc.paths.SpecsDir, "feature.md"), []byte("# authored\n"), 0o644); err != nil {
+			t.Fatalf("create raced destination: %v", err)
+		}
+	}
+	t.Cleanup(func() { testHookImportCandidateBuilt = nil })
+
+	result, err := svc.ApplyImportDraft(ApplyDraftInput{DraftPath: rel})
+	if err == nil {
+		t.Fatal("expected destination race to refuse publication")
+	}
+	if !called {
+		t.Fatal("import did not compare candidate inputs before transaction snapshot")
+	}
+	if failure := MachineFailureFor(err); failure.Code != MachineCodeWriteConflict {
+		t.Fatalf("destination race code = %q, want %q", failure.Code, MachineCodeWriteConflict)
+	} else if len(failure.Snapshots) == 0 {
+		t.Fatal("destination race must retain transaction snapshots")
+	}
+	if result.SpecPath != "" || len(result.Tasks) != 0 {
+		t.Fatalf("destination race must not report publication, got %+v", result)
+	}
+	data, readErr := os.ReadFile(filepath.Join(svc.paths.SpecsDir, "feature.md"))
+	if readErr != nil || string(data) != "# authored\n" {
+		t.Fatalf("destination race overwrote authored bytes: %q, err=%v", data, readErr)
 	}
 }
 

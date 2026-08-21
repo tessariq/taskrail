@@ -3,18 +3,14 @@ package main
 import (
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 	"testing"
 
 	"github.com/tessariq/taskrail/internal/taskrail"
 )
 
-// partialApplyDraft names two tasks and one spec section. Applied against a repo
-// where a directory squats on the second task's file path, the write fails
-// mid-loop with the spec and the first task already on disk — the only shape
-// that reaches the residual partial-apply path (pre-flight rejects everything it
-// can detect without writing).
+// partialApplyDraft names two tasks and one spec section. A directory squatting
+// on the second task's destination must reject the whole transaction.
 const partialApplyDraft = `{
   "schema_version": 1,
   "target": "planning",
@@ -37,8 +33,8 @@ func seedDraftRepo(t *testing.T, draft string) string {
 	return root
 }
 
-// seedPartialApplyRepo additionally blocks the id the second draft task will be
-// allocated (a fresh repo has no tasks, so ids start at T-001).
+// seedPartialApplyRepo additionally blocks the id the second draft task would
+// be allocated (a fresh repo has no tasks, so ids start at T-001).
 func seedPartialApplyRepo(t *testing.T) string {
 	t.Helper()
 	root := seedDraftRepo(t, partialApplyDraft)
@@ -48,61 +44,45 @@ func seedPartialApplyRepo(t *testing.T) string {
 	return root
 }
 
-// A partial apply already moved the repository, so --json must still emit the
-// artifacts it wrote: an operator (or script) reviewing before a retry needs the
-// per-task paths, and getting nothing at all on stdout is indistinguishable from
-// an apply that wrote nothing.
-func TestImportApplyPartialFailureEmitsWrittenArtifactsJSON(t *testing.T) {
+func TestImportApplyCollisionEmitsNoPublishedArtifactsJSON(t *testing.T) {
 	root := seedPartialApplyRepo(t)
 
 	stdout, _, err := runRootSplit(t, "import", "--apply", "draft.json", "--json")
 	if err == nil {
-		t.Fatalf("expected a non-zero exit on a partial apply, got output %q", stdout)
-	}
-	if !strings.Contains(err.Error(), "partial apply already wrote") {
-		t.Fatalf("error must carry the partial-apply wrapper, got %v", err)
+		t.Fatalf("expected a non-zero exit on a collision, got output %q", stdout)
 	}
 
 	failure := decodeMachineError(t, stdout)
-	if failure.Code != taskrail.MachineCodePartialWrite {
-		t.Fatalf("code = %q, want %q", failure.Code, taskrail.MachineCodePartialWrite)
+	if failure.Code != taskrail.MachineCodeRepositoryInvalid {
+		t.Fatalf("code = %q, want %q", failure.Code, taskrail.MachineCodeRepositoryInvalid)
 	}
-	// The complete import never committed, so it must not read back as applied.
 	if failure.Details.Applied {
-		t.Error("a partial apply reported applied = true")
+		t.Error("a refused import reported applied = true")
 	}
-	want := []string{"planning/tasks/T-001-alpha-task.md", "specs/notes.md"}
-	if !slices.Equal(failure.Details.Paths, want) {
-		t.Fatalf("paths = %v, want %v", failure.Details.Paths, want)
+	if len(failure.Details.Paths) != 0 {
+		t.Fatalf("collision reported published paths %v", failure.Details.Paths)
 	}
-	for _, path := range failure.Details.Paths {
-		if _, statErr := os.Stat(filepath.Join(root, path)); statErr != nil {
-			t.Errorf("reported path must exist on disk: %v", statErr)
-		}
+	if _, statErr := os.Stat(filepath.Join(root, "specs", "notes.md")); !os.IsNotExist(statErr) {
+		t.Fatalf("collision published a spec: %v", statErr)
+	}
+	if _, statErr := os.Stat(filepath.Join(root, "planning", "tasks", "T-001-alpha-task.md")); !os.IsNotExist(statErr) {
+		t.Fatalf("collision published a task: %v", statErr)
 	}
 }
 
-// Text mode reports the same written artifacts, so a terminal operator sees the
-// paths to review alongside the partial-apply error wrapper.
-func TestImportApplyPartialFailureReportsWrittenArtifactsText(t *testing.T) {
+func TestImportApplyCollisionReportsNoPublishedArtifactsText(t *testing.T) {
 	seedPartialApplyRepo(t)
 
 	stdout, _, err := runRootSplit(t, "import", "--apply", "draft.json")
 	if err == nil {
-		t.Fatalf("expected a non-zero exit on a partial apply, got output %q", stdout)
+		t.Fatalf("expected a non-zero exit on a collision, got output %q", stdout)
 	}
-	if !strings.Contains(stdout, "review spec specs/notes.md") {
-		t.Fatalf("text mode must report the written spec, got %q", stdout)
-	}
-	if !strings.Contains(stdout, "created T-001-alpha-task planning/tasks/T-001-alpha-task.md") {
-		t.Fatalf("text mode must report the task written before the failure, got %q", stdout)
-	}
-	if !strings.Contains(err.Error(), "partial apply already wrote") {
-		t.Fatalf("error must carry the partial-apply wrapper, got %v", err)
+	if stdout != "" {
+		t.Fatalf("text mode reported unpublished artifacts: %q", stdout)
 	}
 }
 
-func TestImportApplyPartialFailurePrintsEarlierEmptySlugWarning(t *testing.T) {
+func TestImportApplyCollisionDoesNotEmitUnpublishedWarnings(t *testing.T) {
 	root := seedDraftRepo(t, `{
   "schema_version": 1,
   "target": "tasks",
@@ -118,24 +98,18 @@ func TestImportApplyPartialFailurePrintsEarlierEmptySlugWarning(t *testing.T) {
 
 	stdout, stderr, err := runRootSplit(t, "import", "--apply", "draft.json", "--json")
 	if err == nil {
-		t.Fatalf("expected partial apply failure, got stdout %q", stdout)
+		t.Fatalf("expected collision failure, got stdout %q", stdout)
 	}
-	if !strings.Contains(stderr, `"!!!" produced no slug segment`) || !strings.Contains(stderr, "T-001") {
-		t.Fatalf("expected earlier empty-slug warning on stderr, got %q", stderr)
+	if stderr != "" {
+		t.Fatalf("collision emitted unpublished warning: %q", stderr)
 	}
 	failure := decodeMachineError(t, stdout)
-	if failure.Code != taskrail.MachineCodePartialWrite {
-		t.Fatalf("code = %q, want %q", failure.Code, taskrail.MachineCodePartialWrite)
-	}
-	if !slices.Contains(failure.Details.Paths, "planning/tasks/T-001.md") {
-		t.Fatalf("paths must name the task written before the failure, got %v", failure.Details.Paths)
+	if failure.Code != taskrail.MachineCodeRepositoryInvalid || len(failure.Details.Paths) != 0 {
+		t.Fatalf("collision result = %+v", failure)
 	}
 }
 
-// A failed spec write may have created or truncated its target, but it may also
-// have failed before changing anything. Text output must name the path without
-// claiming the write definitely succeeded.
-func TestImportApplyFailedSpecWriteReportsPathWithoutClaimingSuccess(t *testing.T) {
+func TestImportApplyFailedSpecDestinationReportsNoSuccess(t *testing.T) {
 	root := seedDraftRepo(t, `{
   "schema_version": 1,
   "target": "spec",
@@ -150,14 +124,8 @@ func TestImportApplyFailedSpecWriteReportsPathWithoutClaimingSuccess(t *testing.
 	if err == nil {
 		t.Fatalf("expected a non-zero exit on a failed spec write, got output %q", stdout)
 	}
-	if !strings.Contains(stdout, "review spec specs/failed.md") {
-		t.Fatalf("text mode must name the uncertain spec path for review, got %q", stdout)
-	}
-	if strings.Contains(stdout, "wrote spec") {
-		t.Fatalf("text mode must not claim the failed spec write succeeded, got %q", stdout)
-	}
-	if !strings.Contains(err.Error(), "partial apply may have written specs/failed.md") {
-		t.Fatalf("error must carry the uncertain partial-apply wrapper, got %v", err)
+	if stdout != "" {
+		t.Fatalf("text mode reported unpublished spec: %q", stdout)
 	}
 }
 

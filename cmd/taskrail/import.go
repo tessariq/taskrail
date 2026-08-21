@@ -80,19 +80,11 @@ func validateImportArgs(args []string, to string, emitPrompt bool, apply string)
 	return nil
 }
 
-// applyDraftResult writes the draft and reports what landed. A failure after
-// artifacts were written is an error envelope carrying those paths, not a result:
-// a partial apply never committed the complete import, so it must not read back
-// as one. Text mode still lists the artifacts, which is the only place a human
-// sees them.
+// applyDraftResult writes a complete import transaction and reports only its
+// committed spec and task files.
 func applyDraftResult(cmd *cobra.Command, svc *taskrail.Service, path string) (commandResult, error) {
 	result, err := svc.ApplyImportDraft(taskrail.ApplyDraftInput{DraftPath: path})
 	if err != nil {
-		if result.Partial && !machineJSONRequested(cmd) {
-			fmt.Fprint(cmd.OutOrStdout(), renderApplyArtifacts(result))
-		}
-		// The warnings ride along so the failure's envelope still carries the
-		// advisories the partially applied draft raised.
 		return commandResult{warnings: result.Warnings}, err
 	}
 	return commandResult{
@@ -116,16 +108,11 @@ func emitPromptResult(svc *taskrail.Service, source, target string) (commandResu
 	}, nil
 }
 
-// renderApplyArtifacts lists one line per artifact the apply wrote, marking a
-// partial apply's spec as one to review rather than one cleanly written.
+// renderApplyArtifacts lists one line per artifact the import committed.
 func renderApplyArtifacts(result taskrail.ApplyDraftResult) string {
 	var b strings.Builder
 	if result.SpecPath != "" {
-		verb := "wrote"
-		if result.Partial {
-			verb = "review"
-		}
-		fmt.Fprintf(&b, "%s spec %s\n", verb, result.SpecPath)
+		fmt.Fprintf(&b, "wrote spec %s\n", result.SpecPath)
 	}
 	for _, task := range result.Tasks {
 		fmt.Fprintf(&b, "created %s %s\n", task.TaskID, task.Path)

@@ -37,12 +37,11 @@ do not contain the source helper and skip this source-only guard.
    `${TASKRAIL:-taskrail} task new`.
 5. Review the created files. Run `${TASKRAIL:-taskrail} validate --json`.
 
-If apply fails during writing (`partial apply already wrote ...` or `partial
-apply may have written ...`, non-zero exit), it still reports what landed or may
-have been touched: the spec and task paths in text mode, and with `--json` a
-`partial_write` error whose `details.paths` name them. Review those paths first —
-a failed spec write may leave an empty or truncated file, and re-applying the
-same draft creates any already-written tasks a second time under new ids.
+Apply publishes the validated draft as one repository-locked transaction. A
+source or destination race refuses with `write_conflict`; handled publication
+failures roll back unchanged candidates and preserve external edits with common
+transaction evidence. Retry only after resolving the reported conflict or
+rollback evidence.
 
 ## Rules
 

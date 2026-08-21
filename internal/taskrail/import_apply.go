@@ -1,11 +1,16 @@
 package taskrail
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
+
+	"github.com/tessariq/taskrail/internal/repotx"
 )
 
 // Agent-driven apply (T-034): `taskrail import --apply <draft.json>` ingests an
@@ -34,24 +39,24 @@ type ApplyDraftResult struct {
 	Target   string           `json:"target"`
 	SpecPath string           `json:"spec_path,omitempty"`
 	Tasks    []CreatedTaskRef `json:"tasks,omitempty"`
-	// Partial marks an apply that stopped with artifacts already on disk. It
-	// never reaches an envelope — that failure publishes partial_write naming the
-	// paths — and only selects the text-mode verb, so it stays out of the
-	// published shape.
-	Partial  bool      `json:"-"`
-	Warnings []Warning `json:"-"`
+	Warnings []Warning        `json:"-"`
 }
 
-// ApplyImportDraft validates a draft and writes real spec/task files. Structural
-// validation rejects malformed drafts, then a live pre-flight (T-041) runs every
-// task's repo checks — spec heading existence and external dependency existence —
-// resolving spec_ref anchors against both existing spec files and the draft's own
-// pending spec sections. Because that pre-flight writes nothing, a draft that
-// would fail any live check leaves the repository unchanged: no orphan spec, no
-// partial tasks. describeWrittenArtifacts still guards the residual I/O-failure
-// path so a mid-write disk error is never silent.
-func (s *Service) ApplyImportDraft(input ApplyDraftInput) (ApplyDraftResult, error) {
-	draft, err := s.readImportDraft(input.DraftPath)
+// ApplyImportDraft publishes a fully validated v1 import through one normal
+// transaction. The source draft, existing corpus, config, and every destination
+// are snapshotted under the mutation lock before any candidate reaches disk.
+func (s *Service) ApplyImportDraft(input ApplyDraftInput) (result ApplyDraftResult, err error) {
+	own, release, err := s.acquireWriterLock("import", nil)
+	if err != nil {
+		return ApplyDraftResult{}, err
+	}
+	defer func() {
+		if releaseErr := release(); releaseErr != nil && err == nil {
+			err = releaseErr
+		}
+	}()
+
+	draft, data, draftPath, err := s.readImportDraftSnapshot(input.DraftPath)
 	if err != nil {
 		return ApplyDraftResult{}, err
 	}
@@ -59,39 +64,191 @@ func (s *Service) ApplyImportDraft(input ApplyDraftInput) (ApplyDraftResult, err
 		return ApplyDraftResult{}, WithMachineErrorCode(MachineCodeInvalidProposal,
 			fmt.Errorf("import draft is invalid: %s", strings.Join(violations, "; ")))
 	}
-	if err := s.preflightImportDraft(draft); err != nil {
+	state, tasks, err := s.loadStateAndTasks()
+	if err != nil {
+		return ApplyDraftResult{}, err
+	}
+	corpus, err := snapshotTaskCorpus(tasks)
+	if err != nil {
+		return ApplyDraftResult{}, err
+	}
+	baseline := s.validateInMemory(state, tasks)
+	if err := s.preflightImportDraft(tasks, draft); err != nil {
 		// Pre-flight rejects the agent-supplied draft itself, so it is an invalid
 		// proposal rather than an invalid CLI argument.
 		return ApplyDraftResult{}, WithMachineErrorCode(MachineCodeInvalidProposal, err)
 	}
 
-	result := ApplyDraftResult{Target: draft.Target}
-	if len(draft.SpecSections) > 0 {
-		specPath, err := s.writeImportedSpec(draft)
-		if err != nil {
-			if specPath != "" {
-				result.SpecPath = specPath
-				result.Partial = true
-				return result, partialApplyFailure(result,
-					fmt.Errorf("%w; partial apply may have written %s — review before retrying", err, specPath))
-			}
-			return ApplyDraftResult{}, err
+	result, published, preview, err := s.buildImportCandidate(draft, state, tasks)
+	if err != nil {
+		return ApplyDraftResult{}, err
+	}
+	stateBytes, err := marshalFrontmatter(state.Frontmatter, state.Body)
+	if err != nil {
+		return ApplyDraftResult{}, err
+	}
+	published = append([]repotx.Candidate{managedCandidate(s.reportedStatePath(), s.paths.StateFile, stateBytes)}, published...)
+	// Include specs referenced only by the incoming tasks, too. The common task
+	// writer helper skips the newly proposed task files while retaining every
+	// source spec the candidate consulted. A spec candidate itself is already a
+	// published path, so it must not also enter the consumed set.
+	consumed, err := writerConsumedPaths(s.paths, preview, preview[len(tasks):]...)
+	if err != nil {
+		return ApplyDraftResult{}, err
+	}
+	publishedPaths := make(map[string]struct{}, len(published))
+	for _, candidate := range published {
+		publishedPaths[candidate.Reported] = struct{}{}
+	}
+	filtered := consumed[:0]
+	for _, path := range consumed {
+		if _, published := publishedPaths[path.Reported]; !published {
+			filtered = append(filtered, path)
 		}
-		result.SpecPath = specPath
+	}
+	consumed = filtered
+	draftInRepository := pathWithinRepository(s.paths.RepoRoot, draftPath)
+	if draftInRepository {
+		consumed = append(consumed, repotx.Path{Kind: repotx.Worktree, Reported: relPath(s.paths.RepoRoot, draftPath), Physical: draftPath})
+	}
+	observedPaths := make([]string, 0, len(consumed)+len(published)+1)
+	for _, path := range consumed {
+		observedPaths = append(observedPaths, path.Physical)
+	}
+	for _, candidate := range published {
+		observedPaths = append(observedPaths, candidate.Physical)
+	}
+	if !draftInRepository {
+		observedPaths = append(observedPaths, draftPath)
+	}
+	inputs, err := snapshotImportInputs(observedPaths)
+	if err != nil {
+		return ApplyDraftResult{}, err
+	}
+	if testHookImportCandidateBuilt != nil {
+		testHookImportCandidateBuilt()
 	}
 
-	created, warnings, err := s.createDraftTasks(draft.Tasks)
-	result.Tasks = created
-	result.Warnings = warnings
-	if err != nil {
-		if written := describeWrittenArtifacts(result); written != "" {
-			result.Partial = true
-			return result, partialApplyFailure(result,
-				fmt.Errorf("%w; partial apply already wrote %s — review before retrying", err, written))
+	request := repotx.Request{
+		Command:   "import",
+		Consumed:  consumed,
+		Published: published,
+		Validate: func([]repotx.Snapshot) error {
+			if testHookWriterValidated != nil {
+				testHookWriterValidated()
+			}
+			if !sameImportInputs(inputs) {
+				return errImportInputChanged
+			}
+			if !draftInRepository {
+				current, readErr := os.ReadFile(draftPath)
+				if readErr != nil || !slices.Equal(current, data) {
+					return errImportInputChanged
+				}
+			}
+			currentTasks, loadErr := s.loadTasks()
+			if loadErr != nil {
+				return loadErr
+			}
+			if !sameTaskCorpus(corpus, currentTasks) {
+				return fmt.Errorf("import task corpus changed during candidate validation")
+			}
+			// preflightImportDraft validates every new task and its pending-spec
+			// anchor; validateInMemory cannot see a spec candidate before publish.
+			if candidateIntroducesViolations(ValidationResult{Violations: s.validateState(state)}, baseline) {
+				return errors.New("import candidate failed validation")
+			}
+			return nil
+		},
+	}
+	if _, err := repotx.Commit(context.Background(), own, request); err != nil {
+		if errors.Is(err, errImportInputChanged) {
+			return ApplyDraftResult{}, importInputConflict(err)
 		}
-		return result, err
+		return ApplyDraftResult{}, writerTransactionError(err)
 	}
 	return result, nil
+}
+
+func importInputConflict(err error) error {
+	failure := MachineFailure{Code: MachineCodeWriteConflict}
+	var txErr *repotx.Error
+	if errors.As(err, &txErr) {
+		for _, snapshot := range txErr.Snapshots() {
+			failure.Snapshots = append(failure.Snapshots, MachineSnapshot{
+				PathKind: string(snapshot.Kind), Path: snapshot.Path,
+				OriginalSHA256: snapshot.OriginalSHA256, CandidateSHA256: snapshot.CandidateSHA256,
+				CurrentSHA256: snapshot.CurrentSHA256,
+			})
+		}
+	}
+	return WithMachineFailure(failure, err)
+}
+
+var (
+	errImportInputChanged        = errors.New("import input changed during candidate validation")
+	testHookImportCandidateBuilt func()
+)
+
+// importInput records the exact pre-candidate filesystem identity. repotx takes
+// its own snapshot before commit; this extra comparison closes the interval
+// between candidate construction and that transaction snapshot.
+type importInput struct {
+	path    string
+	exists  bool
+	mode    fs.FileMode
+	content []byte
+}
+
+func snapshotImportInputs(paths []string) ([]importInput, error) {
+	seen := make(map[string]struct{}, len(paths))
+	inputs := make([]importInput, 0, len(paths))
+	for _, path := range paths {
+		if _, ok := seen[path]; ok {
+			continue
+		}
+		seen[path] = struct{}{}
+		input := importInput{path: path}
+		info, err := os.Lstat(path)
+		if errors.Is(err, os.ErrNotExist) {
+			inputs = append(inputs, input)
+			continue
+		}
+		if err != nil {
+			return nil, fmt.Errorf("inspect import input: %w", fsCause(err))
+		}
+		input.exists, input.mode = true, info.Mode()
+		if info.Mode().IsRegular() {
+			input.content, err = os.ReadFile(path)
+			if err != nil {
+				return nil, fmt.Errorf("read import input: %w", fsCause(err))
+			}
+		}
+		inputs = append(inputs, input)
+	}
+	return inputs, nil
+}
+
+func sameImportInputs(inputs []importInput) bool {
+	for _, expected := range inputs {
+		info, err := os.Lstat(expected.path)
+		if errors.Is(err, os.ErrNotExist) {
+			if expected.exists {
+				return false
+			}
+			continue
+		}
+		if err != nil || !expected.exists || info.Mode() != expected.mode {
+			return false
+		}
+		if info.Mode().IsRegular() {
+			content, readErr := os.ReadFile(expected.path)
+			if readErr != nil || !slices.Equal(content, expected.content) {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // pendingSpec captures the spec an apply is about to write: its repo-relative
@@ -128,11 +285,7 @@ func (s *Service) buildPendingSpec(draft ImportDraft) *pendingSpec {
 // dependency-cycle check task ordering performs. In-draft key dependencies are
 // accepted here because a sibling task will create them. Nothing is written, so
 // any failure leaves the repository unchanged — no orphan spec, no partial tasks.
-func (s *Service) preflightImportDraft(draft ImportDraft) error {
-	_, tasks, err := s.loadStateAndTasks()
-	if err != nil {
-		return err
-	}
+func (s *Service) preflightImportDraft(tasks []*Task, draft ImportDraft) error {
 	pending := s.buildPendingSpec(draft)
 	keys, _ := draftTaskKeys(draft.Tasks)
 	opts := taskValidationOpts{pending: pending, draftKeys: keys}
@@ -153,6 +306,54 @@ func (s *Service) preflightImportDraft(draft ImportDraft) error {
 		return err
 	}
 	return nil
+}
+
+// buildImportCandidate preserves v1's task scaffolding and allocation semantics
+// while keeping every proposed byte in memory until the transaction commits.
+func (s *Service) buildImportCandidate(draft ImportDraft, state *State, tasks []*Task) (ApplyDraftResult, []repotx.Candidate, []*Task, error) {
+	result := ApplyDraftResult{Target: draft.Target}
+	published := make([]repotx.Candidate, 0, len(draft.Tasks)+1)
+	if len(draft.SpecSections) > 0 {
+		specPath := s.importedSpecPath(draft)
+		if fileExists(specPath) && !isImportedSpec(specPath) {
+			return ApplyDraftResult{}, nil, nil, WithMachineErrorCode(MachineCodeDestinationExists,
+				fmt.Errorf("spec file %s already exists; refusing to overwrite", relPath(s.paths.RepoRoot, specPath)))
+		}
+		result.SpecPath = relPath(s.paths.RepoRoot, specPath)
+		published = append(published, managedCandidate(result.SpecPath, specPath, []byte(renderImportedSpec(draft))))
+	}
+
+	order, err := orderTaskDraftsByDeps(draft.Tasks)
+	if err != nil {
+		return ApplyDraftResult{}, nil, nil, err
+	}
+	preview := slices.Clone(tasks)
+	keyToID := make(map[string]string, len(draft.Tasks))
+	for _, idx := range order {
+		draftTask := draft.Tasks[idx]
+		specRef, priority, err := s.validateTaskCreatable(preview, draftTask.SpecRef, draftTask.Priority,
+			translateDeps(draftTask.Dependencies, keyToID), taskValidationOpts{pending: s.buildPendingSpec(draft)})
+		if err != nil {
+			return ApplyDraftResult{}, nil, nil, fmt.Errorf("%s: %w", taskDraftLabel(draftTask, idx), err)
+		}
+		id, warnings := nextTaskIDWithSlug(preview, draftTask.Title, false, true)
+		now := timestamp(s.now())
+		candidate := &Task{Frontmatter: TaskFrontmatter{ID: id, Title: strings.TrimSpace(draftTask.Title), Status: "todo", Priority: priority, SpecRef: specRef, Dependencies: translateDeps(draftTask.Dependencies, keyToID), UpdatedAt: now}, Body: renderNewTaskBody(id, strings.TrimSpace(draftTask.Title), ""), Path: s.paths.logicalManagedPath(filepath.Join(s.paths.TasksDir, id+".md")), Filename: filepath.Join(s.paths.TasksDir, id+".md")}
+		bytes, err := marshalFrontmatter(candidate.Frontmatter, candidate.Body)
+		if err != nil {
+			return ApplyDraftResult{}, nil, nil, err
+		}
+		if draftTask.Key != "" {
+			keyToID[draftTask.Key] = id
+		}
+		preview = append(preview, candidate)
+		result.Tasks = append(result.Tasks, CreatedTaskRef{Key: draftTask.Key, TaskID: id, Path: relPath(s.paths.RepoRoot, candidate.Filename)})
+		result.Warnings = append(result.Warnings, warnings...)
+		published = append(published, managedCandidate(candidate.Path, candidate.Filename, bytes))
+	}
+	state.Frontmatter.UpdatedAt = timestamp(s.now())
+	state.Body = renderStateBody(state.Frontmatter, preview)
+	return result, published, preview, nil
 }
 
 // validateSpecRefWithPending is the live spec_ref check CreateTask performs,
@@ -178,94 +379,34 @@ func (s *Service) validateSpecRefWithPending(specRef string, pending *pendingSpe
 	return s.validateSpecRef(specRef)
 }
 
-// describeWrittenArtifacts summarizes what an apply landed on disk, for surfacing
-// partial state in a failure message. It returns "" when nothing was written.
-func describeWrittenArtifacts(result ApplyDraftResult) string {
-	parts := make([]string, 0, 2)
-	if result.SpecPath != "" {
-		parts = append(parts, result.SpecPath)
-	}
-	if n := len(result.Tasks); n > 0 {
-		ids := make([]string, 0, n)
-		for _, task := range result.Tasks {
-			ids = append(ids, task.TaskID)
-		}
-		parts = append(parts, "tasks "+strings.Join(ids, ", "))
-	}
-	return strings.Join(parts, " and ")
-}
-
-// partialApplyFailure tags an apply that stopped with artifacts already on disk.
-// The complete semantic operation never committed, so `applied` stays false, and
-// the paths it did write are reported so an agent can review them before
-// retrying.
-func partialApplyFailure(result ApplyDraftResult, cause error) error {
-	paths := make([]string, 0, len(result.Tasks)+1)
-	if result.SpecPath != "" {
-		paths = append(paths, result.SpecPath)
-	}
-	for _, task := range result.Tasks {
-		paths = append(paths, task.Path)
-	}
-	return WithMachineFailure(MachineFailure{Code: MachineCodePartialWrite, Paths: paths}, cause)
-}
-
 // readImportDraft loads and parses a draft file, resolving a relative path
 // against the repo root. This is a read; an absolute path is honored as given.
 func (s *Service) readImportDraft(path string) (ImportDraft, error) {
+	draft, _, _, err := s.readImportDraftSnapshot(path)
+	return draft, err
+}
+
+func (s *Service) readImportDraftSnapshot(path string) (ImportDraft, []byte, string, error) {
 	p := strings.TrimSpace(path)
 	if p == "" {
-		return ImportDraft{}, WithMachineErrorCode(MachineCodeInvalidArguments,
+		return ImportDraft{}, nil, "", WithMachineErrorCode(MachineCodeInvalidArguments,
 			errors.New("import draft path must not be empty"))
 	}
 	resolved := s.resolveRepoPath(p)
 	data, err := os.ReadFile(resolved)
 	if err != nil {
-		return ImportDraft{}, invalidArgumentsf("read import draft %s: %w", relPath(s.paths.RepoRoot, resolved), fsCause(err))
+		return ImportDraft{}, nil, "", invalidArgumentsf("read import draft %s: %w", relPath(s.paths.RepoRoot, resolved), fsCause(err))
 	}
 	draft, err := ParseImportDraft(data)
 	if err != nil {
-		return ImportDraft{}, WithMachineErrorCode(MachineCodeInvalidProposal, err)
+		return ImportDraft{}, nil, "", WithMachineErrorCode(MachineCodeInvalidProposal, err)
 	}
-	return draft, nil
+	return draft, data, resolved, nil
 }
 
-// createDraftTasks scaffolds each task draft through CreateTask in dependency
-// order, translating in-draft key dependencies to the real ids CreateTask
-// allocates as it goes.
-func (s *Service) createDraftTasks(tasks []TaskDraft) ([]CreatedTaskRef, []Warning, error) {
-	if len(tasks) == 0 {
-		return nil, nil, nil
-	}
-	order, err := orderTaskDraftsByDeps(tasks)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	keyToID := make(map[string]string, len(tasks))
-	created := make([]CreatedTaskRef, 0, len(tasks))
-	var warnings []Warning
-	for _, idx := range order {
-		draft := tasks[idx]
-		res, err := s.CreateTask(CreateTaskInput{
-			Title:        draft.Title,
-			Slug:         draft.Title,
-			SpecRef:      draft.SpecRef,
-			Priority:     draft.Priority,
-			Dependencies: translateDeps(draft.Dependencies, keyToID),
-		})
-		if err != nil {
-			// Return what is already on disk alongside the error: the caller's
-			// partial-apply wrapper can only name the written tasks if it sees them.
-			return created, warnings, fmt.Errorf("create %s: %w", taskDraftLabel(draft, idx), err)
-		}
-		if draft.Key != "" {
-			keyToID[draft.Key] = res.TaskID
-		}
-		created = append(created, CreatedTaskRef{Key: draft.Key, TaskID: res.TaskID, Path: res.Path})
-		warnings = append(warnings, res.Warnings...)
-	}
-	return created, warnings, nil
+func pathWithinRepository(root, target string) bool {
+	rel, err := filepath.Rel(root, target)
+	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
 // translateDeps rewrites in-draft key dependencies to their allocated task ids.
