@@ -9,6 +9,126 @@ import (
 	"time"
 )
 
+func TestRenderPromptValidatesAndSubstitutesDeclaredTokens(t *testing.T) {
+	const template = "Task {{TASK_ID}} at {{TASK_PATH}}; braces { } stay literal.\n"
+	result, err := RenderPrompt(PromptRenderInput{
+		Template:       []byte(template),
+		DeclaredTokens: []string{"TASK_ID", "TASK_PATH"},
+		Values: map[string]string{
+			"TASK_ID":   "T-250",
+			"TASK_PATH": "planning/tasks/T-250.md",
+		},
+	})
+	if err != nil {
+		t.Fatalf("render prompt: %v", err)
+	}
+	if result.Content != "Task T-250 at planning/tasks/T-250.md; braces { } stay literal.\n" {
+		t.Fatalf("rendered content = %q", result.Content)
+	}
+	if result.TemplateSHA256 != "0ee68fcf3aa29dcdaf40dd37ad69939f203409380b8d9e0368ee858bcbbc5b9b" || result.SHA256 != "fb94fd45f4235eec1fe01621a21bef252e0f6f353ca1a586110b6fe543d3c5bd" {
+		t.Fatalf("rendered digests = %+v, want exact-byte goldens", result)
+	}
+
+	for _, test := range []struct {
+		name  string
+		input PromptRenderInput
+	}{
+		{"unknown token", PromptRenderInput{Template: []byte("{{OTHER}}"), DeclaredTokens: []string{"KNOWN"}, Values: map[string]string{"KNOWN": "value"}}},
+		{"unresolved token", PromptRenderInput{Template: []byte("{{KNOWN}}"), DeclaredTokens: []string{"KNOWN"}, Values: map[string]string{}}},
+		{"unknown value", PromptRenderInput{Template: []byte("plain"), Values: map[string]string{"OTHER": "value"}}},
+		{"duplicate declaration", PromptRenderInput{Template: []byte("plain"), DeclaredTokens: []string{"KNOWN", "KNOWN"}, Values: map[string]string{"KNOWN": "value"}}},
+		{"invalid declaration", PromptRenderInput{Template: []byte("plain"), DeclaredTokens: []string{"known"}, Values: map[string]string{"known": "value"}}},
+		{"malformed lower case token", PromptRenderInput{Template: []byte("{{known}}"), Values: map[string]string{}}},
+		{"malformed leading digit token", PromptRenderInput{Template: []byte("{{0KNOWN}}"), Values: map[string]string{}}},
+		{"malformed leading underscore token", PromptRenderInput{Template: []byte("{{_KNOWN}}"), Values: map[string]string{}}},
+		{"malformed punctuation token", PromptRenderInput{Template: []byte("{{KNOWN-NAME}}"), Values: map[string]string{}}},
+		{"malformed whitespace token", PromptRenderInput{Template: []byte("{{KNOWN NAME}}"), Values: map[string]string{}}},
+		{"malformed UTF-8 token", PromptRenderInput{Template: []byte("{{KNOWN\u00c9}}"), Values: map[string]string{}}},
+		{"empty token", PromptRenderInput{Template: []byte("{{}}"), Values: map[string]string{}}},
+		{"unterminated token", PromptRenderInput{Template: []byte("{{KNOWN"), Values: map[string]string{}}},
+		{"invalid UTF-8 template", PromptRenderInput{Template: []byte{0xff}, Values: map[string]string{}}},
+		{"BOM template", PromptRenderInput{Template: append([]byte{0xef, 0xbb, 0xbf}, []byte("plain")...), Values: map[string]string{}}},
+		{"oversize template", PromptRenderInput{Template: []byte(strings.Repeat("x", promptReplacementLimit+1)), Values: map[string]string{}}},
+		{"invalid UTF-8 value", PromptRenderInput{Template: []byte("{{KNOWN}}"), DeclaredTokens: []string{"KNOWN"}, Values: map[string]string{"KNOWN": string([]byte{0xff})}}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if _, err := RenderPrompt(test.input); err == nil {
+				t.Fatal("render accepted invalid prompt input")
+			}
+		})
+	}
+
+	if _, err := RenderPrompt(PromptRenderInput{Template: []byte(strings.Repeat("x", promptReplacementLimit))}); err != nil {
+		t.Fatalf("render size-limit template: %v", err)
+	}
+}
+
+func TestRenderPromptIsOnePass(t *testing.T) {
+	result, err := RenderPrompt(PromptRenderInput{
+		Template:       []byte("{{FIRST}} {{SECOND}}"),
+		DeclaredTokens: []string{"FIRST", "SECOND"},
+		Values:         map[string]string{"FIRST": "{{SECOND}}", "SECOND": "done"},
+	})
+	if err != nil {
+		t.Fatalf("render prompt: %v", err)
+	}
+	if result.Content != "{{SECOND}} done" {
+		t.Fatalf("one-pass content = %q", result.Content)
+	}
+}
+
+func TestRenderPromptReturnsNoPartialResultOnValidationFailure(t *testing.T) {
+	template := []byte("{{KNOWN}} {{UNFINISHED")
+	originalTemplate := append([]byte(nil), template...)
+	values := map[string]string{"KNOWN": "value"}
+
+	result, err := RenderPrompt(PromptRenderInput{
+		Template:       template,
+		DeclaredTokens: []string{"KNOWN"},
+		Values:         values,
+	})
+	if err == nil {
+		t.Fatal("render accepted unterminated token after a valid token")
+	}
+	if result != (PromptRenderResult{}) {
+		t.Fatalf("failure result = %+v, want no partial result", result)
+	}
+	if string(template) != string(originalTemplate) || values["KNOWN"] != "value" || len(values) != 1 {
+		t.Fatalf("render mutated caller input: template %q values %#v", template, values)
+	}
+}
+
+func TestRenderPromptAcceptsGrammarBoundariesAndLiteralBraces(t *testing.T) {
+	result, err := RenderPrompt(PromptRenderInput{
+		Template:       []byte("{{A}} {{A0_}} {literal} }}"),
+		DeclaredTokens: []string{"A", "A0_"},
+		Values:         map[string]string{"A": "hello", "A0_": "world"},
+	})
+	if err != nil {
+		t.Fatalf("render prompt: %v", err)
+	}
+	if result.Content != "hello world {literal} }}" {
+		t.Fatalf("literal brace rendering = %q", result.Content)
+	}
+
+	empty, err := RenderPrompt(PromptRenderInput{})
+	if err != nil {
+		t.Fatalf("render empty prompt: %v", err)
+	}
+	if empty.Content != "" || empty.SHA256 != empty.TemplateSHA256 {
+		t.Fatalf("empty prompt result = %+v", empty)
+	}
+
+	utf8Result, err := RenderPrompt(PromptRenderInput{
+		Template:       []byte("Summary: {{VALUE}}"),
+		DeclaredTokens: []string{"VALUE"},
+		Values:         map[string]string{"VALUE": "caf\u00e9"},
+	})
+	if err != nil || utf8Result.Content != "Summary: caf\u00e9" {
+		t.Fatalf("UTF-8 render = %+v, error = %v", utf8Result, err)
+	}
+}
+
 func TestPromptListAndShowResolveCommittedReplacement(t *testing.T) {
 	repo := seedFixtureRepo(t)
 	svc := newTestService(t, repo, time.Date(2026, 8, 21, 12, 0, 0, 0, time.UTC))

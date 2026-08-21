@@ -66,6 +66,121 @@ type PromptContentResult struct {
 	TemplateSHA256  string  `json:"template_sha256"`
 }
 
+// PromptRenderInput is the storage-neutral data needed to render one template.
+type PromptRenderInput struct {
+	Template       []byte
+	DeclaredTokens []string
+	Values         map[string]string
+}
+
+// PromptRenderResult contains the rendered content and hashes of both stages.
+type PromptRenderResult struct {
+	Content        string
+	SHA256         string
+	TemplateSHA256 string
+}
+
+// RenderPrompt validates a v1 prompt template before making one non-recursive
+// substitution pass. Keeping this independent of prompt resolution lets every
+// future context loader share the same strict rendering contract.
+func RenderPrompt(input PromptRenderInput) (PromptRenderResult, error) {
+	if err := validatePromptTemplate(input.Template); err != nil {
+		return PromptRenderResult{}, err
+	}
+	declared := make(map[string]struct{}, len(input.DeclaredTokens))
+	for _, name := range input.DeclaredTokens {
+		if !validPromptTokenName(name) {
+			return PromptRenderResult{}, fmt.Errorf("invalid declared prompt token %q", name)
+		}
+		if _, exists := declared[name]; exists {
+			return PromptRenderResult{}, fmt.Errorf("duplicate declared prompt token %q", name)
+		}
+		declared[name] = struct{}{}
+	}
+	if len(input.Values) != len(declared) {
+		return PromptRenderResult{}, fmt.Errorf("prompt values do not exactly match declared tokens")
+	}
+	for name, value := range input.Values {
+		if _, ok := declared[name]; !ok {
+			return PromptRenderResult{}, fmt.Errorf("value supplied for undeclared prompt token %q", name)
+		}
+		if !utf8.ValidString(value) {
+			return PromptRenderResult{}, fmt.Errorf("value for prompt token %q is not valid UTF-8", name)
+		}
+	}
+	if err := validatePromptTokenReferences(input.Template, declared); err != nil {
+		return PromptRenderResult{}, err
+	}
+
+	var rendered strings.Builder
+	for offset := 0; offset < len(input.Template); {
+		start := bytes.Index(input.Template[offset:], []byte("{{"))
+		if start < 0 {
+			rendered.Write(input.Template[offset:])
+			break
+		}
+		start += offset
+		rendered.Write(input.Template[offset:start])
+		end := bytes.Index(input.Template[start+2:], []byte("}}"))
+		end += start + 2
+		rendered.WriteString(input.Values[string(input.Template[start+2:end])])
+		offset = end + 2
+	}
+
+	content := rendered.String()
+	return PromptRenderResult{
+		Content: content, SHA256: promptDigest([]byte(content)), TemplateSHA256: promptDigest(input.Template),
+	}, nil
+}
+
+func validatePromptTemplate(template []byte) error {
+	switch {
+	case len(template) > promptReplacementLimit:
+		return fmt.Errorf("prompt template exceeds %d bytes", promptReplacementLimit)
+	case bytes.HasPrefix(template, []byte{0xef, 0xbb, 0xbf}):
+		return fmt.Errorf("prompt template has a UTF-8 BOM")
+	case !utf8.Valid(template):
+		return fmt.Errorf("prompt template is not valid UTF-8")
+	}
+	return nil
+}
+
+func validatePromptTokenReferences(template []byte, declared map[string]struct{}) error {
+	for offset := 0; offset < len(template); {
+		start := bytes.Index(template[offset:], []byte("{{"))
+		if start < 0 {
+			return nil
+		}
+		start += offset
+		end := bytes.Index(template[start+2:], []byte("}}"))
+		if end < 0 {
+			return fmt.Errorf("unterminated prompt token %q", string(template[start:]))
+		}
+		end += start + 2
+		name := string(template[start+2 : end])
+		if !validPromptTokenName(name) {
+			return fmt.Errorf("malformed prompt token %q", string(template[start:end+2]))
+		}
+		if _, ok := declared[name]; !ok {
+			return fmt.Errorf("undeclared prompt token %q", name)
+		}
+		offset = end + 2
+	}
+	return nil
+}
+
+func validPromptTokenName(name string) bool {
+	if len(name) == 0 || name[0] < 'A' || name[0] > 'Z' {
+		return false
+	}
+	for i := 1; i < len(name); i++ {
+		if (name[i] < 'A' || name[i] > 'Z') && (name[i] < '0' || name[i] > '9') && name[i] != '_' {
+			return false
+		}
+	}
+	return true
+}
+
 // PromptList reports every retained embedded prompt pair in registry order. It
 // validates committed replacements before reporting their source, so an invalid
 // local file cannot be mistaken for an absent one.

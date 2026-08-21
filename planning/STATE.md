@@ -1,6 +1,6 @@
 ---
 schema_version: 1
-updated_at: "2026-08-21T16:11:19Z"
+updated_at: "2026-08-21T22:04:09Z"
 active_spec_version: v0.5.0
 active_spec_path: specs/v0.5.0.md
 current_task: ""
@@ -8,9 +8,9 @@ current_task_title: ""
 status_summary: idle
 blockers: []
 next_action: Select the next eligible task
-last_verification_result: pass for T-347-align-review-parent-cleanup-test-with-windows at 2026-08-21T16:11:19Z id 043d49ee6783aeb1452432d5b64a96e6
-last_verification_id: 043d49ee6783aeb1452432d5b64a96e6
-last_verified_completion_id: 547f745a21885343b9aff774a1d88fac
+last_verification_result: pass for T-250-render-prompts-from-storage-neutral-context at 2026-08-21T22:04:09Z id bd568d7f8e590bc556a4f05a46850bb6
+last_verification_id: bd568d7f8e590bc556a4f05a46850bb6
+last_verified_completion_id: 6c135fd12d646c4517a8a0103ae9361a
 relevant_artifacts: []
 continuation_notes:
     - This repository is temporarily dogfooding bootstrap workflow tooling until Taskrail v0.1.0 exists.
@@ -36,7 +36,7 @@ continuation_notes:
 
 ## Last Verification
 
-- pass for T-347-align-review-parent-cleanup-test-with-windows at 2026-08-21T16:11:19Z id 043d49ee6783aeb1452432d5b64a96e6
+- pass for T-250-render-prompts-from-storage-neutral-context at 2026-08-21T22:04:09Z id bd568d7f8e590bc556a4f05a46850bb6
 
 ## Next Action
 
@@ -52,8 +52,8 @@ continuation_notes:
 
 ## Task Counts
 
-- todo: 114
+- todo: 113
 - in_progress: 0
-- completed: 232
+- completed: 233
 - blocked: 0
 - cancelled: 0
