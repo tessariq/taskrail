@@ -369,6 +369,9 @@ func TestCreatePublishReplaceRemoveAndMkdir(t *testing.T) {
 }
 
 func TestRemoveDirExpectedRefusesReplacement(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows reports directory durability as unsupported")
+	}
 	repo := t.TempDir()
 	root, lock := openTestRoot(t, repo)
 	defer releaseTestRoot(t, root, lock)
