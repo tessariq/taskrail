@@ -1,12 +1,16 @@
 ---
 id: T-159-add-a-versioned-workflow-prompt-catalog
 title: Add a versioned workflow prompt catalog
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#workflow-prompt-catalog-and-overrides
 dependencies:
     - T-157-upgrade-repositories-transactionally-to-layout-2
-updated_at: "2026-08-04T21:32:13Z"
+updated_at: "2026-08-21T12:35:48Z"
+completion_id: "796d7f76411deab1465f7d8b93e1c828"
+last_verification_id: "45e0c15b3227483f77627b23d500e70c"
+last_verification_result: pass
+last_verified_at: "2026-08-21T12:35:48Z"
 ---
 
 # T-159-add-a-versioned-workflow-prompt-catalog Add a versioned workflow prompt catalog
@@ -49,3 +53,6 @@ rendering, task inspection, and local replacement mapping are separate outcomes.
   commands and failed renders are read-only.
 
 ## Implementation Notes
+
+- 2026-08-21T12:35:36Z: Added read-only v1 prompt catalog with committed replacement resolution.
+- 2026-08-21T12:35:48Z: verification pass id 45e0c15b3227483f77627b23d500e70c previous none completion none

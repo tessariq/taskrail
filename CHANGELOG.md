@@ -6,6 +6,12 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ### Added
 
+- Read-only `prompt list` and `prompt show` now expose the ordered v1 embedded
+  workflow-prompt catalog through text and common-envelope JSON. Complete
+  committed replacements under `.taskrail/prompts/v1/` are validated before
+  use, reported separately from their exact template digests, and can be
+  bypassed explicitly with `prompt show --builtin`; init never materializes
+  prompt files.
 - `verify` now publishes a fresh stable verification ID and direct predecessor
   across its JSON result, reports, task metadata and note, state projection, and
   identity-named artifact directory. Validation rejects broken report chains or

@@ -204,8 +204,8 @@ func TestEmitMachineDocumentRefusesBeforeEmission(t *testing.T) {
 		{
 			name: "command that publishes no machine document yet",
 			outcome: MachineOutcome{
-				Command: "prompt list", Surface: MachineSurfaceStdout,
-				Result: &MachineResult{Shape: "PromptListResult", Value: map[string]any{"prompts": []any{}}},
+				Command: "prompt render", Surface: MachineSurfaceStdout,
+				Result: &MachineResult{Shape: "PromptContentResult", Value: map[string]any{}},
 			},
 			wantErr: `publishes no machine document yet`,
 		},

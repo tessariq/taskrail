@@ -25,6 +25,9 @@ type commandResult struct {
 	shape string
 	value any
 	text  string
+	// exactText bypasses the ordinary report newline for content commands whose
+	// text mode contract is byte-for-byte output.
+	exactText bool
 	// warnings are the advisories the command raised. They are honored even
 	// alongside an error, because a failure after a warned-about step still has
 	// to report the advisory that explains it.
@@ -78,7 +81,13 @@ func finishCommand(cmd *cobra.Command, svc *taskrail.Service, produce func(*task
 		return publishMachineError(cmd, err, result.warnings)
 	}
 	if !machineJSONRequested(cmd) {
-		if _, err := fmt.Fprintln(cmd.OutOrStdout(), result.text); err != nil {
+		var err error
+		if result.exactText {
+			_, err = fmt.Fprint(cmd.OutOrStdout(), result.text)
+		} else {
+			_, err = fmt.Fprintln(cmd.OutOrStdout(), result.text)
+		}
+		if err != nil {
 			return err
 		}
 		return result.gate

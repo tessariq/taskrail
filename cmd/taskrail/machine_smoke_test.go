@@ -75,6 +75,8 @@ var readOnlyMachineInvocations = []struct {
 	{"coverage", "GapReport", []string{"coverage", "--gaps", "--json"}},
 	{"status", "StatusResult", []string{"status", "--json"}},
 	{"stats", "StatsResult", []string{"stats", "--json"}},
+	{"prompt list", "PromptListResult", []string{"prompt", "list", "--json"}},
+	{"prompt show", "PromptContentResult", []string{"prompt", "show", "task-review", "--json"}},
 	{"spec list", "SpecListResult", []string{"spec", "list", "--json"}},
 	{"spec show", "SpecShowResult", []string{"spec", "show", "v0.1.0", "--json"}},
 	{"spec diff", "SpecDiffResult", []string{"spec", "diff", "v0.1.0", "v0.2.0", "--json"}},

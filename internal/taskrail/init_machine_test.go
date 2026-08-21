@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"slices"
@@ -228,6 +229,9 @@ func TestInitSkillInventoryIsEmptyWithoutTheOptIn(t *testing.T) {
 			t.Fatalf("default init created the assistant directory %s", dir)
 		}
 	}
+	if _, err := os.Stat(filepath.Join(repo, ".taskrail", "prompts")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("default init materialized prompt replacements: %v", err)
+	}
 }
 
 // A committed installation reports every packaged file at its normal discovery
@@ -252,6 +256,9 @@ func TestInitCommittedSkillInventory(t *testing.T) {
 	assertSkillInventory(t, installed.Skills, wantCount, writeActionCreate)
 	if len(installed.SkillExclusions) != 0 {
 		t.Fatalf("committed install reported exclusions %+v", installed.SkillExclusions)
+	}
+	if _, err := os.Stat(filepath.Join(repo, ".taskrail", "prompts")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("skill init materialized prompt replacements: %v", err)
 	}
 
 	preserved, err := svc.Init(InitInput{WithSkills: true, SkillVersion: "v9.9.9"})

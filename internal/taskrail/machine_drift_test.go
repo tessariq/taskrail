@@ -77,11 +77,11 @@ func TestCheckMachineEntryPolicyRejectsPerturbedEntries(t *testing.T) {
 		{
 			name: "planned command claiming implemented coverage",
 			entry: func() MachineCommandEntry {
-				e := entry("prompt list")
+				e := entry("prompt render")
 				e.JSONState = MachineJSONInherited
 				return e
 			}(),
-			wantErr: `command "prompt list" publishes "inherited" but is not constructed`,
+			wantErr: `command "prompt render" publishes "inherited" but is not constructed`,
 		},
 		{
 			name: "ungated command claiming a report-result exit exception",
@@ -133,7 +133,7 @@ func TestCheckMachineEntryPolicyRejectsPerturbedEntries(t *testing.T) {
 var migratedCommands = []string{
 	"block", "complete", "coverage", "import", "init", "lock clear", "lock status",
 	"local path", "local status", "next", "recover", "repair", "retrofit",
-	"spec activate", "spec add", "spec diff", "spec list", "spec show", "start",
+	"prompt list", "prompt show", "spec activate", "spec add", "spec diff", "spec list", "spec show", "start",
 	"stats", "status", "task new", "task rename", "task repoint", "unblock",
 	"task dependency add", "task dependency remove", "validate", "verify",
 }
@@ -203,9 +203,9 @@ func TestCheckMachineRegistrationsRejectsDrift(t *testing.T) {
 		{
 			name: "planned command masquerading as implemented",
 			mutate: func(registrations []MachineRegistration) []MachineRegistration {
-				return append(registrations, MachineRegistration{Command: "prompt list", Surface: MachineSurfaceStdout})
+				return append(registrations, MachineRegistration{Command: "prompt render", Surface: MachineSurfaceStdout})
 			},
-			wantErr: `"prompt list stdout" publishes no machine document yet`,
+			wantErr: `"prompt render stdout" publishes no machine document yet`,
 		},
 	}
 	for _, tc := range cases {
@@ -224,7 +224,7 @@ func TestCheckMachineRegistrationsRejectsDrift(t *testing.T) {
 func TestCheckMachineRegistrationsIsDeterministic(t *testing.T) {
 	broken := append(registrationsFor(t)[1:],
 		MachineRegistration{Command: "version", Surface: MachineSurfaceStdout},
-		MachineRegistration{Command: "prompt list", Surface: MachineSurfaceStdout},
+		MachineRegistration{Command: "prompt render", Surface: MachineSurfaceStdout},
 		MachineRegistration{Command: "status", Surface: MachineSurfaceStdout},
 	)
 	first := CheckMachineRegistrations(broken)
@@ -414,12 +414,12 @@ func TestCheckMachinePublicationRejectsDrift(t *testing.T) {
 		{
 			name: "planned command publishing early",
 			publication: MachinePublication{
-				Command:  "prompt list",
+				Command:  "prompt render",
 				Surface:  MachineSurfaceStdout,
-				Result:   "PromptListResult",
-				Document: machineDocumentBytes("prompt list", "[]", `"result":{}`),
+				Result:   "PromptContentResult",
+				Document: machineDocumentBytes("prompt render", "[]", `"result":{}`),
 			},
-			wantErr: `"prompt list stdout" publishes no machine document yet`,
+			wantErr: `"prompt render stdout" publishes no machine document yet`,
 		},
 	}
 	for _, tc := range cases {
