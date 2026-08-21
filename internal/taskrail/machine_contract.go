@@ -292,7 +292,7 @@ var machineInventory = []MachineCommandEntry{
 		warns(), errs(readErrors, "prompt_not_found", "prompt_invalid", "task_not_found", "path_blocked")),
 	planned("`prompt render`", "prompt render", []string{"PromptContentResult"}, "never",
 		warns(), errs(readErrors, "prompt_not_found", "prompt_invalid", "task_not_found", "path_blocked")),
-	planned("`review publish`", "review publish", []string{"ReviewPublishResult"}, "never",
+	migrated("`review publish`", "review publish", []string{"ReviewPublishResult"}, "never",
 		warns(), errs(reviewErrors)),
 	planned("`review show`", "review show", []string{"ReviewShowResult"}, "never",
 		warns(), errs(readErrors, "review_not_found", "path_blocked")),

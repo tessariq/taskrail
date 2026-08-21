@@ -210,6 +210,12 @@ func (r *Root) Mkdir(path string, mode fs.FileMode) (*Directory, error) {
 // complete directory to that absent name at one native no-replace commit point.
 // The destination parent must already exist.
 func (r *Root) PublishDirectory(ctx context.Context, destination string, files []DirectoryFile) (directory *Directory, err error) {
+	return r.PublishDirectoryValidated(ctx, destination, files, nil)
+}
+
+// PublishDirectoryValidated invokes validate after the staged directory has been
+// re-proven intact and immediately before its no-replace namespace commit.
+func (r *Root) PublishDirectoryValidated(ctx context.Context, destination string, files []DirectoryFile, validate func() error) (directory *Directory, err error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -298,6 +304,11 @@ func (r *Root) PublishDirectory(ctx context.Context, destination string, files [
 	}
 	if testHookBeforeDirectoryMove != nil {
 		testHookBeforeDirectoryMove(stagedPath, destination)
+	}
+	if validate != nil {
+		if err := validate(); err != nil {
+			return nil, err
+		}
 	}
 	commitDestination, commitLeaf, commitAncestors, err := r.bindParent(destination)
 	if err != nil {

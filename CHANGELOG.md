@@ -6,6 +6,11 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ### Added
 
+- `review publish --type task` now validates one ignored task-review proposal
+  against exact task and spec digests before previewing or atomically publishing
+  its unchanged `review.json` into an absent durable review session. Apply
+  rechecks proposal, subject, configuration, and destination identities under
+  the repository writer lock without mutating tracked-work lifecycle state.
 - `taskrail task show <task-id>` now returns the exact persisted Markdown for
   one exact task ID through the active storage context. Text preserves the task
   bytes; `--json` returns its logical path, content, and SHA-256 digest without

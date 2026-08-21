@@ -1,14 +1,19 @@
 ---
 id: T-215-add-the-generic-review-artifact-publisher
 title: Add the shared review directory publisher
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#safe-review-artifact-publication
 dependencies:
     - T-223-run-every-v0-5-command-against-local-storage
     - T-240-implement-the-normative-review-schema-decoders
     - T-278-publish-typed-directories-without-clobbering
-updated_at: "2026-08-08T08:40:49Z"
+updated_at: "2026-08-21T14:43:27Z"
+completion_id: "dad2deccd507407c9fedbac45d43f4ec"
+last_verification_id: "3a5cbda36c41be9ce936eafd5b740318"
+last_verification_result: pass
+last_verified_at: "2026-08-21T14:43:27Z"
+last_verified_completion_id: "dad2deccd507407c9fedbac45d43f4ec"
 ---
 
 # T-215-add-the-generic-review-artifact-publisher Add the shared review directory publisher
@@ -44,3 +49,6 @@ reading remain separate outcomes.
   repository-wide sentinels prove every excluded semantic surface is unchanged.
 
 ## Implementation Notes
+
+- 2026-08-21T14:43:13Z: Added the task review publisher with exact snapshot binding and an atomic no-clobber review directory commit.
+- 2026-08-21T14:43:27Z: verification pass id 3a5cbda36c41be9ce936eafd5b740318 previous none completion dad2deccd507407c9fedbac45d43f4ec

@@ -37,6 +37,9 @@ type Request struct {
 	Destination string
 	Files       []File
 	Validate    func(Type, []File) error
+	// ValidateCommit rechecks external snapshots after staging and immediately
+	// before the destination namespace commit.
+	ValidateCommit func() error
 }
 
 // PublishedFile reports one deterministic final path and exact-byte digest.
@@ -100,7 +103,7 @@ func Publish(ctx context.Context, own ownership, request Request) (Result, error
 	if err := own.Capability().AllowsWrites(writes); err != nil {
 		return Result{}, err
 	}
-	if _, err := root.PublishDirectory(ctx, request.Destination, candidates); err != nil {
+	if _, err := root.PublishDirectoryValidated(ctx, request.Destination, candidates, request.ValidateCommit); err != nil {
 		return Result{}, err
 	}
 	return result, nil
@@ -128,6 +131,9 @@ func validateInventory(bundleType Type, files []File) error {
 	}
 	got := make([]string, len(files))
 	for i, file := range files {
+		if len(file.Content) > 1<<20 {
+			return fmt.Errorf("review directory member %q exceeds 1 MiB", file.Name)
+		}
 		if strings.Contains(file.Name, "/") || strings.Contains(file.Name, `\`) {
 			return fmt.Errorf("review directory member %q is not a basename", file.Name)
 		}

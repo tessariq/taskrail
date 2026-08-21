@@ -99,6 +99,48 @@ func TestPublishRefusesInvalidBundlesBeforeCreatingDestination(t *testing.T) {
 	}
 }
 
+func TestPublishRefusesOversizedMembersBeforeCreatingDestination(t *testing.T) {
+	root := t.TempDir()
+	destination := typedDestination(TypeTask)
+	if err := os.MkdirAll(filepath.Dir(filepath.Join(root, filepath.FromSlash(destination))), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	lock := acquire(t, root)
+	defer release(t, lock)
+	_, err := Publish(context.Background(), lock, request("reviews", TypeTask, destination, []File{{Name: "review.json", Content: make([]byte, 1<<20+1)}}))
+	if err == nil {
+		t.Fatal("Publish succeeded")
+	}
+	if _, statErr := os.Stat(filepath.Join(root, filepath.FromSlash(destination))); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("destination exists after refusal: %v", statErr)
+	}
+}
+
+func TestPublishRunsCommitValidationBeforeDestinationVisibility(t *testing.T) {
+	requireDirectoryPublication(t)
+	root := t.TempDir()
+	destination := typedDestination(TypeTask)
+	if err := os.MkdirAll(filepath.Dir(filepath.Join(root, filepath.FromSlash(destination))), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	lock := acquire(t, root)
+	defer release(t, lock)
+	called := false
+	_, err := Publish(context.Background(), lock, Request{
+		Type: TypeTask, ReviewsRoot: "reviews", Destination: destination, Files: files("review.json"), Validate: valid,
+		ValidateCommit: func() error {
+			called = true
+			return errors.New("source changed")
+		},
+	})
+	if err == nil || !called {
+		t.Fatalf("Publish error = %v, called=%t", err, called)
+	}
+	if _, statErr := os.Stat(filepath.Join(root, filepath.FromSlash(destination))); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("destination exists after final validation refusal: %v", statErr)
+	}
+}
+
 func TestPublishDoesNotClobberExistingDestination(t *testing.T) {
 	root := t.TempDir()
 	reported := typedDestination(TypeTask)
