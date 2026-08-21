@@ -1,6 +1,7 @@
 package taskrail
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -15,23 +16,29 @@ import (
 )
 
 // ReviewPublishInput selects one review proposal and binds it to its reviewed
-// subject. Each review type supplies a type-specific adapter to the shared
+// subjects. Each review type supplies a type-specific adapter to the shared
 // directory publisher.
 type ReviewPublishInput struct {
-	Type             string
-	Proposal         string
-	Destination      string
-	Spec             string
-	TaskID           string
-	ExpectTaskSHA256 string
-	ExpectSpecSHA256 string
-	DryRun           bool
+	Type                   string
+	Proposal               string
+	Destination            string
+	Spec                   string
+	TaskID                 string
+	ExpectTaskSHA256       string
+	ExpectSpecSHA256       string
+	SpecReview             string
+	ExpectSpecReviewSHA256 string
+	DryRun                 bool
 
 	// These retain Cobra's selected-type flag boundary when an explicitly empty
 	// flag would otherwise be indistinguishable from an omitted one.
-	SpecFlagSet             bool
-	TaskFlagSet             bool
-	ExpectTaskSHA256FlagSet bool
+	SpecFlagSet                   bool
+	TaskFlagSet                   bool
+	ExpectTaskSHA256FlagSet       bool
+	SpecReviewFlagSet             bool
+	ExpectSpecReviewSHA256FlagSet bool
+	TaskFlagsProvided             bool
+	DecompositionFlagsProvided    bool
 }
 
 type ReviewPublishFile struct {
@@ -87,6 +94,13 @@ type reviewParent struct {
 
 var testHookAfterReviewParent func()
 
+type decompositionReviewPublication struct {
+	proposal, destination, specPath, specReviewPath string
+	config, spec, specReview                        []byte
+	specSHA256, specReviewSHA256                    string
+	bundle                                          DecompositionBundle
+}
+
 // ReviewPublish validates a proposal without writing in preview mode. Apply
 // repeats the complete observation after taking the writer lock, then delegates
 // the single no-clobber directory commit to reviewdir.
@@ -94,11 +108,16 @@ func (s *Service) ReviewPublish(input ReviewPublishInput) (ReviewPublishResult, 
 	if err := s.paths.ensureStorageCapability(); err != nil {
 		return ReviewPublishResult{}, err
 	}
+	if err := validateReviewPublishInput(input); err != nil {
+		return ReviewPublishResult{}, err
+	}
 	switch reviewdir.Type(input.Type) {
 	case reviewdir.TypeTask:
 		return s.reviewPublishTask(input)
 	case reviewdir.TypeSpec:
 		return s.reviewPublishSpec(input)
+	case reviewdir.TypeDecomposition:
+		return s.publishDecompositionReview(input)
 	default:
 		return ReviewPublishResult{}, invalidArgumentsf("unsupported review type %q", input.Type)
 	}
@@ -235,6 +254,26 @@ func (s *Service) reviewPublishSpec(input ReviewPublishInput) (ReviewPublishResu
 		return ReviewPublishResult{}, reviewPublishError(err)
 	}
 	return candidate.result(true), nil
+}
+
+func validateReviewPublishInput(input ReviewPublishInput) error {
+	switch input.Type {
+	case string(reviewdir.TypeTask):
+		if input.DecompositionFlagsProvided || input.Spec != "" || input.SpecReview != "" || input.ExpectSpecReviewSHA256 != "" {
+			return invalidArgumentsf("task review publication does not accept decomposition flags")
+		}
+	case string(reviewdir.TypeSpec):
+		if input.TaskFlagsProvided || input.TaskID != "" || input.ExpectTaskSHA256 != "" || input.SpecReviewFlagSet || input.ExpectSpecReviewSHA256FlagSet || input.SpecReview != "" || input.ExpectSpecReviewSHA256 != "" {
+			return invalidArgumentsf("spec review publication does not accept task or decomposition-only flags")
+		}
+	case string(reviewdir.TypeDecomposition):
+		if input.TaskFlagsProvided || input.TaskID != "" || input.ExpectTaskSHA256 != "" {
+			return invalidArgumentsf("decomposition review publication does not accept task flags")
+		}
+	default:
+		return invalidArgumentsf("unsupported review type %q", input.Type)
+	}
+	return nil
 }
 
 // ensureReviewParent creates only the namespace leading to an absent session.
@@ -520,6 +559,214 @@ func (s *Service) specReviewProposalFiles(proposal string) (map[string][]byte, e
 		files[entry.Path] = content
 	}
 	return files, nil
+}
+
+func (s *Service) publishDecompositionReview(input ReviewPublishInput) (ReviewPublishResult, error) {
+	candidate, err := s.decompositionReviewPublication(input)
+	if err != nil {
+		return ReviewPublishResult{}, err
+	}
+	if input.DryRun {
+		return candidate.result(false), nil
+	}
+	own, err := repolock.Acquire(context.Background(), repolock.Request{
+		Repository: s.paths.LockRepository(),
+		Command:    "review publish",
+		Capability: repolock.Capability{Commands: []string{"review publish"}},
+	})
+	if err != nil {
+		return ReviewPublishResult{}, writerLockError(err)
+	}
+	defer func() { _ = own.Release() }()
+	if err := s.validateWriterStorage(); err != nil {
+		return ReviewPublishResult{}, err
+	}
+	candidate, err = s.decompositionReviewPublication(input)
+	if err != nil {
+		return ReviewPublishResult{}, err
+	}
+	parents, err := s.ensureReviewParent(own, candidate.destination)
+	if err != nil {
+		return ReviewPublishResult{}, reviewPublishError(err)
+	}
+	if testHookAfterReviewParent != nil {
+		testHookAfterReviewParent()
+	}
+	request := reviewdir.Request{
+		Type:        reviewdir.TypeDecomposition,
+		ReviewsRoot: path.Join(s.paths.LogicalPlanningDir, "reviews"),
+		Destination: candidate.destination,
+		Files:       candidate.files(),
+		Validate: func(_ reviewdir.Type, files []reviewdir.File) error {
+			current, err := s.decompositionReviewPublication(input)
+			if err != nil {
+				return err
+			}
+			if !sameDecompositionReviewPublication(candidate, current) || !sameReviewFiles(files, candidate.files()) {
+				return WithMachineErrorCode(MachineCodeWriteConflict, fmt.Errorf("review publication inputs changed before commit"))
+			}
+			return nil
+		},
+		ValidateCommit: func() error {
+			current, err := s.decompositionReviewPublication(input)
+			if err != nil {
+				return err
+			}
+			if !sameDecompositionReviewPublication(candidate, current) {
+				return WithMachineErrorCode(MachineCodeWriteConflict, fmt.Errorf("review publication inputs changed before commit"))
+			}
+			return nil
+		},
+	}
+	if _, err := reviewdir.Publish(context.Background(), own, request); err != nil {
+		err = errors.Join(err, s.removeReviewParents(own, parents))
+		return ReviewPublishResult{}, reviewPublishError(err)
+	}
+	return candidate.result(true), nil
+}
+
+func (s *Service) decompositionReviewPublication(input ReviewPublishInput) (decompositionReviewPublication, error) {
+	var out decompositionReviewPublication
+	if input.Spec == "" || input.Proposal == "" || input.Destination == "" || input.SpecReview == "" {
+		return out, invalidArgumentsf("decomposition review publication requires spec, spec-review, proposal, and destination")
+	}
+	if !reviewDigest.MatchString(input.ExpectSpecSHA256) || !reviewDigest.MatchString(input.ExpectSpecReviewSHA256) {
+		return out, WithMachineErrorCode(MachineCodeInvalidDigest, fmt.Errorf("expected spec and spec-review digests must be lower-case 64-hex"))
+	}
+	proposal, err := s.reviewProposalPath(input.Proposal, reviewdir.TypeDecomposition)
+	if err != nil {
+		return out, err
+	}
+	if err := s.requireTransientProposal(proposal); err != nil {
+		return out, err
+	}
+	tree, err := durablefs.ObserveTree(s.paths.RepoRoot, proposal)
+	if err != nil || !tree.Present {
+		return out, reviewInputError("inspect decomposition review proposal", err)
+	}
+	files := make(map[string][]byte, len(tree.Entries))
+	for _, entry := range tree.Entries {
+		if entry.Directory {
+			return out, reviewInputError("inspect decomposition review proposal", nil)
+		}
+		data, _, err := durablefs.ReadFile(s.paths.RepoRoot, path.Join(proposal, entry.Path), reviewFileLimit)
+		if err != nil {
+			return out, reviewInputError("read decomposition review proposal", err)
+		}
+		files[entry.Path] = data
+	}
+	version, specPath, specFile, err := s.reviewSpecPath(input.Spec)
+	if err != nil {
+		return out, err
+	}
+	specRel, err := s.storageRelative(specFile)
+	if err != nil {
+		return out, err
+	}
+	spec, _, err := durablefs.ReadFile(s.paths.StorageRoot, specRel, 1<<30)
+	if err != nil {
+		return out, reviewInputError("read selected spec", err)
+	}
+	specReview, err := s.readDecompositionSpecReview(input.SpecReview, version)
+	if err != nil {
+		return out, err
+	}
+	bundle, err := DecodeDecompositionBundle(files, DecompositionSubjects{
+		SpecPath: specPath, Spec: spec, SpecReviewManifestPath: input.SpecReview, SpecReviewManifest: specReview,
+	})
+	if err != nil {
+		return out, WithMachineErrorCode(MachineCodeInvalidProposal, err)
+	}
+	destination := path.Clean(input.Destination)
+	if destination != input.Destination || destination != path.Join(s.paths.LogicalPlanningDir, "reviews", "decomposition", version, bundle.Manifest.SessionID) {
+		return out, WithMachineErrorCode(MachineCodeInvalidProposal, fmt.Errorf("decomposition review destination does not match spec version and session identity"))
+	}
+	if path.Base(proposal) != bundle.Manifest.SessionID {
+		return out, WithMachineErrorCode(MachineCodeInvalidProposal, fmt.Errorf("decomposition review proposal does not match session identity"))
+	}
+	destinationTree, err := durablefs.ObserveTree(s.paths.StorageRoot, destination)
+	if err != nil {
+		return out, reviewInputError("inspect decomposition review destination", err)
+	}
+	if destinationTree.Present {
+		return out, WithMachineErrorCode(MachineCodeDestinationExists, fmt.Errorf("decomposition review destination already exists"))
+	}
+	configRel, err := filepath.Rel(s.paths.RepoRoot, s.paths.ConfigFile)
+	if err != nil {
+		return out, err
+	}
+	config, _, err := durablefs.ReadFile(s.paths.RepoRoot, filepath.ToSlash(configRel), 1<<20)
+	if err != nil {
+		return out, reviewInputError("read Taskrail configuration", err)
+	}
+	out = decompositionReviewPublication{
+		proposal: proposal, destination: destination, specPath: specPath, specReviewPath: input.SpecReview,
+		config: config, spec: spec, specReview: specReview, specSHA256: digestRaw(spec), specReviewSHA256: digestRaw(specReview), bundle: bundle,
+	}
+	if out.specSHA256 != input.ExpectSpecSHA256 || out.specReviewSHA256 != input.ExpectSpecReviewSHA256 {
+		return decompositionReviewPublication{}, WithMachineErrorCode(MachineCodeSourceChanged, fmt.Errorf("decomposition review bindings do not match current spec and spec-review snapshots"))
+	}
+	return out, nil
+}
+
+func (s *Service) readDecompositionSpecReview(specReview, version string) ([]byte, error) {
+	if filepath.IsAbs(specReview) || filepath.ToSlash(specReview) != specReview || path.Clean(specReview) != specReview {
+		return nil, invalidArgumentsf("spec-review must be a canonical repository-relative path")
+	}
+	prefix := path.Join(s.paths.LogicalPlanningDir, "reviews", "spec", version) + "/"
+	rel := strings.TrimPrefix(specReview, prefix)
+	if rel == specReview || path.Base(specReview) != "manifest.json" || strings.Count(rel, "/") != 1 || !isPortableReviewKey(path.Dir(rel)) {
+		return nil, WithMachineErrorCode(MachineCodeInvalidProposal, fmt.Errorf("spec-review is not a final manifest for selected spec version"))
+	}
+	physical, err := s.paths.physicalManagedPath(specReview)
+	if err != nil {
+		return nil, err
+	}
+	storageRel, err := s.storageRelative(physical)
+	if err != nil {
+		return nil, err
+	}
+	data, _, err := durablefs.ReadFile(s.paths.StorageRoot, storageRel, reviewFileLimit)
+	if err != nil {
+		return nil, reviewInputError("read post-spec review manifest", err)
+	}
+	return data, nil
+}
+
+func (p decompositionReviewPublication) files() []reviewdir.File {
+	names := []string{"draft.json", "trace.json", "review-1.json"}
+	if _, ok := p.bundle.Raw["review-2.json"]; ok {
+		names = append(names, "review-2.json")
+	}
+	names = append(names, "manifest.json")
+	files := make([]reviewdir.File, 0, len(names))
+	for _, name := range names {
+		files = append(files, reviewdir.File{Name: name, Content: p.bundle.Raw[name]})
+	}
+	return files
+}
+
+func (p decompositionReviewPublication) result(applied bool) ReviewPublishResult {
+	files := p.files()
+	resultFiles := make([]ReviewPublishFile, len(files))
+	for i, file := range files {
+		resultFiles[i] = ReviewPublishFile{Source: path.Join(p.proposal, file.Name), Destination: path.Join(p.destination, file.Name), SHA256: digestRaw(file.Content)}
+	}
+	return ReviewPublishResult{Type: string(reviewdir.TypeDecomposition), Applied: applied, Proposal: p.proposal, Destination: p.destination,
+		Files: resultFiles, Subjects: []ReviewPublishSubject{{Path: p.specPath, SHA256: p.specSHA256}, {Path: p.specReviewPath, SHA256: p.specReviewSHA256}},
+		Validation: ValidationResult{Valid: true, Violations: []string{}}, Transaction: nil}
+}
+
+func sameDecompositionReviewPublication(a, b decompositionReviewPublication) bool {
+	if a.proposal != b.proposal || a.destination != b.destination || a.specPath != b.specPath || a.specReviewPath != b.specReviewPath || a.specSHA256 != b.specSHA256 || a.specReviewSHA256 != b.specReviewSHA256 || !bytes.Equal(a.config, b.config) || !bytes.Equal(a.spec, b.spec) || !bytes.Equal(a.specReview, b.specReview) || len(a.bundle.Raw) != len(b.bundle.Raw) {
+		return false
+	}
+	for name, raw := range a.bundle.Raw {
+		if !bytes.Equal(raw, b.bundle.Raw[name]) {
+			return false
+		}
+	}
+	return true
 }
 
 func (s *Service) reviewProposalPath(proposal string, reviewType reviewdir.Type) (string, error) {

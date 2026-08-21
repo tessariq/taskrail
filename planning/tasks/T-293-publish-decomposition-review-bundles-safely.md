@@ -1,13 +1,18 @@
 ---
 id: T-293-publish-decomposition-review-bundles-safely
 title: Publish decomposition review bundles safely
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#safe-review-artifact-publication
 dependencies:
     - T-215-add-the-generic-review-artifact-publisher
     - T-274-decode-reviewed-decomposition-bundles-strictly
-updated_at: "2026-08-08T14:23:08Z"
+updated_at: "2026-08-21T15:28:04Z"
+completion_id: "03bfe2de51fe91e4709642daf9dc4b90"
+last_verification_id: "98ac4c533254abab2b1af173c0909156"
+last_verification_result: pass
+last_verified_at: "2026-08-21T15:28:04Z"
+last_verified_completion_id: "03bfe2de51fe91e4709642daf9dc4b90"
 ---
 
 # T-293-publish-decomposition-review-bundles-safely Publish decomposition review bundles safely
@@ -41,3 +46,6 @@ final reviewed draft/trace session is published intact for later import.
   prove exact-byte all-or-none output with semantic-write sentinels.
 
 ## Implementation Notes
+
+- 2026-08-21T15:27:51Z: Published strict decomposition review bundles through the shared atomic directory boundary.
+- 2026-08-21T15:28:04Z: verification pass id 98ac4c533254abab2b1af173c0909156 previous none completion 03bfe2de51fe91e4709642daf9dc4b90

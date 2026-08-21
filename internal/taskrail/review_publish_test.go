@@ -84,6 +84,45 @@ func TestReviewPublishSpecPreviewAndApplyBindExactBytes(t *testing.T) {
 	}
 }
 
+func TestReviewPublishDecompositionPreviewAndApplyBindExactBytes(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows reports directory durability as unsupported")
+	}
+	repo, svc, input, files := decompositionReviewPublishFixture(t)
+	preview, err := svc.ReviewPublish(ReviewPublishInput{
+		Type:                   input.Type,
+		Proposal:               input.Proposal,
+		Destination:            input.Destination,
+		Spec:                   input.Spec,
+		ExpectSpecSHA256:       input.ExpectSpecSHA256,
+		SpecReview:             input.SpecReview,
+		ExpectSpecReviewSHA256: input.ExpectSpecReviewSHA256,
+		DryRun:                 true,
+	})
+	if err != nil {
+		t.Fatalf("preview: %v", err)
+	}
+	if preview.Applied || len(preview.Files) != len(files) {
+		t.Fatalf("preview = %+v", preview)
+	}
+	if _, err := os.Stat(filepath.Join(repo, "planning", "reviews", "decomposition", "v0.5.0", "decomposition-1")); !os.IsNotExist(err) {
+		t.Fatalf("preview created destination: %v", err)
+	}
+	applied, err := svc.ReviewPublish(input)
+	if err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+	if !applied.Applied || len(applied.Subjects) != 2 {
+		t.Fatalf("apply = %+v", applied)
+	}
+	for name, want := range files {
+		got, err := os.ReadFile(filepath.Join(repo, "planning", "reviews", "decomposition", "v0.5.0", "decomposition-1", name))
+		if err != nil || string(got) != string(want) {
+			t.Fatalf("published %s = %q, err=%v", name, got, err)
+		}
+	}
+}
+
 func TestReviewPublishSpecRefusesInvalidInputsWithoutPublication(t *testing.T) {
 	for _, test := range []struct {
 		name   string
@@ -151,6 +190,49 @@ func TestReviewPublishSpecCleansNewParentsAfterLateSnapshotConflict(t *testing.T
 	}
 	if _, err := os.Stat(filepath.Join(repo, "planning", "reviews")); !os.IsNotExist(err) {
 		t.Fatalf("late conflict left review parent: %v", err)
+	}
+}
+
+func TestReviewPublishDecompositionAcceptsTwoConsecutivePasses(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows reports directory durability as unsupported")
+	}
+	repo, svc, input, files := decompositionReviewPublishFixture(t)
+	spec, err := os.ReadFile(filepath.Join(repo, "specs", "v0.5.0.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	specReview, err := os.ReadFile(filepath.Join(repo, filepath.FromSlash(input.SpecReview)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	addSecondDecompositionPass(files, DecompositionSubjects{SpecPath: "specs/v0.5.0.md", Spec: spec, SpecReviewManifestPath: input.SpecReview, SpecReviewManifest: specReview})
+	for _, name := range []string{"review-2.json", "manifest.json"} {
+		writeFile(t, filepath.Join(repo, filepath.FromSlash(input.Proposal), name), string(files[name]))
+	}
+	result, err := svc.ReviewPublish(input)
+	if err != nil {
+		t.Fatalf("apply two passes: %v", err)
+	}
+	if len(result.Files) != 5 {
+		t.Fatalf("published files = %+v", result.Files)
+	}
+	published, err := os.ReadFile(filepath.Join(repo, "planning", "reviews", "decomposition", "v0.5.0", "decomposition-1", "review-2.json"))
+	if err != nil || string(published) != string(files["review-2.json"]) {
+		t.Fatalf("published second pass = %q, err=%v", published, err)
+	}
+}
+
+func TestReviewPublishRejectsCrossTypeFlags(t *testing.T) {
+	for _, input := range []ReviewPublishInput{
+		{Type: "task", Spec: "v0.5.0"},
+		{Type: "decomposition", TaskID: "T-215-review"},
+		{Type: "decomposition", TaskFlagsProvided: true},
+		{Type: "task", DecompositionFlagsProvided: true},
+	} {
+		if err := validateReviewPublishInput(input); MachineFailureFor(err).Code != MachineCodeInvalidArguments {
+			t.Fatalf("validateReviewPublishInput(%+v) error = %v", input, err)
+		}
 	}
 }
 
@@ -263,4 +345,33 @@ func specReviewPublishFixture(t *testing.T) (string, *Service, ReviewPublishInpu
 		t.Fatal(err)
 	}
 	return repo, svc, ReviewPublishInput{Type: "spec", Proposal: "planning/artifacts/review-proposals/spec/session-1", Destination: "planning/reviews/spec/v0.1.0/session-1", Spec: "v0.1.0", ExpectSpecSHA256: digestRaw(specBytes)}, files
+}
+
+func decompositionReviewPublishFixture(t *testing.T) (string, *Service, ReviewPublishInput, map[string][]byte) {
+	t.Helper()
+	repo := realGitRepo(t)
+	seedFixtureTree(t, repo)
+	writeFile(t, filepath.Join(repo, ".taskrail", "config.yml"), "layout_version: 1\nspecs_dir: specs\nplanning_dir: planning\n")
+	writeFile(t, filepath.Join(repo, ".gitignore"), "planning/artifacts/\n")
+	files, subjects := decompositionGolden()
+	writeFile(t, filepath.Join(repo, "specs", "v0.5.0.md"), string(subjects.Spec))
+	writeFile(t, filepath.Join(repo, filepath.FromSlash(subjects.SpecReviewManifestPath)), string(subjects.SpecReviewManifest))
+	proposal := "planning/artifacts/review-proposals/decomposition/decomposition-1"
+	for name, content := range files {
+		writeFile(t, filepath.Join(repo, filepath.FromSlash(proposal), name), string(content))
+	}
+	svc, err := NewService(repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	input := ReviewPublishInput{
+		Type:                   "decomposition",
+		Proposal:               proposal,
+		Destination:            "planning/reviews/decomposition/v0.5.0/decomposition-1",
+		Spec:                   "v0.5.0",
+		ExpectSpecSHA256:       digestRaw(subjects.Spec),
+		SpecReview:             subjects.SpecReviewManifestPath,
+		ExpectSpecReviewSHA256: digestRaw(subjects.SpecReviewManifest),
+	}
+	return repo, svc, input, files
 }

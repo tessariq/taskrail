@@ -12,6 +12,11 @@ All notable user-visible changes to Taskrail will be documented in this file.
   spec-review session. Apply rechecks proposal, spec, configuration, and
   destination identities under the repository writer lock without editing the
   reviewed spec.
+- `review publish --type decomposition` now validates a complete one- or
+  two-pass reviewed draft/trace bundle against exact selected-spec and published
+  post-spec-review snapshots before atomically preserving every selected JSON
+  file in an absent durable session directory. It rejects stale, malformed, or
+  cross-type inputs without changing planning state.
 - `review publish --type task` now validates one ignored task-review proposal
   against exact task and spec digests before previewing or atomically publishing
   its unchanged `review.json` into an absent durable review session. Apply
