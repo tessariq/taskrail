@@ -150,6 +150,14 @@ assert_contains "batch OpenCode marker integrated first" "$output" "integrated: 
 assert_contains "batch OpenCode marker integrated second" "$output" "integrated: T-903"
 assert_not_contains "batch OpenCode marker control rejection" "$output" "changed Git control state"
 
+root="$(create_fixture batch-identity-report)"
+prepare_batch_fixture "$root"
+output="$(AUTONOMOUS_TEST_ACTION=identity-report run_fixture "$root" --parallel 2 --max-iterations 2 --keep-workspaces never)"
+rc=$?
+[[ $rc -eq 0 ]] || fail "batch identity report exited $rc: $output"
+assert_contains "batch identity first" "$output" "integrated: T-900-fixture-task"
+assert_contains "batch identity second" "$output" "integrated: T-903"
+
 root="$(create_fixture batch-mixed)"
 prepare_batch_fixture "$root"
 before_head="$(git -C "$root" rev-parse HEAD)"

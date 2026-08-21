@@ -542,7 +542,7 @@ run_iteration() {
   local id="$1" before_head before_remote before_index before_reports
   local before_git_control after_git_control reports_before_manifest
   local stamp after_status verification report result report_result followup recommendation
-  local commit_subject key generated_at before_manifest
+  local commit_subject key generated_at verification_id before_manifest
 
   validate_selected "$id"
   if [[ -z "$CHILD_DIR" ]]; then
@@ -620,11 +620,9 @@ run_iteration() {
   generated_at="${REPORT_FIELDS[0]:-}"
   followup="${REPORT_FIELDS[1]:-}"
   recommendation="${REPORT_FIELDS[2]:-}"
-  if [[ "$report_result" == "pass" ]]; then
-    [[ "$verification" == "pass for $id at $generated_at" ]] || die "$id state/report verification binding does not match"
-  else
-    [[ "$verification" == "fail for $id at $generated_at" ]] || die "$id state/report verification binding does not match"
-  fi
+  verification_id="${REPORT_FIELDS[3]:-}"
+  [[ "$verification" == "$(verification_summary "$report_result" "$id" "$generated_at" "$verification_id")" ]] || \
+    die "$id state/report verification binding does not match"
 
   [[ -s "$COMMIT_MESSAGE" ]] || die "$id did not publish a commit message"
   "$ROOT/scripts/check-commit-msg.sh" "$COMMIT_MESSAGE" || die "$id published an invalid commit message"

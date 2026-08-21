@@ -277,7 +277,7 @@ chmod 700 "$xdg_root" "$xdg_root/taskrail" "$xdg_root/taskrail/autonomous-loop" 
 base_head="$(git -C "$operator_fixture" rev-parse HEAD)"
 base_index="$(git -C "$operator_fixture" write-tree)"
 printf '%s\n' 'fixture candidate' >"$operator_fixture/README.md"
-printf '%s\n' 'last_verification_result: pass for T-900 at 2026-08-20T00:00:00Z' >"$operator_fixture/planning/STATE.md"
+printf '%s\n' 'last_verification_result: pass for T-900 at 2026-08-20T00:00:00Z (verification_id=0123456789abcdef0123456789abcdef)' >"$operator_fixture/planning/STATE.md"
 candidate_index="$TMP_ROOT/operator-candidate-index"
 cp "$(git -C "$operator_fixture" rev-parse --git-path index)" "$candidate_index"
 GIT_INDEX_FILE="$candidate_index" git -C "$operator_fixture" add -A
@@ -285,7 +285,7 @@ candidate_tree="$(GIT_INDEX_FILE="$candidate_index" git -C "$operator_fixture" w
 rm -f "$candidate_index"
 report_path=planning/artifacts/verify/T-900/fixture/report.json
 mkdir -p "$operator_fixture/planning/artifacts/verify/T-900/fixture"
-printf '%s\n' '{"schema_version":1,"task_id":"T-900","task_title":"Fixture","result":"pass","summary":"fixture pass","generated_at":"2026-08-20T00:00:00Z","spec_ref":"specs/v0.5.0.md#fixture","artifacts":[]}' >"$operator_fixture/$report_path"
+printf '%s\n' '{"schema_version":1,"task_id":"T-900","task_title":"Fixture","result":"pass","verification_id":"0123456789abcdef0123456789abcdef","summary":"fixture pass","generated_at":"2026-08-20T00:00:00Z","spec_ref":"specs/v0.5.0.md#fixture","artifacts":[]}' >"$operator_fixture/$report_path"
 printf '%s\n' fixture-log >"$operator_fixture/planning/artifacts/runs/fixture.log"
 printf '%s\n' 'test: recover fixture (T-900)' >"$bundle/commit-message"
 printf '%s\n' 1 >"$bundle/schema_version"

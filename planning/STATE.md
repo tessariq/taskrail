@@ -1,6 +1,6 @@
 ---
 schema_version: 1
-updated_at: "2026-08-21T09:57:32Z"
+updated_at: "2026-08-21T10:11:31Z"
 active_spec_version: v0.5.0
 active_spec_path: specs/v0.5.0.md
 current_task: ""
@@ -8,7 +8,7 @@ current_task_title: ""
 status_summary: idle
 blockers: []
 next_action: Select the next eligible task
-last_verification_result: pass for T-340-accept-verification-identity-reports-in-temporary at 2026-08-21T09:17:18Z
+last_verification_result: pass for T-342-bind-verification-identities-across-temporary-loop at 2026-08-21T10:11:31Z
 relevant_artifacts: []
 continuation_notes:
     - This repository is temporarily dogfooding bootstrap workflow tooling until Taskrail v0.1.0 exists.
@@ -34,7 +34,7 @@ continuation_notes:
 
 ## Last Verification
 
-- pass for T-340-accept-verification-identity-reports-in-temporary at 2026-08-21T09:17:18Z
+- pass for T-342-bind-verification-identities-across-temporary-loop at 2026-08-21T10:11:31Z
 
 ## Next Action
 
@@ -50,8 +50,8 @@ continuation_notes:
 
 ## Task Counts
 
-- todo: 126
+- todo: 127
 - in_progress: 0
-- completed: 214
+- completed: 215
 - blocked: 0
 - cancelled: 0

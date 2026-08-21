@@ -122,13 +122,20 @@ check_report() {
   mapfile -t REPORT_FIELDS <"$output"
 }
 
+verification_summary() {
+  local result="$1" id="$2" generated="$3" verification_id="${4:-}"
+  printf '%s for %s at %s' "$result" "$id" "$generated"
+  [[ -z "$verification_id" ]] || printf ' (verification_id=%s)' "$verification_id"
+}
+
 validate_report_binding() {
-  local id="$1" result="$2" report="$3" expected_generated="$4" verification generated
+  local id="$1" result="$2" report="$3" expected_generated="$4" verification generated verification_id
   check_report "$report" "$id" "$result" || return 1
   generated="${REPORT_FIELDS[0]:-}"
+  verification_id="${REPORT_FIELDS[3]:-}"
   [[ "$generated" == "$expected_generated" ]] || return 1
   verification="$(awk '$1 == "last_verification_result:" { sub(/^[^:]+:[[:space:]]*/, ""); print; exit }' planning/STATE.md)"
-  [[ "$verification" == "$result for $id at $generated" ]]
+  [[ "$verification" == "$(verification_summary "$result" "$id" "$generated" "$verification_id")" ]]
 }
 
 resume_delivery() {

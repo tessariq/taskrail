@@ -235,7 +235,12 @@ if [[ "${AUTONOMOUS_TEST_ACTION:-}" == "in-progress-hang" ]]; then
   wait
 fi
 printf '%s\n' "id: $id" "status: $status" 'spec_ref: specs/v0.5.0.md#test-area' 'dependencies: []' >"$repo/planning/tasks/$id.md"
-printf '%s\n' 'active_spec_path: specs/v0.5.0.md' 'current_task:' "last_verification_result: $result for $id at 2026-08-08T00:00:00Z" >"$repo/planning/STATE.md"
+verification_suffix=''
+case "${AUTONOMOUS_TEST_ACTION:-}" in
+  identity-report | final-outcome-hang) verification_suffix=' (verification_id=0123456789abcdef0123456789abcdef)' ;;
+  identity-mismatch) verification_suffix=' (verification_id=fedcba9876543210fedcba9876543210)' ;;
+esac
+printf '%s\n' 'active_spec_path: specs/v0.5.0.md' 'current_task:' "last_verification_result: $result for $id at 2026-08-08T00:00:00Z$verification_suffix" >"$repo/planning/STATE.md"
 if [[ "${AUTONOMOUS_TEST_ACTION:-}" == "conflict" || "${AUTONOMOUS_TEST_ACTION:-}" == "conflict-unresolved" ]]; then
   printf '%s\n' "content from $id" >"$repo/shared.txt"
 fi
@@ -255,7 +260,7 @@ fi
 mkdir -p "$repo/planning/artifacts/verify/$id/20260808T000000Z"
 if [[ "${AUTONOMOUS_TEST_ACTION:-}" == "forged-report" ]]; then
   extra=",\"unexpected\":\"pass for $id\""
-elif [[ "${AUTONOMOUS_TEST_ACTION:-}" == "identity-report" ]]; then
+elif [[ "${AUTONOMOUS_TEST_ACTION:-}" == "identity-report" || "${AUTONOMOUS_TEST_ACTION:-}" == "identity-mismatch" || "${AUTONOMOUS_TEST_ACTION:-}" == "final-outcome-hang" ]]; then
   extra=',"verification_id":"0123456789abcdef0123456789abcdef","previous_verification_id":null,"observed_completion_id":null'
 elif [[ "${AUTONOMOUS_TEST_ACTION:-}" == "invalid-identity-report" ]]; then
   extra=',"verification_id":"NOT-LOWER-CASE-32-HEX","previous_verification_id":null,"observed_completion_id":null'
@@ -722,6 +727,14 @@ output="$(AUTONOMOUS_TEST_ACTION=identity-report run_fixture "$root")"
 rc=$?
 [[ $rc -eq 0 ]] || fail "identity report expected success, got $rc: $output"
 assert_contains "identity report" "$output" "completed and pushed: T-900-fixture-task"
+
+root="$(create_fixture identity-mismatch)"
+before_head="$(git -C "$root" rev-parse HEAD)"
+output="$(AUTONOMOUS_TEST_ACTION=identity-mismatch run_fixture "$root")"
+rc=$?
+[[ $rc -eq 1 ]] || fail "identity mismatch expected exit 1, got $rc"
+assert_contains "identity mismatch" "$output" "state/report verification binding does not match"
+[[ "$(git -C "$root" rev-parse HEAD)" == "$before_head" ]] || fail "identity mismatch created a commit"
 
 root="$(create_fixture invalid-identity-report)"
 before_head="$(git -C "$root" rev-parse HEAD)"

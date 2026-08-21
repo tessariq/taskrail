@@ -71,7 +71,11 @@ func main() {
 			fail(err)
 		}
 	}
-	fmt.Printf("%s\n%s\n%s\n", got.GeneratedAt, got.FollowupTaskID, recommendation)
+	verificationID := ""
+	if got.VerificationID != nil {
+		verificationID = *got.VerificationID
+	}
+	fmt.Printf("%s\n%s\n%s\n%s\n", got.GeneratedAt, got.FollowupTaskID, recommendation, verificationID)
 }
 
 func lowerHex32(value string) bool {

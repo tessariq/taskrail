@@ -200,7 +200,7 @@ worker_main() {
   local before_head before_remote before_index before_git_control after_git_control
   local before_reports reports_before_manifest before_manifest
   local after_status verification report result report_result
-  local followup recommendation generated_at commit_subject key
+  local followup recommendation generated_at verification_id commit_subject key
 
   ROOT="$ws/clone"
   LOOP_DIR="$ROOT/scripts/autonomous-loop"
@@ -280,7 +280,8 @@ worker_main() {
   generated_at="${REPORT_FIELDS[0]:-}"
   followup="${REPORT_FIELDS[1]:-}"
   recommendation="${REPORT_FIELDS[2]:-}"
-  [[ "$verification" == "$report_result for $id at $generated_at" ]] || \
+  verification_id="${REPORT_FIELDS[3]:-}"
+  [[ "$verification" == "$(verification_summary "$report_result" "$id" "$generated_at" "$verification_id")" ]] || \
     die "$id state/report verification binding does not match"
 
   [[ -s "$COMMIT_MESSAGE" ]] || die "$id did not publish a commit message"

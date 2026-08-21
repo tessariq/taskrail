@@ -361,7 +361,7 @@ candidate_matches_worktree() {
 
 inspect_recovery_bundle() {
   local bundle="$1" state_home expected_root repo id outcome base_head base_remote base_index candidate report report_hash message_hash entry name base
-  local report_result report_fields generated expected_generated task_status run_log delivered delivered_message expected_message verification key subject
+  local report_result report_fields generated verification_id expected_generated task_status run_log delivered delivered_message expected_message verification key subject
   local -a bundle_entries=()
   local -A allowed=(
     [schema_version]=1 [repository]=1 [task_id]=1 [outcome]=1 [base_head]=1
@@ -436,10 +436,13 @@ inspect_recovery_bundle() {
   [[ "$(sha256sum "$ROOT/$report" | awk '{print $1}')" == "$report_hash" ]] || return 1
   report_fields="$(go run "$LOOP_DIR/check-report.go" "$ROOT/$report" "$id" "$report_result" 2>/dev/null)" || return 1
   generated="${report_fields%%$'\n'*}"
+  verification_id="$(printf '%s\n' "$report_fields" | sed -n '4p')"
   bundle_value "$bundle" generated_at; expected_generated="$BUNDLE_VALUE"
   [[ "$generated" == "$expected_generated" ]] || return 1
   verification="$(awk '$1 == "last_verification_result:" { sub(/^[^:]+:[[:space:]]*/, ""); print; exit }' "$ROOT/planning/STATE.md")"
-  [[ "$verification" == "$report_result for $id at $generated" ]] || return 1
+  expected_message="$report_result for $id at $generated"
+  [[ -z "$verification_id" ]] || expected_message+=" (verification_id=$verification_id)"
+  [[ "$verification" == "$expected_message" ]] || return 1
   bundle_value "$bundle" commit_message_sha256; message_hash="$BUNDLE_VALUE"
   [[ -f "$bundle/commit-message" && "$(sha256sum "$bundle/commit-message" | awk '{print $1}')" == "$message_hash" ]] || return 1
   "$ROOT/scripts/check-commit-msg.sh" "$bundle/commit-message" >/dev/null || return 1
