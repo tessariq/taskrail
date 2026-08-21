@@ -274,7 +274,7 @@ func (s *Service) buildPendingSpec(draft ImportDraft) *pendingSpec {
 		return nil
 	}
 	return &pendingSpec{
-		path:    relPath(s.paths.RepoRoot, s.importedSpecPath(draft)),
+		path:    s.paths.logicalManagedPath(s.importedSpecPath(draft)),
 		anchors: collectHeadingAnchors(renderImportedSpec(draft)),
 	}
 }
@@ -315,11 +315,12 @@ func (s *Service) buildImportCandidate(draft ImportDraft, state *State, tasks []
 	published := make([]repotx.Candidate, 0, len(draft.Tasks)+1)
 	if len(draft.SpecSections) > 0 {
 		specPath := s.importedSpecPath(draft)
+		logicalSpecPath := s.paths.logicalManagedPath(specPath)
 		if fileExists(specPath) && !isImportedSpec(specPath) {
 			return ApplyDraftResult{}, nil, nil, WithMachineErrorCode(MachineCodeDestinationExists,
-				fmt.Errorf("spec file %s already exists; refusing to overwrite", relPath(s.paths.RepoRoot, specPath)))
+				fmt.Errorf("spec file %s already exists; refusing to overwrite", logicalSpecPath))
 		}
-		result.SpecPath = relPath(s.paths.RepoRoot, specPath)
+		result.SpecPath = logicalSpecPath
 		published = append(published, managedCandidate(result.SpecPath, specPath, []byte(renderImportedSpec(draft))))
 	}
 
@@ -347,7 +348,7 @@ func (s *Service) buildImportCandidate(draft ImportDraft, state *State, tasks []
 			keyToID[draftTask.Key] = id
 		}
 		preview = append(preview, candidate)
-		result.Tasks = append(result.Tasks, CreatedTaskRef{Key: draftTask.Key, TaskID: id, Path: relPath(s.paths.RepoRoot, candidate.Filename)})
+		result.Tasks = append(result.Tasks, CreatedTaskRef{Key: draftTask.Key, TaskID: id, Path: candidate.Path})
 		result.Warnings = append(result.Warnings, warnings...)
 		published = append(published, managedCandidate(candidate.Path, candidate.Filename, bytes))
 	}
@@ -486,18 +487,18 @@ const importedSpecMarker = "Imported by `taskrail import --apply`. Review before
 // re-apply can succeed (T-041).
 func (s *Service) writeImportedSpec(draft ImportDraft) (string, error) {
 	specPath := s.importedSpecPath(draft)
+	logicalSpecPath := s.paths.logicalManagedPath(specPath)
 	if fileExists(specPath) && !isImportedSpec(specPath) {
 		return "", WithMachineErrorCode(MachineCodeDestinationExists,
-			fmt.Errorf("spec file %s already exists; refusing to overwrite", relPath(s.paths.RepoRoot, specPath)))
+			fmt.Errorf("spec file %s already exists; refusing to overwrite", logicalSpecPath))
 	}
 	if err := ensureDir(s.paths.RepoRoot, filepath.Dir(specPath)); err != nil {
 		return "", err
 	}
-	relSpecPath := relPath(s.paths.RepoRoot, specPath)
 	if err := os.WriteFile(specPath, []byte(renderImportedSpec(draft)), 0o644); err != nil {
-		return relSpecPath, fmt.Errorf("write imported spec %s: %w", relSpecPath, fsCause(err))
+		return logicalSpecPath, fmt.Errorf("write imported spec %s: %w", logicalSpecPath, fsCause(err))
 	}
-	return relSpecPath, nil
+	return logicalSpecPath, nil
 }
 
 // isImportedSpec reports whether the file at path was written by a prior

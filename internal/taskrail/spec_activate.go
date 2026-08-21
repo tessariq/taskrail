@@ -51,8 +51,9 @@ func (s *Service) ActivateSpec(version string) (result SpecActivateResult, err e
 		}
 	}()
 	specFile := filepath.Join(s.paths.SpecsDir, version+".md")
+	logicalSpecFile := s.paths.logicalManagedPath(specFile)
 	if !fileExists(specFile) {
-		return SpecActivateResult{}, invalidArgumentsf("spec file %s does not exist", relPath(s.paths.RepoRoot, specFile))
+		return SpecActivateResult{}, invalidArgumentsf("spec file %s does not exist", logicalSpecFile)
 	}
 
 	state, tasks, err := s.loadStateAndTasks()
@@ -64,7 +65,7 @@ func (s *Service) ActivateSpec(version string) (result SpecActivateResult, err e
 	previousSpecPath := state.Frontmatter.ActiveSpecPath
 
 	state.Frontmatter.ActiveSpecVersion = version
-	state.Frontmatter.ActiveSpecPath = relPath(s.paths.RepoRoot, specFile)
+	state.Frontmatter.ActiveSpecPath = logicalSpecFile
 	state.Frontmatter.UpdatedAt = timestamp(s.now())
 	state.Body = renderStateBody(state.Frontmatter, tasks)
 	stateBytes, err := marshalFrontmatter(state.Frontmatter, state.Body)

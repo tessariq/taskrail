@@ -48,9 +48,10 @@ func (s *Service) AddSpec(version string) (result SpecAddResult, err error) {
 		}
 	}()
 	specFile := filepath.Join(s.paths.SpecsDir, version+".md")
+	logicalSpecFile := s.paths.logicalManagedPath(specFile)
 	if fileExists(specFile) {
 		return SpecAddResult{}, WithMachineErrorCode(MachineCodeDestinationExists,
-			fmt.Errorf("spec file %s already exists; refusing to overwrite", relPath(s.paths.RepoRoot, specFile)))
+			fmt.Errorf("spec file %s already exists; refusing to overwrite", logicalSpecFile))
 	}
 
 	// Read the README before any write so a genuinely unreadable README fails the
@@ -59,7 +60,7 @@ func (s *Service) AddSpec(version string) (result SpecAddResult, err error) {
 	readmePath := filepath.Join(s.paths.SpecsDir, "README.md")
 	readme, err := os.ReadFile(readmePath)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return SpecAddResult{}, fmt.Errorf("read specs README %s: %w", relPath(s.paths.RepoRoot, readmePath), fsCause(err))
+		return SpecAddResult{}, fmt.Errorf("read specs README %s: %w", s.paths.logicalManagedPath(readmePath), fsCause(err))
 	}
 
 	state, tasks, err := s.loadStateAndTasks()
@@ -80,8 +81,8 @@ func (s *Service) AddSpec(version string) (result SpecAddResult, err error) {
 
 	return SpecAddResult{
 		Version:    version,
-		SpecPath:   relPath(s.paths.RepoRoot, specFile),
-		ReadmePath: relPath(s.paths.RepoRoot, readmePath),
+		SpecPath:   logicalSpecFile,
+		ReadmePath: s.paths.logicalManagedPath(readmePath),
 	}, nil
 }
 

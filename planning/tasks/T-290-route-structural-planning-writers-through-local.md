@@ -1,7 +1,7 @@
 ---
 id: T-290-route-structural-planning-writers-through-local
 title: Route structural planning writers through local storage
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#local-planning-mode
 dependencies:
@@ -9,7 +9,8 @@ dependencies:
     - T-283-protect-repair-and-spec-writers-transactionally
     - T-284-protect-importdraft-v1-publication-transactionally
     - T-287-initialize-ignored-local-planning-storage-durably
-updated_at: "2026-08-08T14:23:08Z"
+updated_at: "2026-08-21T11:38:25Z"
+completion_id: "4c7bc73fb91677b112af1172811d16b4"
 ---
 
 # T-290-route-structural-planning-writers-through-local Route structural planning writers through local storage
@@ -46,3 +47,6 @@ gate.
   bootstrap and inherited-writer parity evidence.
 
 ## Implementation Notes
+
+- 2026-08-21T11:38:11Z: Routed structural writers through active local storage while preserving logical managed paths; focused tests and local CLI sandbox passed.
+- 2026-08-21T11:38:25Z: verification pass
