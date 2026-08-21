@@ -211,6 +211,38 @@ func TestTaskMutationConflictPreservesExternalEdit(t *testing.T) {
 	}
 }
 
+func TestRenameAndRepointReadStateAfterAcquiringLock(t *testing.T) {
+	for _, command := range []string{"task rename", "task repoint"} {
+		t.Run(command, func(t *testing.T) {
+			svc, _ := taskMutationFixture(t)
+			testHookTaskWriterLocked = func() {
+				state, tasks, err := svc.loadStateAndTasks()
+				if err != nil {
+					t.Fatalf("load concurrent state: %v", err)
+				}
+				state.Frontmatter.NextAction = "Externally selected next action"
+				state.Frontmatter.UpdatedAt = "2026-08-17T09:00:01Z"
+				state.Body = renderStateBody(state.Frontmatter, tasks)
+				if err := svc.saveState(state); err != nil {
+					t.Fatalf("publish concurrent state: %v", err)
+				}
+			}
+			t.Cleanup(func() { testHookTaskWriterLocked = nil })
+
+			if err := runOneTaskMutation(t, svc, command); err != nil {
+				t.Fatalf("%s: %v", command, err)
+			}
+			state, err := svc.loadState()
+			if err != nil {
+				t.Fatalf("load final state: %v", err)
+			}
+			if state.Frontmatter.NextAction != "Externally selected next action" {
+				t.Fatalf("%s overwrote a state-only update: %q", command, state.Frontmatter.NextAction)
+			}
+		})
+	}
+}
+
 // None of the task mutation writers is a delegated command: a loop child
 // invoking any of them is refused before anything is read or written, so a
 // delegate can never widen its parent's selected work through them.

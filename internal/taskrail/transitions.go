@@ -614,7 +614,7 @@ func (s *Service) CreateTask(input CreateTaskInput) (result CreateTaskResult, er
 		Title:    title,
 		Priority: priority,
 		SpecRef:  specRef,
-		Path:     relPath(s.paths.RepoRoot, newTask.Filename),
+		Path:     newTask.Path,
 		Warnings: warnings,
 	}, nil
 }

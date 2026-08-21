@@ -73,6 +73,22 @@ func (s *Service) RenameTask(input RenameTaskInput) (result RenameTaskResult, er
 	if err != nil {
 		return RenameTaskResult{}, err
 	}
+	var own repotx.Ownership
+	var release func() error
+	if !input.DryRun {
+		own, release, err = s.beginTaskWriterWrite(taskRenameWriter)
+		if err != nil {
+			return RenameTaskResult{}, err
+		}
+		defer func() {
+			if releaseErr := release(); releaseErr != nil && err == nil {
+				err = releaseErr
+			}
+		}()
+		if testHookTaskWriterLocked != nil {
+			testHookTaskWriterLocked()
+		}
+	}
 
 	state, tasks, err := s.loadStateAndTasks()
 	if err != nil {
@@ -129,15 +145,6 @@ func (s *Service) RenameTask(input RenameTaskInput) (result RenameTaskResult, er
 		return renameTaskResult(oldID, newID, false, changes, validation, slug, slugSource), nil
 	}
 
-	own, release, err := s.beginTaskWriterWrite(taskRenameWriter)
-	if err != nil {
-		return RenameTaskResult{}, err
-	}
-	defer func() {
-		if releaseErr := release(); releaseErr != nil && err == nil {
-			err = releaseErr
-		}
-	}()
 	// The corpus and baseline are observed under the lock: the transaction's
 	// recheck then refuses any candidate built from reads that predate it.
 	corpus, err := snapshotTaskCorpus(tasks)

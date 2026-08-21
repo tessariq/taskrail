@@ -49,6 +49,22 @@ func (s *Service) RepointTask(input RepointTaskInput) (result RepointTaskResult,
 	if err != nil {
 		return RepointTaskResult{}, err
 	}
+	var own repotx.Ownership
+	var release func() error
+	if !input.DryRun {
+		own, release, err = s.beginTaskWriterWrite(taskRepointWriter)
+		if err != nil {
+			return RepointTaskResult{}, err
+		}
+		defer func() {
+			if releaseErr := release(); releaseErr != nil && err == nil {
+				err = releaseErr
+			}
+		}()
+		if testHookTaskWriterLocked != nil {
+			testHookTaskWriterLocked()
+		}
+	}
 
 	state, tasks, err := s.loadStateAndTasks()
 	if err != nil {
@@ -103,15 +119,6 @@ func (s *Service) RepointTask(input RepointTaskInput) (result RepointTaskResult,
 		}, nil
 	}
 
-	own, release, err := s.beginTaskWriterWrite(taskRepointWriter)
-	if err != nil {
-		return RepointTaskResult{}, err
-	}
-	defer func() {
-		if releaseErr := release(); releaseErr != nil && err == nil {
-			err = releaseErr
-		}
-	}()
 	// The corpus and baseline are observed under the lock: the transaction's
 	// recheck then refuses any candidate built from reads that predate it.
 	corpus, err := snapshotTaskCorpus(tasks)

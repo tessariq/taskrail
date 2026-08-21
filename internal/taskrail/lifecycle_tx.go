@@ -3,6 +3,7 @@ package taskrail
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path"
@@ -74,9 +75,19 @@ func (s *Service) beginWriterWrite(w writerCommand, selectedTask string, writes 
 			return nil, nil, WithMachineErrorCode(MachineCodeDelegatedRefused,
 				fmt.Errorf("delegated %s could not join its parent's repository lock: %w", w.command, err))
 		}
+		if err := s.validateWriterStorage(); err != nil {
+			return nil, nil, err
+		}
 		return joined, func() error { return nil }, nil
 	}
-	return s.acquireWriterLock(w.command, w.taskFields)
+	own, release, err := s.acquireWriterLock(w.command, w.taskFields)
+	if err != nil {
+		return nil, nil, err
+	}
+	if err := s.validateWriterStorage(); err != nil {
+		return nil, nil, errors.Join(err, release())
+	}
+	return own, release, nil
 }
 
 // lifecycleLedger is the complete candidate set one lifecycle writer validated
@@ -162,6 +173,9 @@ func (s *Service) commitLifecycle(own repotx.Ownership, w writerCommand, ledger 
 		Validate: func([]repotx.Snapshot) error {
 			if testHookWriterValidated != nil {
 				testHookWriterValidated()
+			}
+			if err := s.validateWriterStorage(); err != nil {
+				return err
 			}
 			currentTasks, err := s.loadTasks()
 			if err != nil {

@@ -102,6 +102,307 @@ func TestInitLocalCreatesIgnoredOverlay(t *testing.T) {
 	}
 }
 
+func TestCreateTaskInLocalStorageReportsLogicalPath(t *testing.T) {
+	repo := t.TempDir()
+	initLocalGitRepo(t, repo)
+	requireRecoveryDirectoryDurability(t, repo)
+	setup := newTestService(t, repo, time.Date(2026, 8, 21, 12, 0, 0, 0, time.UTC))
+	if _, err := setup.Init(InitInput{Local: true}); err != nil {
+		t.Fatalf("init local: %v", err)
+	}
+
+	svc, err := NewService(repo)
+	if err != nil {
+		t.Fatalf("rediscover local service: %v", err)
+	}
+	result, err := svc.CreateTask(CreateTaskInput{
+		Title:   "Logical result path",
+		SpecRef: "specs/v0.1.0.md#summary",
+	})
+	if err != nil {
+		t.Fatalf("create local task: %v", err)
+	}
+	if want := "planning/tasks/" + result.TaskID + ".md"; result.Path != want {
+		t.Fatalf("result path = %q, want logical path %q", result.Path, want)
+	}
+	if _, err := os.Stat(filepath.Join(repo, ".taskrail", "local", filepath.FromSlash(result.Path))); err != nil {
+		t.Fatalf("local task was not published beneath the overlay: %v", err)
+	}
+}
+
+func TestLifecycleAndTaskWritersUseOnlyLocalStorage(t *testing.T) {
+	repo := t.TempDir()
+	initLocalGitRepo(t, repo)
+	requireRecoveryDirectoryDurability(t, repo)
+	setup := newTestService(t, repo, time.Date(2026, 8, 21, 12, 0, 0, 0, time.UTC))
+	if _, err := setup.Init(InitInput{Local: true}); err != nil {
+		t.Fatalf("init local: %v", err)
+	}
+
+	svc, err := NewService(repo)
+	if err != nil {
+		t.Fatalf("rediscover local service: %v", err)
+	}
+	svc.now = func() time.Time { return time.Date(2026, 8, 21, 12, 0, 0, 0, time.UTC) }
+	specPath := filepath.Join(svc.paths.SpecsDir, "v0.1.0.md")
+	writeFile(t, specPath, readFileString(t, specPath)+"\n## Goals\n")
+	first, err := svc.CreateTask(CreateTaskInput{Title: "First", SpecRef: "specs/v0.1.0.md#summary"})
+	if err != nil {
+		t.Fatalf("create first local task: %v", err)
+	}
+	second, err := svc.CreateTask(CreateTaskInput{Title: "Second", SpecRef: "specs/v0.1.0.md#goals"})
+	if err != nil {
+		t.Fatalf("create second local task: %v", err)
+	}
+
+	statusBefore := gitOutput(t, repo, "status", "--porcelain")
+
+	if result, err := svc.Next(); err != nil || result.TaskID != first.TaskID {
+		t.Fatalf("next = %+v, %v", result, err)
+	}
+	if _, err := svc.Start(first.TaskID); err != nil {
+		t.Fatalf("start local task: %v", err)
+	}
+	if _, err := svc.Block(first.TaskID, "exercise local block"); err != nil {
+		t.Fatalf("block local task: %v", err)
+	}
+	if _, err := svc.Unblock(first.TaskID, "resume local work"); err != nil {
+		t.Fatalf("unblock local task: %v", err)
+	}
+	if _, err := svc.Start(first.TaskID); err != nil {
+		t.Fatalf("restart local task: %v", err)
+	}
+	if _, err := svc.Complete(first.TaskID, "local implementation complete"); err != nil {
+		t.Fatalf("complete local task: %v", err)
+	}
+	verified, err := svc.Verify(VerifyInput{
+		TaskID: first.TaskID, Result: "pass", Summary: "local workflow verified",
+		CreateFollowup: true, FollowupTitle: "Local follow-up",
+	})
+	if err != nil {
+		t.Fatalf("verify local task with follow-up: %v", err)
+	}
+	if verified.FollowupTaskID == "" {
+		t.Fatal("verify did not create a local follow-up")
+	}
+	if _, err := svc.RepointTask(RepointTaskInput{TaskID: second.TaskID, Area: "summary"}); err != nil {
+		t.Fatalf("repoint local task: %v", err)
+	}
+	if _, err := svc.EditDependency(EditDependencyInput{
+		TaskID: second.TaskID, DependencyID: first.TaskID, Operation: DependencyAdd,
+	}); err != nil {
+		t.Fatalf("edit local dependency: %v", err)
+	}
+	if _, err := svc.RenameTask(RenameTaskInput{OldID: second.TaskID, Slug: "renamed", SlugExplicit: true}); err != nil {
+		t.Fatalf("rename local task: %v", err)
+	}
+
+	if got := gitOutput(t, repo, "status", "--porcelain"); got != statusBefore {
+		t.Fatalf("local writers changed ordinary Git status:\nbefore: %q\nafter:  %q", statusBefore, got)
+	}
+	if got := gitOutput(t, repo, "diff", "--cached", "--name-only"); got != "" {
+		t.Fatalf("local writers staged ignored files:\n%s", got)
+	}
+	if validation, err := svc.Validate(); err != nil || !validation.Valid {
+		t.Fatalf("validate local writer result: validation=%+v err=%v", validation, err)
+	}
+}
+
+func TestLocalWritersRefuseCommittedStateAddedAfterDiscovery(t *testing.T) {
+	repo := t.TempDir()
+	initLocalGitRepo(t, repo)
+	requireRecoveryDirectoryDurability(t, repo)
+	setup := newTestService(t, repo, time.Date(2026, 8, 21, 12, 0, 0, 0, time.UTC))
+	if _, err := setup.Init(InitInput{Local: true}); err != nil {
+		t.Fatalf("init local: %v", err)
+	}
+	svc, err := NewService(repo)
+	if err != nil {
+		t.Fatalf("rediscover local service: %v", err)
+	}
+	decoy := filepath.Join(repo, "planning", "STATE.md")
+	writeFile(t, decoy, "committed state decoy\n")
+	before := snapshotTree(t, repo)
+
+	if _, err := svc.Next(); err == nil || MachineFailureFor(err).Code != MachineCodeRepositoryInvalid {
+		t.Fatalf("next with mixed local/committed state = %v, want repository_invalid", err)
+	}
+	if got := snapshotTree(t, repo); !reflect.DeepEqual(got, before) {
+		t.Fatal("mixed-state refusal changed local or committed bytes")
+	}
+}
+
+func TestLocalWriterTransactionsRejectMixedStateBeforePublication(t *testing.T) {
+	for _, command := range []string{"next", "task new", "verify follow-up"} {
+		t.Run(command, func(t *testing.T) {
+			repo := t.TempDir()
+			initLocalGitRepo(t, repo)
+			requireRecoveryDirectoryDurability(t, repo)
+			setup := newTestService(t, repo, time.Date(2026, 8, 21, 12, 0, 0, 0, time.UTC))
+			if _, err := setup.Init(InitInput{Local: true}); err != nil {
+				t.Fatalf("init local: %v", err)
+			}
+			svc, err := NewService(repo)
+			if err != nil {
+				t.Fatalf("rediscover local service: %v", err)
+			}
+			var taskID string
+			if command != "task new" {
+				created, err := svc.CreateTask(CreateTaskInput{Title: "Source", SpecRef: "specs/v0.1.0.md#summary"})
+				if err != nil {
+					t.Fatalf("create local source task: %v", err)
+				}
+				taskID = created.TaskID
+			}
+			before := snapshotTree(t, filepath.Join(repo, ".taskrail", "local"))
+			installLifecycleHook(t, func() {
+				writeFile(t, filepath.Join(repo, "planning", "STATE.md"), "committed state decoy\n")
+			})
+
+			switch command {
+			case "next":
+				_, err = svc.Next()
+			case "task new":
+				_, err = svc.CreateTask(CreateTaskInput{Title: "Blocked", SpecRef: "specs/v0.1.0.md#summary"})
+			case "verify follow-up":
+				_, err = svc.Verify(VerifyInput{TaskID: taskID, Result: "fail", Summary: "mixed state", CreateFollowup: true, FollowupTitle: "Blocked"})
+			}
+			if err == nil || MachineFailureFor(err).Code != MachineCodeValidationFailed {
+				t.Fatalf("%s with mixed state during validation = %v, want validation_failed", command, err)
+			}
+			if got := snapshotTree(t, filepath.Join(repo, ".taskrail", "local")); !reflect.DeepEqual(got, before) {
+				t.Fatalf("%s published local bytes after mixed-state detection", command)
+			}
+		})
+	}
+}
+
+func localWriterFixture(t *testing.T) (*Service, string) {
+	t.Helper()
+	repo := t.TempDir()
+	initLocalGitRepo(t, repo)
+	requireRecoveryDirectoryDurability(t, repo)
+	setup := newTestService(t, repo, time.Date(2026, 8, 21, 12, 0, 0, 0, time.UTC))
+	if _, err := setup.Init(InitInput{Local: true}); err != nil {
+		t.Fatalf("init local: %v", err)
+	}
+	svc, err := NewService(repo)
+	if err != nil {
+		t.Fatalf("rediscover local service: %v", err)
+	}
+	svc.now = func() time.Time { return time.Date(2026, 8, 21, 12, 0, 0, 0, time.UTC) }
+	writeFile(t, filepath.Join(svc.paths.SpecsDir, "v0.1.0.md"), "# Taskrail v0.1.0\n\n## Summary\n\n## Details\n")
+	return svc, repo
+}
+
+func TestLocalLifecycleAndVerificationRollbackStayInOverlay(t *testing.T) {
+	requirePermissionFaultInjection(t)
+	for _, command := range []string{"start", "verify follow-up"} {
+		t.Run(command, func(t *testing.T) {
+			svc, repo := localWriterFixture(t)
+			created, err := svc.CreateTask(CreateTaskInput{Title: "Source", SpecRef: "specs/v0.1.0.md#summary"})
+			if err != nil {
+				t.Fatalf("create local source task: %v", err)
+			}
+			if command == "verify follow-up" {
+				if _, err := svc.Start(created.TaskID); err != nil {
+					t.Fatalf("start local source task: %v", err)
+				}
+				if _, err := svc.Complete(created.TaskID, "complete before verify"); err != nil {
+					t.Fatalf("complete local source task: %v", err)
+				}
+			}
+			stateBefore := readBytes(t, svc.paths.StateFile)
+			taskPath := filepath.Join(svc.paths.TasksDir, created.TaskID+".md")
+			taskBefore := readBytes(t, taskPath)
+			installLifecycleHook(t, func() {
+				blocked := svc.paths.TasksDir
+				if command == "verify follow-up" {
+					blocked = svc.paths.ArtifactsDir
+					if err := os.MkdirAll(blocked, 0o755); err != nil {
+						t.Fatalf("create local artifacts directory: %v", err)
+					}
+				}
+				if err := os.Chmod(blocked, 0o500); err != nil {
+					t.Fatalf("block local publication: %v", err)
+				}
+				t.Cleanup(func() { _ = os.Chmod(blocked, 0o755) })
+			})
+			if command == "start" {
+				_, err = svc.Start(created.TaskID)
+			} else {
+				_, err = svc.Verify(VerifyInput{TaskID: created.TaskID, Result: "pass", Summary: "rollback", CreateFollowup: true, FollowupTitle: "Follow-up"})
+			}
+			if err == nil || MachineFailureFor(err).Code != MachineCodePartialWrite {
+				t.Fatalf("%s with blocked local publication = %v, want partial_write", command, err)
+			}
+			if got := readBytes(t, svc.paths.StateFile); got != stateBefore {
+				t.Fatalf("%s left local state rolled forward", command)
+			}
+			if got := readBytes(t, taskPath); got != taskBefore {
+				t.Fatalf("%s left local task rolled forward", command)
+			}
+			if got := gitOutput(t, repo, "status", "--porcelain"); got != "" {
+				t.Fatalf("%s exposed ignored local state to Git: %q", command, got)
+			}
+		})
+	}
+}
+
+func TestLocalTaskMutationRollbackStaysInOverlay(t *testing.T) {
+	requirePermissionFaultInjection(t)
+	for _, command := range []string{"new", "rename", "repoint", "dependency"} {
+		t.Run(command, func(t *testing.T) {
+			svc, repo := localWriterFixture(t)
+			base, err := svc.CreateTask(CreateTaskInput{Title: "Base", SpecRef: "specs/v0.1.0.md#summary"})
+			if err != nil {
+				t.Fatalf("create local base task: %v", err)
+			}
+			if _, err := svc.Start(base.TaskID); err != nil {
+				t.Fatalf("start local base task: %v", err)
+			}
+			if _, err := svc.Complete(base.TaskID, "complete before mutation"); err != nil {
+				t.Fatalf("complete local base task: %v", err)
+			}
+			work, err := svc.CreateTask(CreateTaskInput{Title: "Work", SpecRef: "specs/v0.1.0.md#summary"})
+			if err != nil {
+				t.Fatalf("create local work task: %v", err)
+			}
+			extra, err := svc.CreateTask(CreateTaskInput{Title: "Extra", SpecRef: "specs/v0.1.0.md#summary"})
+			if err != nil {
+				t.Fatalf("create local extra task: %v", err)
+			}
+			stateBefore := readBytes(t, svc.paths.StateFile)
+			installLifecycleHook(t, func() {
+				if err := os.Chmod(svc.paths.TasksDir, 0o500); err != nil {
+					t.Fatalf("block local task publication: %v", err)
+				}
+				t.Cleanup(func() { _ = os.Chmod(svc.paths.TasksDir, 0o755) })
+			})
+
+			switch command {
+			case "new":
+				_, err = svc.CreateTask(CreateTaskInput{Title: "New", SpecRef: "specs/v0.1.0.md#summary"})
+			case "rename":
+				_, err = svc.RenameTask(RenameTaskInput{OldID: base.TaskID, Slug: "renamed", SlugExplicit: true})
+			case "repoint":
+				_, err = svc.RepointTask(RepointTaskInput{TaskID: work.TaskID, Area: "details"})
+			case "dependency":
+				_, err = svc.EditDependency(EditDependencyInput{TaskID: work.TaskID, DependencyID: extra.TaskID, Operation: DependencyAdd})
+			}
+			if err == nil || MachineFailureFor(err).Code != MachineCodePartialWrite {
+				t.Fatalf("%s with blocked local task publication = %v, want partial_write", command, err)
+			}
+			if got := readBytes(t, svc.paths.StateFile); got != stateBefore {
+				t.Fatalf("%s left local state rolled forward", command)
+			}
+			if got := gitOutput(t, repo, "status", "--porcelain"); got != "" {
+				t.Fatalf("%s exposed ignored local state to Git: %q", command, got)
+			}
+		})
+	}
+}
+
 func TestInitLocalRemovesEmptyTaskDirectoryOnPrepublicationFailure(t *testing.T) {
 	repo := t.TempDir()
 	initLocalGitRepo(t, repo)

@@ -117,6 +117,9 @@ func (s *Service) commitVerify(own repotx.Ownership, ledger verifyLedger) error 
 			if testHookWriterValidated != nil {
 				testHookWriterValidated()
 			}
+			if err := s.validateWriterStorage(); err != nil {
+				return err
+			}
 			currentTasks, err := s.loadTasks()
 			if err != nil {
 				return err

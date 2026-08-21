@@ -182,7 +182,7 @@ func TestEditDependencySupportsEveryLiveOpenTarget(t *testing.T) {
 	}
 }
 
-func TestEditDependencyUsesActiveLocalStorageAndLeavesCommittedDecoysUntouched(t *testing.T) {
+func TestEditDependencyRefusesMixedLocalAndCommittedStorage(t *testing.T) {
 	svc, _ := storageNeutralService(t, localStorage(), true)
 	svc.paths.ManagedRoot = svc.paths.RepoRoot
 	svc.paths.WorktreeRoot = svc.paths.RepoRoot
@@ -202,20 +202,17 @@ updated_at: "2026-08-14T00:00:00Z"
 	decoy := filepath.Join(svc.paths.RepoRoot, "work", "planning", "tasks", "T-001-renamed.md")
 	decoyBefore := readBytes(t, decoy)
 
-	result, err := svc.EditDependency(EditDependencyInput{
+	_, err := svc.EditDependency(EditDependencyInput{
 		TaskID: "T-001-local", DependencyID: "T-002-dependency", Operation: DependencyAdd,
 	})
-	if err != nil {
-		t.Fatalf("local dependency add: %v", err)
-	}
-	if !result.Applied || !reflect.DeepEqual(result.DependenciesAfter, []string{"T-002-dependency"}) {
-		t.Fatalf("local result = %+v", result)
+	if err == nil || MachineFailureFor(err).Code != MachineCodeRepositoryInvalid {
+		t.Fatalf("mixed local dependency add = %v, want repository_invalid", err)
 	}
 	if got := readBytes(t, decoy); got != decoyBefore {
 		t.Fatal("local writer changed the committed-storage decoy")
 	}
-	if got := readBytes(t, filepath.Join(svc.paths.TasksDir, "T-001-local.md")); !strings.Contains(got, "T-002-dependency") {
-		t.Fatal("local writer did not update the active overlay")
+	if got := readBytes(t, filepath.Join(svc.paths.TasksDir, "T-001-local.md")); strings.Contains(got, "T-002-dependency") {
+		t.Fatal("mixed-state refusal changed the active overlay")
 	}
 }
 

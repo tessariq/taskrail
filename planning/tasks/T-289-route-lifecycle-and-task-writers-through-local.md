@@ -1,14 +1,19 @@
 ---
 id: T-289-route-lifecycle-and-task-writers-through-local
 title: Route lifecycle and task writers through local storage
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#local-planning-mode
 dependencies:
     - T-223-run-every-v0-5-command-against-local-storage
     - T-282-protect-inherited-task-mutation-writers
     - T-286-bind-verification-to-completion-and-adopt-legacy
-updated_at: "2026-08-08T14:23:08Z"
+updated_at: "2026-08-21T14:13:07Z"
+completion_id: "b9f3b8a641c38e8a6fba7c490b42bd56"
+last_verification_id: "58dc59723b90b83e30b1189c070492c9"
+last_verification_result: pass
+last_verified_at: "2026-08-21T14:13:07Z"
+last_verified_completion_id: "b9f3b8a641c38e8a6fba7c490b42bd56"
 ---
 
 # T-289-route-lifecycle-and-task-writers-through-local Route lifecycle and task writers through local storage
@@ -46,3 +51,6 @@ with T-245 and the final parity gate.
   implicit-bootstrap and inherited-writer parity evidence.
 
 ## Implementation Notes
+
+- 2026-08-21T14:12:59Z: Routed lifecycle and task writers through validated local storage.
+- 2026-08-21T14:13:07Z: verification pass id 58dc59723b90b83e30b1189c070492c9 previous none completion b9f3b8a641c38e8a6fba7c490b42bd56

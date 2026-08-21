@@ -2,6 +2,7 @@ package taskrail
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -9,6 +10,11 @@ import (
 	"github.com/tessariq/taskrail/internal/repolock"
 	"github.com/tessariq/taskrail/internal/repotx"
 )
+
+// testHookTaskWriterLocked runs after rename/repoint have their mutation lock
+// and before either reads its candidate. It makes the state-only race boundary
+// deterministic in tests.
+var testHookTaskWriterLocked func()
 
 // The inherited task-mutation transaction substrate
 // (specs/v0.5.0.md#repository-discovery-locking-and-recovery): `task new`,
@@ -56,7 +62,25 @@ func (s *Service) beginTaskWriterWrite(w taskWriterCommand) (repotx.Ownership, f
 		return nil, nil, WithMachineErrorCode(MachineCodeDelegatedRefused,
 			fmt.Errorf("delegated loop children cannot invoke %s", w.command))
 	}
-	return s.acquireWriterLock(w.command, w.taskFields)
+	own, release, err := s.acquireWriterLock(w.command, w.taskFields)
+	if err != nil {
+		return nil, nil, err
+	}
+	if err := s.validateWriterStorage(); err != nil {
+		return nil, nil, errors.Join(err, release())
+	}
+	return own, release, nil
+}
+
+// validateWriterStorage rechecks the discovered layout after the mutation lock
+// is held. A committed semantic tree may appear after discovery in local mode;
+// writers must refuse that mixed state rather than silently continue against one
+// root.
+func (s *Service) validateWriterStorage() error {
+	if err := validateDiscoveredPaths(s.paths); err != nil {
+		return WithMachineErrorCode(MachineCodeRepositoryInvalid, err)
+	}
+	return nil
 }
 
 // acquireWriterLock directly acquires the mutation lock for one writer's
@@ -142,6 +166,9 @@ func (s *Service) commitTaskWriter(own repotx.Ownership, w taskWriterCommand, le
 		Validate: func([]repotx.Snapshot) error {
 			if testHookWriterValidated != nil {
 				testHookWriterValidated()
+			}
+			if err := s.validateWriterStorage(); err != nil {
+				return err
 			}
 			currentTasks, err := s.loadTasks()
 			if err != nil {
