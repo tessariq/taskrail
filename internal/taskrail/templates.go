@@ -135,12 +135,17 @@ func renderFollowupTaskBody(id, title, description string) string {
 `, id, title, description)
 }
 
-func renderVerificationPlan(task *Task, input VerifyInput, followupTaskID string) string {
+func renderVerificationPlan(task *Task, input VerifyInput, verificationID, previousVerificationID, followupTaskID string) string {
 	var builder strings.Builder
 	builder.WriteString("# Verification Plan\n\n")
 	builder.WriteString(fmt.Sprintf("- Task: `%s`\n", task.Frontmatter.ID))
 	builder.WriteString(fmt.Sprintf("- Title: %s\n", task.Frontmatter.Title))
 	builder.WriteString(fmt.Sprintf("- Requested result: %s\n", input.Result))
+	builder.WriteString(fmt.Sprintf("- Verification ID: %s\n", verificationID))
+	if previousVerificationID == "" {
+		previousVerificationID = "none"
+	}
+	builder.WriteString(fmt.Sprintf("- Previous verification ID: %s\n", previousVerificationID))
 	builder.WriteString(fmt.Sprintf("- Summary: %s\n", input.Summary))
 	if input.Details != "" {
 		builder.WriteString(fmt.Sprintf("- Details: %s\n", input.Details))
@@ -157,6 +162,12 @@ func renderVerificationReportMarkdown(report VerificationArtifact) string {
 	builder.WriteString(fmt.Sprintf("- Task: `%s`\n", report.TaskID))
 	builder.WriteString(fmt.Sprintf("- Title: %s\n", report.TaskTitle))
 	builder.WriteString(fmt.Sprintf("- Result: %s\n", report.Result))
+	builder.WriteString(fmt.Sprintf("- Verification ID: %s\n", report.VerificationID))
+	if report.PreviousVerificationID == nil {
+		builder.WriteString("- Previous verification ID: none\n")
+	} else {
+		builder.WriteString(fmt.Sprintf("- Previous verification ID: %s\n", *report.PreviousVerificationID))
+	}
 	builder.WriteString(fmt.Sprintf("- Summary: %s\n", report.Summary))
 	if report.Details != "" {
 		builder.WriteString(fmt.Sprintf("- Details: %s\n", report.Details))

@@ -205,9 +205,10 @@ func TestVerifyWriteErrorOmitsAbsolutePath(t *testing.T) {
 	repo := seedFixtureRepo(t)
 	writeTask(t, repo, "T-002", "Verified item", "completed", "high", "specs/v0.1.0.md#summary", nil)
 	svc := newTestService(t, repo, time.Date(2026, 6, 24, 12, 0, 0, 0, time.UTC))
+	svc.verificationID = func() (string, error) { return firstVerificationID, nil }
 	// Pre-create plan.md as a directory inside the artifact dir so the plan write
 	// fails (EISDIR) after ensureDir has already created the tree.
-	artifactDir := filepath.Join(svc.paths.VerifyDir, "T-002", "20260624T120000Z")
+	artifactDir := filepath.Join(svc.paths.VerifyDir, "T-002", "20260624T120000Z-"+firstVerificationID)
 	if err := os.MkdirAll(filepath.Join(artifactDir, "plan.md"), 0o755); err != nil {
 		t.Fatalf("occupy plan path with dir: %v", err)
 	}

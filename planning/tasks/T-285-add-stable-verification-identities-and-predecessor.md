@@ -1,13 +1,17 @@
 ---
 id: T-285-add-stable-verification-identities-and-predecessor
 title: Add stable verification identities and predecessor chains
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#canonical-transition-order
 dependencies:
     - T-158-bind-completion-and-verification-with-stable
     - T-281-protect-verification-and-follow-up-writers
-updated_at: "2026-08-08T14:23:08Z"
+updated_at: "2026-08-21T11:52:58Z"
+completion_id: "937cb70bdee202db455d9c66911a8c21"
+last_verification_id: "f822a6d6adb63e3c0172957850932dfa"
+last_verification_result: pass
+last_verified_at: "2026-08-21T11:52:58Z"
 ---
 
 # T-285-add-stable-verification-identities-and-predecessor Add stable verification identities and predecessor chains
@@ -45,3 +49,6 @@ adoption remain with T-286.
   inject transaction faults to prove one consistent publication.
 
 ## Implementation Notes
+
+- 2026-08-21T11:52:41Z: Published stable verification identities and direct predecessor validation.
+- 2026-08-21T11:52:58Z: verification pass id f822a6d6adb63e3c0172957850932dfa previous none completion none

@@ -46,9 +46,9 @@ var (
 	lifecycleComplete = writerCommand{command: "complete", taskFields: []string{"status", "updated_at", "implementation_notes", "completion_id", "last_verification_id", "last_verification_previous_id", "last_verification_result", "last_verified_at", "last_verified_completion_id"}}
 	lifecycleBlock    = writerCommand{command: "block", taskFields: []string{"status", "updated_at", "implementation_notes", "blocker"}}
 	lifecycleUnblock  = writerCommand{command: "unblock", taskFields: []string{"status", "updated_at", "implementation_notes"}}
-	// Verify records its result in the task's Implementation Notes and stamp,
-	// never the status; its follow-up publication is owned by verify_tx.go.
-	lifecycleVerify = writerCommand{command: "verify", taskFields: []string{"updated_at", "implementation_notes"}}
+	// Verify records its immutable identity tuple without changing lifecycle
+	// status; its follow-up publication is owned by verify_tx.go.
+	lifecycleVerify = writerCommand{command: "verify", taskFields: []string{"updated_at", "implementation_notes", "last_verification_id", "last_verification_previous_id", "last_verification_result", "last_verified_at"}}
 )
 
 // beginWriterWrite takes the repository mutation lock for one tracked-work
@@ -202,6 +202,36 @@ func patchCompletionMetadata(data []byte, task *Task) ([]byte, error) {
 		}
 	}
 	return []byte(frontmatter + body), nil
+}
+
+func patchVerificationMetadata(data []byte, task *Task) ([]byte, error) {
+	frontmatter, body, newline, err := splitTaskDocument(data, task.Frontmatter.ID)
+	if err != nil {
+		return nil, err
+	}
+	meta := task.Frontmatter.CompletionVerificationMetadata
+	values := map[string]*string{
+		"last_verification_id":          verificationFieldPointer(strconv.Quote(meta.LastVerificationID)),
+		"last_verification_previous_id": optionalQuotedString(meta.LastVerificationPreviousID),
+		"last_verification_result":      verificationFieldPointer(meta.LastVerificationResult),
+		"last_verified_at":              verificationFieldPointer(strconv.Quote(meta.LastVerifiedAt)),
+	}
+	for _, field := range []string{"last_verification_id", "last_verification_previous_id", "last_verification_result", "last_verified_at"} {
+		frontmatter, err = rewriteOptionalTaskField(frontmatter, newline, task.Frontmatter.ID, field, values[field])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return []byte(frontmatter + body), nil
+}
+
+func verificationFieldPointer(value string) *string { return &value }
+
+func optionalQuotedString(value string) *string {
+	if value == "" {
+		return nil
+	}
+	return verificationFieldPointer(strconv.Quote(value))
 }
 
 func rewriteOptionalTaskField(frontmatter, newline, taskID, field string, value *string) (string, error) {

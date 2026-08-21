@@ -6,11 +6,11 @@ import (
 )
 
 // verificationNotePattern matches the committed verification note line that
-// `verify` appends via verificationNoteLine (`- <ts>: verification pass|fail`),
+// `verify` appends via verificationNoteLine with an identity tuple,
 // anchored to the start of a line. Anchoring keeps detection mechanical: only
 // the CLI's own note line counts, not an incidental "verification pass" phrase
 // in a task's prose.
-var verificationNotePattern = regexp.MustCompile(`(?m)^- .+: verification (pass|fail)$`)
+var verificationNotePattern = regexp.MustCompile(`(?m)^- .+: verification (pass|fail)(?: id [0-9a-f]{32} previous (?:[0-9a-f]{32}|none) completion (?:none|[0-9a-f]{32}))?$`)
 
 // Under-decomposed heuristic: a covered area is flagged when its `Requirements:`
 // bullet count both reaches an absolute floor (so tiny areas are never flagged)

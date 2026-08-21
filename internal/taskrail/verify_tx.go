@@ -38,8 +38,8 @@ type verifyLedger struct {
 // and a follow-up's path is derived from a pre-lock read of the task corpus —
 // the transaction re-derives the follow-up under the lock and refuses (rather
 // than publish outside the claimed set) if the corpus moved in between.
-func (s *Service) verifyWriteClaim(input VerifyInput, ts string) ([]string, error) {
-	artifactDir := filepath.Join(s.paths.VerifyDir, input.TaskID, ts)
+func (s *Service) verifyWriteClaim(input VerifyInput, ts, verificationID string) ([]string, error) {
+	artifactDir := filepath.Join(s.paths.VerifyDir, input.TaskID, ts+"-"+verificationID)
 	writes := []string{
 		s.reportedStatePath(),
 		s.reportedTaskPath(input.TaskID),
@@ -83,6 +83,10 @@ func (s *Service) commitVerify(own repotx.Ownership, ledger verifyLedger) error 
 	taskBytes, err := patchLifecycleTask(ledger.task, map[string]string{
 		"updated_at": strconv.Quote(ledger.task.Frontmatter.UpdatedAt),
 	})
+	if err != nil {
+		return err
+	}
+	taskBytes, err = patchVerificationMetadata(taskBytes, ledger.task)
 	if err != nil {
 		return err
 	}

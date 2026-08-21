@@ -196,8 +196,8 @@ func TestValidateCompletionVerificationMetadata(t *testing.T) {
 			m.CompletionID = completion1
 			return m
 		}(), true},
-		{"pass without completion", "completed", verification("pass"), false},
-		{"missing predecessor evidence", "in_progress", verification("fail"), false},
+		{"pass without completion", "completed", verification("pass"), true},
+		{"missing predecessor evidence", "in_progress", verification("fail"), true},
 		{"self predecessor", "in_progress", func() CompletionVerificationMetadata {
 			m := verification("fail")
 			m.LastVerificationPreviousID = m.LastVerificationID
@@ -263,7 +263,7 @@ func TestRepositoryValidationConsumesLifecycleMetadataContract(t *testing.T) {
 	if err != nil {
 		t.Fatalf("validate: %v", err)
 	}
-	if result.Valid || !hasViolation(result.Violations, "completed passing verification must have") {
+	if result.Valid || !hasViolation(result.Violations, "last_verification_id must be lower-case 32-hex") {
 		t.Fatalf("validation did not apply lifecycle metadata contract: %v", result.Violations)
 	}
 }

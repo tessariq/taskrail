@@ -175,7 +175,7 @@ func decodeStateStrict(data []byte) (decodedMigrationState, string, error) {
 	}
 	switch version {
 	case 1:
-		if err := requireExactKeys(keys, append(slices.Clone(common), "continuation_notes"), nil); err != nil {
+		if err := requireExactKeys(keys, append(slices.Clone(common), "continuation_notes"), []string{"last_verification_id", "last_verification_previous_id"}); err != nil {
 			return decodedMigrationState{}, "", err
 		}
 		var legacy StateFrontmatter
@@ -214,7 +214,8 @@ func stateV2FromLegacy(legacy StateFrontmatter) stateV2Frontmatter {
 		CurrentTaskTitle: legacy.CurrentTaskTitle, StatusSummary: legacy.StatusSummary,
 		Blockers: slices.Clone(legacy.Blockers), NextAction: legacy.NextAction,
 		LastVerificationResult: legacy.LastVerificationResult,
-		RelevantArtifacts:      slices.Clone(legacy.RelevantArtifacts),
+		LastVerificationID:     legacy.LastVerificationID, LastVerificationPreviousID: legacy.LastVerificationPreviousID,
+		RelevantArtifacts: slices.Clone(legacy.RelevantArtifacts),
 	}
 }
 
@@ -473,6 +474,12 @@ func validateMigrationStateTaskLinks(state stateV2Frontmatter, tasks []*Task) er
 		task := seen[match[2]]
 		if task == nil {
 			return fmt.Errorf("state verification task %s does not exist", match[2])
+		}
+		if task.Frontmatter.LastVerificationID != state.LastVerificationID || task.Frontmatter.LastVerificationPreviousID != state.LastVerificationPreviousID || task.Frontmatter.LastVerificationResult != match[1] || task.Frontmatter.LastVerifiedAt != match[3] {
+			return fmt.Errorf("state verification tuple does not match task %s", task.Frontmatter.ID)
+		}
+		if note := verificationNoteLine(task.Frontmatter.LastVerifiedAt, task.Frontmatter.LastVerificationResult, task.Frontmatter.LastVerificationID, task.Frontmatter.LastVerificationPreviousID); !containsLine(task.Body, note) {
+			return fmt.Errorf("state verification task %s lacks the matching verification note", task.Frontmatter.ID)
 		}
 		if state.LastVerifiedCompletionID != "" && (task.Frontmatter.Status != "completed" || task.Frontmatter.CompletionID != state.LastVerifiedCompletionID) {
 			return fmt.Errorf("state verified completion does not match the completed task")

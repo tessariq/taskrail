@@ -607,10 +607,10 @@ func TestVerifyWritesPortableCommittedState(t *testing.T) {
 				t.Fatalf("load state: %v", err)
 			}
 
-			// Exact shape: result, task id, and timestamp, with no path.
-			want := fmt.Sprintf("%s for %s at %s", result, "T-002", wantTimestamp)
-			if got := state.Frontmatter.LastVerificationResult; got != want {
-				t.Fatalf("last_verification_result = %q, want %q", got, want)
+			// Exact shape: result, task id, timestamp, and stable identity, with no path.
+			want := fmt.Sprintf("%s for %s at %s id ", result, "T-002", wantTimestamp)
+			if got := state.Frontmatter.LastVerificationResult; !strings.HasPrefix(got, want) || !lowerHex32.MatchString(strings.TrimPrefix(got, want)) {
+				t.Fatalf("last_verification_result = %q, want canonical identity summary", got)
 			}
 			if strings.Contains(state.Frontmatter.LastVerificationResult, gitignoredPrefix) {
 				t.Fatalf("last_verification_result must not embed gitignored path: %q", state.Frontmatter.LastVerificationResult)

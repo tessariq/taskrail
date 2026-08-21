@@ -30,6 +30,7 @@ func (s *Service) Validate() (ValidationResult, error) {
 
 	violations = append(violations, s.validateState(state)...)
 	violations = append(violations, s.validateTasks(state, tasks)...)
+	violations = append(violations, s.validateVerificationEvidence(state, tasks)...)
 
 	return ValidationResult{Valid: len(violations) == 0, Violations: violations}, nil
 }
@@ -85,6 +86,22 @@ func (s *Service) validateState(state *State) []string {
 	}
 	if strings.TrimSpace(state.Frontmatter.StatusSummary) == "" {
 		violations = append(violations, "state status_summary must not be empty")
+	}
+	if state.Frontmatter.LastVerificationID == "" {
+		if state.Frontmatter.LastVerificationPreviousID != "" {
+			violations = append(violations, "state last_verification_previous_id requires last_verification_id")
+		}
+	} else {
+		if !lowerHex32.MatchString(state.Frontmatter.LastVerificationID) {
+			violations = append(violations, "state last_verification_id must be lower-case 32-hex")
+		}
+		match := canonicalStateVerification.FindStringSubmatch(state.Frontmatter.LastVerificationResult)
+		if match == nil || match[4] != state.Frontmatter.LastVerificationID {
+			violations = append(violations, "state last_verification_result must be canonical and match last_verification_id")
+		}
+		if previous := state.Frontmatter.LastVerificationPreviousID; previous != "" && (!lowerHex32.MatchString(previous) || previous == state.Frontmatter.LastVerificationID) {
+			violations = append(violations, "state last_verification_previous_id must be a distinct lower-case 32-hex")
+		}
 	}
 	violations = append(violations, stateArtifactRefsForPrefix(state.Frontmatter, s.logicalArtifactPrefix())...)
 	return violations
@@ -187,6 +204,8 @@ func stateArtifactRefsForPrefix(fm StateFrontmatter, prefix string) []string {
 		}
 	}
 	scan("last_verification_result", fm.LastVerificationResult)
+	scan("last_verification_id", fm.LastVerificationID)
+	scan("last_verification_previous_id", fm.LastVerificationPreviousID)
 	scan("next_action", fm.NextAction)
 	scan("current_task_title", fm.CurrentTaskTitle)
 	for _, v := range fm.RelevantArtifacts {

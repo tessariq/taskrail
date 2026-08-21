@@ -428,7 +428,9 @@ layout, so skill installation keeps working independently of the upgrade.
 
 ## What a Verification Leaves Behind
 
-Every verification writes repo-local evidence under `planning/artifacts/verify/<task-id>/<timestamp>/`:
+Every verification creates a fresh lower-case 32-hex identity, records its direct
+predecessor when one exists, and writes repo-local evidence under
+`planning/artifacts/verify/<task-id>/<timestamp>-<verification-id>/`:
 
 ```text
 planning/
@@ -439,7 +441,7 @@ planning/
   artifacts/
     verify/
       T-001/
-        20260619T113646Z/
+        20260619T113646Z-0123456789abcdef0123456789abcdef/
           plan.md                  # verification plan
           report.json              # machine-readable outcome
           report.md                # human-readable outcome
@@ -453,7 +455,7 @@ placeholder is required or tracked.
 
 ## State Contract
 
-`planning/STATE.md` is the authoritative current execution projection. It carries the active spec, current task, status summary, blockers, the next action, and the last verification result, plus pointers to relevant artifacts. It is not a per-task or per-session log: keep durable task context in task `## Implementation Notes`, blocker reasons, portable verification summaries/reports, or follow-up tasks. Repository-wide human context lives in `planning/NOTES.md`, a human-owned sidecar `init` and `retrofit --apply` create as a short commented template when that path is absent and never rewrite afterwards; agents may read it but edit it only when explicitly asked. Do not hand-edit machine-managed state fields or append continuation prose; let the `taskrail` transitions update the file.
+`planning/STATE.md` is the authoritative current execution projection. It carries the active spec, current task, status summary, blockers, the next action, and the latest verification result and identity tuple, plus pointers to relevant artifacts. It is not a per-task or per-session log: keep durable task context in task `## Implementation Notes`, blocker reasons, portable verification summaries/reports, or follow-up tasks. Repository-wide human context lives in `planning/NOTES.md`, a human-owned sidecar `init` and `retrofit --apply` create as a short commented template when that path is absent and never rewrite afterwards; agents may read it but edit it only when explicitly asked. Do not hand-edit machine-managed state fields or append continuation prose; let the `taskrail` transitions update the file.
 
 ## Repository Layout
 

@@ -110,8 +110,11 @@ func dependenciesResolved(task *Task, tasks []*Task) bool {
 // `verify` appends to a task body. It is the single source of the note's wording
 // so gap analysis (taskVerificationRecorded) can detect a recorded verification
 // from committed content without the two drifting apart.
-func verificationNoteLine(ts, result string) string {
-	return fmt.Sprintf("- %s: verification %s", ts, result)
+func verificationNoteLine(ts, result, id, previous string) string {
+	if previous == "" {
+		previous = "none"
+	}
+	return fmt.Sprintf("- %s: verification %s id %s previous %s completion none", ts, result, id, previous)
 }
 
 // implementationNotesHeading is the section verify and block append their notes to.

@@ -6,6 +6,10 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ### Added
 
+- `verify` now publishes a fresh stable verification ID and direct predecessor
+  across its JSON result, reports, task metadata and note, state projection, and
+  identity-named artifact directory. Validation rejects broken report chains or
+  mismatched published surfaces.
 - Fresh `taskrail init --local` now creates the ignored local
   `planning/tasks` directory as part of initialization, so an empty local task
   corpus is immediately usable by readers, structural writers, and task

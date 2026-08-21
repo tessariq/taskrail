@@ -3,10 +3,11 @@ package taskrail
 import "time"
 
 type Service struct {
-	paths        Paths
-	now          func() time.Time
-	completionID func() (string, error)
-	recovery     recoveryAdmission
+	paths          Paths
+	now            func() time.Time
+	completionID   func() (string, error)
+	verificationID func() (string, error)
+	recovery       recoveryAdmission
 }
 
 func NewService(start string) (*Service, error) {
@@ -32,7 +33,7 @@ func NewService(start string) (*Service, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Service{paths: paths, now: time.Now, completionID: randomCompletionID, recovery: recovery}, nil
+	return &Service{paths: paths, now: time.Now, completionID: randomCompletionID, verificationID: randomVerificationID, recovery: recovery}, nil
 }
 
 // CheckRecovery closes the admission boundary around one semantic operation:

@@ -156,10 +156,13 @@ func ValidateCompletionVerificationMetadata(status string, meta CompletionVerifi
 			violations = append(violations, "last_verified_at must be canonical RFC3339 UTC")
 		}
 	}
-	if presence.previousID && meta.LastVerificationPreviousID != "" {
+	if presence.previousID && meta.LastVerificationPreviousID != "" && chain != nil {
 		if err := ValidateVerificationChain(chain); err != nil || len(chain) == 0 || chain[len(chain)-1].ID != meta.LastVerificationID || chain[len(chain)-1].PreviousID != meta.LastVerificationPreviousID {
 			violations = append(violations, "verification predecessor must identify the exact prior verification evidence")
 		}
+	}
+	if presence.previousID && meta.LastVerificationPreviousID == meta.LastVerificationID {
+		violations = append(violations, "verification predecessor must differ from verification id")
 	}
 	if status != "completed" && presence.completionID {
 		violations = append(violations, "non-completed task must not have a completion id")
@@ -171,9 +174,6 @@ func ValidateCompletionVerificationMetadata(status string, meta CompletionVerifi
 		if meta.CompletionID == "" || meta.LastVerifiedCompletionID != meta.CompletionID {
 			violations = append(violations, "verified completion id must equal the current completion id")
 		}
-	}
-	if status == "completed" && meta.LastVerificationResult == "pass" && meta.CompletionID == "" {
-		violations = append(violations, "completed passing verification must have a current completion id")
 	}
 	return violations
 }

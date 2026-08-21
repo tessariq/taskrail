@@ -2,6 +2,7 @@ package taskrail
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -19,6 +20,7 @@ import (
 // up files, and roll back handled failures while preserving external edits.
 
 const verifyTimestamp = "20260817T090000Z"
+const delegatedVerificationID = "0123456789abcdef0123456789abcdef"
 
 // verifyFixture seeds a repo whose T-002 is verifiable and whose T-009
 // sentinel carries a frontmatter field no Taskrail struct models, so any writer
@@ -40,14 +42,30 @@ sentinel_marker: must-survive-every-verify-write
 
 # T-009-sentinel Sentinel
 `)
-	return newTestService(t, repo, time.Date(2026, 8, 17, 9, 0, 0, 0, time.UTC)), repo
+	svc := newTestService(t, repo, time.Date(2026, 8, 17, 9, 0, 0, 0, time.UTC))
+	setTestVerificationIDs(svc)
+	return svc, repo
 }
 
 func verifyArtifactPaths(taskID string) []string {
+	return verifyArtifactPathsForID(taskID, testVerificationID(1))
+}
+
+func verifyArtifactPathsForID(taskID, verificationID string) []string {
 	return []string{
-		"planning/artifacts/verify/" + taskID + "/" + verifyTimestamp + "/plan.md",
-		"planning/artifacts/verify/" + taskID + "/" + verifyTimestamp + "/report.json",
-		"planning/artifacts/verify/" + taskID + "/" + verifyTimestamp + "/report.md",
+		"planning/artifacts/verify/" + taskID + "/" + verifyTimestamp + "-" + verificationID + "/plan.md",
+		"planning/artifacts/verify/" + taskID + "/" + verifyTimestamp + "-" + verificationID + "/report.json",
+		"planning/artifacts/verify/" + taskID + "/" + verifyTimestamp + "-" + verificationID + "/report.md",
+	}
+}
+
+func testVerificationID(sequence int) string { return fmt.Sprintf("%032x", sequence) }
+
+func setTestVerificationIDs(svc *Service) {
+	sequence := 0
+	svc.verificationID = func() (string, error) {
+		sequence++
+		return testVerificationID(sequence), nil
 	}
 }
 
@@ -236,7 +254,7 @@ func TestVerifyAccumulatesMultipleFollowups(t *testing.T) {
 		"planning/STATE.md",
 		"planning/tasks/T-010-first-gap.md",
 		"planning/tasks/T-011-second-gap.md",
-	}, verifyArtifactPaths("T-010-first-gap")...)
+	}, verifyArtifactPathsForID("T-010-first-gap", testVerificationID(2))...)
 	sortStrings(want)
 	got := changedPaths(t, before, snapshotTree(t, repo))
 	if strings.Join(got, "\n") != strings.Join(want, "\n") {
@@ -396,7 +414,7 @@ func TestVerifyPublicationFailureRollsBack(t *testing.T) {
 			if _, statErr := os.Stat(filepath.Join(repo, "planning", "tasks", "T-003-rollback-probe.md")); statErr == nil {
 				t.Fatalf("%s left the transaction-created follow-up on disk", tc.name)
 			}
-			artifactDir := filepath.Join(repo, "planning", "artifacts", "verify", "T-002", verifyTimestamp)
+			artifactDir := filepath.Join(repo, "planning", "artifacts", "verify", "T-002", verifyTimestamp+"-"+testVerificationID(1))
 			for _, name := range []string{"plan.md", "report.json", "report.md"} {
 				if _, statErr := os.Stat(filepath.Join(artifactDir, name)); statErr == nil {
 					t.Fatalf("%s left the transaction-created artifact %s on disk", tc.name, name)
@@ -479,6 +497,7 @@ updated_at: "2026-03-31T00:00:00Z"
 # T-009-sentinel Sentinel
 `)
 	svc := newTestService(t, repo, time.Date(2026, 8, 17, 9, 0, 0, 0, time.UTC))
+	setTestVerificationIDs(svc)
 	executable := filepath.Join(t.TempDir(), "taskrail")
 	writeFile(t, executable, "taskrail-bytes")
 	lock, err := repolock.Acquire(context.Background(), repolock.Request{
@@ -516,7 +535,7 @@ func delegatedVerifyWrites(followup string) []string {
 	writes := append([]string{
 		"planning/STATE.md",
 		"planning/tasks/T-002.md",
-	}, verifyArtifactPaths("T-002")...)
+	}, verifyArtifactPathsForID("T-002", delegatedVerificationID)...)
 	if followup != "" {
 		writes = append(writes, "planning/tasks/"+followup+".md")
 	}
@@ -626,9 +645,8 @@ func TestDelegatedVerifyWrites(t *testing.T) {
 		if !strings.Contains(after, "selected_sentinel: must-survive") || !strings.Contains(after, "loop_policy: null") {
 			t.Fatalf("delegated verify widened its field reach:\n%s", after)
 		}
-		// The only changes are the stamped timestamp and the appended note:
-		// identity, ranking, anchoring, dependencies, and policy fields all
-		// survive untouched.
+		// Verify owns its timestamp, identity tuple, and append-only note; identity,
+		// ranking, anchoring, dependencies, and policy fields all survive untouched.
 		const stamp = "updated_at: \"2026-08-17T09:00:00Z\""
 		lines := strings.Split(before, "\n")
 		for i, line := range lines {
@@ -636,8 +654,9 @@ func TestDelegatedVerifyWrites(t *testing.T) {
 				lines[i] = stamp
 			}
 		}
-		want := strings.TrimRight(strings.Join(lines, "\n"), "\n") +
-			"\n\n## Implementation Notes\n\n- 2026-08-17T09:00:00Z: verification pass\n"
+		want := strings.TrimRight(strings.Join(lines, "\n"), "\n")
+		want = strings.Replace(want, stamp, stamp+"\nlast_verification_id: \""+delegatedVerificationID+"\"\nlast_verification_result: pass\nlast_verified_at: \"2026-08-17T09:00:00Z\"", 1) +
+			"\n\n## Implementation Notes\n\n- 2026-08-17T09:00:00Z: verification pass id " + delegatedVerificationID + " previous none completion none\n"
 		if after != want {
 			t.Fatalf("delegated verify changed an owned line:\nwant:\n%s\ngot:\n%s", want, after)
 		}

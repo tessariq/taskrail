@@ -234,12 +234,26 @@ func nextAction(result NextResult) string {
 // summary stay portable: they record result and timestamp without a path into
 // gitignored artifacts; local evidence still lives under
 // planning/artifacts/verify/ for the producer (see VerifyResult).
-func recordVerification(state *State, task *Task, input VerifyInput, followupTaskID, nowText string, preview []*Task) {
-	appendTaskNote(task, verificationNoteLine(nowText, input.Result))
+func recordVerification(state *State, task *Task, input VerifyInput, verificationID, previousVerificationID, followupTaskID, nowText string, preview []*Task) {
+	task.Frontmatter.CompletionVerificationMetadata = CompletionVerificationMetadata{
+		CompletionID:                      task.Frontmatter.CompletionID,
+		LastVerificationID:                verificationID,
+		LastVerificationPreviousID:        previousVerificationID,
+		LastVerificationResult:            input.Result,
+		LastVerifiedAt:                    nowText,
+		completionIDPresent:               task.Frontmatter.completionIDPresent || task.Frontmatter.CompletionID != "",
+		lastVerificationIDPresent:         true,
+		lastVerificationPreviousIDPresent: previousVerificationID != "",
+		lastVerificationResultPresent:     true,
+		lastVerifiedAtPresent:             true,
+	}
+	appendTaskNote(task, verificationNoteLine(nowText, input.Result, verificationID, previousVerificationID))
 	task.Frontmatter.UpdatedAt = nowText
 
 	state.Frontmatter.UpdatedAt = nowText
-	state.Frontmatter.LastVerificationResult = fmt.Sprintf("%s for %s at %s", input.Result, task.Frontmatter.ID, nowText)
+	state.Frontmatter.LastVerificationResult = fmt.Sprintf("%s for %s at %s id %s", input.Result, task.Frontmatter.ID, nowText, verificationID)
+	state.Frontmatter.LastVerificationID = verificationID
+	state.Frontmatter.LastVerificationPreviousID = previousVerificationID
 	state.Frontmatter.RelevantArtifacts = nil
 	if input.Result == "fail" && followupTaskID != "" {
 		state.Frontmatter.NextAction = fmt.Sprintf("Review follow-up task %s", followupTaskID)
@@ -260,11 +274,21 @@ func (s *Service) Verify(input VerifyInput) (result VerifyResult, err error) {
 			errors.New("verify summary must not be empty"))
 	}
 
-	// The timestamp fixes the artifact destination before the lock is taken, so
-	// the write set a delegated child claims is the one it publishes.
+	// The timestamp and random identity fix the artifact destination before the
+	// lock is taken, so the write set a delegated child claims is the one it
+	// publishes. The ID is checked against the preflight snapshot first, then
+	// against the under-lock snapshot before it reaches any publication surface.
 	now := s.now().UTC()
 	ts := now.Format("20060102T150405Z")
-	writes, err := s.verifyWriteClaim(input, ts)
+	preflightState, preflightTasks, err := s.loadStateAndTasks()
+	if err != nil {
+		return VerifyResult{}, err
+	}
+	verificationID, err := s.freshVerificationID(preflightState, preflightTasks)
+	if err != nil {
+		return VerifyResult{}, err
+	}
+	writes, err := s.verifyWriteClaim(input, ts, verificationID)
 	if err != nil {
 		return VerifyResult{}, err
 	}
@@ -292,7 +316,15 @@ func (s *Service) Verify(input VerifyInput) (result VerifyResult, err error) {
 		return VerifyResult{}, err
 	}
 
-	artifactDir := filepath.Join(s.paths.VerifyDir, task.Frontmatter.ID, ts)
+	used, err := s.usedVerificationIDs(state, tasks)
+	if err != nil {
+		return VerifyResult{}, err
+	}
+	if _, exists := used[verificationID]; exists {
+		return VerifyResult{}, fmt.Errorf("generate verification id: preflight identity %s was published before the verification lock", verificationID)
+	}
+	previousVerificationID := task.Frontmatter.LastVerificationID
+	artifactDir := filepath.Join(s.paths.VerifyDir, task.Frontmatter.ID, ts+"-"+verificationID)
 	planPath := filepath.Join(artifactDir, "plan.md")
 	reportPath := filepath.Join(artifactDir, "report.json")
 	reportMarkdownPath := filepath.Join(artifactDir, "report.md")
@@ -314,18 +346,20 @@ func (s *Service) Verify(input VerifyInput) (result VerifyResult, err error) {
 	}
 	preview := append(slices.Clone(tasks), followups...)
 
-	plan := renderVerificationPlan(task, input, followupTaskID)
+	plan := renderVerificationPlan(task, input, verificationID, previousVerificationID, followupTaskID)
 	report := VerificationArtifact{
-		SchemaVersion:  stateSchemaVersion,
-		TaskID:         task.Frontmatter.ID,
-		TaskTitle:      task.Frontmatter.Title,
-		Result:         input.Result,
-		Summary:        strings.TrimSpace(input.Summary),
-		Details:        strings.TrimSpace(input.Details),
-		GeneratedAt:    timestamp(now),
-		SpecRef:        task.Frontmatter.SpecRef,
-		Artifacts:      []string{relPlan, relReportMarkdown},
-		FollowupTaskID: followupTaskID,
+		SchemaVersion:          stateSchemaVersion,
+		TaskID:                 task.Frontmatter.ID,
+		TaskTitle:              task.Frontmatter.Title,
+		VerificationID:         verificationID,
+		PreviousVerificationID: optionalVerificationID(previousVerificationID),
+		Result:                 input.Result,
+		Summary:                strings.TrimSpace(input.Summary),
+		Details:                strings.TrimSpace(input.Details),
+		GeneratedAt:            timestamp(now),
+		SpecRef:                task.Frontmatter.SpecRef,
+		Artifacts:              []string{relPlan, relReportMarkdown},
+		FollowupTaskID:         followupTaskID,
 	}
 	reportBytes, err := json.MarshalIndent(report, "", "  ")
 	if err != nil {
@@ -334,7 +368,7 @@ func (s *Service) Verify(input VerifyInput) (result VerifyResult, err error) {
 	reportMarkdown := renderVerificationReportMarkdown(report)
 
 	nowText := timestamp(now)
-	recordVerification(state, task, input, followupTaskID, nowText, preview)
+	recordVerification(state, task, input, verificationID, previousVerificationID, followupTaskID, nowText, preview)
 
 	ledger := verifyLedger{
 		state:     state,
@@ -355,14 +389,16 @@ func (s *Service) Verify(input VerifyInput) (result VerifyResult, err error) {
 	}
 
 	return VerifyResult{
-		TaskID:         task.Frontmatter.ID,
-		Result:         input.Result,
-		ArtifactDir:    relPath(s.paths.RepoRoot, artifactDir),
-		PlanPath:       relPlan,
-		ReportPath:     relReport,
-		ReportMarkdown: relReportMarkdown,
-		FollowupTaskID: followupTaskID,
-		Warnings:       warnings,
+		TaskID:                 task.Frontmatter.ID,
+		VerificationID:         verificationID,
+		PreviousVerificationID: optionalVerificationID(previousVerificationID),
+		Result:                 input.Result,
+		ArtifactDir:            relPath(s.paths.RepoRoot, artifactDir),
+		PlanPath:               relPlan,
+		ReportPath:             relReport,
+		ReportMarkdown:         relReportMarkdown,
+		FollowupTaskID:         followupTaskID,
+		Warnings:               warnings,
 	}, nil
 }
 

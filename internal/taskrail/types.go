@@ -250,18 +250,20 @@ type Layout2UpgradeFacts struct {
 }
 
 type StateFrontmatter struct {
-	SchemaVersion          int      `yaml:"schema_version" json:"schema_version"`
-	UpdatedAt              string   `yaml:"updated_at" json:"updated_at"`
-	ActiveSpecVersion      string   `yaml:"active_spec_version" json:"active_spec_version"`
-	ActiveSpecPath         string   `yaml:"active_spec_path" json:"active_spec_path"`
-	CurrentTask            string   `yaml:"current_task" json:"current_task"`
-	CurrentTaskTitle       string   `yaml:"current_task_title" json:"current_task_title"`
-	StatusSummary          string   `yaml:"status_summary" json:"status_summary"`
-	Blockers               []string `yaml:"blockers" json:"blockers"`
-	NextAction             string   `yaml:"next_action" json:"next_action"`
-	LastVerificationResult string   `yaml:"last_verification_result" json:"last_verification_result"`
-	RelevantArtifacts      []string `yaml:"relevant_artifacts" json:"relevant_artifacts"`
-	ContinuationNotes      []string `yaml:"continuation_notes" json:"continuation_notes"`
+	SchemaVersion              int      `yaml:"schema_version" json:"schema_version"`
+	UpdatedAt                  string   `yaml:"updated_at" json:"updated_at"`
+	ActiveSpecVersion          string   `yaml:"active_spec_version" json:"active_spec_version"`
+	ActiveSpecPath             string   `yaml:"active_spec_path" json:"active_spec_path"`
+	CurrentTask                string   `yaml:"current_task" json:"current_task"`
+	CurrentTaskTitle           string   `yaml:"current_task_title" json:"current_task_title"`
+	StatusSummary              string   `yaml:"status_summary" json:"status_summary"`
+	Blockers                   []string `yaml:"blockers" json:"blockers"`
+	NextAction                 string   `yaml:"next_action" json:"next_action"`
+	LastVerificationResult     string   `yaml:"last_verification_result" json:"last_verification_result"`
+	LastVerificationID         string   `yaml:"last_verification_id,omitempty" json:"last_verification_id,omitempty"`
+	LastVerificationPreviousID string   `yaml:"last_verification_previous_id,omitempty" json:"last_verification_previous_id,omitempty"`
+	RelevantArtifacts          []string `yaml:"relevant_artifacts" json:"relevant_artifacts"`
+	ContinuationNotes          []string `yaml:"continuation_notes" json:"continuation_notes"`
 }
 
 type State struct {
@@ -414,25 +416,29 @@ type VerifyInput struct {
 }
 
 type VerifyResult struct {
-	TaskID         string    `json:"task_id"`
-	Result         string    `json:"result"`
-	ArtifactDir    string    `json:"artifact_dir"`
-	PlanPath       string    `json:"plan_path"`
-	ReportPath     string    `json:"report_path"`
-	ReportMarkdown string    `json:"report_markdown"`
-	FollowupTaskID string    `json:"followup_task_id,omitempty"`
-	Warnings       []Warning `json:"-"`
+	TaskID                 string    `json:"task_id"`
+	VerificationID         string    `json:"verification_id"`
+	PreviousVerificationID *string   `json:"previous_verification_id"`
+	Result                 string    `json:"result"`
+	ArtifactDir            string    `json:"artifact_dir"`
+	PlanPath               string    `json:"plan_path"`
+	ReportPath             string    `json:"report_path"`
+	ReportMarkdown         string    `json:"report_markdown"`
+	FollowupTaskID         string    `json:"followup_task_id,omitempty"`
+	Warnings               []Warning `json:"-"`
 }
 
 type VerificationArtifact struct {
-	SchemaVersion  int      `json:"schema_version"`
-	TaskID         string   `json:"task_id"`
-	TaskTitle      string   `json:"task_title"`
-	Result         string   `json:"result"`
-	Summary        string   `json:"summary"`
-	Details        string   `json:"details,omitempty"`
-	GeneratedAt    string   `json:"generated_at"`
-	SpecRef        string   `json:"spec_ref"`
-	Artifacts      []string `json:"artifacts"`
-	FollowupTaskID string   `json:"followup_task_id,omitempty"`
+	SchemaVersion          int      `json:"schema_version"`
+	TaskID                 string   `json:"task_id"`
+	TaskTitle              string   `json:"task_title"`
+	VerificationID         string   `json:"verification_id"`
+	PreviousVerificationID *string  `json:"previous_verification_id"`
+	Result                 string   `json:"result"`
+	Summary                string   `json:"summary"`
+	Details                string   `json:"details,omitempty"`
+	GeneratedAt            string   `json:"generated_at"`
+	SpecRef                string   `json:"spec_ref"`
+	Artifacts              []string `json:"artifacts"`
+	FollowupTaskID         string   `json:"followup_task_id,omitempty"`
 }
