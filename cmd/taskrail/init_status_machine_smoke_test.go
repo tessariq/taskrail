@@ -124,6 +124,7 @@ func TestLocalInspectionJSONReportsTheActiveLocalContext(t *testing.T) {
 	if output, err := exec.Command("git", "init", "--quiet", root).CombinedOutput(); err != nil {
 		t.Fatalf("git init: %v (%s)", err, output)
 	}
+	requireRecoveryDirectoryDurability(t, root)
 	t.Chdir(root)
 	if _, err := runRoot(t, "init", "--local"); err != nil {
 		t.Fatalf("init --local: %v", err)

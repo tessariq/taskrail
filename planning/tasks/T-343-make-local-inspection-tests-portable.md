@@ -1,12 +1,13 @@
 ---
 id: T-343-make-local-inspection-tests-portable
 title: Make local inspection tests portable across native filesystems
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#local-planning-mode
 dependencies:
     - T-288-inspect-local-planning-storage-read-only
-updated_at: "2026-08-21T10:03:27Z"
+updated_at: "2026-08-21T10:13:27Z"
+completion_id: "299038b895851c1e30d344a081aee790"
 ---
 
 # T-343-make-local-inspection-tests-portable Make local inspection tests portable across native filesystems
@@ -34,3 +35,5 @@ Follow-up derived from T-288-inspect-local-planning-storage-read-only's verifica
   suite; confirm exact-head native Windows and macOS CI.
 
 ## Implementation Notes
+
+- 2026-08-21T10:13:27Z: verification pass

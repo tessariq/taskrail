@@ -111,6 +111,7 @@ func TestLocalStatusAndPathReportOneReadOnlyLocalContext(t *testing.T) {
 	if output, err := exec.Command("git", "init", "--quiet", repo).CombinedOutput(); err != nil {
 		t.Fatalf("git init: %v (%s)", err, output)
 	}
+	requireRecoveryDirectoryDurability(t, repo)
 	if _, err := newTestService(t, repo, time.Now()).Init(InitInput{Local: true}); err != nil {
 		t.Fatalf("init local: %v", err)
 	}
@@ -154,6 +155,7 @@ func TestLocalInspectionRefusesMarkerChangedAfterDiscovery(t *testing.T) {
 	if output, err := exec.Command("git", "init", "--quiet", repo).CombinedOutput(); err != nil {
 		t.Fatalf("git init: %v (%s)", err, output)
 	}
+	requireRecoveryDirectoryDurability(t, repo)
 	if _, err := newTestService(t, repo, time.Now()).Init(InitInput{Local: true}); err != nil {
 		t.Fatalf("init local: %v", err)
 	}
@@ -178,6 +180,7 @@ func TestLocalStatusIncludesInstalledSkillExclusions(t *testing.T) {
 	if output, err := exec.Command("git", "init", "--quiet", repo).CombinedOutput(); err != nil {
 		t.Fatalf("git init: %v (%s)", err, output)
 	}
+	requireRecoveryDirectoryDurability(t, repo)
 	if _, err := newTestService(t, repo, time.Now()).Init(InitInput{Local: true}); err != nil {
 		t.Fatalf("init local: %v", err)
 	}
@@ -234,6 +237,7 @@ func TestLocalInspectionRefusesUninitializedAndMalformedOrigins(t *testing.T) {
 
 	repo := t.TempDir()
 	initLocalGitRepo(t, repo)
+	requireRecoveryDirectoryDurability(t, repo)
 	if _, err := newTestService(t, repo, time.Now()).Init(InitInput{Local: true}); err != nil {
 		t.Fatalf("init local: %v", err)
 	}
@@ -252,6 +256,7 @@ func TestLocalStatusDiscoversDescendantAndLinkedWorktreeScopes(t *testing.T) {
 
 	repo := t.TempDir()
 	initLocalGitRepo(t, repo)
+	requireRecoveryDirectoryDurability(t, repo)
 	if _, err := newTestService(t, repo, time.Now()).Init(InitInput{Local: true}); err != nil {
 		t.Fatalf("init local: %v", err)
 	}
@@ -281,6 +286,7 @@ func TestLocalStatusDiscoversDescendantAndLinkedWorktreeScopes(t *testing.T) {
 		t.Fatalf("remove linked-worktree target: %v", err)
 	}
 	runLocalGit(t, linkedSource, "worktree", "add", "--detach", linked)
+	requireRecoveryDirectoryDurability(t, linked)
 	linkedSvc, err := NewService(linked)
 	if err != nil {
 		t.Fatalf("new linked service: %v", err)
@@ -296,7 +302,15 @@ func TestLocalStatusDiscoversDescendantAndLinkedWorktreeScopes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("linked local status: %v", err)
 	}
-	if linkedStatus.WorktreeRoot != linked || linkedStatus.GitCommonDir != filepath.Join(linkedSource, ".git") {
+	expectedCommonDir, err := filepath.EvalSymlinks(filepath.Join(linkedSource, ".git"))
+	if err != nil {
+		t.Fatalf("canonicalize linked common directory: %v", err)
+	}
+	actualCommonDir, err := filepath.EvalSymlinks(linkedStatus.GitCommonDir)
+	if err != nil {
+		t.Fatalf("canonicalize reported common directory: %v", err)
+	}
+	if linkedStatus.WorktreeRoot != linked || actualCommonDir != expectedCommonDir {
 		t.Fatalf("linked scope = %+v", linkedStatus)
 	}
 }
