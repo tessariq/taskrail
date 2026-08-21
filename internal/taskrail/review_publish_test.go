@@ -179,6 +179,9 @@ func TestReviewPublishSpecRequiresAcceptedReferencesInSelectedSpec(t *testing.T)
 }
 
 func TestReviewPublishSpecCleansNewParentsAfterLateSnapshotConflict(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows reports directory durability as unsupported")
+	}
 	repo, svc, input, _ := specReviewPublishFixture(t)
 	testHookAfterReviewParent = func() {
 		writeFile(t, filepath.Join(repo, ".taskrail", "config.yml"), "layout_version: 1\nspecs_dir: specs\nplanning_dir: planning\n# changed\n")
