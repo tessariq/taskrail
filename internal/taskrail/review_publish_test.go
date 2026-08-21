@@ -58,6 +58,102 @@ func TestReviewPublishTaskPreviewAndApplyBindExactBytes(t *testing.T) {
 	}
 }
 
+func TestReviewPublishSpecPreviewAndApplyBindExactBytes(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows reports directory durability as unsupported")
+	}
+	repo, svc, input, files := specReviewPublishFixture(t)
+	preview, err := svc.ReviewPublish(ReviewPublishInput{
+		Type: input.Type, Proposal: input.Proposal, Destination: input.Destination,
+		Spec: input.Spec, ExpectSpecSHA256: input.ExpectSpecSHA256, DryRun: true,
+	})
+	if err != nil {
+		t.Fatalf("preview: %v", err)
+	}
+	if preview.Applied || len(preview.Files) != 5 || len(preview.Subjects) != 1 {
+		t.Fatalf("preview = %+v", preview)
+	}
+	if _, err := svc.ReviewPublish(input); err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+	for _, name := range []string{"consistency.json", "gaps.json", "additions.json", "adversarial.json", "manifest.json"} {
+		published, err := os.ReadFile(filepath.Join(repo, "planning", "reviews", "spec", "v0.1.0", "session-1", name))
+		if err != nil || string(published) != string(files[name]) {
+			t.Fatalf("published %s = %q, err=%v", name, published, err)
+		}
+	}
+}
+
+func TestReviewPublishSpecRefusesInvalidInputsWithoutPublication(t *testing.T) {
+	for _, test := range []struct {
+		name   string
+		mutate func(string, *ReviewPublishInput)
+		code   string
+	}{
+		{"task flag", func(_ string, input *ReviewPublishInput) { input.TaskID = "T-215-review" }, MachineCodeInvalidArguments},
+		{"wrong destination version", func(_ string, input *ReviewPublishInput) {
+			input.Destination = "planning/reviews/spec/v0.2.0/session-1"
+		}, MachineCodeInvalidProposal},
+		{"stale spec", func(repo string, _ *ReviewPublishInput) {
+			writeFile(t, filepath.Join(repo, "specs", "v0.1.0.md"), "# changed\n")
+		}, MachineCodeSourceChanged},
+		{"extra proposal member", func(repo string, _ *ReviewPublishInput) {
+			writeFile(t, filepath.Join(repo, "planning", "artifacts", "review-proposals", "spec", "session-1", "extra.json"), "{}")
+		}, MachineCodeInvalidProposal},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			repo, svc, input, _ := specReviewPublishFixture(t)
+			test.mutate(repo, &input)
+			_, err := svc.ReviewPublish(input)
+			if err == nil || MachineFailureFor(err).Code != test.code {
+				t.Fatalf("ReviewPublish error = %v, code = %q, want %q", err, MachineFailureFor(err).Code, test.code)
+			}
+			if _, err := os.Stat(filepath.Join(repo, "planning", "reviews", "spec", "v0.1.0", "session-1")); !os.IsNotExist(err) {
+				t.Fatalf("refused input created destination: %v", err)
+			}
+		})
+	}
+}
+
+func TestReviewPublishSpecRequiresAcceptedReferencesInSelectedSpec(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		ref  string
+	}{
+		{"non-spec path", "README.md#summary"},
+		{"missing anchor", "specs/v0.1.0.md#missing"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			repo, svc, input, _ := specReviewPublishFixture(t)
+			manifest := filepath.Join(repo, "planning", "artifacts", "review-proposals", "spec", "session-1", "manifest.json")
+			data, err := os.ReadFile(manifest)
+			if err != nil {
+				t.Fatal(err)
+			}
+			writeFile(t, manifest, strings.Replace(string(data), `"resulting_spec_ref":"specs/v0.1.0.md#summary"`, `"resulting_spec_ref":"`+test.ref+`"`, 1))
+			_, err = svc.ReviewPublish(input)
+			if err == nil || MachineFailureFor(err).Code != MachineCodeInvalidProposal {
+				t.Fatalf("ReviewPublish error = %v, code = %q", err, MachineFailureFor(err).Code)
+			}
+		})
+	}
+}
+
+func TestReviewPublishSpecCleansNewParentsAfterLateSnapshotConflict(t *testing.T) {
+	repo, svc, input, _ := specReviewPublishFixture(t)
+	testHookAfterReviewParent = func() {
+		writeFile(t, filepath.Join(repo, ".taskrail", "config.yml"), "layout_version: 1\nspecs_dir: specs\nplanning_dir: planning\n# changed\n")
+	}
+	t.Cleanup(func() { testHookAfterReviewParent = nil })
+	_, err := svc.ReviewPublish(input)
+	if err == nil || MachineFailureFor(err).Code != MachineCodeWriteConflict {
+		t.Fatalf("ReviewPublish error = %v, code = %q", err, MachineFailureFor(err).Code)
+	}
+	if _, err := os.Stat(filepath.Join(repo, "planning", "reviews")); !os.IsNotExist(err) {
+		t.Fatalf("late conflict left review parent: %v", err)
+	}
+}
+
 func TestReviewPublishTaskRefusesChangedSubjectAndLeavesDestinationAbsent(t *testing.T) {
 	repo, svc, input := reviewPublishFixture(t)
 	writeFile(t, filepath.Join(repo, "specs", "v0.1.0.md"), "# changed\n")
@@ -136,4 +232,35 @@ func reviewPublishFixture(t *testing.T) (string, *Service, ReviewPublishInput) {
 		t.Fatal(err)
 	}
 	return repo, svc, ReviewPublishInput{Type: "task", Proposal: proposal, Destination: "planning/reviews/task/T-215-review/session-1", TaskID: "T-215-review", ExpectTaskSHA256: digestRaw(taskBytes), ExpectSpecSHA256: digestRaw(specBytes)}
+}
+
+func specReviewPublishFixture(t *testing.T) (string, *Service, ReviewPublishInput, map[string][]byte) {
+	t.Helper()
+	repo := realGitRepo(t)
+	seedFixtureTree(t, repo)
+	writeFile(t, filepath.Join(repo, ".taskrail", "config.yml"), "layout_version: 1\nspecs_dir: specs\nplanning_dir: planning\n")
+	writeFile(t, filepath.Join(repo, ".gitignore"), "planning/artifacts/\n")
+	specPath := "specs/v0.1.0.md"
+	specBytes, err := os.ReadFile(filepath.Join(repo, filepath.FromSlash(specPath)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	files := specReviewGolden()
+	for name, content := range files {
+		content = []byte(strings.ReplaceAll(string(content), reviewDigestA, digestRaw(specBytes)))
+		content = []byte(strings.ReplaceAll(string(content), "specs/v0.5.0.md", specPath))
+		content = []byte(strings.ReplaceAll(string(content), "#safe-review-artifact-publication", "#summary"))
+		content = []byte(strings.ReplaceAll(string(content), "spec-review-1", "session-1"))
+		files[name] = content
+	}
+	for _, name := range []string{"consistency.json", "gaps.json", "additions.json", "adversarial.json"} {
+		refreshManifestDigest(files, name)
+		writeFile(t, filepath.Join(repo, "planning", "artifacts", "review-proposals", "spec", "session-1", name), string(files[name]))
+	}
+	writeFile(t, filepath.Join(repo, "planning", "artifacts", "review-proposals", "spec", "session-1", "manifest.json"), string(files["manifest.json"]))
+	svc, err := NewService(repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return repo, svc, ReviewPublishInput{Type: "spec", Proposal: "planning/artifacts/review-proposals/spec/session-1", Destination: "planning/reviews/spec/v0.1.0/session-1", Spec: "v0.1.0", ExpectSpecSHA256: digestRaw(specBytes)}, files
 }

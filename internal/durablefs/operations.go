@@ -467,6 +467,16 @@ func (r *Root) cleanupDirectory(stagedPath string, expected Identity, files []Di
 // a plain directory refuses, so a planted link never turns a cleanup into a
 // removal somewhere else.
 func (r *Root) RemoveDir(path string) error {
+	return r.removeDir(path, nil)
+}
+
+// RemoveDirExpected removes one empty directory only when its identity still
+// matches the caller's creation snapshot.
+func (r *Root) RemoveDirExpected(path string, expected Identity) error {
+	return r.removeDir(path, &expected)
+}
+
+func (r *Root) removeDir(path string, expected *Identity) error {
 	if err := r.authorize(); err != nil {
 		return err
 	}
@@ -478,6 +488,9 @@ func (r *Root) RemoveDir(path string) error {
 	boundIdentity, err := plainDirectoryIdentity(parent, leaf, path)
 	if err != nil {
 		return err
+	}
+	if expected != nil && boundIdentity != *expected {
+		return fmt.Errorf("%w: directory identity changed before removing %s", ErrConflict, path)
 	}
 	runMutationHook("removedir", path)
 	fresh, freshLeaf, freshAncestors, err := r.bindParent(path)
@@ -492,7 +505,7 @@ func (r *Root) RemoveDir(path string) error {
 	if err != nil {
 		return err
 	}
-	if freshIdentity != boundIdentity {
+	if freshIdentity != boundIdentity || expected != nil && freshIdentity != *expected {
 		return fmt.Errorf("%w: directory changed before removing %s", ErrConflict, path)
 	}
 	if err := parent.Remove(leaf); err != nil {

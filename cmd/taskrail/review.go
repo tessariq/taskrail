@@ -19,6 +19,9 @@ func newReviewPublishCmd() *cobra.Command {
 		Short: "Publish one validated review proposal without replacing a session",
 		Args:  machineArgs(cobra.NoArgs),
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			input.SpecFlagSet = cmd.Flags().Changed("spec")
+			input.TaskFlagSet = cmd.Flags().Changed("task")
+			input.ExpectTaskSHA256FlagSet = cmd.Flags().Changed("expect-task-sha256")
 			return runCommand(cmd, func(svc *taskrail.Service) (commandResult, error) {
 				result, err := svc.ReviewPublish(input)
 				if err != nil {
@@ -28,9 +31,10 @@ func newReviewPublishCmd() *cobra.Command {
 			})
 		},
 	}
-	cmd.Flags().StringVar(&input.Type, "type", "", "review type (task)")
+	cmd.Flags().StringVar(&input.Type, "type", "", "review type (task, spec)")
 	cmd.Flags().StringVar(&input.Proposal, "proposal", "", "transient proposal directory")
 	cmd.Flags().StringVar(&input.Destination, "destination", "", "absent durable review directory")
+	cmd.Flags().StringVar(&input.Spec, "spec", "", "reviewed spec version or path")
 	cmd.Flags().StringVar(&input.TaskID, "task", "", "reviewed task ID")
 	cmd.Flags().StringVar(&input.ExpectTaskSHA256, "expect-task-sha256", "", "expected exact task digest")
 	cmd.Flags().StringVar(&input.ExpectSpecSHA256, "expect-spec-sha256", "", "expected exact spec digest")
@@ -38,9 +42,6 @@ func newReviewPublishCmd() *cobra.Command {
 	_ = cmd.MarkFlagRequired("type")
 	_ = cmd.MarkFlagRequired("proposal")
 	_ = cmd.MarkFlagRequired("destination")
-	_ = cmd.MarkFlagRequired("task")
-	_ = cmd.MarkFlagRequired("expect-task-sha256")
-	_ = cmd.MarkFlagRequired("expect-spec-sha256")
 	addMachineJSONFlag(cmd)
 	return cmd
 }

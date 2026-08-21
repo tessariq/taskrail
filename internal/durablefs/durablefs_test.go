@@ -368,6 +368,36 @@ func TestCreatePublishReplaceRemoveAndMkdir(t *testing.T) {
 	}
 }
 
+func TestRemoveDirExpectedRefusesReplacement(t *testing.T) {
+	repo := t.TempDir()
+	root, lock := openTestRoot(t, repo)
+	defer releaseTestRoot(t, root, lock)
+	directory, err := root.Mkdir("session", 0o755)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(repo, "session")
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := root.Mkdir("allocation", 0o755); err != nil {
+		t.Fatal(err)
+	}
+	replacement, err := root.Mkdir("session", 0o755)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if replacement.Identity == directory.Identity {
+		t.Skip("filesystem reused the original directory identity")
+	}
+	if err := root.RemoveDirExpected("session", directory.Identity); !errors.Is(err, ErrConflict) {
+		t.Fatalf("RemoveDirExpected = %v, want identity conflict", err)
+	}
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("replacement directory was removed: %v", err)
+	}
+}
+
 func TestPublishDirectoryCommitsCompleteBytesAtOneAbsentName(t *testing.T) {
 	requireDirectoryPublication(t)
 	repo := t.TempDir()

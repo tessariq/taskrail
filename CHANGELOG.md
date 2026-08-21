@@ -6,6 +6,12 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ### Added
 
+- `review publish --type spec` now validates one ignored, manifest-bound
+  four-lens proposal against an exact selected spec digest before previewing or
+  atomically publishing all five unchanged JSON files into an absent durable
+  spec-review session. Apply rechecks proposal, spec, configuration, and
+  destination identities under the repository writer lock without editing the
+  reviewed spec.
 - `review publish --type task` now validates one ignored task-review proposal
   against exact task and spec digests before previewing or atomically publishing
   its unchanged `review.json` into an absent durable review session. Apply

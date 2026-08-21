@@ -1,12 +1,17 @@
 ---
 id: T-292-publish-spec-review-bundles-safely
 title: Publish spec review bundles safely
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#safe-review-artifact-publication
 dependencies:
     - T-215-add-the-generic-review-artifact-publisher
-updated_at: "2026-08-08T14:23:08Z"
+updated_at: "2026-08-21T15:36:10Z"
+completion_id: "9f1e83e1d33a253bd283a4d01906510e"
+last_verification_id: "f19fb5548de8a3d3f1250ed9d47d868a"
+last_verification_result: pass
+last_verified_at: "2026-08-21T15:36:10Z"
+last_verified_completion_id: "9f1e83e1d33a253bd283a4d01906510e"
 ---
 
 # T-292-publish-spec-review-bundles-safely Publish spec review bundles safely
@@ -38,3 +43,6 @@ four-lens bundle becomes immutable durable evidence without editing the spec.
   and commit fault injection prove exact-byte all-or-none publication.
 
 ## Implementation Notes
+
+- 2026-08-21T15:36:01Z: Published safe spec-review bundle adapter with strict selected-spec binding and atomic no-clobber delivery.
+- 2026-08-21T15:36:10Z: verification pass id f19fb5548de8a3d3f1250ed9d47d868a previous none completion 9f1e83e1d33a253bd283a4d01906510e
