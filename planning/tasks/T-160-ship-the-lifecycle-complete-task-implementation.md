@@ -1,7 +1,7 @@
 ---
 id: T-160-ship-the-lifecycle-complete-task-implementation
 title: Ship the lifecycle-complete task implementation prompt
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#task-implementation-prompt
 dependencies:
@@ -10,7 +10,12 @@ dependencies:
     - T-297-ship-complete-storage-neutral-prompt-rendering
     - T-251-ship-the-outcome-focused-task-authoring-prompt
     - T-303-align-native-task-producers-with-the-body-contract
-updated_at: "2026-08-08T08:40:49Z"
+updated_at: "2026-08-22T11:08:14Z"
+completion_id: "67ed73c0d331169c8475da9f61526f88"
+last_verification_id: "f85ba03fa93df1c99a4a09be9236aa3c"
+last_verification_result: pass
+last_verified_at: "2026-08-22T11:08:14Z"
+last_verified_completion_id: "67ed73c0d331169c8475da9f61526f88"
 ---
 
 # T-160-ship-the-lifecycle-complete-task-implementation Ship the lifecycle-complete task implementation prompt
@@ -98,3 +103,6 @@ guidance. Packaged full-task skill command execution is owned by T-242.
   out-of-scope discoveries to prove follow-up routing.
 
 ## Implementation Notes
+
+- 2026-08-22T11:08:03Z: Published the lifecycle-complete task implementation prompt with contract coverage.
+- 2026-08-22T11:08:14Z: verification pass id f85ba03fa93df1c99a4a09be9236aa3c previous none completion 67ed73c0d331169c8475da9f61526f88

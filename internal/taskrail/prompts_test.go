@@ -103,6 +103,53 @@ func TestTaskAuthoringPromptDefinesOutcomeFocusedBodyContract(t *testing.T) {
 	}
 }
 
+func TestTaskImplementationPromptDefinesLifecycleCompleteWorkflow(t *testing.T) {
+	repo := seedFixtureRepo(t)
+	writeTask(t, repo, "T-001-implement", "Implement", "todo", "high", "specs/v0.1.0.md#summary", nil)
+	svc := newTestService(t, repo, time.Date(2026, 8, 22, 12, 0, 0, 0, time.UTC))
+
+	result, err := svc.PromptRender(PromptRenderCommandInput{ID: "task-implementation", Task: "T-001-implement"})
+	if err != nil {
+		t.Fatalf("render task implementation prompt: %v", err)
+	}
+	content := strings.Join(strings.Fields(result.Content), " ")
+	for _, fixture := range []struct {
+		name string
+		want string
+	}{
+		{"managed reads", "Use `taskrail task show T-001-implement --json` and `taskrail spec show v0.1.0 --json` to inspect managed bytes; do not read logical paths directly."},
+		{"sizing", "Before `start`, apply the outcome-focused sizing rubric: require one independently meaningful outcome, a bounded observable result, explicit dependencies and operator gates, and clear integrated-behavior ownership."},
+		{"replan", "Stop for reviewed decomposition or clarification rather than implement an arbitrary slice when the task bundles independently useful outcomes, fragments one outcome, or leaves integration ownership unclear."},
+		{"invariants", "Trace acceptance requirements to observable executable or inspectable evidence before implementation."},
+		{"writer freshness", "Before every Taskrail state writer, run the source-checkout freshness guard when the repository provides one; stop and apply its named remedy if it fails. Pass `--json` to every consumed Taskrail command, parse its common result envelope, and check command and writer exits."},
+		{"tdd", "Implement the smallest safe change; begin behavior changes with a failing test whenever practical."},
+		{"simplification", "Inspect the verified implementation for unnecessary complexity and simplify only when behavior is preserved; independent simplification delegation is optional."},
+		{"reviewer", "Freeze the verified implementation, then run one broad implementation-review round with one fresh reviewer by default."},
+		{"review lenses", "A broad round has one to three reviewers, each with a named, non-duplicative lens."},
+		{"additional reviewers", "Use additional concurrent reviewers only for distinct independently relevant risks the first lens is unlikely to cover, and give every reviewer the same frozen snapshot."},
+		{"finding dispositions", "Classify every finding as `fix-now`, `separate-followup`, `blocked`, or `rejected` with rationale and evidence."},
+		{"finding routing", "Use `fix-now` when the change introduced or exposed the issue, current acceptance or specification requires it, an affected invariant depends on it, or changed evidence is too weak. Use `separate-followup` only for a distinct outcome outside that scope."},
+		{"regression perturbation", "For a test-strength finding, strengthen the test, demonstrate that a deliberate relevant regression fails, restore the correct implementation, and demonstrate the test passes."},
+		{"second review", "One broad round is the default; use a second broad round only within the maximum and for a distinct unresolved risk that deterministic verification does not adequately cover."},
+		{"final diff", "If review fixes materially change product or test bytes, freeze the repaired candidate and run one narrow final-diff review limited to fix-induced regressions, integration breakage, and behavior drift."},
+		{"objective closure", "A final-diff finding needs repair and affected checks; objective closure evidence permits completion without another model review, otherwise leave the task in progress, record failing verification, and stop for operator review."},
+		{"barriers", "For headless ambiguity, credentials, destructive scope, production data, billed resources, live consoles, or operator decisions, stop for a human rather than guessing."},
+		{"follow ups", "Create only newly discovered, independently meaningful out-of-scope follow-ups through selected-task `verify --create-followup`; never defer current-task acceptance, integration, or evidence. There is no arbitrary numeric cap, but each generated follow-up must be named in a fresh selected-task verification report, depend on the selected task, omit `loop_policy` and `loop_reason`, and remain implicitly held."},
+		{"delegated policy", "A delegated child may use only its granted lifecycle and follow-up write sets; it cannot mutate task-local loop policy or derive unattended authorization from a follow-up body."},
+		{"success lifecycle", "On success, complete before passing verification; check writer exits."},
+		{"recovery", "For interrupted or deliberate manual rework, direct an operator to `task release`; a delegated child must not relinquish its selected task."},
+		{"delivery", "In committed mode, run lifecycle first and commit the complete implementation plus generated task and state bytes. In local mode, commit visible product changes only; metadata-only blocked or rework outcomes do not fabricate an empty commit."},
+		{"provenance", "Follow repository-visible commit, identity, attribution, signing, hook, and ref policy without changing Git identity configuration or copying managed paths, review or verification identities, storage details, or Taskrail or agent attribution into commit metadata or unrelated product text. Only a caller-owned instruction outside managed planning may authorize exposing a local Taskrail identity or path."},
+		{"provider neutrality", "Leave provider commands, credentials, remote pushes, sandboxing, and reviewer identity attestation to callers."},
+	} {
+		t.Run(fixture.name, func(t *testing.T) {
+			if !strings.Contains(content, fixture.want) {
+				t.Errorf("task-implementation prompt missing %q:\n%s", fixture.want, result.Content)
+			}
+		})
+	}
+}
+
 func TestRenderPromptIsOnePass(t *testing.T) {
 	result, err := RenderPrompt(PromptRenderInput{
 		Template:       []byte("{{FIRST}} {{SECOND}}"),
