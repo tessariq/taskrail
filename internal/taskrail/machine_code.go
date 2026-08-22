@@ -31,6 +31,7 @@ const (
 	MachineCodeInvalidProposal     = "invalid_proposal"
 	MachineCodeDestinationExists   = "destination_exists"
 	MachineCodePathBlocked         = "path_blocked"
+	MachineCodeGitState            = "git_state"
 	MachineCodeLockHeld            = "lock_held"
 	MachineCodeDelegatedRefused    = "delegated_write_refused"
 	MachineCodeDependencyExists    = "dependency_exists"

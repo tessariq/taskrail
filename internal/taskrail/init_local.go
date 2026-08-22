@@ -3,6 +3,7 @@ package taskrail
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -305,13 +306,17 @@ func (s *Service) verifyLocalIgnored() error {
 		return err
 	}
 	data, err := os.ReadFile(excludePath)
-	if os.IsNotExist(err) || !strings.Contains(string(data), localExcludeBegin) {
-		// The durable engine invokes its validator once before publication and
-		// again while the candidate is fenced. Ignore proof belongs to the latter.
-		return nil
-	}
 	if err != nil {
 		return err
+	}
+	if !strings.Contains(string(data), localExcludeBegin) {
+		if _, err := os.Lstat(s.paths.ConfigFile); errors.Is(err, os.ErrNotExist) {
+			// Local initialization validates its unpublished candidate before the
+			// exclusion member lands. A discovered local repository never has this
+			// exemption: it must prove its managed paths are ignored.
+			return nil
+		}
+		return fmt.Errorf("Git exclusion is missing the Taskrail local-storage entry")
 	}
 	for _, path := range []string{markerRelPath(), localStorageRoot, filepath.ToSlash(relPath(s.paths.RepoRoot, s.paths.RuntimeDir))} {
 		if _, err := gitCommand(s.paths.WorktreeRoot, "check-ignore", "-q", "--no-index", path); err != nil {

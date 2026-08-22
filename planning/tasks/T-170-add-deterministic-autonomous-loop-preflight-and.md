@@ -1,14 +1,19 @@
 ---
 id: T-170-add-deterministic-autonomous-loop-preflight-and
 title: Add autonomous loop invocation and repository preflight
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#cross-platform-autonomous-loop
 dependencies:
     - T-160-ship-the-lifecycle-complete-task-implementation
     - T-169-select-autonomous-work-through-policy-barriers
     - T-223-run-every-v0-5-command-against-local-storage
-updated_at: "2026-08-08T08:40:49Z"
+updated_at: "2026-08-22T11:38:46Z"
+completion_id: "b93c1eec5603cf24675cff324d10a093"
+last_verification_id: "31f590e315e69b0c90c3a73efcb32406"
+last_verification_result: pass
+last_verified_at: "2026-08-22T11:38:46Z"
+last_verified_completion_id: "b93c1eec5603cf24675cff324d10a093"
 ---
 
 # T-170-add-deterministic-autonomous-loop-preflight-and Add autonomous loop invocation and repository preflight
@@ -64,3 +69,6 @@ replacement prompt, launching a child, or writing managed state.
   `EVIL_REV`; prove this foundation performs no child launch or managed write.
 
 ## Implementation Notes
+
+- 2026-08-22T11:38:34Z: Implemented deterministic loop invocation parsing and immutable repository preflight snapshots.
+- 2026-08-22T11:38:46Z: verification pass id 31f590e315e69b0c90c3a73efcb32406 previous none completion b93c1eec5603cf24675cff324d10a093
