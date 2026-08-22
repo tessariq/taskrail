@@ -1,14 +1,19 @@
 ---
 id: T-295-resolve-managed-prompt-subjects-through-active
 title: Resolve managed prompt subjects through active storage
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#workflow-prompt-catalog-and-overrides
 dependencies:
     - T-250-render-prompts-from-storage-neutral-context
     - T-235-show-a-task-by-exact-id-through-active-storage
     - T-294-show-durable-review-artifacts-through-active
-updated_at: "2026-08-08T14:23:08Z"
+updated_at: "2026-08-22T08:50:39Z"
+completion_id: "6cb115b4865c30e8f5bf1866c675e18e"
+last_verification_id: "1287fdbf88356a5c6d7e74205f487b7c"
+last_verification_result: pass
+last_verified_at: "2026-08-22T08:50:39Z"
+last_verified_completion_id: "6cb115b4865c30e8f5bf1866c675e18e"
 ---
 
 # T-295-resolve-managed-prompt-subjects-through-active Resolve managed prompt subjects through active storage
@@ -40,3 +45,6 @@ commands while rendering only canonical logical managed paths.
   command-mediated reads, logical-path parity, no overlay disclosure, and no writes.
 
 ## Implementation Notes
+
+- 2026-08-22T08:50:31Z: Resolved managed prompt subjects through active storage with logical-path context.
+- 2026-08-22T08:50:39Z: verification pass id 1287fdbf88356a5c6d7e74205f487b7c previous none completion 6cb115b4865c30e8f5bf1866c675e18e

@@ -129,6 +129,134 @@ func TestRenderPromptAcceptsGrammarBoundariesAndLiteralBraces(t *testing.T) {
 	}
 }
 
+func TestResolvePromptManagedContextUsesActiveStorageAndLogicalPaths(t *testing.T) {
+	committed, committedBefore := storageNeutralService(t, committedStorage(), false)
+	local, localBefore := storageNeutralService(t, localStorage(), true)
+	for _, test := range []struct {
+		name string
+		svc  *Service
+		mode string
+	}{
+		{"committed", committed, "committed"},
+		{"local", local, "local"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			result, err := test.svc.ResolvePromptManagedContext(PromptManagedContextInput{
+				ID:   "task-implementation",
+				Task: "T-001-local",
+			})
+			if err != nil {
+				t.Fatalf("resolve task implementation context: %v", err)
+			}
+			want := map[string]string{
+				"TASK_ID":             "T-001-local",
+				"TASK_PATH":           "work/planning/tasks/T-001-local.md",
+				"ACTIVE_SPEC_VERSION": "v0.5.0",
+				"ACTIVE_SPEC_PATH":    "product/specs/v0.5.0.md",
+				"STORAGE_MODE":        test.mode,
+			}
+			for name, value := range want {
+				if result.Values[name] != value {
+					t.Errorf("%s = %q, want %q", name, result.Values[name], value)
+				}
+			}
+			taskAuthoring, err := test.svc.ResolvePromptManagedContext(PromptManagedContextInput{
+				ID:   "task-authoring",
+				Task: "T-001-local",
+			})
+			if err != nil {
+				t.Fatalf("resolve task authoring context: %v", err)
+			}
+			if taskAuthoring.Values["SPEC_VERSION"] != "v0.5.0" || taskAuthoring.Values["SPEC_PATH"] != "product/specs/v0.5.0.md" {
+				t.Fatalf("task-derived spec = %#v", taskAuthoring.Values)
+			}
+			decomposition, err := test.svc.ResolvePromptManagedContext(PromptManagedContextInput{
+				ID:             "task-decomposition",
+				Spec:           "v0.5.0",
+				SpecReviewPath: "work/planning/reviews/spec/v0.5.0/session/report.json",
+			})
+			if err != nil {
+				t.Fatalf("resolve decomposition context: %v", err)
+			}
+			if decomposition.Values["SPEC_REVIEW_PATH"] != "work/planning/reviews/spec/v0.5.0/session/report.json" {
+				t.Fatalf("durable review path = %#v", decomposition.Values)
+			}
+			if strings.Contains(strings.Join(mapValues(result.Values), "\n"), ".taskrail/local/") {
+				t.Fatalf("managed context leaked local overlay: %#v", result.Values)
+			}
+		})
+	}
+	if got := snapshotTree(t, committed.paths.RepoRoot); !reflect.DeepEqual(got, committedBefore) {
+		t.Fatal("committed context resolution changed fixture bytes")
+	}
+	if got := snapshotTree(t, local.paths.RepoRoot); !reflect.DeepEqual(got, localBefore) {
+		t.Fatal("local context resolution changed fixture bytes")
+	}
+}
+
+func TestResolvePromptManagedContextValidatesSubjectsAndReadsDurableReviews(t *testing.T) {
+	repo := seedFixtureRepo(t)
+	writeTask(t, repo, "T-001-subject", "Subject", "todo", "high", "specs/v0.1.0.md#summary", nil)
+	writeFile(t, filepath.Join(repo, "planning", "reviews", "spec", "v0.1.0", "session", "review.json"), "durable review")
+	writeFile(t, filepath.Join(repo, "planning", "reviews", "workflow-adversarial", "memory.json"), "durable memory")
+	svc := newTestService(t, repo, time.Date(2026, 8, 22, 12, 0, 0, 0, time.UTC))
+
+	for _, spec := range []string{"v0.1.0", "specs/v0.1.0.md"} {
+		result, err := svc.ResolvePromptManagedContext(PromptManagedContextInput{ID: "spec-consistency", Spec: spec})
+		if err != nil {
+			t.Fatalf("resolve explicit spec %q: %v", spec, err)
+		}
+		if result.Values["SPEC_VERSION"] != "v0.1.0" || result.Values["SPEC_PATH"] != "specs/v0.1.0.md" {
+			t.Fatalf("explicit spec %q values = %#v", spec, result.Values)
+		}
+	}
+
+	result, err := svc.ResolvePromptManagedContext(PromptManagedContextInput{
+		ID:             "task-decomposition",
+		Spec:           "v0.1.0",
+		SpecReviewPath: "planning/reviews/spec/v0.1.0/session/review.json",
+	})
+	if err != nil {
+		t.Fatalf("resolve decomposition context: %v", err)
+	}
+	if result.Values["SPEC_REVIEW_PATH"] != "planning/reviews/spec/v0.1.0/session/review.json" {
+		t.Fatalf("spec review path = %q", result.Values["SPEC_REVIEW_PATH"])
+	}
+	result, err = svc.ResolvePromptManagedContext(PromptManagedContextInput{
+		ID:         "workflow-adversarial",
+		Spec:       "v0.1.0",
+		MemoryPath: "planning/reviews/workflow-adversarial/memory.json",
+	})
+	if err != nil {
+		t.Fatalf("resolve workflow context: %v", err)
+	}
+	if result.Values["MEMORY_PATH"] != "planning/reviews/workflow-adversarial/memory.json" {
+		t.Fatalf("memory path = %q", result.Values["MEMORY_PATH"])
+	}
+
+	for _, input := range []PromptManagedContextInput{
+		{ID: "task-authoring"},
+		{ID: "spec-consistency", Spec: "README.md"},
+		{ID: "task-authoring", Task: "T-001-subject", Spec: "v0.1.0"},
+		{ID: "spec-consistency", Spec: "v0.1.0", MemoryPath: "planning/reviews/workflow-adversarial/memory.json"},
+		{ID: "task-decomposition", Spec: "v0.1.0"},
+		{ID: "workflow-adversarial", Spec: "v0.1.0"},
+		{ID: "task-authoring", Task: "missing"},
+	} {
+		if _, err := svc.ResolvePromptManagedContext(input); err == nil {
+			t.Fatalf("context %#v unexpectedly resolved", input)
+		}
+	}
+}
+
+func mapValues(values map[string]string) []string {
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		result = append(result, value)
+	}
+	return result
+}
+
 func TestPromptListAndShowResolveCommittedReplacement(t *testing.T) {
 	repo := seedFixtureRepo(t)
 	svc := newTestService(t, repo, time.Date(2026, 8, 21, 12, 0, 0, 0, time.UTC))
