@@ -1,12 +1,17 @@
 ---
 id: T-243-contain-autonomous-loop-process-trees
 title: Contain autonomous loop process trees on Unix
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#cross-platform-autonomous-loop
 dependencies:
     - T-309-launch-loop-children-with-exact-prompt-transport
-updated_at: "2026-08-06T13:46:30Z"
+updated_at: "2026-08-22T14:10:40Z"
+completion_id: "18f027d6c3240b7141c29816228bd3d1"
+last_verification_id: "885e75ae436e9dfe0a87d1d869a51b5b"
+last_verification_result: pass
+last_verified_at: "2026-08-22T14:10:40Z"
+last_verified_completion_id: "18f027d6c3240b7141c29816228bd3d1"
 ---
 
 # T-243-contain-autonomous-loop-process-trees Contain autonomous loop process trees on Unix
@@ -45,3 +50,6 @@ over privileged or undetectable `setsid` escape.
   asserting control over undetectable or privileged escape.
 
 ## Implementation Notes
+
+- 2026-08-22T14:10:25Z: Contain Unix loop process groups with bounded cleanup and process evidence.
+- 2026-08-22T14:10:40Z: verification pass id 885e75ae436e9dfe0a87d1d869a51b5b previous none completion 18f027d6c3240b7141c29816228bd3d1

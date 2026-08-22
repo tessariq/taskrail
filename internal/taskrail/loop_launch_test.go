@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"runtime"
@@ -108,6 +109,23 @@ func TestLoopLaunchChildResolvesSeparatorPathBeforeRepositoryCWD(t *testing.T) {
 	assertLoopWorkingDirectory(t, string(readBytes(t, record+".cwd")), repository)
 }
 
+func TestLoopLaunchChildContainsUnixProcessGroup(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix process groups are covered by the Unix containment implementation")
+	}
+	input := loopHelperLaunch(t, "observe", nil)
+	execution, err := launchLoopChild(input)
+	if err != nil || execution.Failed() {
+		t.Fatalf("launchLoopChild = %+v, %v", execution, err)
+	}
+	if execution.Containment.ProcessGroup != execution.PID {
+		t.Fatalf("process group = %d, want child pid %d", execution.Containment.ProcessGroup, execution.PID)
+	}
+	if !execution.Containment.NormalDrain {
+		t.Fatalf("containment = %+v, want normal drain", execution.Containment)
+	}
+}
+
 func assertLoopWorkingDirectory(t *testing.T, got, want string) {
 	t.Helper()
 	gotInfo, gotErr := os.Stat(got)
@@ -184,9 +202,29 @@ func TestLoopLaunchChildDrainsBothStreamsConcurrently(t *testing.T) {
 	assertLoopLaunchCount(t, input, 1)
 }
 
+func TestLoopLaunchChildDrainsSlowStreamsAfterLeaderExit(t *testing.T) {
+	input := loopHelperLaunch(t, "duplex", nil)
+	stdout, stderr := &slowLoopWriter{}, &slowLoopWriter{}
+	input.Stdout, input.Stderr = stdout, stderr
+	execution, err := launchLoopChild(input)
+	if err != nil || execution.Failed() {
+		t.Fatalf("execution = %+v, %v", execution, err)
+	}
+	if stdout.Len() != 1<<20 || stderr.Len() != 1<<20 {
+		t.Fatalf("stream lengths = %d, %d", stdout.Len(), stderr.Len())
+	}
+}
+
 type failingLoopWriter struct{}
 
 func (failingLoopWriter) Write([]byte) (int, error) { return 0, fmt.Errorf("stream failed") }
+
+type slowLoopWriter struct{ bytes.Buffer }
+
+func (w *slowLoopWriter) Write(value []byte) (int, error) {
+	time.Sleep(2 * time.Millisecond)
+	return w.Buffer.Write(value)
+}
 
 func loopHelperLaunch(t *testing.T, mode string, prompt []byte) loopChildLaunch {
 	t.Helper()
@@ -270,6 +308,20 @@ func TestLoopLaunchChildHelper(t *testing.T) {
 		}
 		<-done
 		<-done
+		os.Exit(0)
+	case "spawn-descendant":
+		descendant := exec.Command(os.Args[0], "-test.run=^TestLoopLaunchChildHelper$", "--", "linger", record)
+		descendant.Stdout = os.Stdout
+		descendant.Stderr = os.Stderr
+		if err := descendant.Start(); err != nil {
+			os.Exit(92)
+		}
+		if err := os.WriteFile(record+".descendant", []byte(strconv.Itoa(descendant.Process.Pid)), 0o600); err != nil {
+			os.Exit(91)
+		}
+		os.Exit(0)
+	case "linger":
+		time.Sleep(5 * time.Second)
 		os.Exit(0)
 	case "observe":
 		prompt, err := io.ReadAll(os.Stdin)
