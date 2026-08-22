@@ -1,13 +1,18 @@
 ---
 id: T-217-release-interrupted-active-work-safely
 title: Release interrupted active work safely
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#canonical-transition-order
 dependencies:
     - T-158-bind-completion-and-verification-with-stable
     - T-223-run-every-v0-5-command-against-local-storage
-updated_at: "2026-08-05T20:24:26Z"
+updated_at: "2026-08-22T09:59:26Z"
+completion_id: "a6d7f3e00319beff7a0ca8954daadf7b"
+last_verification_id: "00bdfe78ba26cff4964a549cbf615f58"
+last_verification_result: pass
+last_verified_at: "2026-08-22T09:59:26Z"
+last_verified_completion_id: "a6d7f3e00319beff7a0ca8954daadf7b"
 ---
 
 # T-217-release-interrupted-active-work-safely Release interrupted active work safely
@@ -35,3 +40,6 @@ deliberate-rework active work without inventing blocker history or cancelling it
 - Run an interrupted-loop sandbox that releases work, proves ordinary next-task eligibility, and records no fabricated blocker history.
 
 ## Implementation Notes
+
+- 2026-08-22T09:59:10Z: Implemented direct release recovery with transactional preimage guards.
+- 2026-08-22T09:59:26Z: verification pass id 00bdfe78ba26cff4964a549cbf615f58 previous none completion a6d7f3e00319beff7a0ca8954daadf7b

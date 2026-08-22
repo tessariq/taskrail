@@ -16,7 +16,7 @@ import (
 
 // The tracked-work transaction substrate
 // (specs/v0.5.0.md#repository-discovery-locking-and-recovery): `next`, `start`,
-// `complete`, `block`, `unblock`, and `verify` publish through one normal
+// `complete`, `block`, `unblock`, `task release`, and `verify` publish through one normal
 // transaction. Each writer takes the discovered repository mutation lock,
 // snapshots its complete consumed and published set, validates the full
 // candidate ledger before the first write, and publishes only its declared
@@ -47,6 +47,7 @@ var (
 	lifecycleComplete = writerCommand{command: "complete", taskFields: []string{"status", "updated_at", "implementation_notes", "completion_id", "last_verification_id", "last_verification_previous_id", "last_verification_result", "last_verified_at", "last_verified_completion_id"}}
 	lifecycleBlock    = writerCommand{command: "block", taskFields: []string{"status", "updated_at", "implementation_notes", "blocker"}}
 	lifecycleUnblock  = writerCommand{command: "unblock", taskFields: []string{"status", "updated_at", "implementation_notes"}}
+	lifecycleRelease  = writerCommand{command: "task release", taskFields: []string{"status", "updated_at", "implementation_notes"}}
 	// Verify records its immutable identity tuple without changing lifecycle
 	// status; its follow-up publication is owned by verify_tx.go.
 	lifecycleVerify = writerCommand{command: "verify", taskFields: []string{"updated_at", "implementation_notes", "completion_id", "last_verification_id", "last_verification_previous_id", "last_verification_result", "last_verified_at", "last_verified_completion_id"}}
@@ -98,11 +99,12 @@ func (s *Service) beginWriterWrite(w writerCommand, selectedTask string, writes 
 // the baseline is what "the candidate introduced nothing new" is measured
 // against.
 type lifecycleLedger struct {
-	state    *State
-	task     *Task
-	preview  []*Task
-	corpus   []string
-	baseline ValidationResult
+	state            *State
+	task             *Task
+	preview          []*Task
+	corpus           []string
+	baseline         ValidationResult
+	taskSHA256Before string
 }
 
 // candidateIntroducesViolations reports whether the candidate verdict contains
@@ -165,11 +167,12 @@ func (s *Service) commitLifecycle(own repotx.Ownership, w writerCommand, ledger 
 	}
 
 	request := repotx.Request{
-		Command:      w.command,
-		SelectedTask: selectedTask,
-		TaskFields:   w.taskFields,
-		Consumed:     consumed,
-		Published:    published,
+		Command:                w.command,
+		SelectedTask:           selectedTask,
+		TaskFields:             w.taskFields,
+		Consumed:               consumed,
+		Published:              published,
+		ExpectedOriginalSHA256: expectedLifecycleTaskDigest(ledger),
 		Validate: func([]repotx.Snapshot) error {
 			if testHookWriterValidated != nil {
 				testHookWriterValidated()
@@ -197,6 +200,13 @@ func (s *Service) commitLifecycle(own repotx.Ownership, w writerCommand, ledger 
 		return ValidationResult{}, writerTransactionError(err)
 	}
 	return validation, nil
+}
+
+func expectedLifecycleTaskDigest(ledger lifecycleLedger) map[string]string {
+	if ledger.task == nil || ledger.taskSHA256Before == "" {
+		return nil
+	}
+	return map[string]string{ledger.task.Path: ledger.taskSHA256Before}
 }
 
 func patchCompletionMetadata(data []byte, task *Task) ([]byte, error) {
@@ -321,6 +331,10 @@ func patchLifecycleTask(task *Task, fields map[string]string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	return patchLifecycleTaskBytes(data, task, fields)
+}
+
+func patchLifecycleTaskBytes(data []byte, task *Task, fields map[string]string) ([]byte, error) {
 	frontmatter, rawBody, newline, err := splitTaskDocument(data, task.Frontmatter.ID)
 	if err != nil {
 		return nil, err

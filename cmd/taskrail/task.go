@@ -17,6 +17,7 @@ func newTaskCmd() *cobra.Command {
 	cmd.AddCommand(newTaskShowCmd())
 	cmd.AddCommand(newTaskRenameCmd())
 	cmd.AddCommand(newTaskRepointCmd())
+	cmd.AddCommand(newTaskReleaseCmd())
 	cmd.AddCommand(newTaskDependencyCmd())
 	return cmd
 }

@@ -66,6 +66,9 @@ func Commit(ctx context.Context, own Ownership, req Request) (Result, error) {
 	if err := snapshot(entries); err != nil {
 		return Result{}, err
 	}
+	if err := checkExpectedOriginals(req.ExpectedOriginalSHA256, entries); err != nil {
+		return Result{}, failure(KindConflict, evidence(entries), err)
+	}
 	if req.Validate != nil {
 		preview := evidence(entries)
 		if err := req.Validate(preview); err != nil {
@@ -79,6 +82,26 @@ func Commit(ctx context.Context, own Ownership, req Request) (Result, error) {
 		return Result{}, rollback(root, entries, err)
 	}
 	return Result{Snapshots: evidence(entries)}, nil
+}
+
+func checkExpectedOriginals(expected map[string]string, entries []*entry) error {
+	for path, digest := range expected {
+		matched := false
+		for _, entry := range entries {
+			if entry.path.Reported != path {
+				continue
+			}
+			matched = true
+			if entry.original == nil || entry.original.digest != digest {
+				return fmt.Errorf("expected original bytes for %s changed before transaction snapshot", path)
+			}
+			break
+		}
+		if !matched {
+			return fmt.Errorf("expected original path %s is not part of the transaction", path)
+		}
+	}
+	return nil
 }
 
 // authorize refuses every write outside the ownership's bound before anything is

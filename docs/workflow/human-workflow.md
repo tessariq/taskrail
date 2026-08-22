@@ -84,3 +84,15 @@ frontmatter. It rewrites only `spec_ref`, re-projects `STATE.md`, and re-runs
 title, status, or dependencies, and completed and cancelled tasks are rejected as
 delivered history. Because it writes `STATE.md`, run `git status` afterwards and
 stage the regenerated file with the change.
+
+### Releasing interrupted active work
+
+Use `taskrail task release <id> --reason "..."` only when a direct operator is
+deliberately relinquishing an `in_progress` task for later selection or rework.
+It returns the task to `todo`, records the portable reason in Implementation
+Notes, and clears the matching active pointers. It does not create blocker or
+cancellation history; use `block` for an external impediment and `unblock` to
+resume blocked work. A cancelled task is intentionally abandoned terminal history,
+not a release outcome. Release is a direct-operator recovery action, not automatic
+continuation for an unattended loop. Use `--dry-run` to inspect the same candidate
+without writing.

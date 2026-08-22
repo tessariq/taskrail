@@ -55,6 +55,11 @@ Rules:
 - A direct operator may create a follow-up before completion with `task new`, use
   `verify --create-followup`, or release interrupted active work. A delegated child
   may create follow-ups only through `verify --create-followup` and cannot release.
+- `task release <id> --reason <text>` is direct-operator recovery, never automatic
+  continuation: it returns one consistently pointed-to active task to `todo`
+  without creating blocker or cancellation history. `block` records an impediment,
+  `unblock` resumes blocked work, and cancellation remains deliberate terminal
+  history.
 
 ## Task Identity
 

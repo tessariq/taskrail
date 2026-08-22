@@ -407,6 +407,22 @@ type UnblockResult struct {
 	Validation ValidationResult `json:"validation"`
 }
 
+// ReleaseTaskResult reports the interrupted-work recovery candidate. The task
+// digests bind dry-run and apply output to the exact selected task bytes.
+type ReleaseTaskResult struct {
+	TaskID             string           `json:"task_id"`
+	PriorStatus        string           `json:"prior_status"`
+	Status             string           `json:"status"`
+	Reason             string           `json:"reason"`
+	Applied            bool             `json:"applied"`
+	CurrentTaskBefore  *string          `json:"current_task_before"`
+	CurrentTaskAfter   *string          `json:"current_task_after"`
+	CurrentTaskCleared bool             `json:"current_task_cleared"`
+	TaskSHA256Before   string           `json:"task_sha256_before"`
+	TaskSHA256After    string           `json:"task_sha256_after"`
+	Validation         ValidationResult `json:"validation"`
+}
+
 type VerifyInput struct {
 	TaskID              string
 	Result              string

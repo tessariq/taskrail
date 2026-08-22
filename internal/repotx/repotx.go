@@ -103,6 +103,10 @@ type Request struct {
 	Consumed []Path
 	// Published is the exact write set.
 	Published []Candidate
+	// ExpectedOriginalSHA256 binds a candidate assembled before Commit to the
+	// exact bytes its snapshot must observe. A mismatch is an external write
+	// conflict, not a candidate-validation failure.
+	ExpectedOriginalSHA256 map[string]string
 	// Validate checks the complete candidate before the first write. It receives
 	// the preview snapshot so a validator can reason about exact bytes, and any
 	// error it returns aborts the transaction with nothing written.

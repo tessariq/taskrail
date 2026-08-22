@@ -223,6 +223,31 @@ status mutator and not a bulk migrator. Completed and cancelled tasks are delive
 history and are rejected. Because it re-projects `planning/STATE.md`, run `git
 status` afterwards and stage the regenerated file with the change.
 
+## Releasing interrupted active work
+
+When a direct operator deliberately gives up an interrupted or rework-pending
+active task, release it rather than inventing a blocker or cancelling it:
+
+```sh
+taskrail task release T-217-release-interrupted-active-work-safely --reason "rework the candidate"
+taskrail task release T-217-release-interrupted-active-work-safely --reason "rework the candidate" --dry-run
+```
+
+Release accepts one exact full-ID `in_progress` task and a trimmed portable reason
+of 1 through 512 bytes. It records that reason in Implementation Notes, returns the
+task to `todo`, preserves its completion/verification and loop-policy metadata, and
+clears both active-task fields only when they consistently name the target. The
+candidate reprojects `STATE.md` from the remaining blocker ledger. `--dry-run` is
+read-only and reports its exact selected-task candidate digests; apply reports the
+exact bytes it publishes. The timestamped note means separate invocations can have
+different after digests.
+
+Release is deliberately distinct from `block`, which records a real impediment;
+`unblock`, which resumes an already blocked task; cancelled terminal history; and
+automatic continuation, which never invokes release. Stale, missing, unrelated, or
+contradictory active pointers refuse instead of being cleared, and delegated loop
+children cannot release work.
+
 ## Editing one dependency edge
 
 Use exact full persisted task IDs to apply one accepted dependency-review change:

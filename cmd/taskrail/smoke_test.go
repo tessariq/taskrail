@@ -665,6 +665,28 @@ func TestUnblockCommand(t *testing.T) {
 	}
 }
 
+func TestTaskReleaseCommand(t *testing.T) {
+	root := setupRepo(t)
+	writeTask(t, root, "T-100", "todo", "")
+	if out, err := runRoot(t, "start", "T-100"); err != nil {
+		t.Fatalf("start: %v (output %q)", err, out)
+	}
+	preview, err := runRoot(t, "task", "release", "T-100", "--reason", "rework", "--dry-run", "--json")
+	if err != nil {
+		t.Fatalf("release dry run: %v (output %q)", err, preview)
+	}
+	if !strings.Contains(preview, `"applied": false`) || !strings.Contains(preview, `"status": "todo"`) {
+		t.Fatalf("unexpected release preview: %q", preview)
+	}
+	out, err := runRoot(t, "task", "release", "T-100", "--reason", "rework", "--json")
+	if err != nil {
+		t.Fatalf("release apply: %v (output %q)", err, out)
+	}
+	if !strings.Contains(out, `"current_task_cleared": true`) {
+		t.Fatalf("release did not report cleared active pointer: %q", out)
+	}
+}
+
 func TestVerifyCommand(t *testing.T) {
 	root := setupRepo(t)
 	writeTask(t, root, "T-100", "todo", "")

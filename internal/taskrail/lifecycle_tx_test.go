@@ -12,12 +12,12 @@ import (
 	"github.com/tessariq/taskrail/internal/repolock"
 )
 
-// The T-233 transactional lifecycle matrix: next, start, complete, block, and
-// unblock must hold the repository mutation lock, publish only their declared
+// The T-233 transactional lifecycle matrix: next, start, complete, block,
+// unblock, and release must hold the repository mutation lock, publish only their declared
 // task/state files, validate the complete candidate before publication, and
 // roll back handled failures while preserving external edits.
 
-var lifecycleCommands = []string{"next", "start", "complete", "block", "unblock"}
+var lifecycleCommands = []string{"next", "start", "complete", "block", "unblock", "release"}
 
 // lifecycleFixture seeds a repo whose T-002 is startable and whose T-009
 // sentinel carries a frontmatter field no Taskrail struct models, so any writer
@@ -59,6 +59,10 @@ func prepareLifecycleCommand(t *testing.T, svc *Service, command string) {
 		if _, err := svc.Block("T-002", "waiting"); err != nil {
 			t.Fatalf("prepare block: %v", err)
 		}
+	case "release":
+		if _, err := svc.Start("T-002"); err != nil {
+			t.Fatalf("prepare start: %v", err)
+		}
 	}
 }
 
@@ -81,6 +85,9 @@ func runOneLifecycleCommand(t *testing.T, svc *Service, command string) error {
 		return err
 	case "unblock":
 		_, err := svc.Unblock("T-002", "recovered")
+		return err
+	case "release":
+		_, err := svc.ReleaseTask(ReleaseTaskInput{TaskID: "T-002", Reason: "rework"})
 		return err
 	default:
 		t.Fatalf("unknown lifecycle command %q", command)
@@ -127,8 +134,12 @@ func TestLifecycleWritersHoldTheMutationLock(t *testing.T) {
 			if !observed.Held || observed.Owner == nil {
 				t.Fatalf("%s completed without holding the repository mutation lock: %+v", command, observed)
 			}
-			if observed.Owner.Command != command {
-				t.Errorf("lock owner command = %q, want %q", observed.Owner.Command, command)
+			wantCommand := command
+			if command == "release" {
+				wantCommand = "task release"
+			}
+			if observed.Owner.Command != wantCommand {
+				t.Errorf("lock owner command = %q, want %q", observed.Owner.Command, wantCommand)
 			}
 			if observed.Owner.PID != os.Getpid() {
 				t.Errorf("lock owner pid = %d, want %d", observed.Owner.PID, os.Getpid())
@@ -165,7 +176,7 @@ func TestLifecycleWritersNeverRewriteUnselectedTasks(t *testing.T) {
 }
 
 func TestLifecycleWritersPreserveSelectedTaskUnknownFrontmatter(t *testing.T) {
-	for _, command := range []string{"start", "complete", "block", "unblock"} {
+	for _, command := range []string{"start", "complete", "block", "unblock", "release"} {
 		t.Run(command, func(t *testing.T) {
 			svc, _ := lifecycleFixture(t)
 			prepareLifecycleCommand(t, svc, command)
@@ -353,7 +364,7 @@ func TestLifecyclePublicationFailureRollsBack(t *testing.T) {
 	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
 		t.Skip("permission-based fault injection is ineffective as root")
 	}
-	for _, command := range []string{"start", "complete", "block", "unblock"} {
+	for _, command := range []string{"start", "complete", "block", "unblock", "release"} {
 		t.Run(command, func(t *testing.T) {
 			svc, repo := lifecycleFixture(t)
 			prepareLifecycleCommand(t, svc, command)

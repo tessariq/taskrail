@@ -6,6 +6,11 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ### Added
 
+- `taskrail task release <task-id> --reason <text>` now safely returns one
+  consistently pointed-to interrupted `in_progress` task to `todo`. Its dry run
+  and apply report exact task candidate digests, preserve task-local metadata and
+  history, append a portable recovery note, and transactionally reproject active
+  state without fabricating blocker or cancellation history.
 - `review publish --type spec` now validates one ignored, manifest-bound
   four-lens proposal against an exact selected spec digest before previewing or
   atomically publishing all five unchanged JSON files into an absent durable
