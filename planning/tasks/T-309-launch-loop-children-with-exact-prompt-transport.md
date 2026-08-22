@@ -1,12 +1,17 @@
 ---
 id: T-309-launch-loop-children-with-exact-prompt-transport
 title: Launch loop children with exact prompt transport
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#cross-platform-autonomous-loop
 dependencies:
     - T-171-contain-and-pin-autonomous-loop-child-processes
-updated_at: "2026-08-08T14:23:09Z"
+updated_at: "2026-08-22T13:22:34Z"
+completion_id: "2a7310f7211a14a0bdd3801d5045c1a0"
+last_verification_id: "c4c21ca25d3c4cf11475b37020c1dd83"
+last_verification_result: pass
+last_verified_at: "2026-08-22T13:22:34Z"
+last_verified_completion_id: "2a7310f7211a14a0bdd3801d5045c1a0"
 ---
 
 # T-309-launch-loop-children-with-exact-prompt-transport Launch loop children with exact prompt transport
@@ -53,3 +58,6 @@ adding process-tree containment or postflight classification.
   distinct evidence and prove no retry or second launch.
 
 ## Implementation Notes
+
+- 2026-08-22T13:22:33Z: Implemented the generic foreground launcher with exact prompt, identity, cwd, argv, and stream transport.
+- 2026-08-22T13:22:34Z: verification pass id c4c21ca25d3c4cf11475b37020c1dd83 previous none completion 2a7310f7211a14a0bdd3801d5045c1a0
