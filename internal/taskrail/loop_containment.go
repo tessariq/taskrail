@@ -5,11 +5,14 @@ import "os/exec"
 // loopChildContainmentEvidence records only processes the platform can observe.
 // A child that deliberately escapes its process group is outside this boundary.
 type loopChildContainmentEvidence struct {
+	Platform              string
 	ProcessGroup          int
 	NormalDrain           bool
 	TerminationRequested  bool
 	ForcedTermination     bool
 	Survivors             bool
+	SurvivorPIDs          []int
+	InspectionError       string
 	ObservationLimitation string
 	leaderReaped          bool
 	leaderExitCode        int

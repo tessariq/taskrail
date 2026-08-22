@@ -83,7 +83,7 @@ func (c *unixLoopChildContainment) signal(err error) string {
 
 func (c *unixLoopChildContainment) cleanup() (loopChildContainmentEvidence, error) {
 	if c.processGroup == 0 {
-		return c.evidence(), fmt.Errorf("child process group was not established")
+		return c.evidence(), nil
 	}
 	alive, err := unixProcessGroupExists(c.processGroup)
 	if err != nil {

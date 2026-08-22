@@ -74,24 +74,26 @@ func launchLoopChild(input loopChildLaunch) (loopChildExecution, error) {
 	containment.configure(child)
 	stdin, err := child.StdinPipe()
 	if err != nil {
-		return loopChildExecution{}, fmt.Errorf("open child stdin: %w", err)
+		return loopChildExecution{}, closeLoopChildContainment(containment, fmt.Errorf("open child stdin: %w", err))
 	}
 	childStdout, err := child.StdoutPipe()
 	if err != nil {
 		_ = stdin.Close()
-		return loopChildExecution{}, fmt.Errorf("open child stdout: %w", err)
+		return loopChildExecution{}, closeLoopChildContainment(containment, fmt.Errorf("open child stdout: %w", err))
 	}
 	childStderr, err := child.StderrPipe()
 	if err != nil {
 		_ = stdin.Close()
 		_ = childStdout.Close()
-		return loopChildExecution{}, fmt.Errorf("open child stderr: %w", err)
+		return loopChildExecution{}, closeLoopChildContainment(containment, fmt.Errorf("open child stderr: %w", err))
 	}
 	if err := child.Start(); err != nil {
 		_ = stdin.Close()
 		_ = childStdout.Close()
 		_ = childStderr.Close()
-		return loopChildExecution{SpawnError: err}, nil
+		execution := loopChildExecution{SpawnError: err}
+		cleanupLoopChildContainment(&execution, containment)
+		return execution, nil
 	}
 
 	execution := loopChildExecution{PID: child.Process.Pid}
@@ -99,6 +101,9 @@ func launchLoopChild(input loopChildLaunch) (loopChildExecution, error) {
 	execution.Containment = containmentEvidence
 	if err != nil {
 		execution.ContainmentError = err
+		if killErr := child.Process.Kill(); killErr != nil && !errors.Is(killErr, os.ErrProcessDone) {
+			execution.ContainmentError = errors.Join(execution.ContainmentError, killErr)
+		}
 		cleanupLoopChildContainment(&execution, containment)
 		if execution.Containment.leaderReaped {
 			execution.ExitCode = &execution.Containment.leaderExitCode
@@ -262,8 +267,13 @@ func cleanupLoopChildContainment(execution *loopChildExecution, containment loop
 	evidence, err := containment.cleanup()
 	execution.Containment = evidence
 	if err != nil {
-		execution.ContainmentError = err
+		execution.ContainmentError = errors.Join(execution.ContainmentError, err)
 	}
+}
+
+func closeLoopChildContainment(containment loopChildContainment, cause error) error {
+	_, cleanupErr := containment.cleanup()
+	return errors.Join(cause, cleanupErr)
 }
 
 func writeLoopChildPrompt(stdin io.WriteCloser, prompt []byte) error {

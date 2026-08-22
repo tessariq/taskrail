@@ -1,12 +1,18 @@
 ---
 id: T-310-contain-loop-process-trees-on-windows
 title: Contain loop process trees on Windows
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#cross-platform-autonomous-loop
 dependencies:
     - T-309-launch-loop-children-with-exact-prompt-transport
-updated_at: "2026-08-08T14:23:09Z"
+updated_at: "2026-08-22T14:48:30Z"
+completion_id: "95c12097e4c97511bb9e6b0cfb6c8df7"
+last_verification_id: "3fbf610164921350f7ecc332e816951d"
+last_verification_result: pass
+last_verified_at: "2026-08-22T14:48:30Z"
+last_verified_completion_id: "95c12097e4c97511bb9e6b0cfb6c8df7"
+last_verification_previous_id: "3c6b13fc83d65a1d3e67f5972498a28a"
 ---
 
 # T-310-contain-loop-process-trees-on-windows Contain loop process trees on Windows
@@ -47,3 +53,9 @@ control over permitted or undetectable breakaway processes.
   native Windows CI lane, without treating Wine or Unix emulation as sufficient.
 
 ## Implementation Notes
+
+- 2026-08-22T14:00:32Z: Added Windows Job Object containment with bounded cleanup evidence.
+- 2026-08-22T14:00:44Z: verification pass id 61be6852244ff4475fe304bddde7f5bf previous none completion 95c12097e4c97511bb9e6b0cfb6c8df7
+- 2026-08-22T14:28:00Z: Integrated the verified Windows implementation with the Unix containment evidence and lifecycle contract from T-243.
+- 2026-08-22T14:36:07Z: verification pass id 3c6b13fc83d65a1d3e67f5972498a28a previous 61be6852244ff4475fe304bddde7f5bf completion 95c12097e4c97511bb9e6b0cfb6c8df7
+- 2026-08-22T14:48:30Z: verification pass id 3fbf610164921350f7ecc332e816951d previous 3c6b13fc83d65a1d3e67f5972498a28a completion 95c12097e4c97511bb9e6b0cfb6c8df7
