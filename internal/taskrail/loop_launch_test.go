@@ -55,9 +55,7 @@ func TestLoopLaunchChildTransportsExactPromptAndIdentity(t *testing.T) {
 			if got := string(readBytes(t, record+".stdin")); !bytes.Equal([]byte(got), prompt) {
 				t.Fatalf("stdin = %q, want %q", got, prompt)
 			}
-			if got := string(readBytes(t, record+".cwd")); got != repository {
-				t.Fatalf("cwd = %q, want %q", got, repository)
-			}
+			assertLoopWorkingDirectory(t, string(readBytes(t, record+".cwd")), repository)
 			if got := string(readBytes(t, record+".pid")); got != strconv.Itoa(execution.PID) || execution.PID <= 0 {
 				t.Fatalf("child pid = %q, launch pid = %d", got, execution.PID)
 			}
@@ -91,20 +89,31 @@ func TestLoopLaunchChildResolvesSeparatorPathBeforeRepositoryCWD(t *testing.T) {
 	t.Setenv("GO_WANT_LOOP_CHILD", "1")
 	caller := t.TempDir()
 	repository := t.TempDir()
-	child := filepath.Join(caller, "child")
+	name := "child"
+	if runtime.GOOS == "windows" {
+		name += ".exe"
+	}
+	child := filepath.Join(caller, name)
 	copyLoopHelper(t, child)
 	t.Chdir(caller)
 	record := filepath.Join(t.TempDir(), "record")
 
 	execution, err := launchLoopChild(loopChildLaunch{
-		Command:        []string{"./child", "-test.run=^TestLoopLaunchChildHelper$", "--", "observe", record},
+		Command:        []string{"./" + name, "-test.run=^TestLoopLaunchChildHelper$", "--", "observe", record},
 		RepositoryRoot: repository, Identity: loopChildIdentity{Executable: "/staged/taskrail", SHA256: "digest", InvocationID: "id", Token: "token"},
 	})
 	if err != nil || execution.Failed() {
 		t.Fatalf("launchLoopChild = %+v, %v", execution, err)
 	}
-	if got := string(readBytes(t, record+".cwd")); got != repository {
-		t.Fatalf("cwd = %q, want %q", got, repository)
+	assertLoopWorkingDirectory(t, string(readBytes(t, record+".cwd")), repository)
+}
+
+func assertLoopWorkingDirectory(t *testing.T, got, want string) {
+	t.Helper()
+	gotInfo, gotErr := os.Stat(got)
+	wantInfo, wantErr := os.Stat(want)
+	if gotErr != nil || wantErr != nil || !os.SameFile(gotInfo, wantInfo) {
+		t.Fatalf("cwd = %q, want filesystem identity %q (errors: %v, %v)", got, want, gotErr, wantErr)
 	}
 }
 
