@@ -266,6 +266,10 @@ frontmatter. Omitting both means an implicit hold with reason
 or malformed pairs. Lifecycle and task writers preserve explicit policy metadata,
 and `STATE.md` does not duplicate it.
 
+Use `taskrail task loop list [--json]` to inspect every task's effective loop
+policy, held dependency closure, and unattended eligibility without changing
+task files, `STATE.md`, or ordinary lifecycle selection.
+
 Let Taskrail pick the next eligible task, start it, and advance it:
 
 ```sh

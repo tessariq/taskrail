@@ -11,6 +11,11 @@ All notable user-visible changes to Taskrail will be documented in this file.
   and apply report exact task candidate digests, preserve task-local metadata and
   history, append a portable recovery note, and transactionally reproject active
   state without fabricating blocker or cancellation history.
+- `taskrail task loop list [--json]` now reports every decodable task's
+  effective loop policy, held dependency closure, and unattended eligibility in
+  stable ID order. Invalid repositories return deterministic partial rows and
+  path-bearing violations without changing task files, `STATE.md`, or ordinary
+  lifecycle selection.
 - `review publish --type spec` now validates one ignored, manifest-bound
   four-lens proposal against an exact selected spec digest before previewing or
   atomically publishing all five unchanged JSON files into an absent durable

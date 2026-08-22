@@ -49,9 +49,9 @@ type MachineErrorDetails struct {
 }
 
 type MachineViolation struct {
-	Code    string
-	Message string
-	Path    *string
+	Code    string  `json:"code"`
+	Message string  `json:"message"`
+	Path    *string `json:"path"`
 }
 
 // MachineSnapshot is the common snapshot shape. Its JSON tags are the wire

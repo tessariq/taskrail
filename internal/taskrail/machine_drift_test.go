@@ -77,11 +77,11 @@ func TestCheckMachineEntryPolicyRejectsPerturbedEntries(t *testing.T) {
 		{
 			name: "planned command claiming implemented coverage",
 			entry: func() MachineCommandEntry {
-				e := entry("task loop list")
+				e := entry("task loop allow")
 				e.JSONState = MachineJSONInherited
 				return e
 			}(),
-			wantErr: `command "task loop list" publishes "inherited" but is not constructed`,
+			wantErr: `command "task loop allow" publishes "inherited" but is not constructed`,
 		},
 		{
 			name: "ungated command claiming a report-result exit exception",
@@ -134,7 +134,7 @@ var migratedCommands = []string{
 	"block", "complete", "coverage", "import", "init", "lock clear", "lock status",
 	"local path", "local status", "next", "recover", "repair", "retrofit",
 	"prompt list", "prompt render", "prompt show", "review publish", "review show", "spec activate", "spec add", "spec diff", "spec list", "spec show", "start",
-	"stats", "status", "task new", "task rename", "task repoint", "task release", "task show", "unblock",
+	"stats", "status", "task new", "task rename", "task repoint", "task release", "task show", "task loop list", "unblock",
 	"task dependency add", "task dependency remove", "validate", "verify",
 }
 
@@ -203,9 +203,9 @@ func TestCheckMachineRegistrationsRejectsDrift(t *testing.T) {
 		{
 			name: "planned command masquerading as implemented",
 			mutate: func(registrations []MachineRegistration) []MachineRegistration {
-				return append(registrations, MachineRegistration{Command: "task loop list", Surface: MachineSurfaceStdout})
+				return append(registrations, MachineRegistration{Command: "task loop allow", Surface: MachineSurfaceStdout})
 			},
-			wantErr: `"task loop list stdout" publishes no machine document yet`,
+			wantErr: `"task loop allow stdout" publishes no machine document yet`,
 		},
 	}
 	for _, tc := range cases {
@@ -414,12 +414,12 @@ func TestCheckMachinePublicationRejectsDrift(t *testing.T) {
 		{
 			name: "planned command publishing early",
 			publication: MachinePublication{
-				Command:  "task loop list",
+				Command:  "task loop allow",
 				Surface:  MachineSurfaceStdout,
-				Result:   "TaskLoopListResult",
-				Document: machineDocumentBytes("task loop list", "[]", `"result":{}`),
+				Result:   "LoopPolicyMutationResult",
+				Document: machineDocumentBytes("task loop allow", "[]", `"result":{}`),
 			},
-			wantErr: `"task loop list stdout" publishes no machine document yet`,
+			wantErr: `"task loop allow stdout" publishes no machine document yet`,
 		},
 	}
 	for _, tc := range cases {

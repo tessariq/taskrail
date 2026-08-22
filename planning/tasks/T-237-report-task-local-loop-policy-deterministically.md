@@ -1,13 +1,18 @@
 ---
 id: T-237-report-task-local-loop-policy-deterministically
 title: Report task-local loop policy deterministically
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#task-local-loop-policy
 dependencies:
     - T-168-parse-and-validate-an-optional-autonomous-run
     - T-213-define-the-uniform-agent-machine-api
-updated_at: "2026-08-06T13:46:30Z"
+updated_at: "2026-08-22T09:54:55Z"
+completion_id: "6ebfb16898a2ad067d181c2df0712054"
+last_verification_id: "775094e1c5a6a6623cfff9c2a0882fa2"
+last_verification_result: pass
+last_verified_at: "2026-08-22T09:54:55Z"
+last_verified_completion_id: "6ebfb16898a2ad067d181c2df0712054"
 ---
 
 # T-237-report-task-local-loop-policy-deterministically Report task-local loop policy deterministically
@@ -34,3 +39,6 @@ validated policy model without inventing rows for undecodable files.
 - A3: repository/Git snapshots before and after list prove zero writes.
 
 ## Implementation Notes
+
+- 2026-08-22T09:54:39Z: Implemented deterministic read-only task loop policy reporting with partial invalid diagnostics.
+- 2026-08-22T09:54:55Z: verification pass id 775094e1c5a6a6623cfff9c2a0882fa2 previous none completion 6ebfb16898a2ad067d181c2df0712054

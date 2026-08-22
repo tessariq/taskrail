@@ -266,7 +266,7 @@ var machineInventory = []MachineCommandEntry{
 		warns(), errs(dependencyErrors)),
 	migrated("`task dependency remove`", "task dependency remove", []string{"DependencyResult"}, "never",
 		warns(), errs(dependencyErrors)),
-	planned("`task loop list`", "task loop list", []string{"TaskLoopListResult"}, "non-empty `violations`",
+	migrated("`task loop list`", "task loop list", []string{"TaskLoopListResult"}, "non-empty `violations`",
 		warns(), errs(readErrors)),
 	planned("`task loop allow`", "task loop allow", []string{"LoopPolicyMutationResult"}, "never",
 		warns(warnsBootstrap), errs(lifecycleErrors, "invalid_reason", "policy_invalid")),

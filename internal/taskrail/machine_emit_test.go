@@ -202,10 +202,10 @@ func TestEmitMachineDocumentRefusesBeforeEmission(t *testing.T) {
 			wantErr: `no schema-1 machine contract for "version stdout"`,
 		},
 		{
-			name: "command that publishes no machine document yet",
+			name: "planned command that publishes no machine document yet",
 			outcome: MachineOutcome{
-				Command: "task loop list", Surface: MachineSurfaceStdout,
-				Result: &MachineResult{Shape: "TaskLoopListResult", Value: map[string]any{}},
+				Command: "task loop allow", Surface: MachineSurfaceStdout,
+				Result: &MachineResult{Shape: "LoopPolicyMutationResult", Value: map[string]any{}},
 			},
 			wantErr: `publishes no machine document yet`,
 		},

@@ -465,12 +465,12 @@ func TestMachineInventoryClassifiesConstructedCommands(t *testing.T) {
 	for _, entry := range MachineCommandInventory() {
 		origins[entry.CompanionRow] = entry.Origin
 	}
-	for _, row := range []string{"`validate`", "`status`", "`task new`", "`spec activate`", "`local status`", "`local path`", "`prompt list`", "`prompt show`", "`prompt render`", "`review publish`"} {
+	for _, row := range []string{"`validate`", "`status`", "`task new`", "`task loop list`", "`spec activate`", "`local status`", "`local path`", "`prompt list`", "`prompt show`", "`prompt render`", "`review publish`"} {
 		if origins[row] != MachineOriginConstructed {
 			t.Errorf("%s is built by the current CLI, inventory says %q", row, origins[row])
 		}
 	}
-	for _, row := range []string{"`task loop list`", "`loop` dry-run"} {
+	for _, row := range []string{"`task loop allow`", "`loop` dry-run"} {
 		if origins[row] != MachineOriginPlanned {
 			t.Errorf("%s is not built by the current CLI, inventory says %q", row, origins[row])
 		}

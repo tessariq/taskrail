@@ -19,6 +19,7 @@ func newTaskCmd() *cobra.Command {
 	cmd.AddCommand(newTaskRepointCmd())
 	cmd.AddCommand(newTaskReleaseCmd())
 	cmd.AddCommand(newTaskDependencyCmd())
+	cmd.AddCommand(newTaskLoopCmd())
 	return cmd
 }
 
