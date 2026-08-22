@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"maps"
 	"path"
 	"path/filepath"
 	"strings"
@@ -64,6 +65,51 @@ type PromptContentResult struct {
 	Content         string  `json:"content"`
 	SHA256          string  `json:"sha256"`
 	TemplateSHA256  string  `json:"template_sha256"`
+}
+
+// PromptRenderCommandInput contains the complete command context before it is
+// resolved into strictly declared template values.
+type PromptRenderCommandInput struct {
+	ID                   string
+	Contract             string
+	Task                 string
+	Spec                 string
+	SpecReviewPath       string
+	DraftPath            string
+	TracePath            string
+	MemoryPath           string
+	ReviewPath           string
+	MaxReviewRounds      int
+	MaxReviewRoundsIsSet bool
+}
+
+type promptTransientRequirement struct {
+	role         string
+	proposalType string
+}
+
+var promptTokenDeclarations = map[string][]string{
+	"task-implementation":            {"TASK_ID", "TASK_PATH", "ACTIVE_SPEC_VERSION", "ACTIVE_SPEC_PATH", "IMPLEMENTATION_REVIEW_MAX_ROUNDS", "STORAGE_MODE"},
+	"task-authoring":                 {"TASK_ID", "TASK_PATH", "SPEC_VERSION", "SPEC_PATH"},
+	"task-review":                    {"TASK_ID", "TASK_PATH", "SPEC_VERSION", "SPEC_PATH", PromptContextReviewPath},
+	"spec-consistency":               {"SPEC_VERSION", "SPEC_PATH", PromptContextReviewPath},
+	"spec-gaps":                      {"SPEC_VERSION", "SPEC_PATH", PromptContextReviewPath},
+	"spec-additions":                 {"SPEC_VERSION", "SPEC_PATH", PromptContextReviewPath},
+	"spec-adversarial":               {"SPEC_VERSION", "SPEC_PATH", PromptContextReviewPath},
+	"task-decomposition":             {"SPEC_VERSION", "SPEC_PATH", "SPEC_REVIEW_PATH", PromptContextTracePath, PromptContextDraftPath},
+	"task-decomposition-adversarial": {"SPEC_VERSION", "SPEC_PATH", "SPEC_REVIEW_PATH", PromptContextTracePath, PromptContextDraftPath, PromptContextReviewPath},
+	"workflow-adversarial":           {"SPEC_VERSION", "SPEC_PATH", "MEMORY_PATH", PromptContextReviewPath},
+}
+
+var promptTransientRequirementsByID = map[string][]promptTransientRequirement{
+	"task-review":                    {{PromptContextReviewPath, "task"}},
+	"spec-consistency":               {{PromptContextReviewPath, "spec"}},
+	"spec-gaps":                      {{PromptContextReviewPath, "spec"}},
+	"spec-additions":                 {{PromptContextReviewPath, "spec"}},
+	"spec-adversarial":               {{PromptContextReviewPath, "spec"}},
+	"task-decomposition":             {{PromptContextTracePath, "decomposition"}, {PromptContextDraftPath, "decomposition"}},
+	"task-decomposition-adversarial": {{PromptContextTracePath, "decomposition"}, {PromptContextDraftPath, "decomposition"}, {PromptContextReviewPath, "decomposition"}},
+	"workflow-adversarial":           {{PromptContextReviewPath, "workflow-adversarial"}},
 }
 
 // PromptRenderInput is the storage-neutral data needed to render one template.
@@ -221,6 +267,115 @@ func (s *Service) PromptShow(input PromptShowInput) (PromptContentResult, error)
 	return stableRead(func() (PromptContentResult, error) {
 		return s.promptShowSnapshot(definition, input.Builtin)
 	})
+}
+
+// PromptRender resolves every managed and transient subject twice before
+// publishing, so one rendered prompt cannot combine mismatched snapshots.
+func (s *Service) PromptRender(input PromptRenderCommandInput) (PromptContentResult, error) {
+	if err := s.paths.ensureStorageCapability(); err != nil {
+		return PromptContentResult{}, err
+	}
+	definition, err := promptDefinitionFor(input.ID, input.Contract)
+	if err != nil {
+		return PromptContentResult{}, err
+	}
+	managed := PromptManagedContextInput{
+		ID: definition.id, Task: input.Task, Spec: input.Spec,
+		SpecReviewPath: input.SpecReviewPath, MemoryPath: input.MemoryPath,
+	}
+	transient, rounds, err := validatePromptRenderInput(input, managed)
+	if err != nil {
+		return PromptContentResult{}, WithMachineErrorCode(MachineCodePromptInvalid, err)
+	}
+	type snapshot struct {
+		result    PromptContentResult
+		managed   PromptManagedContext
+		transient TransientPromptPathAuthorization
+	}
+	resolved, err := stableRead(func() (snapshot, error) {
+		template, err := s.promptShowSnapshot(definition, false)
+		if err != nil {
+			return snapshot{}, err
+		}
+		context, err := s.resolvePromptManagedContext(managed, promptManagedContextRequirementsByID[definition.id])
+		if err != nil {
+			return snapshot{}, err
+		}
+		authorization := TransientPromptPathAuthorization{}
+		if len(transient) > 0 {
+			authorization, err = s.AuthorizeTransientPromptPaths(transient)
+			if err != nil {
+				return snapshot{}, err
+			}
+		}
+		values := maps.Clone(context.Values)
+		if definition.id == "task-implementation" {
+			values["IMPLEMENTATION_REVIEW_MAX_ROUNDS"] = fmt.Sprintf("%d", rounds)
+		}
+		for _, authorized := range authorization.Paths {
+			values[authorized.Role] = authorized.Path
+		}
+		rendered, err := RenderPrompt(PromptRenderInput{
+			Template: []byte(template.Content), DeclaredTokens: promptTokenDeclarations[definition.id], Values: values,
+		})
+		if err != nil {
+			return snapshot{}, WithMachineErrorCode(MachineCodePromptInvalid, err)
+		}
+		template.Content = rendered.Content
+		template.SHA256 = rendered.SHA256
+		template.TemplateSHA256 = rendered.TemplateSHA256
+		return snapshot{result: template, managed: context, transient: authorization}, nil
+	})
+	if err != nil {
+		return PromptContentResult{}, normalizePromptRenderError(err)
+	}
+	return resolved.result, nil
+}
+
+func normalizePromptRenderError(err error) error {
+	switch MachineFailureFor(err).Code {
+	case MachineCodeReviewNotFound, MachineCodeWriteConflict:
+		return WithMachineErrorCode(MachineCodePromptInvalid, err)
+	default:
+		return err
+	}
+}
+
+func validatePromptRenderInput(input PromptRenderCommandInput, managed PromptManagedContextInput) ([]TransientPromptPath, int, error) {
+	if err := validatePromptManagedContextInput(managed, promptManagedContextRequirementsByID[input.ID]); err != nil {
+		return nil, 0, err
+	}
+	rounds := 1
+	if input.ID != "task-implementation" && input.MaxReviewRoundsIsSet {
+		return nil, 0, invalidArgumentsf("--max-review-rounds is only accepted for task-implementation")
+	}
+	if input.ID == "task-implementation" && input.MaxReviewRoundsIsSet {
+		if input.MaxReviewRounds < 1 || input.MaxReviewRounds > 2 {
+			return nil, 0, invalidArgumentsf("--max-review-rounds must be between 1 and 2")
+		}
+		rounds = input.MaxReviewRounds
+	}
+	values := map[string]string{
+		PromptContextReviewPath: input.ReviewPath,
+		PromptContextDraftPath:  input.DraftPath,
+		PromptContextTracePath:  input.TracePath,
+	}
+	requirements := promptTransientRequirementsByID[input.ID]
+	paths := make([]TransientPromptPath, 0, len(requirements))
+	for _, requirement := range requirements {
+		value := values[requirement.role]
+		if value == "" {
+			return nil, 0, invalidArgumentsf("prompt %q requires --%s", input.ID, strings.ToLower(strings.TrimSuffix(requirement.role, "_PATH")))
+		}
+		paths = append(paths, TransientPromptPath{Role: requirement.role, ProposalType: requirement.proposalType, Path: value})
+		delete(values, requirement.role)
+	}
+	for role, value := range values {
+		if value != "" {
+			return nil, 0, invalidArgumentsf("prompt %q does not accept --%s", input.ID, strings.ToLower(strings.TrimSuffix(role, "_PATH")))
+		}
+	}
+	return paths, rounds, nil
 }
 
 func (s *Service) promptShowSnapshot(definition promptDefinition, builtinOnly bool) (PromptContentResult, error) {

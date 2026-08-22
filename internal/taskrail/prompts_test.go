@@ -194,6 +194,121 @@ func TestResolvePromptManagedContextUsesActiveStorageAndLogicalPaths(t *testing.
 	}
 }
 
+func TestPromptRenderComposesEveryDeclaredContextWithoutWrites(t *testing.T) {
+	repo := t.TempDir()
+	initLocalGitRepo(t, repo)
+	seedFixtureTree(t, repo)
+	writeTask(t, repo, "T-001-render", "Render", "todo", "high", "specs/v0.1.0.md#summary", nil)
+	writeFile(t, filepath.Join(repo, "planning", "reviews", "spec", "v0.1.0", "session", "review.json"), "review\n")
+	writeFile(t, filepath.Join(repo, "planning", "reviews", "workflow-adversarial", "memory.json"), "memory\n")
+	writeFile(t, filepath.Join(repo, ".git", "info", "exclude"), "planning/artifacts/\n")
+	for _, proposal := range []string{
+		"planning/artifacts/review-proposals/task/task-1",
+		"planning/artifacts/review-proposals/spec/spec-1",
+		"planning/artifacts/review-proposals/decomposition/decomposition-1",
+		"planning/artifacts/review-proposals/workflow-adversarial/workflow-1",
+	} {
+		if err := os.MkdirAll(filepath.Join(repo, filepath.FromSlash(proposal)), 0o755); err != nil {
+			t.Fatalf("create proposal %s: %v", proposal, err)
+		}
+	}
+	svc := newTestService(t, repo, time.Date(2026, 8, 22, 12, 0, 0, 0, time.UTC))
+	before := snapshotTree(t, repo)
+	inputs := []PromptRenderCommandInput{
+		{ID: "task-implementation", Task: "T-001-render"},
+		{ID: "task-authoring", Task: "T-001-render"},
+		{ID: "task-review", Task: "T-001-render", ReviewPath: "planning/artifacts/review-proposals/task/task-1/review.json"},
+		{ID: "spec-consistency", Spec: "v0.1.0", ReviewPath: "planning/artifacts/review-proposals/spec/spec-1/review.json"},
+		{ID: "spec-gaps", Spec: "v0.1.0", ReviewPath: "planning/artifacts/review-proposals/spec/spec-1/gaps.json"},
+		{ID: "spec-additions", Spec: "v0.1.0", ReviewPath: "planning/artifacts/review-proposals/spec/spec-1/additions.json"},
+		{ID: "spec-adversarial", Spec: "v0.1.0", ReviewPath: "planning/artifacts/review-proposals/spec/spec-1/adversarial.json"},
+		{ID: "task-decomposition", Spec: "v0.1.0", SpecReviewPath: "planning/reviews/spec/v0.1.0/session/review.json", TracePath: "planning/artifacts/review-proposals/decomposition/decomposition-1/trace.json", DraftPath: "planning/artifacts/review-proposals/decomposition/decomposition-1/draft.json"},
+		{ID: "task-decomposition-adversarial", Spec: "v0.1.0", SpecReviewPath: "planning/reviews/spec/v0.1.0/session/review.json", TracePath: "planning/artifacts/review-proposals/decomposition/decomposition-1/trace.json", DraftPath: "planning/artifacts/review-proposals/decomposition/decomposition-1/draft.json", ReviewPath: "planning/artifacts/review-proposals/decomposition/decomposition-1/review.json"},
+		{ID: "workflow-adversarial", Spec: "v0.1.0", MemoryPath: "planning/reviews/workflow-adversarial/memory.json", ReviewPath: "planning/artifacts/review-proposals/workflow-adversarial/workflow-1/review.json"},
+	}
+	for _, input := range inputs {
+		result, err := svc.PromptRender(input)
+		if err != nil {
+			t.Fatalf("render %s: %v", input.ID, err)
+		}
+		if strings.Contains(result.Content, "{{") || result.SHA256 == "" || result.TemplateSHA256 == "" {
+			t.Fatalf("render %s = %+v", input.ID, result)
+		}
+	}
+	if after := snapshotTree(t, repo); !reflect.DeepEqual(before, after) {
+		t.Fatal("prompt rendering changed repository bytes")
+	}
+}
+
+func TestPromptRenderRejectsUndeclaredContextAndSnapshotChanges(t *testing.T) {
+	repo := seedFixtureRepo(t)
+	writeTask(t, repo, "T-001-render", "Render", "todo", "high", "specs/v0.1.0.md#summary", nil)
+	svc := newTestService(t, repo, time.Date(2026, 8, 22, 12, 0, 0, 0, time.UTC))
+	for _, input := range []PromptRenderCommandInput{
+		{ID: "task-authoring", Task: "T-001-render", MaxReviewRounds: 2, MaxReviewRoundsIsSet: true},
+		{ID: "task-implementation", Task: "T-001-render", MaxReviewRounds: 0, MaxReviewRoundsIsSet: true},
+		{ID: "task-implementation", Task: "T-001-render", ReviewPath: "planning/artifacts/review-proposals/task/task-1/review.json"},
+		{ID: "task-review", Task: "T-001-render"},
+	} {
+		if _, err := svc.PromptRender(input); MachineFailureFor(err).Code != MachineCodePromptInvalid {
+			t.Fatalf("render %#v error = %v, code = %q", input, err, MachineFailureFor(err).Code)
+		}
+	}
+	testHookReadOnlyRecheck = func() {
+		path := filepath.Join(repo, "planning", "tasks", "T-001-render.md")
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		writeFile(t, path, strings.Replace(string(data), "# T-001-render Render", "# T-001-render Render\n\nChanged body.", 1))
+	}
+	t.Cleanup(func() { testHookReadOnlyRecheck = nil })
+	if _, err := svc.PromptRender(PromptRenderCommandInput{ID: "task-authoring", Task: "T-001-render"}); MachineFailureFor(err).Code != MachineCodePromptInvalid {
+		t.Fatalf("snapshot change error = %v, code = %q", err, MachineFailureFor(err).Code)
+	}
+}
+
+func TestPromptRenderUsesLogicalManagedContextAndRejectsInvalidReplacement(t *testing.T) {
+	committed, committedBefore := storageNeutralService(t, committedStorage(), false)
+	local, _ := storageNeutralService(t, localStorage(), false)
+	initLocalGitRepo(t, local.paths.RepoRoot)
+	local.paths.WorktreeRoot = local.paths.RepoRoot
+	writeFile(t, filepath.Join(local.paths.RepoRoot, ".git", "info", "exclude"), ".taskrail/local/\n")
+	localBefore := snapshotTree(t, local.paths.RepoRoot)
+	for _, test := range []struct {
+		name string
+		svc  *Service
+		mode string
+	}{
+		{"committed", committed, "committed"},
+		{"local", local, "local"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			result, err := test.svc.PromptRender(PromptRenderCommandInput{ID: "task-implementation", Task: "T-001-local"})
+			if err != nil {
+				t.Fatalf("render: %v", err)
+			}
+			if result.Source != "builtin" || !strings.Contains(result.Content, "storage mode is "+test.mode) || strings.Contains(result.Content, ".taskrail/local/") {
+				t.Fatalf("storage-neutral render = %+v", result)
+			}
+		})
+	}
+	if got := snapshotTree(t, committed.paths.RepoRoot); !reflect.DeepEqual(got, committedBefore) {
+		t.Fatal("committed render changed fixture bytes")
+	}
+	if got := snapshotTree(t, local.paths.RepoRoot); !reflect.DeepEqual(got, localBefore) {
+		t.Fatal("local render changed fixture bytes")
+	}
+
+	repo := seedFixtureRepo(t)
+	writeTask(t, repo, "T-001-render", "Render", "todo", "high", "specs/v0.1.0.md#summary", nil)
+	writeFile(t, filepath.Join(repo, ".taskrail", "prompts", "v1", "task-authoring.md"), "\xef\xbb\xbfnot a usable replacement")
+	svc := newTestService(t, repo, time.Date(2026, 8, 22, 12, 0, 0, 0, time.UTC))
+	if _, err := svc.PromptRender(PromptRenderCommandInput{ID: "task-authoring", Task: "T-001-render"}); MachineFailureFor(err).Code != MachineCodePromptInvalid {
+		t.Fatalf("invalid replacement error = %v, code = %q", err, MachineFailureFor(err).Code)
+	}
+}
+
 func TestResolvePromptManagedContextValidatesSubjectsAndReadsDurableReviews(t *testing.T) {
 	repo := seedFixtureRepo(t)
 	writeTask(t, repo, "T-001-subject", "Subject", "todo", "high", "specs/v0.1.0.md#summary", nil)

@@ -19,7 +19,8 @@ type PromptManagedContextInput struct {
 // PromptManagedContext contains logical placeholder values resolved through the
 // active storage context. Callers combine it with authorized transient values.
 type PromptManagedContext struct {
-	Values map[string]string
+	Values    map[string]string
+	Snapshots map[string]string
 }
 
 type promptManagedContextRequirements struct {
@@ -87,6 +88,7 @@ func requiredPrefix(required bool) string {
 
 func (s *Service) resolvePromptManagedContext(input PromptManagedContextInput, requirements promptManagedContextRequirements) (PromptManagedContext, error) {
 	values := make(map[string]string)
+	snapshots := make(map[string]string)
 	var spec SpecShowResult
 	if requirements.task {
 		task, err := s.TaskShow(input.Task)
@@ -110,6 +112,7 @@ func (s *Service) resolvePromptManagedContext(input PromptManagedContextInput, r
 		}
 		values["TASK_ID"] = task.TaskID
 		values["TASK_PATH"] = task.TaskPath
+		snapshots["task:"+task.TaskPath] = task.SHA256
 	}
 	if requirements.spec {
 		var err error
@@ -126,9 +129,13 @@ func (s *Service) resolvePromptManagedContext(input PromptManagedContextInput, r
 		values["ACTIVE_SPEC_VERSION"] = active.Version
 		values["ACTIVE_SPEC_PATH"] = active.Path
 		values["STORAGE_MODE"] = string(s.paths.Storage.Mode)
+		snapshots["spec:"+active.Path] = promptDigest([]byte(active.Content))
 	} else if requirements.task || requirements.spec {
 		values["SPEC_VERSION"] = spec.Version
 		values["SPEC_PATH"] = spec.Path
+	}
+	if requirements.task || requirements.spec {
+		snapshots["spec:"+spec.Path] = promptDigest([]byte(spec.Content))
 	}
 	if requirements.specReview {
 		review, err := s.ReviewShow(input.SpecReviewPath)
@@ -136,6 +143,7 @@ func (s *Service) resolvePromptManagedContext(input PromptManagedContextInput, r
 			return PromptManagedContext{}, err
 		}
 		values["SPEC_REVIEW_PATH"] = review.Path
+		snapshots["review:"+review.Path] = review.SHA256
 	}
 	if requirements.memory {
 		review, err := s.ReviewShow(input.MemoryPath)
@@ -143,8 +151,9 @@ func (s *Service) resolvePromptManagedContext(input PromptManagedContextInput, r
 			return PromptManagedContext{}, err
 		}
 		values["MEMORY_PATH"] = review.Path
+		snapshots["review:"+review.Path] = review.SHA256
 	}
-	return PromptManagedContext{Values: values}, nil
+	return PromptManagedContext{Values: values, Snapshots: snapshots}, nil
 }
 
 func (s *Service) resolvePromptSpec(subject string) (SpecShowResult, error) {

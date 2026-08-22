@@ -1,7 +1,9 @@
 package main
 
 import (
+	"crypto/sha256"
 	"encoding/json"
+	"fmt"
 	"maps"
 	"os"
 	"path/filepath"
@@ -65,5 +67,54 @@ func TestPromptShowTextPreservesExactReplacementBytes(t *testing.T) {
 	}
 	if stdout != replacement {
 		t.Fatalf("prompt show bytes = %q, want %q", stdout, replacement)
+	}
+}
+
+func TestPromptRenderPublishesExactReadOnlyContent(t *testing.T) {
+	root := seedTodo(t)
+	before := snapshotTree(t, root)
+
+	text, err := runRoot(t, "prompt", "render", "task-implementation", "--task", "T-100")
+	if err != nil {
+		t.Fatalf("render task implementation: %v (output %q)", err, text)
+	}
+	if strings.Contains(text, "{{") || !strings.Contains(text, "T-100") || !strings.Contains(text, "maximum is 1") {
+		t.Fatalf("rendered text = %q", text)
+	}
+	if out, err := runRoot(t, "prompt", "render", "task-implementation", "--task", "T-100", "--max-review-rounds", "2"); err != nil || !strings.Contains(out, "maximum is 2") {
+		t.Fatalf("render override = %q, error = %v", out, err)
+	}
+	stdout, stderr, err := runRootSplit(t, "prompt", "render", "task-authoring", "--task", "T-100", "--max-review-rounds", "2", "--json")
+	if err == nil {
+		t.Fatal("expected task-authoring to reject implementation-only override")
+	}
+	invalid := decodeEnvelope(t, stdout)
+	if invalid.Error == nil || invalid.Error.Code != "prompt_invalid" {
+		t.Fatalf("invalid render envelope = %+v, stderr = %q", invalid, stderr)
+	}
+
+	stdout, stderr, err = runRootSplit(t, "prompt", "render", "task-implementation", "--task", "T-100", "--json")
+	if err != nil {
+		t.Fatalf("render JSON: %v (stderr %q)", err, stderr)
+	}
+	envelope := decodeEnvelope(t, stdout)
+	if envelope.Command != "prompt render" || envelope.Error != nil {
+		t.Fatalf("render envelope = %+v", envelope)
+	}
+	var result struct {
+		ID             string `json:"id"`
+		Content        string `json:"content"`
+		SHA256         string `json:"sha256"`
+		TemplateSHA256 string `json:"template_sha256"`
+	}
+	if err := json.Unmarshal(envelope.Result, &result); err != nil {
+		t.Fatalf("decode render result: %v", err)
+	}
+	digest := sha256.Sum256([]byte(result.Content))
+	if result.ID != "task-implementation" || result.SHA256 != fmt.Sprintf("%x", digest) || result.SHA256 == result.TemplateSHA256 {
+		t.Fatalf("render result = %+v", result)
+	}
+	if after := snapshotTree(t, root); !maps.Equal(before, after) {
+		t.Fatal("prompt render changed repository bytes")
 	}
 }

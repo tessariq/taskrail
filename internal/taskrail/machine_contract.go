@@ -290,7 +290,7 @@ var machineInventory = []MachineCommandEntry{
 		warns(), errs(readErrors, "prompt_invalid")),
 	migrated("`prompt show`", "prompt show", []string{"PromptContentResult"}, "never",
 		warns(), errs(readErrors, "prompt_not_found", "prompt_invalid", "task_not_found", "path_blocked")),
-	planned("`prompt render`", "prompt render", []string{"PromptContentResult"}, "never",
+	migrated("`prompt render`", "prompt render", []string{"PromptContentResult"}, "never",
 		warns(), errs(readErrors, "prompt_not_found", "prompt_invalid", "task_not_found", "path_blocked")),
 	migrated("`review publish`", "review publish", []string{"ReviewPublishResult"}, "never",
 		warns(), errs(reviewErrors)),

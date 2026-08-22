@@ -1,7 +1,7 @@
 ---
 id: T-297-ship-complete-storage-neutral-prompt-rendering
 title: Ship complete storage-neutral prompt rendering
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#workflow-prompt-catalog-and-overrides
 dependencies:
@@ -10,7 +10,12 @@ dependencies:
     - T-296-authorize-transient-prompt-context-paths-safely
     - T-236-resolve-local-prompt-replacements-through-the
     - T-213-define-the-uniform-agent-machine-api
-updated_at: "2026-08-08T14:23:08Z"
+updated_at: "2026-08-22T09:28:46Z"
+completion_id: "aa22fd2e73d46b67c3dfdfc7bbfa8147"
+last_verification_id: "197cfdda75dc3e79c36a1f2886ebb1dd"
+last_verification_result: pass
+last_verified_at: "2026-08-22T09:28:46Z"
+last_verified_completion_id: "aa22fd2e73d46b67c3dfdfc7bbfa8147"
 ---
 
 # T-297-ship-complete-storage-neutral-prompt-rendering Ship complete storage-neutral prompt rendering
@@ -44,3 +49,6 @@ managed subject context, transient-path authorization, and strict substitution.
   storage-neutral reads, the sole transient exception, and zero writes.
 
 ## Implementation Notes
+
+- 2026-08-22T09:28:35Z: Published storage-neutral prompt rendering with strict declared context and atomic snapshots.
+- 2026-08-22T09:28:46Z: verification pass id 197cfdda75dc3e79c36a1f2886ebb1dd previous none completion aa22fd2e73d46b67c3dfdfc7bbfa8147
