@@ -1,6 +1,6 @@
 ---
 schema_version: 1
-updated_at: "2026-08-22T14:58:23Z"
+updated_at: "2026-08-22T15:07:50Z"
 active_spec_version: v0.5.0
 active_spec_path: specs/v0.5.0.md
 current_task: ""
@@ -8,9 +8,9 @@ current_task_title: ""
 status_summary: idle
 blockers: []
 next_action: Select the next eligible task
-last_verification_result: pass for T-351-await-terminated-windows-loop-descendants at 2026-08-22T14:58:23Z id 43179086b757e08bbdf879002ec87605
-last_verification_id: 43179086b757e08bbdf879002ec87605
-last_verified_completion_id: e7e8f8dcc5e513ceb1e0fbb7f01fa940
+last_verification_result: pass for T-352-ignore-transient-git-locks-in-test-snapshots at 2026-08-22T15:07:50Z id ab5238b5b4b186a74e6b0001237312ca
+last_verification_id: ab5238b5b4b186a74e6b0001237312ca
+last_verified_completion_id: 79e0f829d9b06d45b2964668904cb2b8
 relevant_artifacts: []
 continuation_notes:
     - This repository is temporarily dogfooding bootstrap workflow tooling until Taskrail v0.1.0 exists.
@@ -36,7 +36,7 @@ continuation_notes:
 
 ## Last Verification
 
-- pass for T-351-await-terminated-windows-loop-descendants at 2026-08-22T14:58:23Z id 43179086b757e08bbdf879002ec87605
+- pass for T-352-ignore-transient-git-locks-in-test-snapshots at 2026-08-22T15:07:50Z id ab5238b5b4b186a74e6b0001237312ca
 
 ## Next Action
 
@@ -54,6 +54,6 @@ continuation_notes:
 
 - todo: 97
 - in_progress: 0
-- completed: 253
+- completed: 254
 - blocked: 0
 - cancelled: 0
