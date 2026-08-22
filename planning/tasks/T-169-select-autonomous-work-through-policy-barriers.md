@@ -1,12 +1,17 @@
 ---
 id: T-169-select-autonomous-work-through-policy-barriers
 title: Select autonomous work through task-local loop policy
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#task-local-loop-policy
 dependencies:
     - T-237-report-task-local-loop-policy-deterministically
-updated_at: "2026-08-04T21:32:13Z"
+updated_at: "2026-08-22T10:21:17Z"
+completion_id: "9f4343ec570821477862380f8cf750f7"
+last_verification_id: "15b046a089ad06da93e4c236a358b1f0"
+last_verification_result: pass
+last_verified_at: "2026-08-22T10:21:17Z"
+last_verified_completion_id: "9f4343ec570821477862380f8cf750f7"
 ---
 
 # T-169-select-autonomous-work-through-policy-barriers Select autonomous work through task-local loop policy
@@ -54,3 +59,6 @@ the task ledger.
   selection.
 
 ## Implementation Notes
+
+- 2026-08-22T10:20:56Z: Added read-only policy-filtered selection with full validation gating and ranking coverage.
+- 2026-08-22T10:21:17Z: verification pass id 15b046a089ad06da93e4c236a358b1f0 previous none completion 9f4343ec570821477862380f8cf750f7

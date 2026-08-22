@@ -31,6 +31,17 @@ type TaskLoopListResult struct {
 	Violations []MachineViolation `json:"violations"`
 }
 
+// TaskLoopSelectionResult is the read-only policy-filtered selection that loop
+// preflight uses. The full row is retained so later command surfaces do not need
+// a second ranking or policy projection.
+type TaskLoopSelectionResult struct {
+	Action       string             `json:"action"`
+	Reason       string             `json:"reason"`
+	SelectedTask *TaskLoopRow       `json:"selected_task"`
+	Tasks        []TaskLoopRow      `json:"tasks"`
+	Violations   []MachineViolation `json:"violations"`
+}
+
 // TaskLoopList reports every decodable task's policy without changing ordinary
 // lifecycle selection or writing any managed file.
 func (s *Service) TaskLoopList() (TaskLoopListResult, error) {
@@ -42,9 +53,13 @@ func (s *Service) TaskLoopList() (TaskLoopListResult, error) {
 	if err != nil {
 		return TaskLoopListResult{}, err
 	}
+	return buildTaskLoopListResult(s, state, tasks, violations, decodedInvalid), nil
+}
 
+func buildTaskLoopListResult(s *Service, state *State, tasks []*Task, violations []MachineViolation, decodedInvalid map[*Task]bool) TaskLoopListResult {
 	validation := append(s.layoutViolations(), s.validateState(state)...)
 	validation = append(validation, s.validateTasks(state, tasks)...)
+	validation = append(validation, s.validateVerificationEvidence(state, tasks)...)
 	invalid := invalidLoopTasks(tasks, validation, decodedInvalid)
 	for _, message := range validation {
 		violations = append(violations, MachineViolation{Code: MachineCodeRepositoryInvalid, Message: message})
@@ -63,7 +78,60 @@ func (s *Service) TaskLoopList() (TaskLoopListResult, error) {
 			Eligible: disposition == "eligible", HeldDependencies: held, Disposition: disposition,
 		})
 	}
-	return TaskLoopListResult{Tasks: rows, Violations: violations}, nil
+	return TaskLoopListResult{Tasks: rows, Violations: violations}
+}
+
+// TaskLoopSelect chooses an explicitly allowed, active-spec task with the same
+// priority and ID ordering as ordinary status selection. It is read-only and
+// returns invalid input as an inspectable report for loop dry-run to gate.
+func (s *Service) TaskLoopSelect() (TaskLoopSelectionResult, error) {
+	state, err := s.loadState()
+	if err != nil {
+		return TaskLoopSelectionResult{}, err
+	}
+	tasks, violations, decodedInvalid, err := s.loadLoopListTasks()
+	if err != nil {
+		return TaskLoopSelectionResult{}, err
+	}
+	report := buildTaskLoopListResult(s, state, tasks, violations, decodedInvalid)
+	result := TaskLoopSelectionResult{Tasks: report.Tasks, Violations: report.Violations}
+	if len(result.Violations) != 0 {
+		result.Action = "invalid"
+		result.Reason = "repository contains loop-policy violations"
+		return result, nil
+	}
+
+	byID := make(map[string]*Task, len(tasks))
+	for _, task := range tasks {
+		byID[task.Frontmatter.ID] = task
+	}
+	candidates := make([]int, 0)
+	for i, row := range result.Tasks {
+		if row.Eligible && row.Source == "explicit" && row.EffectivePolicy == "allow" {
+			candidates = append(candidates, i)
+		}
+	}
+	sort.Slice(candidates, func(i, j int) bool {
+		left := byID[result.Tasks[candidates[i]].TaskID]
+		right := byID[result.Tasks[candidates[j]].TaskID]
+		leftRank := priorityRank[left.Frontmatter.Priority]
+		rightRank := priorityRank[right.Frontmatter.Priority]
+		if leftRank != rightRank {
+			return leftRank < rightRank
+		}
+		return left.Frontmatter.ID < right.Frontmatter.ID
+	})
+	if len(candidates) == 0 {
+		result.Action = "none"
+		result.Reason = "no eligible allowed task"
+		return result, nil
+	}
+
+	result.Action = "run"
+	result.Reason = "selected allowed task by priority and stable task id"
+	selected := result.Tasks[candidates[0]]
+	result.SelectedTask = &selected
+	return result, nil
 }
 
 func (s *Service) loadLoopListTasks() ([]*Task, []MachineViolation, map[*Task]bool, error) {
