@@ -117,23 +117,37 @@ func (c *windowsLoopChildContainment) cleanup() (evidence loopChildContainmentEv
 		evidence.NormalDrain = true
 		return evidence, nil
 	}
+	waiters, waiterErr := openWindowsProcessWaiters(members)
+	defer closeWindowsProcessWaiters(waiters)
+	if waiterErr != nil {
+		evidence.InspectionError = waiterErr.Error()
+		inspectionErr = errors.Join(inspectionErr, waiterErr)
+	}
 	if err := windows.TerminateJobObject(c.job, 1); err != nil {
 		return evidence, errors.Join(inspectionErr, fmt.Errorf("request job termination: %w", err))
 	}
 	c.terminationRequested = true
 	evidence.TerminationRequested = true
 
-	members, drainErr := waitForWindowsJobDrain(c.job, windowsContainmentGraceMilliseconds*time.Millisecond)
+	survivors, drainErr := waitForWindowsProcessExit(waiters, windowsContainmentGraceMilliseconds*time.Millisecond)
 	if drainErr != nil {
 		return evidence, errors.Join(inspectionErr, fmt.Errorf("wait for job drain: %w", drainErr))
 	}
-	if len(members) == 0 {
+	members, membershipErr := windowsJobMembers(c.job)
+	if membershipErr != nil {
+		return evidence, errors.Join(inspectionErr, fmt.Errorf("inspect drained job: %w", membershipErr))
+	}
+	if len(survivors) == 0 && len(members) == 0 {
 		return evidence, inspectionErr
 	}
 
 	evidence.ForcedTermination = true
 	if err := windows.TerminateJobObject(c.job, 1); err != nil {
 		return evidence, errors.Join(inspectionErr, fmt.Errorf("force job termination: %w", err))
+	}
+	survivors, drainErr = waitForWindowsProcessExit(waiters, windowsContainmentGraceMilliseconds*time.Millisecond)
+	if drainErr != nil {
+		return evidence, errors.Join(inspectionErr, fmt.Errorf("wait for forced job drain: %w", drainErr))
 	}
 	members, err := windowsJobMembers(c.job)
 	if err != nil {
@@ -142,23 +156,78 @@ func (c *windowsLoopChildContainment) cleanup() (evidence loopChildContainmentEv
 		}
 		return evidence, errors.Join(inspectionErr, fmt.Errorf("inspect forced job members: %w", err))
 	}
-	evidence.SurvivorPIDs = members
-	evidence.Survivors = len(members) > 0
+	evidence.SurvivorPIDs = mergeWindowsProcessIDs(survivors, members)
+	evidence.Survivors = len(evidence.SurvivorPIDs) > 0
 	if evidence.Survivors {
-		return evidence, errors.Join(inspectionErr, fmt.Errorf("known job survivors: %v", members))
+		return evidence, errors.Join(inspectionErr, fmt.Errorf("known job survivors: %v", evidence.SurvivorPIDs))
 	}
 	return evidence, inspectionErr
 }
 
-func waitForWindowsJobDrain(job windows.Handle, limit time.Duration) ([]int, error) {
+type windowsProcessWaiter struct {
+	pid    int
+	handle windows.Handle
+}
+
+func openWindowsProcessWaiters(pids []int) ([]windowsProcessWaiter, error) {
+	waiters := make([]windowsProcessWaiter, 0, len(pids))
+	var result error
+	for _, pid := range pids {
+		handle, err := windows.OpenProcess(windows.SYNCHRONIZE, false, uint32(pid))
+		if errors.Is(err, windows.ERROR_INVALID_PARAMETER) {
+			continue
+		}
+		if err != nil {
+			result = errors.Join(result, fmt.Errorf("open job member %d for exit wait: %w", pid, err))
+			continue
+		}
+		waiters = append(waiters, windowsProcessWaiter{pid: pid, handle: handle})
+	}
+	return waiters, result
+}
+
+func closeWindowsProcessWaiters(waiters []windowsProcessWaiter) {
+	for _, waiter := range waiters {
+		_ = windows.CloseHandle(waiter.handle)
+	}
+}
+
+func waitForWindowsProcessExit(waiters []windowsProcessWaiter, limit time.Duration) ([]int, error) {
 	deadline := time.Now().Add(limit)
 	for {
-		members, err := windowsJobMembers(job)
-		if err != nil || len(members) == 0 || time.Now().After(deadline) {
-			return members, err
+		survivors := make([]int, 0, len(waiters))
+		for _, waiter := range waiters {
+			status, err := windows.WaitForSingleObject(waiter.handle, 0)
+			if err != nil {
+				return survivors, err
+			}
+			switch status {
+			case windows.WAIT_OBJECT_0:
+			case uint32(windows.WAIT_TIMEOUT):
+				survivors = append(survivors, waiter.pid)
+			default:
+				return survivors, fmt.Errorf("process %d exit wait returned status %#x", waiter.pid, status)
+			}
+		}
+		if len(survivors) == 0 || time.Now().After(deadline) {
+			return survivors, nil
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
+}
+
+func mergeWindowsProcessIDs(groups ...[]int) []int {
+	seen := make(map[int]bool)
+	var merged []int
+	for _, group := range groups {
+		for _, pid := range group {
+			if !seen[pid] {
+				seen[pid] = true
+				merged = append(merged, pid)
+			}
+		}
+	}
+	return merged
 }
 
 func (c *windowsLoopChildContainment) evidence() loopChildContainmentEvidence {
