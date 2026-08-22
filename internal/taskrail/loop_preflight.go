@@ -19,11 +19,12 @@ import (
 // LoopInvocation is the repository-independent portion of one loop request.
 // ParseLoopInvocation validates it before a caller discovers a repository.
 type LoopInvocation struct {
-	DryRun          bool
-	MaxIterations   int
-	MaxReviewRounds *int
-	Timeout         *time.Duration
-	Child           []string
+	DryRun                    bool
+	MaxIterations             int
+	MaxReviewRounds           *int
+	Timeout                   *time.Duration
+	AllowPromptOverrideSHA256 string
+	Child                     []string
 }
 
 // LoopPreflightSnapshot freezes the byte and Git inputs later loop stages use.
@@ -124,7 +125,7 @@ func ParseLoopInvocation(args []string) (LoopInvocation, error) {
 			if name == "--dry-run" {
 				invocation.DryRun = true
 			}
-		case "--max-iterations", "--max-review-rounds", "--timeout":
+		case "--max-iterations", "--max-review-rounds", "--timeout", "--allow-prompt-override-sha256":
 			if !inline {
 				i++
 				if i == len(args) {
@@ -154,6 +155,8 @@ func ParseLoopInvocation(args []string) (LoopInvocation, error) {
 					return LoopInvocation{}, invalidArgumentsf("--timeout must be a positive Go duration")
 				}
 				invocation.Timeout = &duration
+			case "--allow-prompt-override-sha256":
+				invocation.AllowPromptOverrideSHA256 = value
 			}
 		default:
 			return LoopInvocation{}, invalidArgumentsf("unsupported loop flag %s", name)
@@ -214,7 +217,7 @@ func (s *Service) LoopPreflight(invocation LoopInvocation) (LoopPreflightSnapsho
 		return LoopPreflightSnapshot{}, err
 	}
 	if len(inProgressTasks(tasks)) != 0 {
-		return LoopPreflightSnapshot{}, WithMachineErrorCode(MachineCodeInvalidStatus, errors.New("loop requires no in_progress task"))
+		return LoopPreflightSnapshot{}, WithMachineErrorCode(MachineCodeValidationFailed, errors.New("loop requires no in_progress task"))
 	}
 	if s.paths.Storage.Mode == StorageLocal {
 		if err := s.verifyLocalIgnored(); err != nil {
@@ -379,7 +382,7 @@ func loopInputBytes(paths Paths) (map[string][]byte, error) {
 func collectLoopInputTree(repo, root string, inputs map[string][]byte) error {
 	tree, err := durablefs.ObserveTree(repo, root)
 	if err != nil || !tree.Present {
-		return WithMachineErrorCode(MachineCodePathBlocked, fmt.Errorf("inspect loop input directory %s: %w", root, err))
+		return WithMachineErrorCode(MachineCodeRepositoryInvalid, fmt.Errorf("inspect loop input directory %s: %w", root, err))
 	}
 	for _, entry := range tree.Entries {
 		if entry.Directory {
@@ -388,7 +391,7 @@ func collectLoopInputTree(repo, root string, inputs map[string][]byte) error {
 		file := path.Join(root, entry.Path)
 		data, err := loopReadFile(repo, file)
 		if err != nil {
-			return WithMachineErrorCode(MachineCodePathBlocked, fmt.Errorf("read loop input %s: %w", file, err))
+			return WithMachineErrorCode(MachineCodeRepositoryInvalid, fmt.Errorf("read loop input %s: %w", file, err))
 		}
 		inputs[file] = data
 	}
@@ -423,7 +426,7 @@ func loopRootRefCandidates(gitDirs ...string) (map[string][]byte, error) {
 				continue
 			}
 			if entry.Directory {
-				return nil, WithMachineErrorCode(MachineCodePathBlocked, fmt.Errorf("Git root candidate %s is not regular", filepath.Join(dir, entry.Path)))
+				return nil, WithMachineErrorCode(MachineCodeGitState, fmt.Errorf("Git root candidate %s is not regular", filepath.Join(dir, entry.Path)))
 			}
 			data, err := loopReadFile(dir, entry.Path)
 			if err != nil {

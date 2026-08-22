@@ -2,7 +2,11 @@ package main
 
 import (
 	"encoding/json"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/tessariq/taskrail/internal/taskrail"
@@ -35,6 +39,112 @@ func TestTaskLoopListPublishesRowsAndStaysReadOnly(t *testing.T) {
 	if after := readAllFiles(t, root); !reflect.DeepEqual(after, before) {
 		t.Fatal("task loop list changed repository files")
 	}
+}
+
+func TestLoopDryRunPublishesRunAndInvalidReportsWithoutMutation(t *testing.T) {
+	root := setupLoopDryRunRepo(t)
+	writeTask(t, root, "T-001-ready", "todo", "")
+	taskPath := filepath.Join(root, "planning", "tasks", "T-001-ready.md")
+	task, err := os.ReadFile(taskPath)
+	if err != nil {
+		t.Fatalf("read task: %v", err)
+	}
+	if err := os.WriteFile(taskPath, []byte(strings.Replace(string(task), "updated_at:", "loop_policy: allow\nloop_reason: independent work\nupdated_at:", 1)), 0o644); err != nil {
+		t.Fatalf("allow task: %v", err)
+	}
+	if _, err := runRoot(t, "repair", "--apply"); err != nil {
+		t.Fatalf("repair fixture state: %v", err)
+	}
+	runLoopGit(t, root, "add", ".")
+	runLoopGit(t, root, "commit", "-m", "allow loop task")
+	if output, err := runRoot(t, "validate"); err != nil {
+		t.Fatalf("validate loop fixture: %v (%s)", err, output)
+	}
+
+	before := readAllFiles(t, root)
+	statusBefore := loopGitOutput(t, root, "status", "--porcelain=v1")
+	refsBefore := loopGitOutput(t, root, "for-each-ref", "--format=%(refname):%(objectname)")
+	stdout, _, err := runRootSplit(t, "loop", "--dry-run", "--json")
+	if err != nil {
+		t.Fatalf("loop dry run: %v (stdout %q)", err, stdout)
+	}
+	var report struct {
+		Action       string                        `json:"action"`
+		SelectedTask *taskrail.TaskLoopRow         `json:"selected_task"`
+		Prompt       *taskrail.LoopPromptExecution `json:"prompt"`
+		Review       *taskrail.LoopReviewPolicy    `json:"review"`
+		Parallel     any                           `json:"parallel"`
+	}
+	decodeMachineResult(t, stdout, &report)
+	if report.Action != "run" || report.SelectedTask == nil || report.SelectedTask.TaskID != "T-001-ready" || report.Prompt == nil || report.Prompt.Source != "builtin" || !report.Prompt.OverrideAuthorized || report.Review == nil || report.Review.EffectiveMaxRounds != 1 || report.Parallel != nil {
+		t.Fatalf("dry-run report = %+v", report)
+	}
+	if after := readAllFiles(t, root); !reflect.DeepEqual(after, before) || loopGitOutput(t, root, "status", "--porcelain=v1") != statusBefore || loopGitOutput(t, root, "for-each-ref", "--format=%(refname):%(objectname)") != refsBefore {
+		t.Fatal("loop dry run changed the sandbox")
+	}
+	stdout, _, err = runRootSplit(t, "loop", "--dry-run", "--max-review-rounds", "2", "--timeout", "30s", "--json")
+	if err != nil {
+		t.Fatalf("overridden loop dry run: %v (stdout %q)", err, stdout)
+	}
+	var overridden struct {
+		Action string `json:"action"`
+		Review struct {
+			Configured int    `json:"configured_max_rounds"`
+			Effective  int    `json:"effective_max_rounds"`
+			Source     string `json:"source"`
+		} `json:"review"`
+		Execution struct {
+			Timeout *string `json:"timeout"`
+			Source  string  `json:"timeout_source"`
+		} `json:"execution"`
+	}
+	decodeMachineResult(t, stdout, &overridden)
+	if overridden.Action != "run" || overridden.Review.Configured != 1 || overridden.Review.Effective != 2 || overridden.Review.Source != "flag" || overridden.Execution.Timeout == nil || *overridden.Execution.Timeout != "30s" || overridden.Execution.Source != "flag" {
+		t.Fatalf("overridden dry-run report = %+v", overridden)
+	}
+
+	stdout, _, err = runRootSplit(t, "loop", "--dry-run", "--allow-prompt-override-sha256", strings.Repeat("0", 64), "--json")
+	if err == nil {
+		t.Fatal("stale built-in authorization must gate the dry run")
+	}
+	envelope, decodeErr := taskrail.DecodeMachineEnvelope([]byte(stdout))
+	if decodeErr != nil || envelope.Error == nil || envelope.Error.Code != taskrail.MachineCodeInvalidArguments {
+		t.Fatalf("invalid authorization envelope = %+v (decode error %v)", envelope, decodeErr)
+	}
+}
+
+func setupLoopDryRunRepo(t *testing.T) string {
+	t.Helper()
+	root := t.TempDir()
+	runLoopGit(t, root, "init", "--quiet")
+	runLoopGit(t, root, "config", "user.email", "taskrail@example.test")
+	runLoopGit(t, root, "config", "user.name", "Taskrail Test")
+	t.Chdir(root)
+	if _, err := runRoot(t, "init"); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, ".taskrail", "config.yml"), []byte("layout_version: 2\nspecs_dir: specs\nplanning_dir: planning\nstorage_mode: committed\nimplementation_review_max_rounds: 1\n"), 0o644); err != nil {
+		t.Fatalf("write layout-2 fixture: %v", err)
+	}
+	runLoopGit(t, root, "add", ".")
+	runLoopGit(t, root, "commit", "-m", "taskrail layout")
+	return root
+}
+
+func runLoopGit(t *testing.T, root string, args ...string) {
+	t.Helper()
+	if output, err := exec.Command("git", append([]string{"-C", root}, args...)...).CombinedOutput(); err != nil {
+		t.Fatalf("git %s: %v (%s)", strings.Join(args, " "), err, output)
+	}
+}
+
+func loopGitOutput(t *testing.T, root string, args ...string) string {
+	t.Helper()
+	output, err := exec.Command("git", append([]string{"-C", root}, args...)...).Output()
+	if err != nil {
+		t.Fatalf("git %s: %v", strings.Join(args, " "), err)
+	}
+	return string(output)
 }
 
 func TestTaskLoopListReturnsGatedReportForInvalidTask(t *testing.T) {

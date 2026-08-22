@@ -6,6 +6,10 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ### Added
 
+- `taskrail loop --dry-run [--json]` now selects the highest-ranked explicitly
+  allowed active-spec task without launching a child or changing repository
+  state. It reports frozen prompt bytes and hashes, review and delivery facts,
+  and requires an exact template SHA-256 authorization for replacements.
 - `taskrail task release <task-id> --reason <text>` now safely returns one
   consistently pointed-to interrupted `in_progress` task to `todo`. Its dry run
   and apply report exact task candidate digests, preserve task-local metadata and

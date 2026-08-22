@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -160,7 +161,7 @@ func TestLoopPreflightRefusesDirtyActiveAndLockedRepositories(t *testing.T) {
 			},
 		},
 		{
-			name: "active task", code: MachineCodeInvalidStatus,
+			name: "active task", code: MachineCodeValidationFailed,
 			mutate: func(t *testing.T, repo string, svc *Service) func() {
 				writeTask(t, repo, "T-001-active", "Active", "todo", "high", "specs/v0.1.0.md#summary", nil)
 				runGit(t, repo, "add", ".")
@@ -264,7 +265,7 @@ func TestLoopPreflightRefusesAliasedOrLinkedInputs(t *testing.T) {
 		}
 		runGit(t, repo, "add", ".")
 		runGit(t, repo, "commit", "-m", "symlink")
-		if _, err := svc.LoopPreflight(LoopInvocation{MaxIterations: 1, Child: []string{"agent"}}); err == nil || MachineFailureFor(err).Code != MachineCodePathBlocked {
+		if _, err := svc.LoopPreflight(LoopInvocation{MaxIterations: 1, Child: []string{"agent"}}); err == nil || MachineFailureFor(err).Code != MachineCodeRepositoryInvalid {
 			t.Fatalf("LoopPreflight error = %v", err)
 		}
 	})
@@ -312,6 +313,122 @@ func TestLoopPreflightProvesLocalManagedPathsIgnored(t *testing.T) {
 	}
 	if _, err := local.LoopPreflight(LoopInvocation{MaxIterations: 1, Child: []string{"agent"}}); err == nil {
 		t.Fatal("LoopPreflight accepted local paths without ignore proof")
+	}
+}
+
+func TestLoopDryRunSelectsAllowedTaskAndRendersFrozenPrompt(t *testing.T) {
+	repo, svc := loopFixture(t)
+	writeTask(t, repo, "T-001-held", "Held", "todo", "high", "specs/v0.1.0.md#summary", nil)
+	writeTask(t, repo, "T-002-ready", "Ready", "todo", "high", "specs/v0.1.0.md#summary", nil)
+	setLoopPolicy(t, repo, "T-002-ready", "allow", "independent work")
+	runGit(t, repo, "add", ".")
+	runGit(t, repo, "commit", "-m", "loop tasks")
+
+	before := snapshotTree(t, repo)
+	report, err := svc.LoopDryRun(LoopInvocation{DryRun: true, MaxIterations: 1})
+	if err != nil {
+		t.Fatalf("LoopDryRun: %v", err)
+	}
+	if report.Action != "run" || report.SelectedTask == nil || report.SelectedTask.TaskID != "T-002-ready" {
+		t.Fatalf("report selection = %+v", report)
+	}
+	if report.Prompt == nil || report.Prompt.Source != "builtin" || !report.Prompt.OverrideAuthorized {
+		t.Fatalf("report prompt = %+v", report.Prompt)
+	}
+	if got, want := report.Prompt.RenderedSHA256, promptDigest([]byte(report.Prompt.Content)); got != want {
+		t.Fatalf("rendered hash = %q, want %q", got, want)
+	}
+	if after := snapshotTree(t, repo); !reflect.DeepEqual(after, before) {
+		t.Fatal("LoopDryRun changed repository bytes")
+	}
+}
+
+func TestLoopDryRunRequiresExactReplacementTemplateAuthorization(t *testing.T) {
+	repo, svc := loopFixture(t)
+	writeTask(t, repo, "T-001-ready", "Ready", "todo", "high", "specs/v0.1.0.md#summary", nil)
+	setLoopPolicy(t, repo, "T-001-ready", "allow", "independent work")
+	template := []byte("Implement {{TASK_ID}} in {{TASK_PATH}} with {{IMPLEMENTATION_REVIEW_MAX_ROUNDS}} review round(s).\n")
+	writeFile(t, filepath.Join(repo, ".taskrail", "prompts", "v1", "task-implementation.md"), string(template))
+	runGit(t, repo, "add", ".")
+	runGit(t, repo, "commit", "-m", "replacement prompt")
+
+	unauthorized, err := svc.LoopDryRun(LoopInvocation{DryRun: true, MaxIterations: 1})
+	if err != nil {
+		t.Fatalf("unauthorized dry run: %v", err)
+	}
+	if unauthorized.Action != "invalid" || unauthorized.Prompt != nil {
+		t.Fatalf("unauthorized report = %+v", unauthorized)
+	}
+	mismatched, err := svc.LoopDryRun(LoopInvocation{DryRun: true, MaxIterations: 1, AllowPromptOverrideSHA256: strings.Repeat("0", 64)})
+	if err != nil {
+		t.Fatalf("mismatched dry run: %v", err)
+	}
+	if mismatched.Action != "invalid" || mismatched.Prompt != nil {
+		t.Fatalf("mismatched report = %+v", mismatched)
+	}
+
+	authorized, err := svc.LoopDryRun(LoopInvocation{DryRun: true, MaxIterations: 1, AllowPromptOverrideSHA256: promptDigest(template)})
+	if err != nil {
+		t.Fatalf("authorized dry run: %v", err)
+	}
+	if authorized.Action != "run" || authorized.Prompt == nil || authorized.Prompt.Source != "replacement" || !authorized.Prompt.OverrideAuthorized {
+		t.Fatalf("authorized report = %+v", authorized)
+	}
+	if got, want := authorized.Prompt.TemplateSHA256, promptDigest(template); got != want {
+		t.Fatalf("template hash = %q, want %q", got, want)
+	}
+}
+
+func TestLoopDryRunChecksReplacementAuthorizationWithoutSelectedWork(t *testing.T) {
+	repo, svc := loopFixture(t)
+	template := []byte("Implement {{TASK_ID}} in {{TASK_PATH}} with {{IMPLEMENTATION_REVIEW_MAX_ROUNDS}} review round(s).\n")
+	writeFile(t, filepath.Join(repo, ".taskrail", "prompts", "v1", "task-implementation.md"), string(template))
+	runGit(t, repo, "add", ".")
+	runGit(t, repo, "commit", "-m", "replacement prompt")
+
+	report, err := svc.LoopDryRun(LoopInvocation{DryRun: true, MaxIterations: 1})
+	if err != nil {
+		t.Fatalf("dry run: %v", err)
+	}
+	if report.Action != "invalid" || report.SelectedTask != nil || report.Prompt != nil {
+		t.Fatalf("report = %+v", report)
+	}
+}
+
+func TestLoopFrozenSelectionUsesPreflightTaskBytes(t *testing.T) {
+	repo, svc := loopFixture(t)
+	writeTask(t, repo, "T-001-ready", "Ready", "todo", "high", "specs/v0.1.0.md#summary", nil)
+	setLoopPolicy(t, repo, "T-001-ready", "allow", "independent work")
+	runGit(t, repo, "add", ".")
+	runGit(t, repo, "commit", "-m", "allowed task")
+	snapshot, err := svc.LoopPreflight(LoopInvocation{DryRun: true, MaxIterations: 1})
+	if err != nil {
+		t.Fatalf("preflight: %v", err)
+	}
+	setLoopPolicy(t, repo, "T-001-ready", "hold", "changed after preflight")
+
+	selection, err := svc.loopFrozenSelection(snapshot)
+	if err != nil {
+		t.Fatalf("frozen selection: %v", err)
+	}
+	if selection.Action != "run" || selection.SelectedTask == nil || selection.SelectedTask.TaskID != "T-001-ready" {
+		t.Fatalf("selection = %+v", selection)
+	}
+}
+
+func TestLoopDryRunReportsNoneWithoutPromptAndRejectsStaleBuiltinAuthorization(t *testing.T) {
+	_, svc := loopFixture(t)
+
+	none, err := svc.LoopDryRun(LoopInvocation{DryRun: true, MaxIterations: 1})
+	if err != nil {
+		t.Fatalf("none dry run: %v", err)
+	}
+	if none.Action != "none" || none.SelectedTask != nil || none.Prompt != nil {
+		t.Fatalf("none report = %+v", none)
+	}
+
+	if _, err := svc.LoopDryRun(LoopInvocation{DryRun: true, MaxIterations: 1, AllowPromptOverrideSHA256: strings.Repeat("0", 64)}); MachineFailureFor(err).Code != MachineCodeInvalidArguments {
+		t.Fatalf("stale authorization error = %v", err)
 	}
 }
 

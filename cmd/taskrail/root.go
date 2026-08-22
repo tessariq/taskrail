@@ -41,6 +41,7 @@ func newRootCmd() *cobra.Command {
 		newRecoverCmd(),
 		newImportCmd(),
 		newLocalCmd(),
+		newLoopCmd(),
 		newVersionCmd(),
 	)
 

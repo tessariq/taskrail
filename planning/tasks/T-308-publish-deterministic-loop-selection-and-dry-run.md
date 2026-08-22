@@ -1,12 +1,17 @@
 ---
 id: T-308-publish-deterministic-loop-selection-and-dry-run
 title: Publish deterministic loop selection and dry-run
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#cross-platform-autonomous-loop
 dependencies:
     - T-170-add-deterministic-autonomous-loop-preflight-and
-updated_at: "2026-08-08T14:23:09Z"
+updated_at: "2026-08-22T12:24:11Z"
+completion_id: "171eafb1dd36c3a834f8a05d786b8461"
+last_verification_id: "aff6c098dff00e9beef7d2cad04c17d1"
+last_verification_result: pass
+last_verified_at: "2026-08-22T12:24:11Z"
+last_verified_completion_id: "171eafb1dd36c3a834f8a05d786b8461"
 ---
 
 # T-308-publish-deterministic-loop-selection-and-dry-run Publish deterministic loop selection and dry-run
@@ -56,3 +61,6 @@ outside this task.
   dry-run purity and report-result exit classification.
 
 ## Implementation Notes
+
+- 2026-08-22T12:23:58Z: Published deterministic loop dry-run selection and frozen prompt authorization.
+- 2026-08-22T12:24:11Z: verification pass id aff6c098dff00e9beef7d2cad04c17d1 previous none completion 171eafb1dd36c3a834f8a05d786b8461

@@ -308,7 +308,7 @@ var machineInventory = []MachineCommandEntry{
 		warns(), errs(readErrors, "invalid_digest", "source_changed", "lock_held", "write_conflict")),
 	migrated("`recover`", "recover", []string{"RecoverResult"}, "never",
 		warns(), errs(writerErrors, "invalid_digest", "source_changed")),
-	planned("`loop` dry-run", "loop", []string{"LoopDryRunResult"}, "`action:invalid`",
+	migrated("`loop` dry-run", "loop", []string{"LoopDryRunResult"}, "`action:invalid`",
 		warns(), errs(loopDryRunErrors)),
 	loopResultFileEntry(),
 }
@@ -321,6 +321,9 @@ func loopResultFileEntry() MachineCommandEntry {
 	e := planned("`loop` result file", "loop", []string{"LoopDiagnostic"}, "failures use `error`",
 		warns(warnsBootstrap),
 		mergeCodes(loopExecutionPreflightErrors, []string{"result_file_publish_failed"}, loopPostflightErrors))
+	// The command path exists for dry-run even though execution has not yet
+	// implemented this result-file surface.
+	e.Origin = MachineOriginConstructed
 	e.Surface = MachineSurfaceResultFile
 	return e
 }

@@ -135,7 +135,7 @@ Details: [docs/commands.md](docs/commands.md#next-task-selection-and-the-active-
 - **Adopt an existing repo** — `init` and `retrofit` scaffold `specs/` + `planning/` non-destructively; `import` turns rough notes into spec/task drafts without an LLM; `repair` reconciles mechanical `STATE.md` drift.
 - **See where work stands** — `status`, `stats`, and `coverage` report a live snapshot, aggregate metrics, and advisory spec-linkage, all read-only. `status` also breaks down open work (`todo`/`in_progress`/`blocked`) by how much targets the active spec versus points away from it, listing the away tasks and their `spec_ref`; the away set matches the active-spec filter `next` uses for idle selection.
 - **Author and steer specs** — the `spec` family (`list`, `show`, `add`, `activate`, `diff`) inspects and evolves versioned specs; `spec diff` previews the mechanical area-set delta before activation.
-- **Inspect workflow evidence** — `prompt list` reports the versioned embedded catalog and committed replacement source, `prompt show <id>` prints the resolved template or `--builtin` bytes, and `review show <logical-path>` returns exact durable-review bytes through active storage without creating files.
+- **Inspect workflow evidence** — `prompt list` reports the versioned embedded catalog and committed replacement source, `prompt show <id>` prints the resolved template or `--builtin` bytes, `loop --dry-run --json` publishes the one allowed task and frozen implementation prompt without launching it, and `review show <logical-path>` returns exact durable-review bytes through active storage without creating files.
 - **Publish review evidence** — `review publish --type task` validates one ignored task proposal against exact task and spec snapshots; `--type spec` validates an approved ignored four-lens bundle and exact selected spec snapshot; and `--type decomposition` validates a complete reviewed draft/trace bundle against exact selected-spec and published spec-review snapshots. Each preserves selected JSON bytes in one absent durable session directory; use `--dry-run` to inspect the same candidate without writing it.
 - **Draft missing work** — the optional `taskrail-decompose` and `taskrail-gap` skills turn uncovered areas and structural gap signals into reviewable proposals; only an explicit `task new` or `import --apply` writes tracked tasks.
 - **Handle the messy parts** — `task show <id>` reads one exact task's persisted Markdown through the active storage context. `block`/`unblock` park and resume work; `task release <id> --reason "..."` deliberately returns interrupted active work to `todo` without fabricating blocker or cancellation history; `task new` scaffolds a task, `task rename` re-slugs it, `task repoint` moves its `spec_ref`, and `task dependency add|remove` changes one reviewed dependency edge. When a crashed writer leaves the repository mutation lock behind, `lock status` inspects it read-only and `lock clear` removes exactly the observed stale lock — never automatically, and never while its owner is provably alive on this host. When a crashed durable transaction leaves a recovery fence behind, `recover <transaction-id>` previews and — with `--apply` — performs the one mechanically safe action (restore originals, accept the validated candidate, or clear the fence).
@@ -148,7 +148,7 @@ Taskrail commands intentionally use different write conventions based on risk:
 
 | Class | Current examples | Effect |
 |---|---|---|
-| Read-only | `validate`, `status`, `stats`, `coverage`, `task show`, `spec list/show/diff`, `prompt list/show`, `review show`, `lock status` | Inspect only; never rewrite tracked planning state. |
+| Read-only | `validate`, `status`, `stats`, `coverage`, `task show`, `spec list/show/diff`, `prompt list/show`, `loop --dry-run`, `review show`, `lock status` | Inspect only; never rewrite tracked planning state. |
 | Mode-dependent initialization | `init` | Fresh, unmarked-standard, and current-layout adoption/repair paths may write immediately; detected migration or retrofit paths preview unless `--apply` is supplied. Fresh/adopted writes, including `--with-skills`, publish as one locked normal transaction. A repository at layout 1 reports the read-only layout 2 upgrade preview instead: the flagless invocation writes nothing, and `--apply` requires `--confirm-quiescent` plus the note and skill decisions the preview names. |
 | Preview by default | `retrofit`, `repair` | Report a candidate; `--apply` is the write opt-in. Retrofit apply publishes its complete scaffold under the repository lock, while its preview rechecks inputs without creating lock or transaction artifacts. |
 | Apply with preview option | `task rename`, `task repoint`, `task release`, `task dependency add/remove` | Write by default; `--dry-run` validates the candidate first. |
@@ -269,6 +269,11 @@ and `STATE.md` does not duplicate it.
 Use `taskrail task loop list [--json]` to inspect every task's effective loop
 policy, held dependency closure, and unattended eligibility without changing
 task files, `STATE.md`, or ordinary lifecycle selection.
+
+Use `taskrail loop --dry-run --json` to inspect the highest-ranked explicitly
+allowed task, its frozen implementation prompt, and delivery/review limits. A
+replacement implementation prompt requires its exact template SHA-256 through
+`--allow-prompt-override-sha256`; dry run never launches a child process.
 
 Let Taskrail pick the next eligible task, start it, and advance it:
 

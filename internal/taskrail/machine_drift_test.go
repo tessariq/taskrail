@@ -136,6 +136,7 @@ var migratedCommands = []string{
 	"prompt list", "prompt render", "prompt show", "review publish", "review show", "spec activate", "spec add", "spec diff", "spec list", "spec show", "start",
 	"stats", "status", "task new", "task rename", "task repoint", "task release", "task show", "task loop list", "unblock",
 	"task dependency add", "task dependency remove", "validate", "verify",
+	"loop",
 }
 
 // TestOnlyMigratedCommandsPublishTheCommonEnvelope pins the migration boundary,

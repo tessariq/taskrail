@@ -470,10 +470,13 @@ func TestMachineInventoryClassifiesConstructedCommands(t *testing.T) {
 			t.Errorf("%s is built by the current CLI, inventory says %q", row, origins[row])
 		}
 	}
-	for _, row := range []string{"`task loop allow`", "`loop` dry-run"} {
+	for _, row := range []string{"`task loop allow`"} {
 		if origins[row] != MachineOriginPlanned {
 			t.Errorf("%s is not built by the current CLI, inventory says %q", row, origins[row])
 		}
+	}
+	if origins["`loop` dry-run"] != MachineOriginConstructed {
+		t.Errorf("`loop` dry-run is built by the current CLI, inventory says %q", origins["`loop` dry-run"])
 	}
 }
 
