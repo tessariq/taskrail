@@ -332,6 +332,64 @@ func (l *Lock) Delegation() (Delegation, error) {
 	return *l.delegation, nil
 }
 
+// Delegate rotates the child-only grant while retaining the same lock owner.
+// expectedSHA256 binds the rotation to the caller's immutable executable
+// snapshot: a changed path refuses instead of publishing a different identity.
+func (l *Lock) Delegate(executablePath, expectedSHA256 string, capability Capability) (Delegation, error) {
+	if l.released {
+		return Delegation{}, fmt.Errorf("%w: %s", ErrReleased, l.path)
+	}
+	grant, err := delegationGrant(capability)
+	if err != nil {
+		return Delegation{}, err
+	}
+	digest, err := ExecutableDigest(executablePath)
+	if err != nil || digest != expectedSHA256 {
+		if err != nil {
+			return Delegation{}, err
+		}
+		return Delegation{}, errors.New("delegated executable bytes changed before grant rotation")
+	}
+	token, err := randomHex(32)
+	if err != nil {
+		return Delegation{}, err
+	}
+	owner := l.owner
+	delegationDigest := delegationDigest(token, grant)
+	owner.ExecutableSHA256 = &expectedSHA256
+	owner.DelegationDigest = &delegationDigest
+	if err := l.replaceOwner(owner); err != nil {
+		return Delegation{}, err
+	}
+	delegation := Delegation{Token: token, ExecutableSHA256: expectedSHA256, Grant: grant}
+	l.owner = owner
+	l.delegation = &delegation
+	return delegation, nil
+}
+
+func (l *Lock) replaceOwner(owner Owner) error {
+	current, _, err := readOwner(l.path)
+	if err != nil {
+		return fmt.Errorf("read lock before delegation: %w", err)
+	}
+	if current.LockID != l.owner.LockID {
+		return fmt.Errorf("refusing to update lock %s: it is now held by %s, not %s",
+			l.path, current.LockID, l.owner.LockID)
+	}
+	data, err := json.Marshal(owner)
+	if err != nil {
+		return fmt.Errorf("encode delegated lock metadata: %w", err)
+	}
+	staged, err := stageLock(l.path, data)
+	if err != nil {
+		return err
+	}
+	if err := os.Rename(staged, l.path); err != nil {
+		return errors.Join(fmt.Errorf("publish delegated lock metadata: %w", err), removeLock(staged))
+	}
+	return nil
+}
+
 // Release removes this ownership's record. It is compare-and-delete: a lock
 // record that is no longer this handle's belongs to someone else and is left
 // alone, so a release can never delete a successor's claim.

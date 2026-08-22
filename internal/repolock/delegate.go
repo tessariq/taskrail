@@ -25,6 +25,7 @@ type Delegation struct {
 type JoinRequest struct {
 	Repository       Repository
 	Command          string
+	InvocationID     string
 	Token            string
 	ExecutableSHA256 string
 	// Grant is the owner-declared task and write set authenticated by the lock.
@@ -83,6 +84,12 @@ func matchesOwner(req JoinRequest, owner Owner) (Capability, error) {
 	if owner.StorageRoot != req.Repository.StorageRoot() {
 		return Capability{}, fmt.Errorf("%w: lock storage root is %s, not %s",
 			ErrRefused, owner.StorageRoot, req.Repository.StorageRoot())
+	}
+	if owner.TransactionID != nil && req.InvocationID != *owner.TransactionID {
+		return Capability{}, fmt.Errorf("%w: invocation does not match lock %s", ErrRefused, owner.LockID)
+	}
+	if owner.TransactionID == nil && req.InvocationID != "" {
+		return Capability{}, fmt.Errorf("%w: lock %s has no invocation", ErrRefused, owner.LockID)
 	}
 	if owner.DelegationDigest == nil || owner.ExecutableSHA256 == nil {
 		return Capability{}, fmt.Errorf("%w: lock %s was not acquired for delegation", ErrRefused, owner.LockID)

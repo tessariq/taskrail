@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -64,11 +65,17 @@ func (s *Service) beginWriterWrite(w writerCommand, selectedTask string, writes 
 		return nil, nil, err
 	}
 	if delegatedInvocation() {
+		identity, err := delegatedWriterIdentity()
+		if err != nil {
+			return nil, nil, WithMachineErrorCode(MachineCodeDelegatedRefused,
+				fmt.Errorf("delegated %s has invalid loop identity: %w", w.command, err))
+		}
 		joined, err := repolock.Join(repolock.JoinRequest{
 			Repository:       s.paths.LockRepository(),
 			Command:          w.command,
-			Token:            os.Getenv("TASKRAIL_DELEGATION_TOKEN"),
-			ExecutableSHA256: os.Getenv("TASKRAIL_EXECUTABLE_SHA256"),
+			InvocationID:     identity.invocationID,
+			Token:            identity.token,
+			ExecutableSHA256: identity.executableSHA256,
 			Grant:            repolock.Capability{SelectedTask: selectedTask, Writes: writes},
 			Capability:       repolock.Capability{Commands: []string{w.command}, TaskFields: w.taskFields, SelectedTask: selectedTask, Writes: writes},
 		})
@@ -89,6 +96,54 @@ func (s *Service) beginWriterWrite(w writerCommand, selectedTask string, writes 
 		return nil, nil, errors.Join(err, release())
 	}
 	return own, release, nil
+}
+
+type delegatedIdentity struct {
+	invocationID     string
+	token            string
+	executableSHA256 string
+}
+
+func delegatedWriterIdentity() (delegatedIdentity, error) {
+	values := make(map[string]string, len(loopChildEnvironmentNames))
+	for _, name := range loopChildEnvironmentNames {
+		value, present := os.LookupEnv(name)
+		if !present || value == "" {
+			return delegatedIdentity{}, fmt.Errorf("%s is required", name)
+		}
+		values[name] = value
+	}
+	if !lowerHex32.MatchString(values["TASKRAIL_DELEGATION_ID"]) {
+		return delegatedIdentity{}, errors.New("TASKRAIL_DELEGATION_ID must be lower-case 32-hex")
+	}
+	stagedPath := values["TASKRAIL"]
+	if !filepath.IsAbs(stagedPath) || filepath.Clean(stagedPath) != stagedPath {
+		return delegatedIdentity{}, errors.New("TASKRAIL must name a clean absolute path")
+	}
+	staged, err := os.Lstat(stagedPath)
+	if err != nil || !staged.Mode().IsRegular() {
+		return delegatedIdentity{}, errors.New("TASKRAIL must name a regular staged executable")
+	}
+	runningPath, err := os.Executable()
+	if err != nil {
+		return delegatedIdentity{}, fmt.Errorf("resolve running executable: %w", err)
+	}
+	running, err := os.Stat(runningPath)
+	if err != nil || !running.Mode().IsRegular() || !os.SameFile(staged, running) {
+		return delegatedIdentity{}, errors.New("running executable does not match TASKRAIL")
+	}
+	stagedDigest, err := repolock.ExecutableDigest(stagedPath)
+	if err != nil || stagedDigest != values["TASKRAIL_EXECUTABLE_SHA256"] {
+		return delegatedIdentity{}, errors.New("TASKRAIL digest does not match TASKRAIL_EXECUTABLE_SHA256")
+	}
+	runningDigest, err := repolock.ExecutableDigest(runningPath)
+	if err != nil || runningDigest != stagedDigest {
+		return delegatedIdentity{}, errors.New("running executable digest does not match TASKRAIL")
+	}
+	return delegatedIdentity{
+		invocationID: values["TASKRAIL_DELEGATION_ID"],
+		token:        values["TASKRAIL_DELEGATION_TOKEN"], executableSHA256: stagedDigest,
+	}, nil
 }
 
 // lifecycleLedger is the complete candidate set one lifecycle writer validated

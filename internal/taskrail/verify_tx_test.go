@@ -498,11 +498,14 @@ updated_at: "2026-03-31T00:00:00Z"
 `)
 	svc := newTestService(t, repo, time.Date(2026, 8, 17, 9, 0, 0, 0, time.UTC))
 	setTestVerificationIDs(svc)
-	executable := filepath.Join(t.TempDir(), "taskrail")
-	writeFile(t, executable, "taskrail-bytes")
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatalf("resolve test executable: %v", err)
+	}
 	lock, err := repolock.Acquire(context.Background(), repolock.Request{
-		Repository: svc.paths.LockRepository(),
-		Command:    "loop",
+		Repository:    svc.paths.LockRepository(),
+		Command:       "loop",
+		TransactionID: delegatedVerificationID,
 		Capability: repolock.Capability{
 			Commands:     []string{"loop"},
 			SelectedTask: selected,
@@ -523,6 +526,11 @@ updated_at: "2026-03-31T00:00:00Z"
 
 func asVerifyDelegate(t *testing.T, delegation repolock.Delegation) {
 	t.Helper()
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatalf("resolve test executable: %v", err)
+	}
+	t.Setenv("TASKRAIL", executable)
 	t.Setenv("TASKRAIL_DELEGATION_ID", "0123456789abcdef0123456789abcdef")
 	t.Setenv("TASKRAIL_DELEGATION_TOKEN", delegation.Token)
 	t.Setenv("TASKRAIL_EXECUTABLE_SHA256", delegation.ExecutableSHA256)

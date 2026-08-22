@@ -1,12 +1,17 @@
 ---
 id: T-171-contain-and-pin-autonomous-loop-child-processes
 title: Pin autonomous loop writer ownership
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#cross-platform-autonomous-loop
 dependencies:
     - T-308-publish-deterministic-loop-selection-and-dry-run
-updated_at: "2026-08-04T21:32:13Z"
+updated_at: "2026-08-22T12:54:52Z"
+completion_id: "a06516365df3bcfb88360340b156fd4d"
+last_verification_id: "ebed3d29ba39a1049bef5ba377972d96"
+last_verification_result: pass
+last_verified_at: "2026-08-22T12:54:52Z"
+last_verified_completion_id: "a06516365df3bcfb88360340b156fd4d"
 ---
 
 # T-171-contain-and-pin-autonomous-loop-child-processes Pin autonomous loop writer ownership
@@ -54,3 +59,6 @@ containment is owned by T-243, T-310, and T-311.
   non-disclosure.
 
 ## Implementation Notes
+
+- 2026-08-22T12:54:39Z: Pinned staged loop executable ownership and delegated writer identity; verified by loop ownership and full repository checks.
+- 2026-08-22T12:54:52Z: verification pass id ebed3d29ba39a1049bef5ba377972d96 previous none completion a06516365df3bcfb88360340b156fd4d

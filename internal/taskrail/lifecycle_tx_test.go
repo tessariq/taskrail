@@ -421,11 +421,14 @@ updated_at: "2026-03-31T00:00:00Z"
 # T-009-sentinel Sentinel
 `)
 		svc := newTestService(t, repo, time.Date(2026, 8, 17, 9, 0, 0, 0, time.UTC))
-		executable := filepath.Join(t.TempDir(), "taskrail")
-		writeFile(t, executable, "taskrail-bytes")
+		executable, err := os.Executable()
+		if err != nil {
+			t.Fatalf("resolve test executable: %v", err)
+		}
 		lock, err := repolock.Acquire(context.Background(), repolock.Request{
-			Repository: svc.paths.LockRepository(),
-			Command:    "loop",
+			Repository:    svc.paths.LockRepository(),
+			Command:       "loop",
+			TransactionID: "0123456789abcdef0123456789abcdef",
 			Capability: repolock.Capability{
 				Commands:     []string{"loop"},
 				SelectedTask: selected,
@@ -449,6 +452,11 @@ updated_at: "2026-03-31T00:00:00Z"
 
 	asDelegate := func(t *testing.T, delegation repolock.Delegation) {
 		t.Helper()
+		executable, err := os.Executable()
+		if err != nil {
+			t.Fatalf("resolve test executable: %v", err)
+		}
+		t.Setenv("TASKRAIL", executable)
 		t.Setenv("TASKRAIL_DELEGATION_ID", "0123456789abcdef0123456789abcdef")
 		t.Setenv("TASKRAIL_DELEGATION_TOKEN", delegation.Token)
 		t.Setenv("TASKRAIL_EXECUTABLE_SHA256", delegation.ExecutableSHA256)
@@ -482,6 +490,34 @@ updated_at: "2026-03-31T00:00:00Z"
 		}
 		if got := snapshotTree(t, repo); !mapEqual(got, before) {
 			t.Fatal("refused delegation changed repository bytes")
+		}
+	})
+
+	t.Run("wrong invocation refuses without writes", func(t *testing.T) {
+		svc, repo, delegation := delegationFixture(t, "in_progress")
+		asDelegate(t, delegation)
+		t.Setenv("TASKRAIL_DELEGATION_ID", "fedcba9876543210fedcba9876543210")
+
+		before := snapshotTree(t, repo)
+		if _, err := svc.Complete(selected, "nope"); err == nil || MachineFailureFor(err).Code != MachineCodeDelegatedRefused {
+			t.Fatalf("delegated complete with a wrong invocation = %v, want delegated_write_refused", err)
+		}
+		if got := snapshotTree(t, repo); !mapEqual(got, before) {
+			t.Fatal("wrong invocation changed repository bytes")
+		}
+	})
+
+	t.Run("wrong executable refuses without writes", func(t *testing.T) {
+		svc, repo, delegation := delegationFixture(t, "in_progress")
+		asDelegate(t, delegation)
+		t.Setenv("TASKRAIL", filepath.Join(t.TempDir(), "other-taskrail"))
+
+		before := snapshotTree(t, repo)
+		if _, err := svc.Complete(selected, "nope"); err == nil || MachineFailureFor(err).Code != MachineCodeDelegatedRefused {
+			t.Fatalf("delegated complete with a wrong executable = %v, want delegated_write_refused", err)
+		}
+		if got := snapshotTree(t, repo); !mapEqual(got, before) {
+			t.Fatal("wrong executable changed repository bytes")
 		}
 	})
 
