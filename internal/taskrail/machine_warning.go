@@ -47,6 +47,8 @@ func MachineWarnings(warnings []Warning) []MachineWarning {
 			TaskID:         warning.TaskID,
 			SpecRef:        warning.SpecRef,
 			ActiveSpecPath: warning.ActiveSpecPath,
+			Status:         warning.Status,
+			ExpectedStatus: warning.ExpectedStatus,
 		})
 	}
 	return projected

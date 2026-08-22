@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -691,6 +692,81 @@ func TestVerifyCommand(t *testing.T) {
 	for _, name := range []string{"plan.md", "report.json", "report.md"} {
 		if _, err := os.Stat(filepath.Join(verifyDir, stamp, name)); err != nil {
 			t.Errorf("expected artifact %s: %v", name, err)
+		}
+	}
+}
+
+func TestVerifyPassBeforeCompletionWarnsWithoutChangingTaskStatus(t *testing.T) {
+	for _, status := range []string{"todo", "in_progress", "blocked", "cancelled"} {
+		t.Run(status, func(t *testing.T) {
+			root := setupRepo(t)
+			writeTask(t, root, "T-100", status, "")
+
+			stdout, stderr, err := runRootSplit(t, "verify", "T-100", "--result", "pass", "--summary", "checked", "--json")
+			if err != nil {
+				t.Fatalf("verify: %v (stdout %q stderr %q)", err, stdout, stderr)
+			}
+			envelope := decodeEnvelope(t, stdout)
+			if len(envelope.Warnings) != 1 {
+				t.Fatalf("warnings = %+v, want one", envelope.Warnings)
+			}
+			warning := envelope.Warnings[0]
+			if warning.Code != "verify_pass_before_complete" || warning.TaskID != "T-100" ||
+				warning.Status != status || warning.ExpectedStatus != "completed" {
+				t.Fatalf("warning = %+v, want verify-order warning for %s", warning, status)
+			}
+			wantMessage := fmt.Sprintf("warning: passing verification for task T-100 precedes completion; current status is %s, expected completed", status)
+			if warning.Message != wantMessage {
+				t.Fatalf("warning message = %q, want %q", warning.Message, wantMessage)
+			}
+			if strings.TrimSpace(stderr) != warning.Message {
+				t.Fatalf("stderr = %q, want warning message %q", stderr, warning.Message)
+			}
+			task, err := os.ReadFile(filepath.Join(root, "planning", "tasks", "T-100.md"))
+			if err != nil {
+				t.Fatalf("read verified task: %v", err)
+			}
+			if !strings.Contains(string(task), "status: "+status) {
+				t.Fatalf("verify changed task status:\n%s", task)
+			}
+			entries, err := os.ReadDir(filepath.Join(root, "planning", "artifacts", "verify", "T-100"))
+			if err != nil || len(entries) != 1 {
+				t.Fatalf("verification artifacts = %v, %v; want one report directory", entries, err)
+			}
+			report, err := os.ReadFile(filepath.Join(root, "planning", "artifacts", "verify", "T-100", entries[0].Name(), "report.json"))
+			if err != nil || !strings.Contains(string(report), `"result": "pass"`) {
+				t.Fatalf("verification report = %q, %v; want a passing report", report, err)
+			}
+			state, err := os.ReadFile(filepath.Join(root, "planning", "STATE.md"))
+			if err != nil || !strings.Contains(string(state), "pass for T-100") {
+				t.Fatalf("state = %q, %v; want passing verification summary", state, err)
+			}
+		})
+	}
+}
+
+func TestVerifyOrderWarningIsAbsentForCompletedPassAndEveryFail(t *testing.T) {
+	for _, result := range []string{"pass", "fail"} {
+		for _, status := range []string{"todo", "in_progress", "blocked", "cancelled", "completed"} {
+			if result == "pass" && status != "completed" {
+				continue
+			}
+			t.Run(result+"/"+status, func(t *testing.T) {
+				root := setupRepo(t)
+				writeTask(t, root, "T-100", status, "")
+
+				stdout, stderr, err := runRootSplit(t, "verify", "T-100", "--result", result, "--summary", "checked", "--json")
+				if err != nil {
+					t.Fatalf("verify: %v (stdout %q stderr %q)", err, stdout, stderr)
+				}
+				envelope := decodeEnvelope(t, stdout)
+				if len(envelope.Warnings) != 0 {
+					t.Fatalf("warnings = %+v, want none", envelope.Warnings)
+				}
+				if strings.TrimSpace(stderr) != "" {
+					t.Fatalf("stderr = %q, want no warning", stderr)
+				}
+			})
 		}
 	}
 }

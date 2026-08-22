@@ -354,7 +354,7 @@ func (s *Service) Verify(input VerifyInput) (result VerifyResult, err error) {
 
 	var followups []*Task
 	followupTaskID := ""
-	var warnings []Warning
+	warnings := verifyOrderWarnings(task, input.Result)
 	if input.CreateFollowup {
 		newTask, taskWarnings, err := s.createFollowupTask(tasks, task, input)
 		if err != nil {
@@ -362,7 +362,7 @@ func (s *Service) Verify(input VerifyInput) (result VerifyResult, err error) {
 		}
 		followups = append(followups, newTask)
 		followupTaskID = newTask.Frontmatter.ID
-		warnings = taskWarnings
+		warnings = append(warnings, taskWarnings...)
 	}
 	preview := append(slices.Clone(tasks), followups...)
 
@@ -422,6 +422,19 @@ func (s *Service) Verify(input VerifyInput) (result VerifyResult, err error) {
 		FollowupTaskID:         followupTaskID,
 		Warnings:               warnings,
 	}, nil
+}
+
+func verifyOrderWarnings(task *Task, result string) []Warning {
+	if result != "pass" || task.Frontmatter.Status == "completed" {
+		return nil
+	}
+	return []Warning{{
+		Code:           "verify_pass_before_complete",
+		Message:        fmt.Sprintf("warning: passing verification for task %s precedes completion; current status is %s, expected completed", task.Frontmatter.ID, task.Frontmatter.Status),
+		TaskID:         task.Frontmatter.ID,
+		Status:         task.Frontmatter.Status,
+		ExpectedStatus: "completed",
+	}}
 }
 
 // taskValidationOpts carries the import-specific relaxations validateTaskCreatable

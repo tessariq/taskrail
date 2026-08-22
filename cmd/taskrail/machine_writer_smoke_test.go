@@ -167,7 +167,11 @@ func TestWriterCommandsPublishTheCommonEnvelope(t *testing.T) {
 			if envelope.Error != nil {
 				t.Fatalf("expected a result envelope, got error %q", envelope.Error.Code)
 			}
-			if len(envelope.Warnings) != 0 {
+			if invocation.command == "verify" {
+				if len(envelope.Warnings) != 1 || envelope.Warnings[0].Code != "verify_pass_before_complete" {
+					t.Errorf("warnings = %v, want verify order warning", envelope.Warnings)
+				}
+			} else if len(envelope.Warnings) != 0 {
 				t.Errorf("warnings = %v, want none", envelope.Warnings)
 			}
 
