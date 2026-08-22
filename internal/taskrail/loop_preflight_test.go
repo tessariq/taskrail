@@ -247,6 +247,11 @@ func TestLoopPreflightRefusesAliasedOrLinkedInputs(t *testing.T) {
 		if err := os.WriteFile(filepath.Join(repo, ".git", "evil_rev"), []byte("two\n"), 0o644); err != nil {
 			t.Skipf("filesystem cannot create portable alias: %v", err)
 		}
+		upper, upperErr := os.Stat(filepath.Join(repo, ".git", "EVIL_REV"))
+		lower, lowerErr := os.Stat(filepath.Join(repo, ".git", "evil_rev"))
+		if upperErr == nil && lowerErr == nil && os.SameFile(upper, lower) {
+			t.Skip("case-insensitive filesystem cannot create distinct aliases")
+		}
 		if _, err := svc.LoopPreflight(LoopInvocation{MaxIterations: 1, Child: []string{"agent"}}); err == nil || MachineFailureFor(err).Code != MachineCodeGitState {
 			t.Fatalf("LoopPreflight error = %v", err)
 		}
@@ -292,6 +297,7 @@ func TestLoopPreflightSnapshotAccessorsDefendFrozenBytes(t *testing.T) {
 
 func TestLoopPreflightProvesLocalManagedPathsIgnored(t *testing.T) {
 	repo := realGitRepo(t)
+	requireRecoveryDirectoryDurability(t, repo)
 	svc := newTestService(t, repo, time.Now())
 	if _, err := svc.Init(InitInput{Local: true}); err != nil {
 		t.Fatalf("init local: %v", err)
