@@ -2,6 +2,7 @@ package taskrail
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -212,6 +213,41 @@ func TestLoopLaunchChildDrainsSlowStreamsAfterLeaderExit(t *testing.T) {
 	}
 	if stdout.Len() != 1<<20 || stderr.Len() != 1<<20 {
 		t.Fatalf("stream lengths = %d, %d", stdout.Len(), stderr.Len())
+	}
+}
+
+func TestLoopLaunchChildAppliesPerChildTimeout(t *testing.T) {
+	timeout := 20 * time.Millisecond
+	input := loopHelperLaunch(t, "linger-output", nil)
+	input.Timeout = &timeout
+
+	started := time.Now()
+	execution, err := launchLoopChild(input)
+	if err != nil {
+		t.Fatalf("launchLoopChild: %v", err)
+	}
+	if !execution.TimedOut || execution.CancellationError != context.DeadlineExceeded || !execution.Containment.TerminationRequested || !execution.Failed() {
+		t.Fatalf("execution = %+v, want contained timeout failure", execution)
+	}
+	if elapsed := time.Since(started); elapsed > time.Second {
+		t.Fatalf("cleanup took %s, want less than one second", elapsed)
+	}
+}
+
+func TestLoopLaunchChildDoesNotRelabelCallerDeadline(t *testing.T) {
+	parent, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+	timeout := time.Second
+	input := loopHelperLaunch(t, "linger-output", nil)
+	input.Context = parent
+	input.Timeout = &timeout
+
+	execution, err := launchLoopChild(input)
+	if err != nil {
+		t.Fatalf("launchLoopChild: %v", err)
+	}
+	if execution.TimedOut || execution.CancellationError != context.DeadlineExceeded || !execution.Containment.TerminationRequested || !execution.Failed() {
+		t.Fatalf("execution = %+v, want contained caller cancellation", execution)
 	}
 }
 

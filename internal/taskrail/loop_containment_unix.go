@@ -10,11 +10,15 @@ import (
 	"time"
 )
 
-const unixContainmentGracePeriod = 10 * time.Second
+var unixContainmentGracePeriod = 10 * time.Second
 
 const unixContainmentLimitation = "privileged or undetectable session escape is not certified as contained"
 
-var unixGetpgid = syscall.Getpgid
+var (
+	unixGetpgid             = syscall.Getpgid
+	unixProcessGroupIsAlive = unixProcessGroupExists
+	unixKill                = syscall.Kill
+)
 
 type unixLoopChildContainment struct {
 	processGroup int
@@ -42,7 +46,7 @@ func (c *unixLoopChildContainment) verify(pid int) (loopChildContainmentEvidence
 	if group != pid {
 		return c.evidence(), fmt.Errorf("verify child process group: got %d, want %d", group, pid)
 	}
-	if _, err := unixProcessGroupExists(group); err != nil {
+	if _, err := unixProcessGroupIsAlive(group); err != nil {
 		return c.evidence(), fmt.Errorf("verify child process group %d: %w", group, err)
 	}
 	return c.evidence(), nil
@@ -85,7 +89,7 @@ func (c *unixLoopChildContainment) cleanup() (loopChildContainmentEvidence, erro
 	if c.processGroup == 0 {
 		return c.evidence(), nil
 	}
-	alive, err := unixProcessGroupExists(c.processGroup)
+	alive, err := unixProcessGroupIsAlive(c.processGroup)
 	if err != nil {
 		return c.evidence(), fmt.Errorf("inspect child process group %d: %w", c.processGroup, err)
 	}
@@ -94,11 +98,11 @@ func (c *unixLoopChildContainment) cleanup() (loopChildContainmentEvidence, erro
 		evidence.NormalDrain = true
 		return evidence, nil
 	}
-	if err := syscall.Kill(-c.processGroup, syscall.SIGTERM); err != nil && err != syscall.ESRCH {
+	if err := unixKill(-c.processGroup, syscall.SIGTERM); err != nil && err != syscall.ESRCH {
 		return c.evidence(), fmt.Errorf("terminate child process group %d: %w", c.processGroup, err)
 	}
 	if !c.waitForGroupExit(unixContainmentGracePeriod) {
-		if err := syscall.Kill(-c.processGroup, syscall.SIGKILL); err != nil && err != syscall.ESRCH {
+		if err := unixKill(-c.processGroup, syscall.SIGKILL); err != nil && err != syscall.ESRCH {
 			return c.evidence(), fmt.Errorf("force child process group %d: %w", c.processGroup, err)
 		}
 		if !c.waitForGroupExit(unixContainmentGracePeriod) {
@@ -120,7 +124,7 @@ func (c *unixLoopChildContainment) waitForGroupExit(limit time.Duration) bool {
 	deadline := time.Now().Add(limit)
 	for {
 		c.reapLeader()
-		alive, err := unixProcessGroupExists(c.processGroup)
+		alive, err := unixProcessGroupIsAlive(c.processGroup)
 		if err != nil || !alive {
 			return !alive
 		}
@@ -140,6 +144,7 @@ func (c *unixLoopChildContainment) reapLeader() {
 
 func (c *unixLoopChildContainment) evidence() loopChildContainmentEvidence {
 	return loopChildContainmentEvidence{
+		Platform:              "unix",
 		ProcessGroup:          c.processGroup,
 		ObservationLimitation: unixContainmentLimitation,
 		leaderReaped:          c.leaderReaped,

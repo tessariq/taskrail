@@ -17,6 +17,7 @@ import (
 type loopChildLaunch struct {
 	Command        []string
 	Context        context.Context
+	Timeout        *time.Duration
 	Prompt         []byte
 	RepositoryRoot string
 	Identity       loopChildIdentity
@@ -29,6 +30,7 @@ type loopChildLaunch struct {
 type loopChildExecution struct {
 	PID               int
 	ExitCode          *int
+	TimedOut          bool
 	Containment       loopChildContainmentEvidence
 	ContainmentError  error
 	CancellationError error
@@ -101,10 +103,8 @@ func launchLoopChild(input loopChildLaunch) (loopChildExecution, error) {
 	execution.Containment = containmentEvidence
 	if err != nil {
 		execution.ContainmentError = err
-		if killErr := child.Process.Kill(); killErr != nil && !errors.Is(killErr, os.ErrProcessDone) {
-			execution.ContainmentError = errors.Join(execution.ContainmentError, killErr)
-		}
 		cleanupLoopChildContainment(&execution, containment)
+		closeLoopChildTransport(stdin, childStdout, childStderr)
 		if execution.Containment.leaderReaped {
 			execution.ExitCode = &execution.Containment.leaderExitCode
 			execution.Signal = execution.Containment.leaderSignal
@@ -118,10 +118,8 @@ func launchLoopChild(input loopChildLaunch) (loopChildExecution, error) {
 	stdoutResult := copyLoopChildStream(childStdout, stdout)
 	stderrResult := copyLoopChildStream(childStderr, stderr)
 	stdinResult := writeLoopChildPromptAsync(stdin, input.Prompt)
-	contextDone := input.Context
-	if contextDone == nil {
-		contextDone = context.Background()
-	}
+	contextDone, stopContext := loopChildContext(input)
+	defer stopContext()
 	checkExit := time.NewTicker(10 * time.Millisecond)
 	defer checkExit.Stop()
 	cleanupDone := false
@@ -146,6 +144,9 @@ func launchLoopChild(input loopChildLaunch) (loopChildExecution, error) {
 		}
 		cleanupDone = true
 		cleanupLoopChildContainment(&execution, containment)
+		if execution.ContainmentError != nil {
+			closeLoopChildTransport(stdin, childStdout, childStderr)
+		}
 		if execution.Containment.leaderReaped {
 			releaseLeader(execution.Containment.leaderExitCode, execution.Containment.leaderSignal)
 		}
@@ -171,6 +172,7 @@ func launchLoopChild(input loopChildLaunch) (loopChildExecution, error) {
 				cleanup()
 			}
 		case <-contextDone.Done():
+			execution.TimedOut = loopChildTimedOut(input, contextDone)
 			execution.CancellationError = contextDone.Err()
 			cleanup()
 		case <-checkExit.C:
@@ -199,6 +201,22 @@ func launchLoopChild(input loopChildLaunch) (loopChildExecution, error) {
 		execution.ExitCode = &exitCode
 	}
 	return execution, nil
+}
+
+func loopChildContext(input loopChildLaunch) (context.Context, context.CancelFunc) {
+	parent := input.Context
+	if parent == nil {
+		parent = context.Background()
+	}
+	if input.Timeout == nil {
+		return parent, func() {}
+	}
+	return context.WithTimeout(parent, *input.Timeout)
+}
+
+func loopChildTimedOut(input loopChildLaunch, ctx context.Context) bool {
+	return input.Timeout != nil && errors.Is(ctx.Err(), context.DeadlineExceeded) &&
+		(input.Context == nil || input.Context.Err() == nil)
 }
 
 func resolveLoopChildCommand(command []string) ([]string, error) {
@@ -274,6 +292,13 @@ func cleanupLoopChildContainment(execution *loopChildExecution, containment loop
 func closeLoopChildContainment(containment loopChildContainment, cause error) error {
 	_, cleanupErr := containment.cleanup()
 	return errors.Join(cause, cleanupErr)
+}
+
+func closeLoopChildTransport(stdin io.WriteCloser, streams ...io.ReadCloser) {
+	_ = stdin.Close()
+	for _, stream := range streams {
+		_ = stream.Close()
+	}
 }
 
 func writeLoopChildPrompt(stdin io.WriteCloser, prompt []byte) error {

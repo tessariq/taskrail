@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"os/exec"
 	"strconv"
 	"syscall"
 	"testing"
@@ -46,6 +47,9 @@ func TestLoopLaunchChildTerminatesOnContextCancellation(t *testing.T) {
 	}
 	if execution.CancellationError != context.DeadlineExceeded {
 		t.Fatalf("cancellation = %v, want deadline exceeded", execution.CancellationError)
+	}
+	if execution.TimedOut {
+		t.Fatalf("execution = %+v, caller cancellation must not report a loop timeout", execution)
 	}
 	if execution.Signal != syscall.SIGTERM.String() {
 		t.Fatalf("signal = %q, want %q", execution.Signal, syscall.SIGTERM.String())
@@ -90,6 +94,44 @@ func TestLoopLaunchChildCleansUpAfterContainmentVerificationFailure(t *testing.T
 	}
 	if err := syscall.Kill(pid, 0); err != syscall.ESRCH {
 		t.Fatalf("descendant %d remains after verification cleanup: %v", pid, err)
+	}
+}
+
+func TestLoopLaunchChildReturnsAfterSurvivorEvidence(t *testing.T) {
+	if _, err := exec.LookPath("setsid"); err != nil {
+		t.Skip("setsid is required to retain an escaped descendant stream")
+	}
+	record := t.TempDir() + "/descendant"
+	t.Setenv("LOOP_DESCENDANT", record)
+	originalAlive, originalKill, originalGrace := unixProcessGroupIsAlive, unixKill, unixContainmentGracePeriod
+	unixProcessGroupIsAlive = func(int) (bool, error) { return true, nil }
+	unixKill = func(int, syscall.Signal) error { return nil }
+	unixContainmentGracePeriod = 0
+	t.Cleanup(func() {
+		unixProcessGroupIsAlive = originalAlive
+		unixKill = originalKill
+		unixContainmentGracePeriod = originalGrace
+		if data, err := os.ReadFile(record); err == nil {
+			if pid, err := strconv.Atoi(string(data)); err == nil {
+				_ = syscall.Kill(-pid, syscall.SIGKILL)
+			}
+		}
+	})
+
+	input := loopChildLaunch{
+		Command:        []string{"/bin/sh", "-c", "setsid sleep 5 & echo $! > \"$LOOP_DESCENDANT\"; exit 0"},
+		RepositoryRoot: t.TempDir(),
+	}
+	started := time.Now()
+	execution, err := launchLoopChild(input)
+	if err != nil {
+		t.Fatalf("launchLoopChild: %v", err)
+	}
+	if !execution.Containment.Survivors || execution.ContainmentError == nil || execution.StdoutError == nil {
+		t.Fatalf("execution = %+v, want survivor evidence and closed stream failure", execution)
+	}
+	if elapsed := time.Since(started); elapsed > time.Second {
+		t.Fatalf("launchLoopChild returned after %s, want survivor evidence without waiting for the escaped stream", elapsed)
 	}
 }
 

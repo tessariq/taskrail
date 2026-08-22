@@ -1,13 +1,18 @@
 ---
 id: T-311-integrate-portable-loop-process-containment
 title: Integrate portable loop process containment
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#cross-platform-autonomous-loop
 dependencies:
     - T-243-contain-autonomous-loop-process-trees
     - T-310-contain-loop-process-trees-on-windows
-updated_at: "2026-08-08T14:23:09Z"
+updated_at: "2026-08-22T15:32:59Z"
+completion_id: "633e58941c0e31765484b44a735fdf63"
+last_verification_id: "583dea6c72d71a946e6b3c4597854e3c"
+last_verification_result: pass
+last_verified_at: "2026-08-22T15:32:59Z"
+last_verified_completion_id: "633e58941c0e31765484b44a735fdf63"
 ---
 
 # T-311-integrate-portable-loop-process-containment Integrate portable loop process containment
@@ -50,3 +55,6 @@ portable process evidence and cleanup behavior to postflight diagnostics.
   child and process diagnostics.
 
 ## Implementation Notes
+
+- 2026-08-22T15:32:49Z: Applied frozen per-child timeouts to the portable containment boundary, preserved caller interruption classification, and closed transport pipes after containment failure so survivor evidence cannot retain the loop boundary.
+- 2026-08-22T15:32:59Z: verification pass id 583dea6c72d71a946e6b3c4597854e3c previous none completion 633e58941c0e31765484b44a735fdf63
