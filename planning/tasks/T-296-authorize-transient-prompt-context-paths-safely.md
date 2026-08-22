@@ -1,13 +1,18 @@
 ---
 id: T-296-authorize-transient-prompt-context-paths-safely
 title: Authorize transient prompt context paths safely
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#workflow-prompt-catalog-and-overrides
 dependencies:
     - T-250-render-prompts-from-storage-neutral-context
     - T-222-initialize-and-discover-ignored-local-taskrail
-updated_at: "2026-08-08T14:23:08Z"
+updated_at: "2026-08-22T09:00:21Z"
+completion_id: "35815aae8db88ed0bd2311c3c62eae43"
+last_verification_id: "c2b52a4deb914fed1d1ec7d966f47a10"
+last_verification_result: pass
+last_verified_at: "2026-08-22T09:00:21Z"
+last_verified_completion_id: "35815aae8db88ed0bd2311c3c62eae43"
 ---
 
 # T-296-authorize-transient-prompt-context-paths-safely Authorize transient prompt context paths safely
@@ -40,3 +45,6 @@ against the exact active transient artifacts directory.
   identity goldens prove deterministic recheck inputs.
 
 ## Implementation Notes
+
+- 2026-08-22T09:00:00Z: Added read-only transient prompt-path authorization with Git and filesystem identity rechecks.
+- 2026-08-22T09:00:21Z: verification pass id c2b52a4deb914fed1d1ec7d966f47a10 previous none completion 35815aae8db88ed0bd2311c3c62eae43
