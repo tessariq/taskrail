@@ -24,6 +24,23 @@ func markdownLinesWithoutFencedContent(markdown string) []string {
 	return lines
 }
 
+func markdownHasUnclosedFence(markdown string) bool {
+	var openFence string
+	for _, line := range strings.Split(markdown, "\n") {
+		fence, rest := markdownFence(line)
+		if openFence == "" {
+			if fence != "" {
+				openFence = fence
+			}
+			continue
+		}
+		if fence != "" && fence[0] == openFence[0] && len(fence) >= len(openFence) && strings.TrimSpace(rest) == "" {
+			openFence = ""
+		}
+	}
+	return openFence != ""
+}
+
 func markdownFence(line string) (fence, rest string) {
 	line = strings.TrimSuffix(line, "\r")
 	indent := len(line) - len(strings.TrimLeft(line, " "))

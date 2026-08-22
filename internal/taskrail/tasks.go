@@ -124,6 +124,35 @@ func verificationNoteLine(ts, result, id, previous string, completionID ...strin
 // implementationNotesHeading is the section verify and block append their notes to.
 const implementationNotesHeading = "## Implementation Notes"
 
+// scaffoldSectionHeadings are the level-two headings native producers own. Text
+// interpolated into a generated body must not introduce one of them, or it would
+// break the ordered body contract.
+var scaffoldSectionHeadings = []string{
+	"## Description",
+	"## Acceptance",
+	"## Verification Notes",
+	implementationNotesHeading,
+}
+
+func rejectScaffoldHeading(field, text string) error {
+	if markdownHasUnclosedFence(text) {
+		return fmt.Errorf("%s must not contain an unclosed code fence", field)
+	}
+	for _, line := range markdownLinesWithoutFencedContent(text) {
+		level, heading := markdownATXHeading(line)
+		if level != 2 {
+			continue
+		}
+		for _, scaffold := range scaffoldSectionHeadings {
+			_, scaffoldHeading := markdownATXHeading(scaffold)
+			if heading == scaffoldHeading {
+				return fmt.Errorf("%s must not contain scaffold heading %q", field, scaffold)
+			}
+		}
+	}
+	return nil
+}
+
 // hasImplementationNotesHeading reports whether body already carries the section.
 // It matches a whole line, so neither a heading that merely starts with the same
 // words nor a mention inside prose counts as the section.

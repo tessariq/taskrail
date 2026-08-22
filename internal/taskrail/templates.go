@@ -83,15 +83,18 @@ _TODO: list what this version deliberately does not do._
 `) + "\n"
 }
 
-// renderNewTaskBody produces the placeholder body for a scaffolded task: the
-// four sections agents and humans fill in before starting work. A non-empty
-// provenance line is appended to the Description so a follow-up records in its
-// durable file that it derives from a parent, not only in the dependency list.
+// renderNewTaskBody produces the shared body contract for native task creation.
+// A non-empty provenance line records an implementation follow-up's parent in
+// its durable file, not only in the dependency list.
 func renderNewTaskBody(id, title, provenance string) string {
-	description := "TODO: describe the work and link the spec section."
+	description := "TODO: describe the outcome's invariant and relevant spec section."
 	if provenance != "" {
 		description += "\n\n" + provenance
 	}
+	return renderOutcomeFocusedTaskBody(id, title, description)
+}
+
+func renderOutcomeFocusedTaskBody(id, title, description string) string {
 	// A bare scaffold may carry no title; keep the heading free of a trailing space.
 	heading := strings.TrimRight(fmt.Sprintf("# %s %s", id, title), " ")
 	return fmt.Sprintf(`%s
@@ -100,39 +103,26 @@ func renderNewTaskBody(id, title, provenance string) string {
 
 %s
 
+TODO: state one independently meaningful outcome. Do not bundle independently valuable outcomes or create a fragment without independent value.
+
 ## Acceptance
 
-- TODO: define acceptance criteria.
+- TODO: define observable acceptance criteria for the outcome.
 
 ## Verification Notes
 
-- TODO: record verification evidence paths.
+- TODO: map each criterion to setup, action, expected observation, and the cheapest sufficient evidence.
+- TODO: record later evidence paths after verification.
 
 ## Implementation Notes
 `, heading, description)
 }
 
-// renderFollowupTaskBody produces the body for a verify-created follow-up task.
-// Unlike renderNewTaskBody its Description is evidence-populated from the
-// verification finding and it deliberately omits an Implementation Notes section,
-// so the two task-body scaffolds stay distinct while living side by side
-// (T-028/T-038).
-func renderFollowupTaskBody(id, title, description string) string {
-	return fmt.Sprintf(`# %s %s
-
-## Description
-
-%s
-
-## Acceptance
-
-- The follow-up issue described by verification is resolved.
-- Verification evidence is updated.
-
-## Verification Notes
-
-- Re-run task-scoped verification after implementing the fix.
-`, id, title, description)
+// renderFollowupTaskBody records the deferred outcome and makes the newly
+// created task its integrated owner while retaining the native body contract.
+func renderFollowupTaskBody(id, title, description, sourceID string) string {
+	description = fmt.Sprintf("Deferred independently meaningful outcome: %s\n\nThis task owns integrated delivery of the deferred outcome and its invariant after %s's verification.", description, sourceID)
+	return renderOutcomeFocusedTaskBody(id, title, description)
 }
 
 func renderVerificationPlan(task *Task, input VerifyInput, verificationID, previousVerificationID, followupTaskID string) string {

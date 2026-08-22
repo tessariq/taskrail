@@ -1,12 +1,17 @@
 ---
 id: T-303-align-native-task-producers-with-the-body-contract
 title: Align native task producers with the body contract
-status: todo
+status: completed
 priority: medium
 spec_ref: specs/v0.5.0.md#outcome-focused-task-authoring
 dependencies:
     - T-251-ship-the-outcome-focused-task-authoring-prompt
-updated_at: "2026-08-08T14:23:09Z"
+updated_at: "2026-08-22T10:47:34Z"
+completion_id: "ab74d55cddabb11f9a86fdde9003c932"
+last_verification_id: "0423f52a8b319cdc7fd7fff74de717ac"
+last_verification_result: pass
+last_verified_at: "2026-08-22T10:47:34Z"
+last_verified_completion_id: "ab74d55cddabb11f9a86fdde9003c932"
 ---
 
 # T-303-align-native-task-producers-with-the-body-contract Align native task producers with the body contract
@@ -38,3 +43,6 @@ creation with the shared body shape and implicit-hold contract.
   projection fixtures prove implicit hold and unchanged native semantics.
 
 ## Implementation Notes
+
+- 2026-08-22T10:47:33Z: Aligned native task producers with the shared outcome-focused body contract and safeguards.
+- 2026-08-22T10:47:34Z: verification pass id 0423f52a8b319cdc7fd7fff74de717ac previous none completion ab74d55cddabb11f9a86fdde9003c932

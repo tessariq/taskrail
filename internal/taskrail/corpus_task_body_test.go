@@ -8,18 +8,6 @@ import (
 	"testing"
 )
 
-// scaffoldSectionHeadings are the sections renderNewTaskBody lays down, and the
-// only headings the duplicate guard below scopes to. Deeper prose headings an
-// author adds may legitimately repeat, so they stay out of scope;
-// TestScaffoldSectionHeadingsMatchScaffoldOutput keeps this list from drifting
-// away from the scaffold it mirrors.
-var scaffoldSectionHeadings = []string{
-	"## Description",
-	"## Acceptance",
-	"## Verification Notes",
-	implementationNotesHeading,
-}
-
 // TestCorpusTasksHaveOneOfEachScaffoldSection holds the invariant T-119 healed at
 // zero, widened in T-135 from Implementation Notes to every scaffold section. The
 // writer that duplicated Implementation Notes is fixed (T-117), but a task body is

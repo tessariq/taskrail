@@ -2,6 +2,7 @@ package taskrail
 
 import (
 	"encoding/json"
+	"maps"
 	"os"
 	"path/filepath"
 	"strings"
@@ -138,6 +139,31 @@ func TestApplyImportDraftWarnsWhenTitleProducesEmptySlug(t *testing.T) {
 	}
 	if !validation.Valid {
 		t.Fatalf("expected valid repo after bare-id fallback, got %v", validation.Violations)
+	}
+}
+
+func TestApplyImportDraftRejectsMultilineTaskTitle(t *testing.T) {
+	t.Parallel()
+
+	svc := applyFixture(t)
+	draft := ImportDraft{
+		SchemaVersion: importDraftSchemaVersion,
+		Target:        "tasks",
+		Source:        "notes.md",
+		Tasks: []TaskDraft{{
+			Key:      "injected",
+			Title:    "Injected title\n## Acceptance",
+			SpecRef:  "specs/v0.1.0.md#summary",
+			Priority: "medium",
+		}},
+	}
+	rel := writeDraftFile(t, svc.paths.RepoRoot, "planning/imports/injected-title.json", draft)
+	before := snapshotTree(t, svc.paths.RepoRoot)
+	if _, err := svc.ApplyImportDraft(ApplyDraftInput{DraftPath: rel}); err == nil {
+		t.Fatal("expected multiline import title rejection")
+	}
+	if got := snapshotTree(t, svc.paths.RepoRoot); !maps.Equal(before, got) {
+		t.Fatal("rejected import title changed the repository")
 	}
 }
 

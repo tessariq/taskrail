@@ -3,6 +3,7 @@ package taskrail
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -966,6 +967,185 @@ func TestScaffoldedTaskVerifiedKeepsOneNotesSection(t *testing.T) {
 	}
 	if !strings.Contains(body, "verification pass") {
 		t.Fatalf("verification note missing from the body:\n%s", body)
+	}
+}
+
+func TestNativeTaskProducersUseOutcomeFocusedBodyContract(t *testing.T) {
+	t.Parallel()
+
+	repo := seedFixtureRepo(t)
+	writeTask(t, repo, "T-002", "Parent item", "completed", "high", "specs/v0.1.0.md#summary", nil)
+	svc := newTestService(t, repo, time.Date(2026, 8, 22, 12, 0, 0, 0, time.UTC))
+
+	normal, err := svc.CreateTask(CreateTaskInput{
+		Title:    "Normal task",
+		SpecRef:  "specs/v0.1.0.md#summary",
+		Priority: "high",
+	})
+	if err != nil {
+		t.Fatalf("create normal task: %v", err)
+	}
+	implementationFollowup, err := svc.CreateTask(CreateTaskInput{
+		Title:      "Implementation follow-up",
+		FollowUpOf: "T-002",
+	})
+	if err != nil {
+		t.Fatalf("create implementation follow-up: %v", err)
+	}
+	verification, err := svc.Verify(VerifyInput{
+		TaskID:              "T-002",
+		Result:              "pass",
+		Summary:             "A deferred outcome remains",
+		Details:             "Deliver the deferred boundary behavior as one integrated result.",
+		CreateFollowup:      true,
+		FollowupTitle:       "Verification follow-up",
+		FollowupDescription: "Deliver the deferred boundary behavior as one integrated result.",
+	})
+	if err != nil {
+		t.Fatalf("create verification follow-up: %v", err)
+	}
+
+	_, tasks, err := svc.loadStateAndTasks()
+	if err != nil {
+		t.Fatalf("load tasks: %v", err)
+	}
+	for _, id := range []string{normal.TaskID, implementationFollowup.TaskID, verification.FollowupTaskID} {
+		task, ok := taskByID(tasks, id)
+		if !ok {
+			t.Fatalf("created task %s not found", id)
+		}
+		assertOutcomeFocusedTaskBody(t, task)
+		if task.Frontmatter.Policy != nil || task.Frontmatter.Reason != nil {
+			t.Fatalf("%s has explicit loop metadata: %+v", id, task.Frontmatter.LoopPolicyMetadata)
+		}
+		if policy := ResolveLoopPolicy(task.Frontmatter.LoopPolicyMetadata); policy.Policy != "hold" || policy.Source != "default" {
+			t.Fatalf("%s loop policy = %+v, want implicit hold", id, policy)
+		}
+		data := readFileString(t, filepath.Join(repo, task.Path))
+		if strings.Contains(data, "loop_policy:") || strings.Contains(data, "loop_reason:") {
+			t.Fatalf("%s wrote explicit loop fields:\n%s", id, data)
+		}
+	}
+
+	implementationTask, _ := taskByID(tasks, implementationFollowup.TaskID)
+	if !strings.Contains(implementationTask.Body, "Follow-up derived from T-002") {
+		t.Fatalf("implementation follow-up lost provenance: %s", implementationTask.Body)
+	}
+	verificationTask, _ := taskByID(tasks, verification.FollowupTaskID)
+	if !strings.Contains(verificationTask.Body, "owns integrated delivery") {
+		t.Fatalf("verification follow-up does not identify its integrated owner: %s", verificationTask.Body)
+	}
+
+	if _, err := svc.Verify(VerifyInput{TaskID: normal.TaskID, Result: "pass", Summary: "checked"}); err != nil {
+		t.Fatalf("verify normal scaffold: %v", err)
+	}
+	body := readFileString(t, filepath.Join(repo, normal.Path))
+	if got := strings.Count(body, implementationNotesHeading); got != 1 {
+		t.Fatalf("normal task has %d Implementation Notes headings after verify, want 1:\n%s", got, body)
+	}
+	validation, err := svc.Validate()
+	if err != nil {
+		t.Fatalf("validate native task outputs: %v", err)
+	}
+	if !validation.Valid {
+		t.Fatalf("native task outputs invalid: %v", validation.Violations)
+	}
+}
+
+func TestNativeTaskProducersRejectBodyShapeInjection(t *testing.T) {
+	t.Parallel()
+
+	t.Run("task title", func(t *testing.T) {
+		t.Parallel()
+		repo := seedFixtureRepo(t)
+		svc := newTestService(t, repo, time.Date(2026, 8, 22, 12, 0, 0, 0, time.UTC))
+		before := snapshotTree(t, repo)
+		_, err := svc.CreateTask(CreateTaskInput{
+			Title:    "Injected title\n## Acceptance",
+			SpecRef:  "specs/v0.1.0.md#summary",
+			Priority: "medium",
+		})
+		if err == nil {
+			t.Fatal("expected multiline title rejection")
+		}
+		if got := snapshotTree(t, repo); !maps.Equal(before, got) {
+			t.Fatal("rejected task title changed the repository")
+		}
+	})
+
+	for _, tc := range []struct {
+		name  string
+		input VerifyInput
+	}{
+		{
+			name:  "follow-up title",
+			input: VerifyInput{FollowupTitle: "Injected title\n## Acceptance"},
+		},
+		{
+			name:  "follow-up description",
+			input: VerifyInput{FollowupTitle: "Follow-up", FollowupDescription: "Deferred work\n\n## Acceptance"},
+		},
+		{
+			name:  "equivalent follow-up description heading",
+			input: VerifyInput{FollowupTitle: "Follow-up", FollowupDescription: "Deferred work\n\n  ## Acceptance ##"},
+		},
+		{
+			name:  "follow-up details fallback",
+			input: VerifyInput{FollowupTitle: "Follow-up", Details: "Deferred work\n\n## Verification Notes"},
+		},
+		{
+			name:  "unclosed follow-up description fence",
+			input: VerifyInput{FollowupTitle: "Follow-up", FollowupDescription: "```markdown\nDeferred work"},
+		},
+	} {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			repo := seedFixtureRepo(t)
+			writeTask(t, repo, "T-002", "Parent", "completed", "high", "specs/v0.1.0.md#summary", nil)
+			svc := newTestService(t, repo, time.Date(2026, 8, 22, 12, 0, 0, 0, time.UTC))
+			before := snapshotTree(t, repo)
+			input := tc.input
+			input.TaskID = "T-002"
+			input.Result = "pass"
+			input.Summary = "deferred work"
+			input.CreateFollowup = true
+			if _, err := svc.Verify(input); err == nil {
+				t.Fatal("expected follow-up body shape rejection")
+			}
+			if got := snapshotTree(t, repo); !maps.Equal(before, got) {
+				t.Fatal("rejected follow-up changed the repository")
+			}
+		})
+	}
+}
+
+func assertOutcomeFocusedTaskBody(t *testing.T, task *Task) {
+	t.Helper()
+
+	sections := []string{"## Description", "## Acceptance", "## Verification Notes", implementationNotesHeading}
+	previous := -1
+	for _, section := range sections {
+		position := strings.Index(task.Body, section)
+		if position < 0 || position <= previous || strings.Count(task.Body, section) != 1 {
+			t.Fatalf("%s does not have one ordered %s section:\n%s", task.Frontmatter.ID, section, task.Body)
+		}
+		previous = position
+	}
+	for _, want := range []string{
+		"independently meaningful outcome",
+		"invariant",
+		"Do not bundle independently valuable outcomes or create a fragment without independent value.",
+		"observable acceptance criteria",
+		"criterion to setup, action, expected observation, and the cheapest sufficient evidence",
+		"later evidence paths",
+	} {
+		if !strings.Contains(task.Body, want) {
+			t.Errorf("%s body missing %q:\n%s", task.Frontmatter.ID, want, task.Body)
+		}
+	}
+	if strings.Contains(task.Body, "right-sized") {
+		t.Errorf("%s body claims semantic sizing certification:\n%s", task.Frontmatter.ID, task.Body)
 	}
 }
 

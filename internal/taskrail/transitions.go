@@ -508,7 +508,7 @@ func (s *Service) CreateTask(input CreateTaskInput) (result CreateTaskResult, er
 	// would make the very next validate fail. It is also the only free-text operator
 	// input that reaches the file: the slug is normalized to [a-z0-9-] and the
 	// description/provenance lines are generated.
-	if err := ensurePortableNote("title", title); err != nil {
+	if err := ensureTaskTitle(title); err != nil {
 		return CreateTaskResult{}, WithMachineErrorCode(MachineCodeInvalidArguments, err)
 	}
 
@@ -583,7 +583,7 @@ func (s *Service) CreateTask(input CreateTaskInput) (result CreateTaskResult, er
 	now := timestamp(s.now())
 	var provenance string
 	if followUpOf != "" {
-		provenance = fmt.Sprintf("Follow-up derived from %s's verification or discovery.", followUpOf)
+		provenance = fmt.Sprintf("Follow-up derived from %s's verification or discovery. This task owns the independently meaningful deferred outcome and any required integrated delivery.", followUpOf)
 	}
 	body := renderNewTaskBody(nextID, title, provenance)
 	newTask := &Task{
@@ -665,6 +665,13 @@ func ensurePortableNote(field, note string) error {
 	return nil
 }
 
+func ensureTaskTitle(title string) error {
+	if strings.ContainsAny(title, "\r\n") {
+		return errors.New("title must not contain a newline")
+	}
+	return ensurePortableNote("title", title)
+}
+
 func (s *Service) createFollowupTask(tasks []*Task, source *Task, input VerifyInput) (*Task, []Warning, error) {
 	priority := strings.TrimSpace(input.FollowupPriority)
 	if priority == "" {
@@ -690,15 +697,18 @@ func (s *Service) createFollowupTask(tasks []*Task, source *Task, input VerifyIn
 	// own note is fixed-format, but a follow-up's title falls back to --summary and
 	// its body to --details, either of which an operator may paste a gitignored
 	// evidence path into. Guard before Verify writes any artifact or task file.
-	if err := ensurePortableNote("follow-up title", title); err != nil {
+	if err := ensureTaskTitle(title); err != nil {
 		return nil, nil, WithMachineErrorCode(MachineCodeInvalidArguments, err)
 	}
 	if err := ensurePortableNote("follow-up description", description); err != nil {
 		return nil, nil, WithMachineErrorCode(MachineCodeInvalidArguments, err)
 	}
+	if err := rejectScaffoldHeading("follow-up description", description); err != nil {
+		return nil, nil, WithMachineErrorCode(MachineCodeInvalidArguments, err)
+	}
 	nextID, warnings := nextTaskIDWithSlug(tasks, title, false, true)
 
-	body := renderFollowupTaskBody(nextID, title, description)
+	body := renderFollowupTaskBody(nextID, title, description, source.Frontmatter.ID)
 	filename := filepath.Join(s.paths.TasksDir, nextID+".md")
 	task := &Task{
 		Frontmatter: TaskFrontmatter{

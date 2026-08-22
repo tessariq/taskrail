@@ -296,7 +296,7 @@ func (s *Service) preflightImportDraft(tasks []*Task, draft ImportDraft) error {
 		// Mirror CreateTask's title-portability guard here too: without it a draft
 		// whose later task carries an unportable title would only fail mid-loop,
 		// after the earlier tasks were already written.
-		if err := ensurePortableNote("title", strings.TrimSpace(task.Title)); err != nil {
+		if err := ensureTaskTitle(strings.TrimSpace(task.Title)); err != nil {
 			return fmt.Errorf("%s: %w", taskDraftLabel(task, i), err)
 		}
 	}
