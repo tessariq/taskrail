@@ -63,6 +63,46 @@ func TestRenderPromptValidatesAndSubstitutesDeclaredTokens(t *testing.T) {
 	}
 }
 
+func TestTaskAuthoringPromptDefinesOutcomeFocusedBodyContract(t *testing.T) {
+	repo := seedFixtureRepo(t)
+	writeTask(t, repo, "T-001-author", "Author", "todo", "high", "specs/v0.1.0.md#summary", nil)
+	svc := newTestService(t, repo, time.Date(2026, 8, 22, 12, 0, 0, 0, time.UTC))
+
+	result, err := svc.PromptRender(PromptRenderCommandInput{ID: "task-authoring", Task: "T-001-author"})
+	if err != nil {
+		t.Fatalf("render task authoring prompt: %v", err)
+	}
+	content := strings.Join(strings.Fields(result.Content), " ")
+	for _, fixture := range []struct {
+		name string
+		want string
+	}{
+		{"managed reads", "Use `taskrail task show T-001-author` and `taskrail spec show v0.1.0` to inspect managed bytes; do not read logical paths directly."},
+		{"aligned", "one independently meaningful user, operator, or system outcome and the invariant it establishes"},
+		{"oversized", "Split an oversized proposal when independently useful parts have separate acceptance or durable oracles"},
+		{"fragmented", "Merge a fragmented proposal when code, tests, documentation, migration, and cross-layer changes together establish one observable result"},
+		{"integration owner", "Name which resulting task owns required integrated behavior."},
+		{"mechanical size proxy", "Do not use file count, criterion count, implementation layers, or estimates as size proxies."},
+		{"relevant boundaries", "For every acceptance criterion, map relevant actor, precondition, state, action, and expected success; include failure and boundary observations where they materially differ."},
+		{"evidence layer", "cheapest sufficient evidence layer"},
+		{"durable oracle", "public or durable oracle"},
+		{"shallow oracle", "a shallow oracle when it does not establish persisted or user-visible behavior"},
+		{"regression", "regression-sensitive evidence"},
+		{"manual evidence", "Manual probes must be reproducible and sandbox-first, name prerequisites and cleanup, and distinguish expected behavior from observed evidence."},
+		{"non-code evidence", "Non-code tasks must name an equivalent inspectable check or explain why a test category is not applicable."},
+		{"reuse rationale", "Before proposing a new abstraction, inventory relevant existing repository primitives and record why extension or reuse is insufficient."},
+		{"non-todo", "Refuse to author a task whose status is not exactly `todo`."},
+		{"over-prescribed", "Refuse vague suite-pass evidence, unnecessary internal prescription, speculative checklist scope, and direct task mutation."},
+		{"read-only", "Do not mutate the task, its status, dependencies, spec, or repository files."},
+	} {
+		t.Run(fixture.name, func(t *testing.T) {
+			if !strings.Contains(content, fixture.want) {
+				t.Errorf("task-authoring prompt missing %q:\n%s", fixture.want, result.Content)
+			}
+		})
+	}
+}
+
 func TestRenderPromptIsOnePass(t *testing.T) {
 	result, err := RenderPrompt(PromptRenderInput{
 		Template:       []byte("{{FIRST}} {{SECOND}}"),

@@ -1,12 +1,17 @@
 ---
 id: T-251-ship-the-outcome-focused-task-authoring-prompt
 title: Ship the outcome-focused task-authoring prompt
-status: todo
+status: completed
 priority: medium
 spec_ref: specs/v0.5.0.md#outcome-focused-task-authoring
 dependencies:
     - T-250-render-prompts-from-storage-neutral-context
-updated_at: "2026-08-06T13:46:30Z"
+updated_at: "2026-08-22T10:20:26Z"
+completion_id: "e60670d3d75104000add18be8fc95783"
+last_verification_id: "26a7ec1f186888f6f2ec86f96622f715"
+last_verification_result: pass
+last_verified_at: "2026-08-22T10:20:26Z"
+last_verified_completion_id: "e60670d3d75104000add18be8fc95783"
 ---
 
 # T-251-ship-the-outcome-focused-task-authoring-prompt Ship the outcome-focused task-authoring prompt
@@ -37,3 +42,6 @@ from the later CAS writer that applies a reviewed proposal.
   rendering remains read-only.
 
 ## Implementation Notes
+
+- 2026-08-22T10:20:16Z: Ship the read-only outcome-focused task-authoring prompt and contract fixtures.
+- 2026-08-22T10:20:26Z: verification pass id 26a7ec1f186888f6f2ec86f96622f715 previous none completion e60670d3d75104000add18be8fc95783
