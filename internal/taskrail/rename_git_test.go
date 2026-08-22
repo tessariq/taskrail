@@ -82,7 +82,6 @@ func TestRenameTaskPublishesByFilesystemOperationsInRealRepo(t *testing.T) {
 // A handled publication failure rolls the worktree back to its exact original
 // bytes, so neither the worktree nor the Git index shows any residue.
 func TestRenameTaskRollbackLeavesGitIndexCleanInRealRepo(t *testing.T) {
-	t.Parallel()
 	requirePermissionFaultInjection(t)
 	repo, runGit := realGitFixtureRepo(t)
 	writeTask(t, repo, "T-001", "Base", "completed", "high", "specs/v0.1.0.md#summary", nil)

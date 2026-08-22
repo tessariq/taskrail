@@ -742,7 +742,6 @@ func TestRenameTaskRewritesAllInboundDependents(t *testing.T) {
 }
 
 func TestRenameTaskRollsBackWhenTaskPublicationFails(t *testing.T) {
-	t.Parallel()
 	requirePermissionFaultInjection(t)
 	svc, repo := renameFixture(t)
 	tasksDir := filepath.Join(repo, "planning", "tasks")
