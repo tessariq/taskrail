@@ -275,6 +275,12 @@ allowed task, its frozen implementation prompt, and delivery/review limits. A
 replacement implementation prompt requires its exact template SHA-256 through
 `--allow-prompt-override-sha256`; dry run never launches a child process.
 
+Execution keeps child output streaming, so use `--result-file <external-path>`
+to receive its one terminal schema-1 envelope. The target must be absent in an
+existing, non-symlinked directory outside the worktree and Git metadata;
+Taskrail rechecks that directory and creates the file without replacement after
+postflight.
+
 Let Taskrail pick the next eligible task, start it, and advance it:
 
 ```sh

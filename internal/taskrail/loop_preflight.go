@@ -24,6 +24,7 @@ type LoopInvocation struct {
 	MaxReviewRounds           *int
 	Timeout                   *time.Duration
 	AllowPromptOverrideSHA256 string
+	ResultFile                string
 	Child                     []string
 }
 
@@ -125,7 +126,7 @@ func ParseLoopInvocation(args []string) (LoopInvocation, error) {
 			if name == "--dry-run" {
 				invocation.DryRun = true
 			}
-		case "--max-iterations", "--max-review-rounds", "--timeout", "--allow-prompt-override-sha256":
+		case "--max-iterations", "--max-review-rounds", "--timeout", "--allow-prompt-override-sha256", "--result-file":
 			if !inline {
 				i++
 				if i == len(args) {
@@ -157,12 +158,20 @@ func ParseLoopInvocation(args []string) (LoopInvocation, error) {
 				invocation.Timeout = &duration
 			case "--allow-prompt-override-sha256":
 				invocation.AllowPromptOverrideSHA256 = value
+			case "--result-file":
+				if value == "" {
+					return LoopInvocation{}, invalidArgumentsf("--result-file requires a non-empty path")
+				}
+				invocation.ResultFile = value
 			}
 		default:
 			return LoopInvocation{}, invalidArgumentsf("unsupported loop flag %s", name)
 		}
 	}
 	if invocation.DryRun {
+		if invocation.ResultFile != "" {
+			return LoopInvocation{}, invalidArgumentsf("loop --dry-run does not support --result-file")
+		}
 		if dash >= 0 {
 			return LoopInvocation{}, invalidArgumentsf("loop --dry-run does not accept a child command")
 		}
@@ -262,6 +271,9 @@ func validateLoopInvocation(invocation LoopInvocation) error {
 	}
 	if invocation.Timeout != nil && *invocation.Timeout <= 0 {
 		return invalidArgumentsf("--timeout must be a positive Go duration")
+	}
+	if invocation.DryRun && invocation.ResultFile != "" {
+		return invalidArgumentsf("loop --dry-run does not support --result-file")
 	}
 	if !invocation.DryRun && len(invocation.Child) == 0 {
 		return invalidArgumentsf("loop execution requires a child command after --")

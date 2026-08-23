@@ -120,6 +120,114 @@ func TestLoopExecutionRejectsJSONBeforeRepositoryDiscovery(t *testing.T) {
 	}
 }
 
+func TestLoopExecutionPublishesTerminalResultOutOfBand(t *testing.T) {
+	clearLoopExecutionEnvironment(t)
+	root := setupLoopDryRunRepo(t)
+	result := filepath.Join(t.TempDir(), "loop-result.json")
+	before := readAllFiles(t, root)
+
+	stdout, _, err := runRootSplit(t, "loop", "--result-file", result, "--", "not-run")
+	if err != nil {
+		t.Fatalf("loop execution: %v (stdout %q)", err, stdout)
+	}
+	if strings.Contains(stdout, `"schema_version"`) {
+		t.Fatalf("loop stdout contains result document: %q", stdout)
+	}
+	document, err := os.ReadFile(result)
+	if err != nil {
+		t.Fatalf("read result file: %v", err)
+	}
+	envelope := decodeEnvelope(t, string(document))
+	if envelope.Command != "loop" || envelope.Error != nil {
+		t.Fatalf("result envelope = %+v", envelope)
+	}
+	var diagnostic taskrail.LoopDiagnostic
+	if err := json.Unmarshal(envelope.Result, &diagnostic); err != nil {
+		t.Fatalf("decode diagnostic: %v", err)
+	}
+	if diagnostic.Outcome != "no_work" || diagnostic.LastIteration != nil {
+		t.Fatalf("diagnostic = %+v", diagnostic)
+	}
+	if after := readAllFiles(t, root); !reflect.DeepEqual(after, before) {
+		t.Fatal("result publication changed repository files")
+	}
+}
+
+func TestLoopExecutionPublishesPostflightFailureOutOfBand(t *testing.T) {
+	clearLoopExecutionEnvironment(t)
+	root := setupLoopDryRunRepo(t)
+	writeTask(t, root, "T-001-ready", "todo", "")
+	taskPath := filepath.Join(root, "planning", "tasks", "T-001-ready.md")
+	task, err := os.ReadFile(taskPath)
+	if err != nil {
+		t.Fatalf("read task: %v", err)
+	}
+	if err := os.WriteFile(taskPath, []byte(strings.Replace(string(task), "updated_at:", "loop_policy: allow\nloop_reason: test execution\nupdated_at:", 1)), 0o644); err != nil {
+		t.Fatalf("allow task: %v", err)
+	}
+	if _, err := runRoot(t, "repair", "--apply"); err != nil {
+		t.Fatalf("repair fixture state: %v", err)
+	}
+	runLoopGit(t, root, "add", ".")
+	runLoopGit(t, root, "commit", "-m", "allow loop task")
+	result := filepath.Join(t.TempDir(), "loop-result.json")
+
+	_, _, err = runRootSplit(t, "loop", "--result-file", result, "--", filepath.Join(t.TempDir(), "missing-child"))
+	if err == nil {
+		t.Fatal("loop launch failure exited zero")
+	}
+	document, err := os.ReadFile(result)
+	if err != nil {
+		t.Fatalf("read result file: %v", err)
+	}
+	var envelope struct {
+		Command string `json:"command"`
+		Error   struct {
+			Code    string `json:"code"`
+			Details struct {
+				Outcome string `json:"outcome"`
+			} `json:"details"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(document, &envelope); err != nil {
+		t.Fatalf("decode postflight result: %v", err)
+	}
+	if envelope.Command != "loop" || envelope.Error.Code != "invalid_postflight" || envelope.Error.Code != envelope.Error.Details.Outcome {
+		t.Fatalf("postflight result = %+v", envelope)
+	}
+}
+
+func clearLoopExecutionEnvironment(t *testing.T) {
+	t.Helper()
+	for _, name := range []string{"TASKRAIL", "TASKRAIL_EXECUTABLE_SHA256", "TASKRAIL_DELEGATION_ID", "TASKRAIL_DELEGATION_TOKEN"} {
+		old, present := os.LookupEnv(name)
+		if err := os.Unsetenv(name); err != nil {
+			t.Fatalf("unset %s: %v", name, err)
+		}
+		t.Cleanup(func() {
+			if present {
+				_ = os.Setenv(name, old)
+			}
+		})
+	}
+}
+
+func TestLoopExecutionRefusesManagedResultFileWithoutPublication(t *testing.T) {
+	root := setupLoopDryRunRepo(t)
+	result := filepath.Join(root, "result.json")
+
+	_, _, err := runRootSplit(t, "loop", "--result-file", result, "--", "not-run")
+	if err == nil {
+		t.Fatal("loop accepted a managed result destination")
+	}
+	if _, err := os.Stat(result); !os.IsNotExist(err) {
+		t.Fatalf("managed result destination was published: %v", err)
+	}
+	if status := loopGitOutput(t, root, "status", "--porcelain=v1"); status != "" {
+		t.Fatalf("managed result destination dirtied repository: %q", status)
+	}
+}
+
 func setupLoopDryRunRepo(t *testing.T) string {
 	t.Helper()
 	root := t.TempDir()

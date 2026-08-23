@@ -47,8 +47,8 @@ func TestParseLoopInvocationAcceptsExecutionAndDryRun(t *testing.T) {
 	}{
 		{
 			name: "execution",
-			args: []string{"--max-iterations=2", "--max-review-rounds", "2", "--timeout", "90s", "--", "agent", "--model", "fast"},
-			want: LoopInvocation{MaxIterations: 2, MaxReviewRounds: &rounds, Timeout: &timeout, Child: []string{"agent", "--model", "fast"}},
+			args: []string{"--max-iterations=2", "--max-review-rounds", "2", "--timeout", "90s", "--result-file", "/tmp/result.json", "--", "agent", "--model", "fast"},
+			want: LoopInvocation{MaxIterations: 2, MaxReviewRounds: &rounds, Timeout: &timeout, ResultFile: "/tmp/result.json", Child: []string{"agent", "--model", "fast"}},
 		},
 		{
 			name: "dry run",

@@ -24,6 +24,12 @@ func newLoopCmd() *cobra.Command {
 				input.Timeout = &timeout
 			}
 			input.Child = args
+			if input.DryRun && input.ResultFile != "" {
+				return invalidArgumentsf("loop --dry-run does not support --result-file")
+			}
+			if !input.DryRun && input.ResultFile != "" {
+				return runLoopWithResultFile(cmd, input)
+			}
 			if !input.DryRun && len(input.Child) == 0 {
 				return invalidArgumentsf("loop execution requires a child command after --")
 			}
@@ -54,8 +60,69 @@ func newLoopCmd() *cobra.Command {
 	cmd.Flags().StringVar(&input.AllowPromptOverrideSHA256, "allow-prompt-override-sha256", "", "authorize an exact replacement prompt template")
 	cmd.Flags().IntVar(&maxReviewRounds, "max-review-rounds", 0, "override implementation review rounds (1-2)")
 	cmd.Flags().DurationVar(&timeout, "timeout", 0, "per-child timeout")
+	cmd.Flags().StringVar(&input.ResultFile, "result-file", "", "publish the terminal machine envelope outside the repository")
 	addMachineJSONFlag(cmd)
 	return cmd
+}
+
+func runLoopWithResultFile(cmd *cobra.Command, input taskrail.LoopInvocation) error {
+	result, err := taskrail.PrepareLoopResultFile(input.ResultFile)
+	if err != nil {
+		return err
+	}
+	svc, err := serviceFromCmd(cmd)
+	if err != nil {
+		if publishErr := publishLoopResultFile(cmd, result, nil, err); publishErr != nil {
+			return publishErr
+		}
+		return err
+	}
+	if err := svc.ValidateLoopResultFile(result); err != nil {
+		return err
+	}
+	if len(input.Child) == 0 {
+		err := invalidArgumentsf("loop execution requires a child command after --")
+		if publishErr := publishLoopResultFile(cmd, result, nil, err); publishErr != nil {
+			return publishErr
+		}
+		return err
+	}
+	if machineJSONRequested(cmd) {
+		err := invalidArgumentsf("loop execution does not support --json")
+		if publishErr := publishLoopResultFile(cmd, result, nil, err); publishErr != nil {
+			return publishErr
+		}
+		return err
+	}
+	report, executeErr := svc.LoopExecute(cmd.Context(), input)
+	if executeErr == nil {
+		executeErr = loopDiagnosticGate(report)
+	}
+	if recoveryErr := svc.CheckRecovery(); recoveryErr != nil {
+		if report.LastIteration == nil {
+			executeErr = recoveryErr
+		} else {
+			report.Outcome = "invalid_postflight"
+			report.NextAction = "Inspect recovery state and the completed child before another loop invocation."
+			executeErr = loopDiagnosticGate(report)
+		}
+	}
+	if publishErr := publishLoopResultFile(cmd, result, &report, executeErr); publishErr != nil {
+		return publishErr
+	}
+	fmt.Fprintln(cmd.OutOrStdout(), renderLoopDiagnostic(report))
+	return executeErr
+}
+
+func publishLoopResultFile(cmd *cobra.Command, result *taskrail.LoopResultFile, report *taskrail.LoopDiagnostic, cause error) error {
+	document, err := taskrail.EncodeLoopResultFileDocument(report, cause, envelopeWarnings(cmd, nil))
+	if err != nil {
+		return taskrail.WithMachineErrorCode("result_file_publish_failed", fmt.Errorf("encode result file: %w", err))
+	}
+	if err := result.Publish(document); err != nil {
+		return taskrail.WithMachineErrorCode("result_file_publish_failed", fmt.Errorf("publish result file: %w", err))
+	}
+	return nil
 }
 
 func loopDiagnosticGate(report taskrail.LoopDiagnostic) error {

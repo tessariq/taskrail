@@ -51,6 +51,7 @@ func TestMachineRegistrationsMatchJSONCapableCommands(t *testing.T) {
 			Surface: taskrail.MachineSurfaceStdout,
 		})
 	}
+	registrations = append(registrations, taskrail.MachineRegistration{Command: "loop", Surface: taskrail.MachineSurfaceResultFile})
 	if len(registrations) == 0 {
 		t.Fatal("the CLI publishes no --json command")
 	}

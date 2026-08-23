@@ -1,12 +1,17 @@
 ---
 id: T-244-publish-streamed-loop-results-out-of-band
 title: Publish streamed loop results out of band
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#cross-platform-autonomous-loop
 dependencies:
     - T-314-integrate-loop-continuation-and-terminal
-updated_at: "2026-08-06T13:46:30Z"
+updated_at: "2026-08-23T19:38:18Z"
+completion_id: "cfd1fa2bb3bad4094729c6e1bd0c69aa"
+last_verification_id: "898b8ae80438c190684995bc7a77ea3a"
+last_verification_result: pass
+last_verified_at: "2026-08-23T19:38:18Z"
+last_verified_completion_id: "cfd1fa2bb3bad4094729c6e1bd0c69aa"
 ---
 
 # T-244-publish-streamed-loop-results-out-of-band Publish streamed loop results out of band
@@ -33,3 +38,6 @@ continues streaming and cannot be mixed with JSON stdout.
 - A3: final-create failure injection proves absent target and clean repository.
 
 ## Implementation Notes
+
+- 2026-08-23T19:38:17Z: Published safe out-of-band loop result envelopes with no-clobber destination checks.
+- 2026-08-23T19:38:18Z: verification pass id 898b8ae80438c190684995bc7a77ea3a previous none completion cfd1fa2bb3bad4094729c6e1bd0c69aa

@@ -6,6 +6,10 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ### Added
 
+- `taskrail loop --result-file <path>` now publishes one terminal schema-1
+  envelope to an absent external file while child output continues streaming.
+  Publication rejects repository, Git, symlinked, replaced, and existing
+  destinations without overwriting files or dirtying the repository.
 - `taskrail loop --dry-run [--json]` now selects the highest-ranked explicitly
   allowed active-spec task without launching a child or changing repository
   state. It reports frozen prompt bytes and hashes, review and delivery facts,

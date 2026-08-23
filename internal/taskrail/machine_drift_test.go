@@ -144,7 +144,7 @@ var migratedCommands = []string{
 // producer onto the common envelope and flips its inventory constructor.
 func TestOnlyMigratedCommandsPublishTheCommonEnvelope(t *testing.T) {
 	for _, entry := range MachineCommandInventory() {
-		want := slices.Contains(migratedCommands, entry.Command) && entry.Surface == MachineSurfaceStdout
+		want := (slices.Contains(migratedCommands, entry.Command) && entry.Surface == MachineSurfaceStdout) || entry.Surface == MachineSurfaceResultFile
 		if got := entry.JSONState == MachineJSONEnvelope; got != want {
 			t.Errorf("%s publishes the common envelope = %v, want %v", entry.CompanionRow, got, want)
 		}

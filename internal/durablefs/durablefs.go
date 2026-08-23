@@ -143,6 +143,25 @@ func Open(path string, own ownership) (*Root, error) {
 	return openRoot(abs, own)
 }
 
+// OpenExternal binds a caller-owned directory outside a repository transaction.
+// It retains the same no-follow and identity checks as Open, but deliberately
+// has no repository lock because the destination is not Taskrail-managed state.
+func OpenExternal(path string) (*Root, error) {
+	abs, err := absoluteRoot(path)
+	if err != nil {
+		return nil, err
+	}
+	return openRoot(abs, externalOwnership{})
+}
+
+type externalOwnership struct{}
+
+func (externalOwnership) Owner() repolock.Owner { return repolock.Owner{Command: "external"} }
+
+func (externalOwnership) Repository() repolock.Repository { return repolock.Repository{} }
+
+func (externalOwnership) Authorize(string, ...string) error { return nil }
+
 // OpenAt binds a root the held lock covers but the repository tree does not
 // contain. Taskrail's own runtime state lives beneath the Git common directory,
 // which a linked worktree is not an ancestor of, so requiring the repository
@@ -218,6 +237,9 @@ func (r *Root) Close() error {
 	r.closed = true
 	return r.handle.Close()
 }
+
+// Identity is the no-follow directory identity retained at bind time.
+func (r *Root) Identity() Identity { return r.identity }
 
 func (r *Root) authorize() error {
 	if r.closed {

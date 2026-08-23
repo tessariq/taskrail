@@ -94,7 +94,9 @@ func (s *Service) LoopExecute(ctx context.Context, invocation LoopInvocation) (L
 
 		selection, err = s.TaskLoopSelect()
 		if err != nil {
-			return LoopDiagnostic{}, err
+			diagnostic.Outcome = "invalid_postflight"
+			diagnostic.NextAction = "Inspect repository selection evidence before another loop invocation."
+			return diagnostic, nil
 		}
 		if selection.Action == "none" {
 			diagnostic.Outcome = "no_work"
@@ -114,7 +116,9 @@ func (s *Service) LoopExecute(ctx context.Context, invocation LoopInvocation) (L
 		}
 		snapshot, err = s.nextLoopIterationSnapshot(snapshot)
 		if err != nil {
-			return LoopDiagnostic{}, err
+			diagnostic.Outcome = "invalid_postflight"
+			diagnostic.NextAction = "Inspect repository postflight evidence before another loop invocation."
+			return diagnostic, nil
 		}
 	}
 }
