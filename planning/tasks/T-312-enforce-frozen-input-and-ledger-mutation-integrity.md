@@ -1,12 +1,17 @@
 ---
 id: T-312-enforce-frozen-input-and-ledger-mutation-integrity
 title: Enforce frozen input and ledger mutation integrity
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#cross-platform-autonomous-loop
 dependencies:
     - T-172-enforce-autonomous-loop-lifecycle-and-delivery
-updated_at: "2026-08-08T14:23:09Z"
+updated_at: "2026-08-23T17:48:30Z"
+completion_id: "f625e11e7e08dd3100af4ddf21c0b050"
+last_verification_id: "bab89fda0d50e7299ca14002789c0557"
+last_verification_result: pass
+last_verified_at: "2026-08-23T17:48:30Z"
+last_verified_completion_id: "f625e11e7e08dd3100af4ddf21c0b050"
 ---
 
 # T-312-enforce-frozen-input-and-ledger-mutation-integrity Enforce frozen input and ledger mutation integrity
@@ -55,3 +60,6 @@ ordered integrity violations without deciding committed/local Git delivery.
   aliases, special files, `EVIL_REV`, and the documented transient-movement limit.
 
 ## Implementation Notes
+
+- 2026-08-23T17:48:21Z: Added frozen postflight input and ledger integrity checks.
+- 2026-08-23T17:48:30Z: verification pass id bab89fda0d50e7299ca14002789c0557 previous none completion f625e11e7e08dd3100af4ddf21c0b050
