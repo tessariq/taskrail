@@ -1,13 +1,18 @@
 ---
 id: T-172-enforce-autonomous-loop-lifecycle-and-delivery
 title: Derive autonomous loop lifecycle outcomes
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#cross-platform-autonomous-loop
 dependencies:
     - T-217-release-interrupted-active-work-safely
     - T-311-integrate-portable-loop-process-containment
-updated_at: "2026-08-08T08:40:49Z"
+updated_at: "2026-08-23T17:14:00Z"
+completion_id: "7359ebb6ac1ea9c8ba7fd4ca76688559"
+last_verification_id: "3f925f99cece3af2d04bc83560b07155"
+last_verification_result: pass
+last_verified_at: "2026-08-23T17:14:00Z"
+last_verified_completion_id: "7359ebb6ac1ea9c8ba7fd4ca76688559"
 ---
 
 # T-172-enforce-autonomous-loop-lifecycle-and-delivery Derive autonomous loop lifecycle outcomes
@@ -56,3 +61,6 @@ invocation continuation are owned by T-312, T-313, and T-314.
   artifacts, and null candidate derivation without depending on Git delivery.
 
 ## Implementation Notes
+
+- 2026-08-23T17:13:51Z: Added lifecycle candidate derivation with fresh verification and child-failure precedence.
+- 2026-08-23T17:14:00Z: verification pass id 3f925f99cece3af2d04bc83560b07155 previous none completion 7359ebb6ac1ea9c8ba7fd4ca76688559
