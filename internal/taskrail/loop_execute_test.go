@@ -84,6 +84,7 @@ func TestNextLoopIterationSnapshotAdvancesGitEvidence(t *testing.T) {
 
 func TestLoopExecuteStopsAfterFailedChild(t *testing.T) {
 	clearLoopChildEnvironment(t)
+	t.Setenv("GO_WANT_LOOP_CHILD", "1")
 	repo, svc := loopFixture(t)
 	writeTask(t, repo, "T-001-ready", "Ready", "todo", "high", "specs/v0.1.0.md#summary", nil)
 	taskPath := repo + "/planning/tasks/T-001-ready.md"
@@ -95,7 +96,8 @@ func TestLoopExecuteStopsAfterFailedChild(t *testing.T) {
 	runGit(t, repo, "add", ".")
 	runGit(t, repo, "commit", "-m", "allow task")
 
-	report, err := svc.LoopExecute(context.Background(), LoopInvocation{MaxIterations: 2, Child: []string{"/bin/sh", "-c", "exit 7"}})
+	record := filepath.Join(t.TempDir(), "failed-child")
+	report, err := svc.LoopExecute(context.Background(), LoopInvocation{MaxIterations: 2, Child: []string{os.Args[0], "-test.run=^TestLoopLaunchChildHelper$", "--", "nonzero", record}})
 	if err != nil {
 		t.Fatalf("LoopExecute: %v", err)
 	}

@@ -1,6 +1,6 @@
 ---
 schema_version: 1
-updated_at: "2026-08-23T18:55:26Z"
+updated_at: "2026-08-23T19:06:08Z"
 active_spec_version: v0.5.0
 active_spec_path: specs/v0.5.0.md
 current_task: ""
@@ -8,9 +8,9 @@ current_task_title: ""
 status_summary: idle
 blockers: []
 next_action: Select the next eligible task
-last_verification_result: pass for T-352-ignore-transient-git-locks-in-test-snapshots at 2026-08-22T15:07:50Z id ab5238b5b4b186a74e6b0001237312ca
-last_verification_id: ab5238b5b4b186a74e6b0001237312ca
-last_verified_completion_id: 79e0f829d9b06d45b2964668904cb2b8
+last_verification_result: pass for T-353-make-failed-child-loop-test-portable at 2026-08-23T19:06:08Z id f850b42dd4290ed75d122302e2f19bb0
+last_verification_id: f850b42dd4290ed75d122302e2f19bb0
+last_verified_completion_id: ebbd15481074a11d4ae5c3a2bec0570e
 relevant_artifacts: []
 continuation_notes:
     - This repository is temporarily dogfooding bootstrap workflow tooling until Taskrail v0.1.0 exists.
@@ -36,7 +36,7 @@ continuation_notes:
 
 ## Last Verification
 
-- pass for T-352-ignore-transient-git-locks-in-test-snapshots at 2026-08-22T15:07:50Z id ab5238b5b4b186a74e6b0001237312ca
+- pass for T-353-make-failed-child-loop-test-portable at 2026-08-23T19:06:08Z id f850b42dd4290ed75d122302e2f19bb0
 
 ## Next Action
 
@@ -54,6 +54,6 @@ continuation_notes:
 
 - todo: 92
 - in_progress: 0
-- completed: 259
+- completed: 260
 - blocked: 0
 - cancelled: 0
