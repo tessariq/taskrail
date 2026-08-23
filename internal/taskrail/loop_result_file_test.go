@@ -79,28 +79,30 @@ func TestLoopResultFileRechecksParentAndNoClobberTarget(t *testing.T) {
 		t.Fatalf("swapped parent received target: %v", err)
 	}
 
-	parent = filepath.Join(t.TempDir(), "late-swapped-parent")
-	if err := os.Mkdir(parent, 0o700); err != nil {
-		t.Fatalf("make late swap parent: %v", err)
-	}
-	result, err = PrepareLoopResultFile(filepath.Join(parent, "result.json"))
-	if err != nil {
-		t.Fatalf("prepare late swapped result: %v", err)
-	}
-	testHookLoopResultAfterPublish = func() {
-		if err := os.Rename(parent, parent+"-old"); err != nil {
-			t.Fatalf("rename late parent: %v", err)
-		}
+	t.Run("late parent swap", func(t *testing.T) {
+		parent := filepath.Join(t.TempDir(), "late-swapped-parent")
 		if err := os.Mkdir(parent, 0o700); err != nil {
-			t.Fatalf("replace late parent: %v", err)
+			t.Fatalf("make late swap parent: %v", err)
 		}
-	}
-	if err := result.Publish([]byte(`{"schema_version":1}`)); !errors.Is(err, durablefs.ErrConflict) {
-		t.Fatalf("late swapped parent publish error = %v", err)
-	}
-	if _, err := os.Stat(filepath.Join(parent, "result.json")); !errors.Is(err, fs.ErrNotExist) {
-		t.Fatalf("late swapped parent named target: %v", err)
-	}
+		result, err := PrepareLoopResultFile(filepath.Join(parent, "result.json"))
+		if err != nil {
+			t.Fatalf("prepare late swapped result: %v", err)
+		}
+		testHookLoopResultAfterPublish = func() {
+			if err := os.Rename(parent, parent+"-old"); err != nil {
+				t.Skipf("filesystem cannot rename an open result parent: %v", err)
+			}
+			if err := os.Mkdir(parent, 0o700); err != nil {
+				t.Fatalf("replace late parent: %v", err)
+			}
+		}
+		if err := result.Publish([]byte(`{"schema_version":1}`)); !errors.Is(err, durablefs.ErrConflict) {
+			t.Fatalf("late swapped parent publish error = %v", err)
+		}
+		if _, err := os.Stat(filepath.Join(parent, "result.json")); !errors.Is(err, fs.ErrNotExist) {
+			t.Fatalf("late swapped parent named target: %v", err)
+		}
+	})
 }
 
 func TestLoopResultPublicationAcceptsOnlyCommittedUnsupportedBarrier(t *testing.T) {
