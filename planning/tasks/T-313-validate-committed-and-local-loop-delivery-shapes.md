@@ -1,12 +1,17 @@
 ---
 id: T-313-validate-committed-and-local-loop-delivery-shapes
 title: Validate committed and local loop delivery shapes
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#cross-platform-autonomous-loop
 dependencies:
     - T-312-enforce-frozen-input-and-ledger-mutation-integrity
-updated_at: "2026-08-08T14:23:09Z"
+updated_at: "2026-08-23T18:16:57Z"
+completion_id: "1c7bd4d57c2145f268b632642ed901b9"
+last_verification_id: "2a8e8bf725721c9257495af7adbb35d5"
+last_verification_result: pass
+last_verified_at: "2026-08-23T18:16:57Z"
+last_verified_completion_id: "1c7bd4d57c2145f268b632642ed901b9"
 ---
 
 # T-313-validate-committed-and-local-loop-delivery-shapes Validate committed and local loop delivery shapes
@@ -55,3 +60,6 @@ commits without performing Git repair.
   push, merge, or repair.
 
 ## Implementation Notes
+
+- 2026-08-23T18:16:47Z: Added read-only committed and local loop delivery validation with Git-shape fixtures.
+- 2026-08-23T18:16:57Z: verification pass id 2a8e8bf725721c9257495af7adbb35d5 previous none completion 1c7bd4d57c2145f268b632642ed901b9
