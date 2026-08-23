@@ -1,12 +1,17 @@
 ---
 id: T-314-integrate-loop-continuation-and-terminal
 title: Integrate loop continuation and terminal diagnostics
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#cross-platform-autonomous-loop
 dependencies:
     - T-313-validate-committed-and-local-loop-delivery-shapes
-updated_at: "2026-08-08T14:23:09Z"
+updated_at: "2026-08-23T18:54:26Z"
+completion_id: "72226778f28457945e992f2af26dbdff"
+last_verification_id: "4c405beafe9f89a3fdfdf962ab79c180"
+last_verification_result: pass
+last_verified_at: "2026-08-23T18:54:26Z"
+last_verified_completion_id: "72226778f28457945e992f2af26dbdff"
 ---
 
 # T-314-integrate-loop-continuation-and-terminal Integrate loop continuation and terminal diagnostics
@@ -59,3 +64,6 @@ diagnostics and safe recovery guidance.
   bypass, and held-dependency isolation while proving no hidden recovery action.
 
 ## Implementation Notes
+
+- 2026-08-23T18:54:15Z: Integrated sequential loop execution, terminal diagnostics, and continuation guards.
+- 2026-08-23T18:54:26Z: verification pass id 4c405beafe9f89a3fdfdf962ab79c180 previous none completion 72226778f28457945e992f2af26dbdff

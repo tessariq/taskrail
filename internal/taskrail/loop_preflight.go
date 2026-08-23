@@ -417,22 +417,25 @@ func loopRootRefCandidates(gitDirs ...string) (map[string][]byte, error) {
 			continue
 		}
 		seen[dir] = true
-		tree, err := durablefs.ObserveRoot(dir)
+		entries, err := os.ReadDir(dir)
 		if err != nil {
 			return nil, WithMachineErrorCode(MachineCodeGitState, fmt.Errorf("read Git directory %s: %w", dir, fsCause(err)))
 		}
-		for _, entry := range tree.Entries {
-			if strings.Contains(entry.Path, "/") || entry.Path == "COMMIT_EDITMSG" || !loopRootRefName.MatchString(entry.Path) {
+		for _, entry := range entries {
+			name := entry.Name()
+			if name == "COMMIT_EDITMSG" || !loopRootRefName.MatchString(name) {
 				continue
 			}
-			if entry.Directory {
-				return nil, WithMachineErrorCode(MachineCodeGitState, fmt.Errorf("Git root candidate %s is not regular", filepath.Join(dir, entry.Path)))
+			candidate := filepath.Join(dir, name)
+			info, err := os.Lstat(candidate)
+			if err != nil || !info.Mode().IsRegular() {
+				return nil, WithMachineErrorCode(MachineCodeGitState, fmt.Errorf("Git root candidate %s is not regular", candidate))
 			}
-			data, err := loopReadFile(dir, entry.Path)
+			data, err := loopReadFile(dir, name)
 			if err != nil {
-				return nil, WithMachineErrorCode(MachineCodeGitState, fmt.Errorf("read Git root candidate %s: %w", filepath.Join(dir, entry.Path), err))
+				return nil, WithMachineErrorCode(MachineCodeGitState, fmt.Errorf("read Git root candidate %s: %w", candidate, err))
 			}
-			candidates[filepath.Join(dir, entry.Path)] = data
+			candidates[candidate] = data
 		}
 	}
 	return candidates, nil

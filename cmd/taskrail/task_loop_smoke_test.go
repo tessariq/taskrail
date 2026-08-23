@@ -113,6 +113,13 @@ func TestLoopDryRunPublishesRunAndInvalidReportsWithoutMutation(t *testing.T) {
 	}
 }
 
+func TestLoopExecutionRejectsJSONBeforeRepositoryDiscovery(t *testing.T) {
+	_, _, err := runRootSplit(t, "loop", "--json", "--", "/bin/true")
+	if err == nil {
+		t.Fatal("loop execution accepted --json")
+	}
+}
+
 func setupLoopDryRunRepo(t *testing.T) string {
 	t.Helper()
 	root := t.TempDir()

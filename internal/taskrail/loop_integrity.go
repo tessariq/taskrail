@@ -99,7 +99,7 @@ func checkLoopIntegrity(evidence loopIntegrityEvidence) []MachineViolation {
 			continue
 		}
 		if inputPath == loopSelectedTaskPath(planningDir, evidence.SelectedTask) {
-			if !validSelectedTaskMutation(before, after) {
+			if !bytes.Equal(before, after) && !validSelectedTaskMutation(before, after) {
 				violations = append(violations, loopIntegrityViolation("selected_task_mutation", "selected task changed outside canonical lifecycle fields", &inputPath))
 			}
 			continue
