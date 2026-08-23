@@ -726,18 +726,27 @@ func readAllFiles(t *testing.T, root string) map[string]string {
 	files := make(map[string]string)
 	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
+			if os.IsNotExist(err) {
+				return nil
+			}
 			return err
 		}
 		if info.IsDir() {
 			return nil
 		}
-		data, readErr := os.ReadFile(path)
-		if readErr != nil {
-			return readErr
-		}
 		rel, relErr := filepath.Rel(root, path)
 		if relErr != nil {
 			return relErr
+		}
+		if strings.HasPrefix(rel, ".git"+string(filepath.Separator)) && strings.HasSuffix(rel, ".lock") {
+			return nil
+		}
+		data, readErr := os.ReadFile(path)
+		if readErr != nil {
+			if os.IsNotExist(readErr) {
+				return nil
+			}
+			return readErr
 		}
 		files[rel] = string(data)
 		return nil
@@ -746,6 +755,22 @@ func readAllFiles(t *testing.T, root string) map[string]string {
 		t.Fatalf("walk repo: %v", err)
 	}
 	return files
+}
+
+func TestReadAllFilesIgnoresTransientGitLocks(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, ".git", "objects"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, ".git", "objects", "maintenance.lock"), []byte("transient"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "tracked"), []byte("durable"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got := readAllFiles(t, root); len(got) != 1 || got["tracked"] != "durable" {
+		t.Fatalf("snapshot = %#v", got)
+	}
 }
 
 const gapsSmokeSpec = `# GapSmoke
