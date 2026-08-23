@@ -21,6 +21,17 @@ import (
 type LoopInvocation struct {
 	DryRun                    bool
 	MaxIterations             int
+	Parallel                  int
+	WorkspaceRoot             string
+	WorkspaceRootSet          bool
+	CloneDepth                string
+	CloneDepthSet             bool
+	KeepWorkspaces            string
+	KeepWorkspacesSet         bool
+	Delivery                  string
+	DeliverySet               bool
+	ReviewAdapter             string
+	ReviewAdapterSet          bool
 	MaxReviewRounds           *int
 	Timeout                   *time.Duration
 	AllowPromptOverrideSHA256 string
@@ -93,7 +104,7 @@ var loopRootRefName = regexp.MustCompile(`^[A-Z][A-Z0-9_]*$`)
 // ParseLoopInvocation accepts only the base loop flags. Later stages add their
 // own options around this parser rather than weakening its delimiter boundary.
 func ParseLoopInvocation(args []string) (LoopInvocation, error) {
-	invocation := LoopInvocation{MaxIterations: 1}
+	invocation := LoopInvocation{MaxIterations: 1, Parallel: 1, CloneDepth: "1", KeepWorkspaces: "failure", Delivery: "local"}
 	dash := -1
 	for i, arg := range args {
 		if arg == "--" {
@@ -126,7 +137,7 @@ func ParseLoopInvocation(args []string) (LoopInvocation, error) {
 			if name == "--dry-run" {
 				invocation.DryRun = true
 			}
-		case "--max-iterations", "--max-review-rounds", "--timeout", "--allow-prompt-override-sha256", "--result-file":
+		case "--max-iterations", "--parallel", "--workspace-root", "--clone-depth", "--keep-workspaces", "--delivery", "--review-adapter", "--max-review-rounds", "--timeout", "--allow-prompt-override-sha256", "--result-file":
 			if !inline {
 				i++
 				if i == len(args) {
@@ -141,6 +152,33 @@ func ParseLoopInvocation(args []string) (LoopInvocation, error) {
 					return LoopInvocation{}, err
 				}
 				invocation.MaxIterations = n
+			case "--parallel":
+				n, err := positiveLoopInt(name, value)
+				if err != nil {
+					return LoopInvocation{}, err
+				}
+				invocation.Parallel = n
+			case "--workspace-root":
+				invocation.WorkspaceRoot, invocation.WorkspaceRootSet = value, true
+			case "--clone-depth":
+				if value != "full" {
+					if _, err := positiveLoopInt(name, value); err != nil {
+						return LoopInvocation{}, invalidArgumentsf("--clone-depth must be a positive integer or full")
+					}
+				}
+				invocation.CloneDepth, invocation.CloneDepthSet = value, true
+			case "--keep-workspaces":
+				if value != "never" && value != "failure" && value != "always" {
+					return LoopInvocation{}, invalidArgumentsf("--keep-workspaces must be never, failure, or always")
+				}
+				invocation.KeepWorkspaces, invocation.KeepWorkspacesSet = value, true
+			case "--delivery":
+				if value != "local" && value != "review" {
+					return LoopInvocation{}, invalidArgumentsf("--delivery must be local or review")
+				}
+				invocation.Delivery, invocation.DeliverySet = value, true
+			case "--review-adapter":
+				invocation.ReviewAdapter, invocation.ReviewAdapterSet = value, true
 			case "--max-review-rounds":
 				n, err := positiveLoopInt(name, value)
 				if err != nil {
@@ -167,6 +205,9 @@ func ParseLoopInvocation(args []string) (LoopInvocation, error) {
 		default:
 			return LoopInvocation{}, invalidArgumentsf("unsupported loop flag %s", name)
 		}
+	}
+	if err := validateParallelInvocation(invocation); err != nil {
+		return LoopInvocation{}, err
 	}
 	if invocation.DryRun {
 		if invocation.ResultFile != "" {
@@ -197,6 +238,7 @@ func positiveLoopInt(name, value string) (int, error) {
 // LoopPreflight captures the repository inputs common to dry-run and execution.
 // It takes no lock and does not select work, so it cannot change managed state.
 func (s *Service) LoopPreflight(invocation LoopInvocation) (LoopPreflightSnapshot, error) {
+	invocation = normalizeLoopInvocation(invocation)
 	if err := validateLoopInvocation(invocation); err != nil {
 		return LoopPreflightSnapshot{}, err
 	}
@@ -262,6 +304,22 @@ func (s *Service) LoopPreflight(invocation LoopInvocation) (LoopPreflightSnapsho
 		review:  review, lock: LoopLockSnapshot{Available: true}, rootRefs: cloneLoopBytes(rootRefs)}, nil
 }
 
+func normalizeLoopInvocation(invocation LoopInvocation) LoopInvocation {
+	if invocation.Parallel == 0 {
+		invocation.Parallel = 1
+	}
+	if invocation.CloneDepth == "" {
+		invocation.CloneDepth = "1"
+	}
+	if invocation.KeepWorkspaces == "" {
+		invocation.KeepWorkspaces = "failure"
+	}
+	if invocation.Delivery == "" {
+		invocation.Delivery = "local"
+	}
+	return invocation
+}
+
 func validateLoopInvocation(invocation LoopInvocation) error {
 	if invocation.MaxIterations <= 0 {
 		return invalidArgumentsf("--max-iterations must be a positive integer")
@@ -278,7 +336,40 @@ func validateLoopInvocation(invocation LoopInvocation) error {
 	if !invocation.DryRun && len(invocation.Child) == 0 {
 		return invalidArgumentsf("loop execution requires a child command after --")
 	}
+	return validateParallelInvocation(invocation)
+}
+
+func validateParallelInvocation(invocation LoopInvocation) error {
+	if invocation.Parallel <= 0 {
+		return invalidArgumentsf("--parallel must be a positive integer")
+	}
+	if invocation.CloneDepth == "" || (invocation.CloneDepth != "full" && !isPositiveLoopInt(invocation.CloneDepth)) {
+		return invalidArgumentsf("--clone-depth must be a positive integer or full")
+	}
+	if invocation.KeepWorkspaces != "never" && invocation.KeepWorkspaces != "failure" && invocation.KeepWorkspaces != "always" {
+		return invalidArgumentsf("--keep-workspaces must be never, failure, or always")
+	}
+	if invocation.Delivery != "local" && invocation.Delivery != "review" {
+		return invalidArgumentsf("--delivery must be local or review")
+	}
+	if min(invocation.Parallel, invocation.MaxIterations) == 1 {
+		if invocation.WorkspaceRootSet || invocation.CloneDepthSet || invocation.KeepWorkspacesSet || invocation.DeliverySet || invocation.ReviewAdapterSet {
+			return invalidArgumentsf("parallel-only flags require an effective parallel width greater than 1")
+		}
+		return nil
+	}
+	if invocation.Delivery == "review" && !invocation.ReviewAdapterSet {
+		return invalidArgumentsf("--delivery review requires exactly one --review-adapter")
+	}
+	if invocation.Delivery == "local" && invocation.ReviewAdapterSet {
+		return invalidArgumentsf("--review-adapter requires --delivery review")
+	}
 	return nil
+}
+
+func isPositiveLoopInt(value string) bool {
+	n, err := strconv.Atoi(value)
+	return err == nil && n > 0
 }
 
 func cloneLoopInvocation(in LoopInvocation) LoopInvocation {

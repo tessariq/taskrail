@@ -271,9 +271,12 @@ policy, held dependency closure, and unattended eligibility without changing
 task files, `STATE.md`, or ordinary lifecycle selection.
 
 Use `taskrail loop --dry-run --json` to inspect the highest-ranked explicitly
-allowed task, its frozen implementation prompt, and delivery/review limits. A
-replacement implementation prompt requires its exact template SHA-256 through
-`--allow-prompt-override-sha256`; dry run never launches a child process.
+allowed task, its frozen implementation prompt, and delivery/review limits. Use
+`--parallel <n>` to preview one ranked, dependency-ready clone frontier without
+creating workspaces or launching workers; clone and delivery options are refused
+when their effective width is one. A replacement implementation prompt requires
+its exact template SHA-256 through `--allow-prompt-override-sha256`; dry run
+never launches a child process.
 
 Execution keeps child output streaming, so use `--result-file <external-path>`
 to receive its one terminal schema-1 envelope. The target must be absent in an

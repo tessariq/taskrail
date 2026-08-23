@@ -48,12 +48,17 @@ func TestParseLoopInvocationAcceptsExecutionAndDryRun(t *testing.T) {
 		{
 			name: "execution",
 			args: []string{"--max-iterations=2", "--max-review-rounds", "2", "--timeout", "90s", "--result-file", "/tmp/result.json", "--", "agent", "--model", "fast"},
-			want: LoopInvocation{MaxIterations: 2, MaxReviewRounds: &rounds, Timeout: &timeout, ResultFile: "/tmp/result.json", Child: []string{"agent", "--model", "fast"}},
+			want: LoopInvocation{MaxIterations: 2, Parallel: 1, CloneDepth: "1", KeepWorkspaces: "failure", Delivery: "local", MaxReviewRounds: &rounds, Timeout: &timeout, ResultFile: "/tmp/result.json", Child: []string{"agent", "--model", "fast"}},
 		},
 		{
 			name: "dry run",
 			args: []string{"--dry-run", "--json"},
-			want: LoopInvocation{DryRun: true, MaxIterations: 1},
+			want: LoopInvocation{DryRun: true, MaxIterations: 1, Parallel: 1, CloneDepth: "1", KeepWorkspaces: "failure", Delivery: "local"},
+		},
+		{
+			name: "parallel dry run",
+			args: []string{"--dry-run", "--max-iterations", "3", "--parallel", "3", "--clone-depth", "full", "--keep-workspaces", "always", "--delivery", "review", "--review-adapter", "/tmp/adapter"},
+			want: LoopInvocation{DryRun: true, MaxIterations: 3, Parallel: 3, CloneDepth: "full", CloneDepthSet: true, KeepWorkspaces: "always", KeepWorkspacesSet: true, Delivery: "review", DeliverySet: true, ReviewAdapter: "/tmp/adapter", ReviewAdapterSet: true},
 		},
 	}
 	for _, test := range tests {
@@ -66,6 +71,18 @@ func TestParseLoopInvocationAcceptsExecutionAndDryRun(t *testing.T) {
 				t.Fatalf("invocation = %#v, want %#v", got, test.want)
 			}
 		})
+	}
+}
+
+func TestParseLoopInvocationRejectsStaleParallelIntent(t *testing.T) {
+	for _, args := range [][]string{
+		{"--dry-run", "--clone-depth", "1"},
+		{"--dry-run", "--parallel", "2", "--max-iterations", "1", "--keep-workspaces", "always"},
+		{"--dry-run", "--delivery", "review", "--review-adapter", "/tmp/adapter"},
+	} {
+		if _, err := ParseLoopInvocation(args); err == nil {
+			t.Fatalf("ParseLoopInvocation(%q) succeeded", args)
+		}
 	}
 }
 
@@ -340,6 +357,49 @@ func TestLoopDryRunSelectsAllowedTaskAndRendersFrozenPrompt(t *testing.T) {
 	}
 	if after := snapshotTree(t, repo); !reflect.DeepEqual(after, before) {
 		t.Fatal("LoopDryRun changed repository bytes")
+	}
+}
+
+func TestLoopDryRunBuildsParallelFrontierWithoutMutation(t *testing.T) {
+	repo, svc := loopFixture(t)
+	writeTask(t, repo, "T-001-ready", "Ready", "todo", "high", "specs/v0.1.0.md#summary", nil)
+	writeTask(t, repo, "T-002-ready", "Ready", "todo", "medium", "specs/v0.1.0.md#summary", nil)
+	writeTask(t, repo, "T-003-waiting", "Waiting", "todo", "high", "specs/v0.1.0.md#summary", []string{"T-001-ready"})
+	setLoopPolicy(t, repo, "T-001-ready", "allow", "independent work")
+	setLoopPolicy(t, repo, "T-002-ready", "allow", "independent work")
+	setLoopPolicy(t, repo, "T-003-waiting", "allow", "waiting work")
+	runGit(t, repo, "add", ".")
+	runGit(t, repo, "commit", "-m", "parallel loop tasks")
+
+	before := snapshotTree(t, repo)
+	report, err := svc.LoopDryRun(LoopInvocation{DryRun: true, MaxIterations: 3, Parallel: 2})
+	if err != nil {
+		t.Fatalf("LoopDryRun: %v", err)
+	}
+	if report.Action != "run" || report.SelectedTask != nil || report.Prompt != nil || report.Parallel == nil {
+		t.Fatalf("parallel report = %+v", report)
+	}
+	if report.Parallel.RequestedWidth != 2 || report.Parallel.EffectiveWidth != 2 || report.Parallel.Delivery != "local" || report.Parallel.Workspace.CloneDepth == nil || *report.Parallel.Workspace.CloneDepth != 1 || len(report.Parallel.Frontier) != 2 {
+		t.Fatalf("parallel plan = %+v", report.Parallel)
+	}
+	if report.Parallel.Frontier[0].Task.TaskID != "T-001-ready" || report.Parallel.Frontier[1].Task.TaskID != "T-002-ready" {
+		t.Fatalf("frontier = %+v", report.Parallel.Frontier)
+	}
+	if after := snapshotTree(t, repo); !reflect.DeepEqual(after, before) {
+		t.Fatal("parallel dry run changed repository bytes")
+	}
+}
+
+func TestLoopDryRunRejectsWorkspaceInsideRepository(t *testing.T) {
+	repo, svc := loopFixture(t)
+	writeTask(t, repo, "T-001-ready", "Ready", "todo", "high", "specs/v0.1.0.md#summary", nil)
+	setLoopPolicy(t, repo, "T-001-ready", "allow", "independent work")
+	runGit(t, repo, "add", ".")
+	runGit(t, repo, "commit", "-m", "parallel loop task")
+
+	_, err := svc.LoopDryRun(LoopInvocation{DryRun: true, MaxIterations: 2, Parallel: 2, WorkspaceRoot: repo, WorkspaceRootSet: true})
+	if err == nil || MachineFailureFor(err).Code != MachineCodeInvalidArguments {
+		t.Fatalf("LoopDryRun error = %v", err)
 	}
 }
 

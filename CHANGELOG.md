@@ -10,6 +10,9 @@ All notable user-visible changes to Taskrail will be documented in this file.
   envelope to an absent external file while child output continues streaming.
   Publication rejects repository, Git, symlinked, replaced, and existing
   destinations without overwriting files or dirtying the repository.
+- `taskrail loop --dry-run --parallel <n>` now reports one deterministic,
+  dependency-ready committed-storage frontier with frozen clone, workspace, and
+  delivery policy. It remains read-only; parallel execution is not shipped yet.
 - `taskrail loop --dry-run [--json]` now selects the highest-ranked explicitly
   allowed active-spec task without launching a child or changing repository
   state. It reports frozen prompt bytes and hashes, review and delivery facts,

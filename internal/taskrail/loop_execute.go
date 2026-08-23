@@ -51,6 +51,9 @@ func (s *Service) LoopExecute(ctx context.Context, invocation LoopInvocation) (L
 	if invocation.DryRun {
 		return LoopDiagnostic{}, invalidArgumentsf("loop execution does not accept --dry-run")
 	}
+	if invocation.Parallel > 1 {
+		return LoopDiagnostic{}, WithMachineErrorCode(MachineCodeUnsupported, fmt.Errorf("parallel loop execution is not available; use --dry-run to preview the frontier"))
+	}
 	snapshot, err := s.LoopPreflight(invocation)
 	if err != nil {
 		return LoopDiagnostic{}, err

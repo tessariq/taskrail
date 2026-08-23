@@ -1,13 +1,18 @@
 ---
 id: T-333-preview-deterministic-parallel-clone-batches
 title: Preview deterministic parallel clone batches
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#parallel-isolated-clone-batches
 dependencies:
     - T-308-publish-deterministic-loop-selection-and-dry-run
     - T-314-integrate-loop-continuation-and-terminal
-updated_at: "2026-08-18T15:50:07Z"
+updated_at: "2026-08-23T19:35:02Z"
+completion_id: "dc39f93da27cd34f37b31bf0feb18b8e"
+last_verification_id: "f13fc96689c8d161eca8ce2407670ef4"
+last_verification_result: pass
+last_verified_at: "2026-08-23T19:35:02Z"
+last_verified_completion_id: "dc39f93da27cd34f37b31bf0feb18b8e"
 ---
 
 # T-333-preview-deterministic-parallel-clone-batches Preview deterministic parallel clone batches
@@ -62,3 +67,6 @@ would launch without creating a workspace or weakening sequential defaults.
   macOS, and native Windows where path behavior differs.
 
 ## Implementation Notes
+
+- 2026-08-23T19:34:51Z: Published read-only deterministic parallel clone-batch previews with strict admission and policy validation.
+- 2026-08-23T19:35:02Z: verification pass id f13fc96689c8d161eca8ce2407670ef4 previous none completion dc39f93da27cd34f37b31bf0feb18b8e
