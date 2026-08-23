@@ -3,21 +3,20 @@ package repolock
 import (
 	"errors"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 )
 
-// deadPID returns a process id that has provably exited, so a stale-owner
-// fixture cannot accidentally name a live process.
+// deadPID uses a value above native PID allocation ranges rather than a
+// just-exited child whose PID may be recycled before Clear probes it.
 func deadPID(t *testing.T) int {
 	t.Helper()
-	cmd := exec.Command(os.Args[0], "-test.run=^TestNothingMatchesThis$")
-	if err := cmd.Run(); err != nil {
-		t.Fatalf("run short-lived process: %v", err)
+	const pid = 1 << 30
+	if processAlive(pid) {
+		t.Fatalf("dead PID fixture %d is unexpectedly live", pid)
 	}
-	return cmd.Process.Pid
+	return pid
 }
 
 func staleOwner(repo Repository, pid int) Owner {
