@@ -103,6 +103,33 @@ func TestLoopResultFileRechecksParentAndNoClobberTarget(t *testing.T) {
 	}
 }
 
+func TestLoopResultPublicationAcceptsOnlyCommittedUnsupportedBarrier(t *testing.T) {
+	expected := "result.json"
+	committedUnsupported := &durablefs.MutationError{
+		Operation: "publish",
+		Path:      expected,
+		Committed: true,
+		Err:       durablefs.ErrUnsupported,
+	}
+	for _, test := range []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{name: "success", want: true},
+		{name: "committed unsupported", err: committedUnsupported, want: true},
+		{name: "pre-commit unsupported", err: &durablefs.MutationError{Operation: "publish", Path: expected, Err: durablefs.ErrUnsupported}},
+		{name: "other committed error", err: &durablefs.MutationError{Operation: "publish", Path: expected, Committed: true, Err: fs.ErrPermission}},
+		{name: "other destination", err: &durablefs.MutationError{Operation: "publish", Path: "other.json", Committed: true, Err: durablefs.ErrUnsupported}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if got := loopResultPublicationCommitted(test.err, expected); got != test.want {
+				t.Fatalf("committed = %v, want %v for %v", got, test.want, test.err)
+			}
+		})
+	}
+}
+
 func TestLoopResultFileRefusesRepositoryDestinations(t *testing.T) {
 	repo, svc := loopFixture(t)
 	result, err := PrepareLoopResultFile(filepath.Join(repo, "result.json"))

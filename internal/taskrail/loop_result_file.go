@@ -89,7 +89,7 @@ func (r *LoopResultFile) Publish(document []byte) error {
 		return err
 	}
 	_, err = root.Publish(r.leaf, append(document, '\n'), 0o600)
-	if err != nil {
+	if !loopResultPublicationCommitted(err, r.leaf) {
 		return err
 	}
 	if testHookLoopResultAfterPublish != nil {
@@ -104,4 +104,13 @@ func (r *LoopResultFile) Publish(document []byte) error {
 		return fmt.Errorf("%w: result-file parent changed after publication", durablefs.ErrConflict)
 	}
 	return nil
+}
+
+func loopResultPublicationCommitted(err error, expectedPath string) bool {
+	if err == nil {
+		return true
+	}
+	var mutation *durablefs.MutationError
+	return errors.As(err, &mutation) && mutation.Operation == "publish" &&
+		mutation.Path == expectedPath && mutation.Committed && errors.Is(err, durablefs.ErrUnsupported)
 }
