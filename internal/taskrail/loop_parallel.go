@@ -2,6 +2,7 @@ package taskrail
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/url"
@@ -543,16 +544,8 @@ func (s *Service) cleanupParallelWorkspaces(owner parallelWorkspaceOwner, retent
 			violations = append(violations, parallelViolation("cleanup_failed", err.Error()))
 		}
 	}
-	if retention == "never" {
-		if err := removeParallelRoot(owner); err != nil {
-			violations = append(violations, parallelViolation("cleanup_failed", err.Error()))
-		}
-		if err := owner.root.Close(); err != nil {
-			violations = append(violations, parallelViolation("cleanup_failed", err.Error()))
-		}
-		return violations
-	}
-	if batch.Integration.Workspace == nil {
+	removeRoot := retention == "never"
+	if !removeRoot && batch.Integration.Workspace == nil {
 		retained := false
 		for _, worker := range batch.Workers {
 			if worker.Workspace != nil {
@@ -560,13 +553,15 @@ func (s *Service) cleanupParallelWorkspaces(owner parallelWorkspaceOwner, retent
 				break
 			}
 		}
-		if !retained {
-			if err := removeParallelRoot(owner); err != nil {
-				violations = append(violations, parallelViolation("cleanup_failed", err.Error()))
-			}
-		}
+		removeRoot = !retained
 	}
-	if err := owner.root.Close(); err != nil {
+	var err error
+	if removeRoot {
+		err = removeParallelRoot(owner)
+	} else {
+		err = owner.root.Close()
+	}
+	if err != nil {
 		violations = append(violations, parallelViolation("cleanup_failed", err.Error()))
 	}
 	return violations
@@ -592,9 +587,12 @@ func removeParallelWorkspace(owner parallelWorkspaceOwner, workspace string) err
 
 func removeParallelRoot(owner parallelWorkspaceOwner) error {
 	if err := verifyParallelWorkspaceRoot(owner); err != nil {
-		return err
+		return errors.Join(err, owner.root.Close())
 	}
 	if err := owner.root.Remove(".taskrail-parallel-owner"); err != nil {
+		return errors.Join(err, owner.root.Close())
+	}
+	if err := owner.root.Close(); err != nil {
 		return err
 	}
 	return os.Remove(owner.path)

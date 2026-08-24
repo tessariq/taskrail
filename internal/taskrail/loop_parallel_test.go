@@ -14,6 +14,93 @@ import (
 	"time"
 )
 
+func TestRemoveParallelRootClosesHandleBeforeRemovingDirectory(t *testing.T) {
+	parent := t.TempDir()
+	path, err := os.MkdirTemp(parent, "taskrail-parallel-")
+	if err != nil {
+		t.Fatalf("create parallel root: %v", err)
+	}
+	root, err := os.OpenRoot(path)
+	if err != nil {
+		t.Fatalf("open parallel root: %v", err)
+	}
+	owner := parallelWorkspaceOwner{path: path, root: root}
+	if err := owner.root.WriteFile(".taskrail-parallel-owner", []byte(path), 0o600); err != nil {
+		t.Fatalf("write ownership marker: %v", err)
+	}
+
+	if err := removeParallelRoot(owner); err != nil {
+		t.Fatalf("removeParallelRoot: %v", err)
+	}
+	if _, err := owner.root.Lstat("."); err == nil {
+		t.Fatal("parallel root handle remained open after removal")
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatalf("parallel root remains after removal: %v", err)
+	}
+}
+
+func TestCleanupParallelWorkspacesClosesRootOnEveryDisposition(t *testing.T) {
+	retainedWorkspace := "retained"
+	tests := []struct {
+		name       string
+		retention  string
+		batch      ParallelBatch
+		badMarker  bool
+		wantExists bool
+		wantErrors int
+	}{
+		{name: "retention never", retention: "never"},
+		{name: "no retained workspaces", retention: "failure"},
+		{name: "retained workspaces", retention: "failure", batch: ParallelBatch{Workers: []ParallelWorker{{Workspace: &retainedWorkspace}}}, wantExists: true},
+		{name: "ownership error", retention: "never", badMarker: true, wantExists: true, wantErrors: 1},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			parent := t.TempDir()
+			path, err := os.MkdirTemp(parent, "taskrail-parallel-")
+			if err != nil {
+				t.Fatalf("create parallel root: %v", err)
+			}
+			root, err := os.OpenRoot(path)
+			if err != nil {
+				t.Fatalf("open parallel root: %v", err)
+			}
+			owner := parallelWorkspaceOwner{path: path, root: root}
+			marker := path
+			if tt.badMarker {
+				marker = path + "-changed"
+			}
+			if err := owner.root.WriteFile(".taskrail-parallel-owner", []byte(marker), 0o600); err != nil {
+				t.Fatalf("write ownership marker: %v", err)
+			}
+
+			violations := (&Service{}).cleanupParallelWorkspaces(owner, tt.retention, &tt.batch)
+			if len(violations) != tt.wantErrors {
+				t.Fatalf("cleanup violations = %+v, want %d", violations, tt.wantErrors)
+			}
+			for _, violation := range violations {
+				if violation.Code != "cleanup_failed" {
+					t.Fatalf("cleanup violation = %+v, want cleanup_failed", violation)
+				}
+			}
+			if tt.badMarker && !strings.Contains(violations[0].Message, "ownership marker does not match") {
+				t.Fatalf("ownership violation = %+v", violations[0])
+			}
+			if _, err := owner.root.Lstat("."); err == nil {
+				t.Fatal("parallel root handle remained open after cleanup")
+			}
+			_, err = os.Stat(path)
+			if tt.wantExists && err != nil {
+				t.Fatalf("retained parallel root: %v", err)
+			}
+			if !tt.wantExists && !os.IsNotExist(err) {
+				t.Fatalf("parallel root remains after cleanup: %v", err)
+			}
+		})
+	}
+}
+
 func TestParallelCloneUsesShallowTransportClone(t *testing.T) {
 	repo, _ := loopFixture(t)
 	clone := filepath.Join(t.TempDir(), "worker")
