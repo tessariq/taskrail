@@ -8,6 +8,7 @@ dependencies:
     - T-333-preview-deterministic-parallel-clone-batches
     - T-314-integrate-loop-continuation-and-terminal
     - T-244-publish-streamed-loop-results-out-of-band
+    - T-360-authenticate-delegated-lifecycle-writes-against-loop-grant
 updated_at: "2026-08-18T15:50:12Z"
 ---
 
