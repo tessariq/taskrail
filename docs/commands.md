@@ -61,6 +61,12 @@ also admitted through a valid recovery fence, so an operator can observe the
 lock that blocks recovery. Malformed or substituted fence state still fails
 closed.
 
+Delegated loop lifecycle writers authenticate the same task-scoped grant that
+the loop issued, then narrow it to their exact command, task fields, and
+transaction paths. The task-directory and selected verification-artifact
+prefixes let a child use runtime-generated verification destinations without
+exposing the grant or expanding its authority.
+
 `taskrail lock clear <lock-id> --expect-sha256 <digest>` is the guarded
 compare-and-delete for an abandoned lock: it removes only the unchanged lock
 record named by both the ID and the digest observed via `lock status`, refuses

@@ -1,13 +1,18 @@
 ---
 id: T-360-authenticate-delegated-lifecycle-writes-against-loop-grant
 title: Authenticate delegated lifecycle writes against the loop grant
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#cross-platform-autonomous-loop
 dependencies:
     - T-317-bind-delegated-grants-to-the-owner-s-declared-task
     - T-314-integrate-loop-continuation-and-terminal
-updated_at: "2026-08-24T08:51:29Z"
+updated_at: "2026-08-24T09:24:17Z"
+completion_id: "b69619cf7f6442002b85582bcb6a7f17"
+last_verification_id: "1f1cb693004b597d61b1de9afee13cd5"
+last_verification_result: pass
+last_verified_at: "2026-08-24T09:24:17Z"
+last_verified_completion_id: "b69619cf7f6442002b85582bcb6a7f17"
 ---
 
 # T-360-authenticate-delegated-lifecycle-writes-against-loop-grant Authenticate delegated lifecycle writes against the loop grant
@@ -51,3 +56,6 @@ runtime-destination `verify` with the same task-scoped token.
   checks, and exact-head cross-platform CI.
 
 ## Implementation Notes
+
+- 2026-08-24T09:24:06Z: Shared loop grants now authenticate delegated lifecycle writes while preserving narrow per-command authority.
+- 2026-08-24T09:24:17Z: verification pass id 1f1cb693004b597d61b1de9afee13cd5 previous none completion b69619cf7f6442002b85582bcb6a7f17

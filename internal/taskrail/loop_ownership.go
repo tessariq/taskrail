@@ -81,14 +81,11 @@ func (s *Service) beginLoopOwnership(ctx context.Context) (*loopOwnership, error
 // delegate rotates the child-only grant for the next selected task without
 // releasing the loop lock or changing the staged executable identity. The
 // caller must wait for the previous delegated child before rotating it.
-func (o *loopOwnership) delegate(taskID string, writes []string) (loopChildIdentity, error) {
+func (o *loopOwnership) delegate(grant repolock.Capability) (loopChildIdentity, error) {
 	if err := o.executable.validate(); err != nil {
 		return loopChildIdentity{}, err
 	}
-	delegation, err := o.lock.Delegate(o.executable.Path, o.executable.SHA256, repolock.Capability{
-		SelectedTask: taskID,
-		Writes:       writes,
-	})
+	delegation, err := o.lock.Delegate(o.executable.Path, o.executable.SHA256, grant)
 	if err != nil {
 		return loopChildIdentity{}, err
 	}

@@ -149,7 +149,7 @@ func (s *Service) runLoopIteration(ctx context.Context, snapshot LoopPreflightSn
 	if err != nil {
 		return LoopIteration{TaskID: selected.TaskID, Outcome: "invalid_postflight", Policy: selected}, 0, []MachineViolation{{Code: "prompt_changed", Message: err.Error()}}, []MachineViolation{}
 	}
-	identity, err := ownership.delegate(selected.TaskID, []string{s.reportedStatePath(), filepath.ToSlash(filepath.Join(s.paths.LogicalPlanningDir, "tasks")) + "/", filepath.ToSlash(filepath.Join(s.paths.LogicalPlanningDir, "artifacts", "verify", selected.TaskID)) + "/"})
+	identity, err := ownership.delegate(s.loopDelegationGrant(selected.TaskID))
 	if err != nil {
 		return LoopIteration{TaskID: selected.TaskID, Outcome: "invalid_postflight", Policy: selected}, 0, []MachineViolation{{Code: "executable_changed", Message: err.Error()}}, []MachineViolation{}
 	}

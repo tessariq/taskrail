@@ -432,10 +432,7 @@ updated_at: "2026-03-31T00:00:00Z"
 			Capability: repolock.Capability{
 				Commands:     []string{"loop"},
 				SelectedTask: selected,
-				Writes: []string{
-					"planning/STATE.md",
-					"planning/tasks/T-002.md",
-				},
+				Writes:       svc.loopDelegationGrant(selected).Writes,
 			},
 			ExecutablePath: executable,
 		})
@@ -547,6 +544,60 @@ updated_at: "2026-03-31T00:00:00Z"
 			t.Fatal("refused delegated next changed repository bytes")
 		}
 	})
+}
+
+// A loop issues one broad task-scoped grant before its child knows the concrete
+// verification destination. Each lifecycle writer must authenticate that grant,
+// then narrow to its own command and transaction paths.
+func TestDelegatedLifecycleWritersShareLoopGrant(t *testing.T) {
+	const selected = "T-002"
+	repo := seedFixtureRepo(t)
+	writeTask(t, repo, selected, "Work item", "todo", "high", "specs/v0.1.0.md#summary", nil)
+	svc := newTestService(t, repo, time.Date(2026, 8, 17, 9, 0, 0, 0, time.UTC))
+	setTestVerificationIDs(svc)
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatalf("resolve test executable: %v", err)
+	}
+	lock, err := repolock.Acquire(context.Background(), repolock.Request{
+		Repository:    svc.paths.LockRepository(),
+		Command:       "loop",
+		TransactionID: "0123456789abcdef0123456789abcdef",
+		Capability: repolock.Capability{Commands: []string{"loop"}, SelectedTask: selected,
+			Writes: svc.loopDelegationGrant(selected).Writes},
+		ExecutablePath: executable,
+	})
+	if err != nil {
+		t.Fatalf("acquire loop lock: %v", err)
+	}
+	t.Cleanup(func() { _ = lock.Release() })
+	delegation, err := lock.Delegation()
+	if err != nil {
+		t.Fatalf("read loop delegation: %v", err)
+	}
+	t.Setenv("TASKRAIL", executable)
+	t.Setenv("TASKRAIL_DELEGATION_ID", "0123456789abcdef0123456789abcdef")
+	t.Setenv("TASKRAIL_DELEGATION_TOKEN", delegation.Token)
+	t.Setenv("TASKRAIL_EXECUTABLE_SHA256", delegation.ExecutableSHA256)
+
+	if _, err := svc.Start(selected); err != nil {
+		t.Fatalf("delegated start: %v", err)
+	}
+	if _, err := svc.Block(selected, "blocked under the loop grant"); err != nil {
+		t.Fatalf("delegated block: %v", err)
+	}
+	if _, err := svc.Unblock(selected, "resume under the loop grant"); err != nil {
+		t.Fatalf("delegated unblock: %v", err)
+	}
+	if _, err := svc.Start(selected); err != nil {
+		t.Fatalf("delegated restart: %v", err)
+	}
+	if _, err := svc.Complete(selected, "completed under the loop grant"); err != nil {
+		t.Fatalf("delegated complete: %v", err)
+	}
+	if _, err := runVerify(t, svc, baseVerifyInput()); err != nil {
+		t.Fatalf("delegated verify: %v", err)
+	}
 }
 
 // Outside Git, the discovered non-Git repository places its lock beneath its

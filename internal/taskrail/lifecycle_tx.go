@@ -76,7 +76,7 @@ func (s *Service) beginWriterWrite(w writerCommand, selectedTask string, writes 
 			InvocationID:     identity.invocationID,
 			Token:            identity.token,
 			ExecutableSHA256: identity.executableSHA256,
-			Grant:            repolock.Capability{SelectedTask: selectedTask, Writes: writes},
+			Grant:            s.loopDelegationGrant(selectedTask),
 			Capability:       repolock.Capability{Commands: []string{w.command}, TaskFields: w.taskFields, SelectedTask: selectedTask, Writes: writes},
 		})
 		if err != nil {
@@ -96,6 +96,18 @@ func (s *Service) beginWriterWrite(w writerCommand, selectedTask string, writes 
 		return nil, nil, errors.Join(err, release())
 	}
 	return own, release, nil
+}
+
+// loopDelegationGrant is the stable task-scoped authority a loop authenticates
+// before a child narrows to one lifecycle transaction. Verification destinations
+// include a runtime-generated timestamp and ID, so its selected-task prefix is
+// part of the canonical grant rather than a concrete writer claim.
+func (s *Service) loopDelegationGrant(taskID string) repolock.Capability {
+	return repolock.Capability{SelectedTask: taskID, Writes: []string{
+		s.reportedStatePath(),
+		path.Join(s.paths.LogicalPlanningDir, "tasks") + "/",
+		relPath(s.paths.RepoRoot, filepath.Join(s.paths.VerifyDir, taskID)) + "/",
+	}}
 }
 
 type delegatedIdentity struct {

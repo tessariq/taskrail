@@ -4,6 +4,13 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ## Unreleased
 
+### Fixed
+
+- Delegated loop lifecycle writers now authenticate the loop's one canonical
+  task-scoped grant before narrowing to each command's exact task fields and
+  transaction paths. One child token can therefore safely cover `start`,
+  `complete`, `block`, and verification with a runtime-generated destination.
+
 ### Added
 
 - `lock status` now remains read-only under a valid recovery fence, and

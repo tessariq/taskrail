@@ -42,7 +42,7 @@ func TestLoopOwnershipPinsOneExecutableAndRetainsItsLock(t *testing.T) {
 	}
 	lockID := status.Owner.LockID
 
-	first, err := ownership.delegate("T-001-first", []string{"planning/STATE.md", "planning/tasks/T-001-first.md"})
+	first, err := ownership.delegate(svc.loopDelegationGrant("T-001-first"))
 	if err != nil {
 		t.Fatalf("delegate first task: %v", err)
 	}
@@ -56,15 +56,49 @@ func TestLoopOwnershipPinsOneExecutableAndRetainsItsLock(t *testing.T) {
 	if got := string(readBytes(t, repolock.LockPath(svc.paths.LockRepository()))); containsAny(got, first.Token) {
 		t.Fatal("loop lock metadata leaked the child token")
 	}
-	if _, err := repolock.Join(repolock.JoinRequest{
+	join := repolock.JoinRequest{
 		Repository: svc.paths.LockRepository(), Command: "complete", InvocationID: first.InvocationID, Token: first.Token, ExecutableSHA256: first.SHA256,
-		Grant:      repolock.Capability{SelectedTask: "T-001-first", Writes: []string{"planning/STATE.md", "planning/tasks/T-001-first.md"}},
+		Grant:      svc.loopDelegationGrant("T-001-first"),
 		Capability: repolock.Capability{Commands: []string{"complete"}, TaskFields: []string{"status"}, SelectedTask: "T-001-first", Writes: []string{"planning/STATE.md", "planning/tasks/T-001-first.md"}},
-	}); err != nil {
+	}
+	if _, err := repolock.Join(join); err != nil {
 		t.Fatalf("join first child: %v", err)
 	}
+	lockBefore := readBytes(t, repolock.LockPath(svc.paths.LockRepository()))
+	for _, tc := range []struct {
+		name   string
+		mutate func(*repolock.JoinRequest)
+	}{
+		{name: "forged broad grant", mutate: func(req *repolock.JoinRequest) {
+			req.Grant.Writes = append(req.Grant.Writes, "planning/tasks/T-009-forged.md")
+		}},
+		{name: "widened command", mutate: func(req *repolock.JoinRequest) {
+			req.Command, req.Capability.Commands = "task release", []string{"task release"}
+		}},
+		{name: "widened task field", mutate: func(req *repolock.JoinRequest) {
+			req.Capability.TaskFields = append(req.Capability.TaskFields, "loop_policy")
+		}},
+		{name: "another task", mutate: func(req *repolock.JoinRequest) {
+			req.Capability.SelectedTask = "T-002-second"
+			req.Capability.Writes = []string{"planning/STATE.md", "planning/tasks/T-002-second.md"}
+		}},
+		{name: "another verification artifact directory", mutate: func(req *repolock.JoinRequest) {
+			req.Capability.Writes = append(req.Capability.Writes, "planning/artifacts/verify/T-002-second/report.json")
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			req := join
+			tc.mutate(&req)
+			if _, err := repolock.Join(req); !errors.Is(err, repolock.ErrRefused) {
+				t.Fatalf("widened loop grant join = %v, want refusal", err)
+			}
+			if got := readBytes(t, repolock.LockPath(svc.paths.LockRepository())); got != lockBefore {
+				t.Fatal("refused loop grant join changed lock metadata")
+			}
+		})
+	}
 
-	second, err := ownership.delegate("T-002-second", []string{"planning/STATE.md", "planning/tasks/T-002-second.md"})
+	second, err := ownership.delegate(svc.loopDelegationGrant("T-002-second"))
 	if err != nil {
 		t.Fatalf("delegate second task: %v", err)
 	}
@@ -77,7 +111,7 @@ func TestLoopOwnershipPinsOneExecutableAndRetainsItsLock(t *testing.T) {
 	}
 	if _, err := repolock.Join(repolock.JoinRequest{
 		Repository: svc.paths.LockRepository(), Command: "complete", InvocationID: first.InvocationID, Token: first.Token, ExecutableSHA256: first.SHA256,
-		Grant:      repolock.Capability{SelectedTask: "T-001-first", Writes: []string{"planning/STATE.md", "planning/tasks/T-001-first.md"}},
+		Grant:      svc.loopDelegationGrant("T-001-first"),
 		Capability: repolock.Capability{Commands: []string{"complete"}, TaskFields: []string{"status"}, SelectedTask: "T-001-first", Writes: []string{"planning/STATE.md", "planning/tasks/T-001-first.md"}},
 	}); !errors.Is(err, repolock.ErrRefused) {
 		t.Fatalf("old delegation join error = %v, want refusal", err)
@@ -167,7 +201,7 @@ func TestLoopOwnershipRefusesToRotateAfterStagedBytesChange(t *testing.T) {
 	if err != nil {
 		t.Fatalf("begin loop ownership: %v", err)
 	}
-	if _, err := ownership.delegate("T-001-first", []string{"planning/STATE.md", "planning/tasks/T-001-first.md"}); err != nil {
+	if _, err := ownership.delegate(svc.loopDelegationGrant("T-001-first")); err != nil {
 		t.Fatalf("delegate first task: %v", err)
 	}
 	before, err := repolock.Inspect(svc.paths.LockRepository())
@@ -177,7 +211,7 @@ func TestLoopOwnershipRefusesToRotateAfterStagedBytesChange(t *testing.T) {
 	if err := os.WriteFile(ownership.executable.Path, []byte("changed executable bytes"), 0o700); err != nil {
 		t.Fatalf("change staged executable: %v", err)
 	}
-	if _, err := ownership.delegate("T-002-second", []string{"planning/STATE.md", "planning/tasks/T-002-second.md"}); err == nil {
+	if _, err := ownership.delegate(svc.loopDelegationGrant("T-002-second")); err == nil {
 		t.Fatal("rotated delegation after staged executable bytes changed")
 	}
 	after, err := repolock.Inspect(svc.paths.LockRepository())

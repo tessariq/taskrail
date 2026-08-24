@@ -2,6 +2,7 @@ package taskrail
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -480,7 +481,7 @@ func TestVerifyPreservesNonCanonicalStatusBytes(t *testing.T) {
 // verifyDelegationFixture acquires a loop-style delegating lock over the
 // fixture repository, granting exactly the write set a delegated verify must
 // claim for the selected task.
-func verifyDelegationFixture(t *testing.T, selected string, writes []string) (*Service, string, repolock.Delegation) {
+func verifyDelegationFixture(t *testing.T, selected string) (*Service, string, repolock.Delegation) {
 	t.Helper()
 	repo := seedFixtureRepo(t)
 	writeTask(t, repo, selected, "Verified item", "completed", "high", "specs/v0.1.0.md#summary", nil)
@@ -509,7 +510,7 @@ updated_at: "2026-03-31T00:00:00Z"
 		Capability: repolock.Capability{
 			Commands:     []string{"loop"},
 			SelectedTask: selected,
-			Writes:       writes,
+			Writes:       svc.loopDelegationGrant(selected).Writes,
 		},
 		ExecutablePath: executable,
 	})
@@ -536,27 +537,13 @@ func asVerifyDelegate(t *testing.T, delegation repolock.Delegation) {
 	t.Setenv("TASKRAIL_EXECUTABLE_SHA256", delegation.ExecutableSHA256)
 }
 
-// delegatedVerifyWrites is the exact write set a delegated verify claims for
-// T-002: state, the selected task, its three artifact files, and — when the
-// grant covers creation — the follow-up task file.
-func delegatedVerifyWrites(followup string) []string {
-	writes := append([]string{
-		"planning/STATE.md",
-		"planning/tasks/T-002.md",
-	}, verifyArtifactPathsForID("T-002", delegatedVerificationID)...)
-	if followup != "" {
-		writes = append(writes, "planning/tasks/"+followup+".md")
-	}
-	return writes
-}
-
-// A delegated verify joins its parent's narrowed grant and publishes normally;
-// a wrong task, an unapproved follow-up, or an unapproved artifact set refuses
-// without writes; and the sentinel task a delegate never selected stays
-// byte-identical.
+// A delegated verify joins its parent's broad loop grant and publishes through
+// its narrowed write claim. An unselected follow-up or another artifact
+// directory refuses without writes, while a selected-task follow-up remains
+// available only through verify's own creation flow.
 func TestDelegatedVerifyWrites(t *testing.T) {
 	t.Run("permitted verification publishes normally", func(t *testing.T) {
-		svc, repo, delegation := verifyDelegationFixture(t, "T-002", delegatedVerifyWrites(""))
+		svc, repo, delegation := verifyDelegationFixture(t, "T-002")
 		asVerifyDelegate(t, delegation)
 		sentinel := filepath.Join(repo, "planning", "tasks", "T-009-sentinel.md")
 		sentinelBefore := readBytes(t, sentinel)
@@ -574,8 +561,7 @@ func TestDelegatedVerifyWrites(t *testing.T) {
 	})
 
 	t.Run("permitted follow-up creation publishes normally", func(t *testing.T) {
-		svc, _, delegation := verifyDelegationFixture(t, "T-002",
-			delegatedVerifyWrites("T-010-delegated-gap"))
+		svc, _, delegation := verifyDelegationFixture(t, "T-002")
 		asVerifyDelegate(t, delegation)
 
 		input := baseVerifyInput()
@@ -591,55 +577,47 @@ func TestDelegatedVerifyWrites(t *testing.T) {
 		}
 	})
 
-	t.Run("another task refuses without writes", func(t *testing.T) {
-		svc, repo, delegation := verifyDelegationFixture(t, "T-002", delegatedVerifyWrites(""))
+	t.Run("an unselected follow-up refuses without writes", func(t *testing.T) {
+		svc, repo, delegation := verifyDelegationFixture(t, "T-002")
 		asVerifyDelegate(t, delegation)
-		writeTask(t, repo, "T-005-other", "Other", "completed", "low", "specs/v0.1.0.md#summary", nil)
+		writeTask(t, repo, "T-005-followup", "Follow-up", "completed", "low", "specs/v0.1.0.md#summary", []string{"T-002"})
 
 		before := snapshotTree(t, repo)
 		input := baseVerifyInput()
-		input.TaskID = "T-005-other"
+		input.TaskID = "T-005-followup"
 		if _, err := runVerify(t, svc, input); err == nil || MachineFailureFor(err).Code != MachineCodeDelegatedRefused {
-			t.Fatalf("delegated verify of an unselected task = %v, want delegated_write_refused", err)
+			t.Fatalf("delegated verify of an unselected follow-up = %v, want delegated_write_refused", err)
 		}
 		if got := snapshotTree(t, repo); !mapEqual(got, before) {
-			t.Fatal("cross-task delegation changed repository bytes")
+			t.Fatal("unselected follow-up delegation changed repository bytes")
 		}
 	})
 
-	t.Run("unapproved follow-up creation refuses without writes", func(t *testing.T) {
-		svc, repo, delegation := verifyDelegationFixture(t, "T-002", delegatedVerifyWrites(""))
+	t.Run("another verification artifact directory refuses without writes", func(t *testing.T) {
+		svc, repo, delegation := verifyDelegationFixture(t, "T-002")
 		asVerifyDelegate(t, delegation)
 
 		before := snapshotTree(t, repo)
-		input := baseVerifyInput()
-		input.Result = "fail"
-		input.CreateFollowup = true
-		input.FollowupTitle = "Unapproved gap"
-		if _, err := runVerify(t, svc, input); err == nil || MachineFailureFor(err).Code != MachineCodeDelegatedRefused {
-			t.Fatalf("delegated verify creating an unapproved follow-up = %v, want delegated_write_refused", err)
+		_, err := repolock.Join(repolock.JoinRequest{
+			Repository:       svc.paths.LockRepository(),
+			Command:          "verify",
+			InvocationID:     delegatedVerificationID,
+			Token:            delegation.Token,
+			ExecutableSHA256: delegation.ExecutableSHA256,
+			Grant:            svc.loopDelegationGrant("T-002"),
+			Capability: repolock.Capability{Commands: []string{"verify"}, TaskFields: lifecycleVerify.taskFields,
+				SelectedTask: "T-002", Writes: []string{"planning/artifacts/verify/T-005-other/report.json"}},
+		})
+		if err == nil || !errors.Is(err, repolock.ErrRefused) {
+			t.Fatalf("delegated verify claiming another artifact directory = %v, want refusal", err)
 		}
 		if got := snapshotTree(t, repo); !mapEqual(got, before) {
-			t.Fatal("unapproved follow-up creation changed repository bytes")
-		}
-	})
-
-	t.Run("unapproved artifact set refuses without writes", func(t *testing.T) {
-		svc, repo, delegation := verifyDelegationFixture(t, "T-002",
-			[]string{"planning/STATE.md", "planning/tasks/T-002.md"})
-		asVerifyDelegate(t, delegation)
-
-		before := snapshotTree(t, repo)
-		if _, err := runVerify(t, svc, baseVerifyInput()); err == nil || MachineFailureFor(err).Code != MachineCodeDelegatedRefused {
-			t.Fatalf("delegated verify with an unapproved artifact set = %v, want delegated_write_refused", err)
-		}
-		if got := snapshotTree(t, repo); !mapEqual(got, before) {
-			t.Fatal("unapproved artifact set changed repository bytes")
+			t.Fatal("unapproved artifact claim changed repository bytes")
 		}
 	})
 
 	t.Run("only canonical verify fields change", func(t *testing.T) {
-		svc, repo, delegation := verifyDelegationFixture(t, "T-002", delegatedVerifyWrites(""))
+		svc, repo, delegation := verifyDelegationFixture(t, "T-002")
 		svc.completionID = func() (string, error) { return firstCompletionID, nil }
 		asVerifyDelegate(t, delegation)
 		selected := filepath.Join(repo, "planning", "tasks", "T-002.md")
@@ -670,4 +648,51 @@ func TestDelegatedVerifyWrites(t *testing.T) {
 			t.Fatalf("delegated verify changed an owned line:\nwant:\n%s\ngot:\n%s", want, after)
 		}
 	})
+}
+
+// Local planning stores verification artifacts beneath its ignored overlay. The
+// loop grant must use that concrete reported prefix while task and state paths
+// retain their logical identities.
+func TestDelegatedLocalVerifyUsesPhysicalArtifactGrant(t *testing.T) {
+	repo := t.TempDir()
+	initLocalGitRepo(t, repo)
+	seedFixtureTree(t, repo)
+	writeTask(t, repo, "T-002", "Verified item", "completed", "high", "specs/v0.1.0.md#summary", nil)
+	svc := newLocalTestService(t, repo, time.Date(2026, 8, 17, 9, 0, 0, 0, time.UTC))
+	setTestVerificationIDs(svc)
+	for _, file := range []string{"specs/README.md", "specs/v0.1.0.md", "planning/STATE.md", "planning/tasks/T-002.md"} {
+		writeFile(t, filepath.Join(svc.paths.StorageRoot, filepath.FromSlash(file)), readBytes(t, filepath.Join(repo, filepath.FromSlash(file))))
+	}
+	for _, root := range []string{"specs", "planning"} {
+		if err := os.RemoveAll(filepath.Join(repo, root)); err != nil {
+			t.Fatalf("remove committed %s fixture: %v", root, err)
+		}
+	}
+
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatalf("resolve test executable: %v", err)
+	}
+	lock, err := repolock.Acquire(context.Background(), repolock.Request{
+		Repository: svc.paths.LockRepository(), Command: "loop", TransactionID: delegatedVerificationID,
+		Capability:     repolock.Capability{Commands: []string{"loop"}, SelectedTask: "T-002", Writes: svc.loopDelegationGrant("T-002").Writes},
+		ExecutablePath: executable,
+	})
+	if err != nil {
+		t.Fatalf("acquire local loop lock: %v", err)
+	}
+	t.Cleanup(func() { _ = lock.Release() })
+	delegation, err := lock.Delegation()
+	if err != nil {
+		t.Fatalf("read local loop delegation: %v", err)
+	}
+	asVerifyDelegate(t, delegation)
+
+	if _, err := runVerify(t, svc, baseVerifyInput()); err != nil {
+		t.Fatalf("delegated local verify: %v", err)
+	}
+	artifact := filepath.Join(svc.paths.VerifyDir, "T-002", verifyTimestamp+"-"+delegatedVerificationID, "report.json")
+	if _, err := os.Stat(artifact); err != nil {
+		t.Fatalf("local verification artifact %s: %v", artifact, err)
+	}
 }
