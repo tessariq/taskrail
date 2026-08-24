@@ -1,12 +1,17 @@
 ---
 id: T-362-diagnose-macos-parallel-dry-run-byte-mutation
 title: Diagnose macOS parallel dry-run byte mutation
-status: in_progress
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#parallel-isolated-clone-batches
 dependencies:
     - T-335-deliver-parallel-batches-through-review-adapters
-updated_at: "2026-08-24T12:02:04Z"
+updated_at: "2026-08-24T12:13:52Z"
+completion_id: "27d8f4d0329c838fdcdbb72a1437ef74"
+last_verification_id: "af2d010a6eb2b64f3267b8b66d007c77"
+last_verification_result: pass
+last_verified_at: "2026-08-24T12:13:52Z"
+last_verified_completion_id: "27d8f4d0329c838fdcdbb72a1437ef74"
 ---
 
 # T-362-diagnose-macos-parallel-dry-run-byte-mutation Diagnose macOS parallel dry-run byte mutation
@@ -42,3 +47,6 @@ writer, and prevent that write without weakening the repository snapshot.
   `taskrail validate`, and exact-head CI.
 
 ## Implementation Notes
+
+- 2026-08-24T12:13:44Z: Kept the strict repository-byte snapshot, added exact changed-path diagnostics, and confirmed the unchanged head through two passing macOS CI executions plus the full cross-platform matrix.
+- 2026-08-24T12:13:52Z: verification pass id af2d010a6eb2b64f3267b8b66d007c77 previous none completion 27d8f4d0329c838fdcdbb72a1437ef74

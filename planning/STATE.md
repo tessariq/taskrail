@@ -1,17 +1,16 @@
 ---
 schema_version: 1
-updated_at: "2026-08-24T12:02:04Z"
+updated_at: "2026-08-24T12:13:52Z"
 active_spec_version: v0.5.0
 active_spec_path: specs/v0.5.0.md
-current_task: T-362-diagnose-macos-parallel-dry-run-byte-mutation
-current_task_title: Diagnose macOS parallel dry-run byte mutation
-status_summary: in_progress
+current_task: ""
+current_task_title: ""
+status_summary: idle
 blockers: []
-next_action: Implement T-362-diagnose-macos-parallel-dry-run-byte-mutation and run targeted tests
-last_verification_result: pass for T-335-deliver-parallel-batches-through-review-adapters at 2026-08-24T11:46:06Z id a440f37a9fbcf8fe9e301285e24fe6bb
-last_verification_id: a440f37a9fbcf8fe9e301285e24fe6bb
-last_verification_previous_id: 6c005d39a2d895aa20fc32d7bb9a66b1
-last_verified_completion_id: 0cd8f1c359fdaa019e060ee6ca7ba6ee
+next_action: Select the next eligible task
+last_verification_result: pass for T-362-diagnose-macos-parallel-dry-run-byte-mutation at 2026-08-24T12:13:52Z id af2d010a6eb2b64f3267b8b66d007c77
+last_verification_id: af2d010a6eb2b64f3267b8b66d007c77
+last_verified_completion_id: 27d8f4d0329c838fdcdbb72a1437ef74
 relevant_artifacts: []
 continuation_notes:
     - This repository is temporarily dogfooding bootstrap workflow tooling until Taskrail v0.1.0 exists.
@@ -25,12 +24,11 @@ continuation_notes:
 
 ## Current Focus
 
-- Task: `T-362-diagnose-macos-parallel-dry-run-byte-mutation`
-- Title: Diagnose macOS parallel dry-run byte mutation
+- Task: none
 
 ## Status
 
-- in_progress
+- idle
 
 ## Blockers
 
@@ -38,11 +36,11 @@ continuation_notes:
 
 ## Last Verification
 
-- pass for T-335-deliver-parallel-batches-through-review-adapters at 2026-08-24T11:46:06Z id a440f37a9fbcf8fe9e301285e24fe6bb
+- pass for T-362-diagnose-macos-parallel-dry-run-byte-mutation at 2026-08-24T12:13:52Z id af2d010a6eb2b64f3267b8b66d007c77
 
 ## Next Action
 
-- Implement T-362-diagnose-macos-parallel-dry-run-byte-mutation and run targeted tests
+- Select the next eligible task
 
 ## Relevant Artifacts
 
@@ -55,7 +53,7 @@ continuation_notes:
 ## Task Counts
 
 - todo: 88
-- in_progress: 1
-- completed: 272
+- in_progress: 0
+- completed: 273
 - blocked: 0
 - cancelled: 0
