@@ -7,12 +7,13 @@ spec_ref: specs/v0.5.0.md#parallel-isolated-clone-batches
 dependencies:
     - T-334-deliver-parallel-clone-batches-locally
     - T-361-make-parallel-local-delivery-portable-in-clean-environments
-updated_at: "2026-08-24T11:32:45Z"
+updated_at: "2026-08-24T11:46:06Z"
 completion_id: "0cd8f1c359fdaa019e060ee6ca7ba6ee"
-last_verification_id: "6c005d39a2d895aa20fc32d7bb9a66b1"
+last_verification_id: "a440f37a9fbcf8fe9e301285e24fe6bb"
 last_verification_result: pass
-last_verified_at: "2026-08-24T11:32:45Z"
+last_verified_at: "2026-08-24T11:46:06Z"
 last_verified_completion_id: "0cd8f1c359fdaa019e060ee6ca7ba6ee"
+last_verification_previous_id: "6c005d39a2d895aa20fc32d7bb9a66b1"
 ---
 
 # T-335-deliver-parallel-batches-through-review-adapters Deliver parallel batches through review adapters
@@ -75,3 +76,4 @@ embedding GitHub, GitLab, credentials, or provider-specific state in Taskrail.
 
 - 2026-08-24T11:32:32Z: Delivered strict provider-neutral review-adapter parallel delivery with ordered merges and refreshes.
 - 2026-08-24T11:32:45Z: verification pass id 6c005d39a2d895aa20fc32d7bb9a66b1 previous none completion 0cd8f1c359fdaa019e060ee6ca7ba6ee
+- 2026-08-24T11:46:06Z: verification pass id a440f37a9fbcf8fe9e301285e24fe6bb previous 6c005d39a2d895aa20fc32d7bb9a66b1 completion 0cd8f1c359fdaa019e060ee6ca7ba6ee

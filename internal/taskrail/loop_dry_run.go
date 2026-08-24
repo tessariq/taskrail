@@ -231,10 +231,14 @@ func resolveReviewAdapter(adapter string) (string, error) {
 		return "", invalidArgumentsf("resolve --review-adapter: %v", err)
 	}
 	info, err := os.Stat(absolute)
-	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0o111 == 0 {
+	if err != nil || !executableReviewAdapter(info.Mode(), runtime.GOOS) {
 		return "", invalidArgumentsf("--review-adapter must resolve to an executable regular file")
 	}
 	return absolute, nil
+}
+
+func executableReviewAdapter(mode os.FileMode, goos string) bool {
+	return mode.IsRegular() && (goos == "windows" || mode.Perm()&0o111 != 0)
 }
 
 func (s *Service) frozenTaskPriorities(snapshot LoopPreflightSnapshot) (map[string]int, error) {

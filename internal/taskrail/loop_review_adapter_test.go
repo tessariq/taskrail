@@ -100,6 +100,34 @@ func TestLoopExecuteDeliversParallelReviewBatchThroughAdapter(t *testing.T) {
 	}
 }
 
+func TestExecutableReviewAdapterUsesPlatformSemantics(t *testing.T) {
+	tests := []struct {
+		name string
+		mode os.FileMode
+		goos string
+		want bool
+	}{
+		{name: "windows regular file without execute bits", mode: 0o600, goos: "windows", want: true},
+		{name: "unix regular file with execute bit", mode: 0o700, goos: "linux", want: true},
+		{name: "unix regular file without execute bits", mode: 0o600, goos: "linux", want: false},
+		{name: "windows directory", mode: os.ModeDir | 0o700, goos: "windows", want: false},
+		{name: "windows non-regular file", mode: os.ModeNamedPipe | 0o700, goos: "windows", want: false},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := executableReviewAdapter(test.mode, test.goos); got != test.want {
+				t.Fatalf("executableReviewAdapter(%v, %q) = %t, want %t", test.mode, test.goos, got, test.want)
+			}
+		})
+	}
+}
+
+func TestResolveReviewAdapterRejectsUnresolvedPath(t *testing.T) {
+	if _, err := resolveReviewAdapter(filepath.Join(t.TempDir(), "missing-adapter")); err == nil {
+		t.Fatal("resolveReviewAdapter accepted an unresolved path")
+	}
+}
+
 func TestRunReviewAdapterRejectsExtraStdout(t *testing.T) {
 	adapter := buildReviewAdapter(t, "{}")
 	request := ReviewAdapterRequest{SchemaVersion: 1, RequestID: "request-1", Operation: "inspect_change",
