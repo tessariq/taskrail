@@ -1,13 +1,13 @@
 ---
 schema_version: 1
-updated_at: "2026-08-24T11:46:06Z"
+updated_at: "2026-08-24T12:02:04Z"
 active_spec_version: v0.5.0
 active_spec_path: specs/v0.5.0.md
-current_task: ""
-current_task_title: ""
-status_summary: idle
+current_task: T-362-diagnose-macos-parallel-dry-run-byte-mutation
+current_task_title: Diagnose macOS parallel dry-run byte mutation
+status_summary: in_progress
 blockers: []
-next_action: Select the next eligible task
+next_action: Implement T-362-diagnose-macos-parallel-dry-run-byte-mutation and run targeted tests
 last_verification_result: pass for T-335-deliver-parallel-batches-through-review-adapters at 2026-08-24T11:46:06Z id a440f37a9fbcf8fe9e301285e24fe6bb
 last_verification_id: a440f37a9fbcf8fe9e301285e24fe6bb
 last_verification_previous_id: 6c005d39a2d895aa20fc32d7bb9a66b1
@@ -25,11 +25,12 @@ continuation_notes:
 
 ## Current Focus
 
-- Task: none
+- Task: `T-362-diagnose-macos-parallel-dry-run-byte-mutation`
+- Title: Diagnose macOS parallel dry-run byte mutation
 
 ## Status
 
-- idle
+- in_progress
 
 ## Blockers
 
@@ -41,7 +42,7 @@ continuation_notes:
 
 ## Next Action
 
-- Select the next eligible task
+- Implement T-362-diagnose-macos-parallel-dry-run-byte-mutation and run targeted tests
 
 ## Relevant Artifacts
 
@@ -54,7 +55,7 @@ continuation_notes:
 ## Task Counts
 
 - todo: 88
-- in_progress: 0
+- in_progress: 1
 - completed: 272
 - blocked: 0
 - cancelled: 0

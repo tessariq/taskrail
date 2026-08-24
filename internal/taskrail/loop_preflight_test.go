@@ -386,7 +386,7 @@ func TestLoopDryRunBuildsParallelFrontierWithoutMutation(t *testing.T) {
 		t.Fatalf("frontier = %+v", report.Parallel.Frontier)
 	}
 	if after := snapshotTree(t, repo); !reflect.DeepEqual(after, before) {
-		t.Fatal("parallel dry run changed repository bytes")
+		t.Fatalf("parallel dry run changed repository bytes: %v", changedPaths(t, before, after))
 	}
 }
 

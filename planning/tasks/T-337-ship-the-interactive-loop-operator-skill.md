@@ -7,6 +7,7 @@ spec_ref: specs/v0.5.0.md#cross-platform-autonomous-loop
 dependencies:
     - T-244-publish-streamed-loop-results-out-of-band
     - T-335-deliver-parallel-batches-through-review-adapters
+    - T-362-diagnose-macos-parallel-dry-run-byte-mutation
     - T-326-unblock-the-operator-lock-surface-under-a-retained
 updated_at: "2026-08-20T11:57:50Z"
 ---
