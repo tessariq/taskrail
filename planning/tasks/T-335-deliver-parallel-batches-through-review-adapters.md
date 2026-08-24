@@ -6,6 +6,7 @@ priority: medium
 spec_ref: specs/v0.5.0.md#parallel-isolated-clone-batches
 dependencies:
     - T-334-deliver-parallel-clone-batches-locally
+    - T-361-make-parallel-local-delivery-portable-in-clean-environments
 updated_at: "2026-08-18T15:50:17Z"
 ---
 

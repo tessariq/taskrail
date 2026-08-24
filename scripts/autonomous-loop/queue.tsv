@@ -128,6 +128,7 @@ T-332-gate-task-mutation-permission-fault-tests-on	hold-operator	Operator-owned 
 T-333-preview-deterministic-parallel-clone-batches	run	-
 T-360-authenticate-delegated-lifecycle-writes-against-loop-grant	run	-
 T-334-deliver-parallel-clone-batches-locally	run	-
+T-361-make-parallel-local-delivery-portable-in-clean-environments	run	-
 T-335-deliver-parallel-batches-through-review-adapters	run	-
 T-336-run-bounded-parallel-batches-in-the-temporary-loop	hold-operator	Operator-owned temporary-loop parallel batch backport
 T-337-ship-the-interactive-loop-operator-skill	run	-
