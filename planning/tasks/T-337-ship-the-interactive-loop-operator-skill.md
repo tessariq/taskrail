@@ -1,7 +1,7 @@
 ---
 id: T-337-ship-the-interactive-loop-operator-skill
 title: Ship the interactive loop operator skill
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#cross-platform-autonomous-loop
 dependencies:
@@ -9,7 +9,12 @@ dependencies:
     - T-335-deliver-parallel-batches-through-review-adapters
     - T-362-diagnose-macos-parallel-dry-run-byte-mutation
     - T-326-unblock-the-operator-lock-surface-under-a-retained
-updated_at: "2026-08-20T11:57:50Z"
+updated_at: "2026-08-24T12:43:40Z"
+completion_id: "5932faecfef11345de3f09f5a05de005"
+last_verification_id: "2b6fff20980be66431a329c6d18bbbd4"
+last_verification_result: pass
+last_verified_at: "2026-08-24T12:43:40Z"
+last_verified_completion_id: "5932faecfef11345de3f09f5a05de005"
 ---
 
 # T-337-ship-the-interactive-loop-operator-skill Ship the interactive loop operator skill
@@ -128,3 +133,6 @@ reprojects state, updates refs, and publishes results.
   background wait, or automatic relaunch.
 
 ## Implementation Notes
+
+- 2026-08-24T12:43:30Z: Shipped provider-neutral interactive loop operator skill with explicit dry-run confirmation, result-file supervision, recovery guidance, and packaged parity.
+- 2026-08-24T12:43:40Z: verification pass id 2b6fff20980be66431a329c6d18bbbd4 previous none completion 5932faecfef11345de3f09f5a05de005

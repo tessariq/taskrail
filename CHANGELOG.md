@@ -16,6 +16,10 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ### Added
 
+- Added the provider-neutral `taskrail-loop` packaged skill for one confirmed,
+  bounded loop invocation. It supervises structured dry-run, result-file,
+  recovery, and caller-owned adapter evidence without gaining coordinator or
+  Git authority.
 - Parallel loop delivery now supports an explicit caller-owned review adapter.
   Taskrail exchanges one strict provider-neutral JSON request/result per branch,
   change, inspection, update, or merge operation without embedding credentials,

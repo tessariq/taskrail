@@ -297,6 +297,14 @@ existing, non-symlinked directory outside the worktree and Git metadata;
 Taskrail rechecks that directory and creates the file without replacement after
 postflight.
 
+Use the packaged `taskrail-loop` skill when an operator needs one interactive,
+provider-neutral loop run. It elicits unresolved caller-owned choices, explains
+the structured dry-run and requires confirmation, then supervises the one
+coordinator invocation through its external result file. The skill reports
+worker, integration, delivery, and optional caller-owned CI evidence, but never
+selects work, mutates Git or planning state, or substitutes for Taskrail's
+coordinator or review adapter.
+
 Let Taskrail pick the next eligible task, start it, and advance it:
 
 ```sh

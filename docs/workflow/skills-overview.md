@@ -30,6 +30,10 @@ Tracked-work and spec skills (each bullet notes how it creates tasks, if at all)
   hand-editing authoritative state (shipped in T-054).
 - `autonomous-manual-test` — its `planning/artifacts/manual-test/` artifacts stay
   ephemeral and gitignored, not a product invariant (shipped in T-081).
+- `taskrail-loop` — interactively configures, previews, confirms, and supervises
+  one bounded provider-neutral `loop` invocation. It reports coordinator and
+  caller-owned adapter evidence but never selects work or gains lifecycle, Git,
+  integration, delivery, or recovery-write authority (shipped in T-337).
 - `taskrail-repair`
 - `taskrail-spec` — inspect and author specs, anchoring tracked work to real
   `spec_ref` headings via the `spec` command family (shipped in T-064).

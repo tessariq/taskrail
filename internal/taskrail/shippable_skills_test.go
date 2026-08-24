@@ -22,6 +22,7 @@ var shippableSkills = []string{
 	"autonomous-verify",
 	"autonomous-recovery",
 	"autonomous-manual-test",
+	"taskrail-loop",
 	"taskrail-import",
 	"taskrail-retrofit",
 	"taskrail-repair",
@@ -123,6 +124,7 @@ func TestShippableSkillsConsumeStructuredResultsAsJSON(t *testing.T) {
 		"autonomous-verify":      {"} validate --json", "} verify <task-id> --result pass --summary \"...\" --json", "} verify <task-id> --result fail --summary \"...\" --json", "} task new --follow-up <task-id> --title \"...\" --json", "} verify <task-id> --result fail --summary \"...\" --create-followup --json"},
 		"autonomous-recovery":    {"} validate --json", "} repair --json", "} repair --apply --json"},
 		"autonomous-manual-test": {"} validate --json"},
+		"taskrail-loop":          {"} loop --dry-run --json", "} loop", "--result-file <absolute-external-path>", "--parallel <n>", "--workspace-root <absolute-external-path>", "--clone-depth <n|full>", "--keep-workspaces <never|failure|always>", "--delivery <local|review>", "--review-adapter <path>", "--allow-prompt-override-sha256 <digest>", "-- <child-command> <args...>", "} lock status --json", "} recover <transaction-id>", "--take-over-lock <lock-id> --expect-sha256 <digest> --json", "--apply"},
 		"taskrail-import":        {"} import --apply draft.json --json", "} validate --json"},
 		"taskrail-retrofit":      {"} retrofit <notes.md> --json", "} retrofit --json", "} retrofit <notes.md> --apply --json", "} import --apply draft.json --json", "} validate --json"},
 		"taskrail-repair":        {"} validate --json", "} repair --json", "} repair --apply --json"},
@@ -139,6 +141,52 @@ func TestShippableSkillsConsumeStructuredResultsAsJSON(t *testing.T) {
 			}
 		}
 	}
+}
+
+// The loop skill is the interactive parent supervisor, not another coordinator.
+// Its instructions must bind every mutating launch to a reviewed dry-run and
+// leave selection, lifecycle, integration, delivery, and recovery writes to the
+// Taskrail command or an explicitly caller-owned adapter.
+func TestTaskrailLoopSkillSupervisesOneConfirmedInvocation(t *testing.T) {
+	assertSkillReferences(t, "taskrail-loop",
+		"safe defaults",
+		"missing provider command",
+		"dry-run",
+		"explicit confirmation",
+		"result file",
+		"exactly once",
+		"deterministic rank",
+		"coordinator",
+		"does not select a task",
+		"does not cherry-pick",
+		"does not stage",
+		"does not commit",
+		"does not merge",
+		"does not push",
+		"not_checked",
+		"checks: pass",
+		"caller-owned adapter",
+		"external evidence",
+		"action: run",
+		"action:none",
+		"action:invalid",
+		"A `result` carries the terminal diagnostic",
+		"A postflight `error` carries that diagnostic under `error.details`",
+		"error.details",
+		"common error",
+		"may include a recovery record",
+		"`error.details.recovery`",
+		"malformed",
+		"absent file",
+		"lock status",
+		"take-over-lock",
+		"completed_unverified",
+		"no retry",
+		"fresh dry-run",
+		"new result destination",
+		"no background wait",
+		"never automatically relaunch",
+	)
 }
 
 func TestShippableSkillsNameExactTextExceptions(t *testing.T) {
