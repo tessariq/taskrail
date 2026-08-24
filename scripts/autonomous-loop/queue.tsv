@@ -138,3 +138,5 @@ T-341-support-empty-local-planning-task-directories	hold-operator	Verification f
 T-342-bind-verification-identities-across-temporary-loop	hold-operator	Operator-owned temporary-loop state/report identity binding repair
 T-343-make-local-inspection-tests-portable	hold-operator	Operator-owned cross-platform CI repair for T-288
 T-344-align-temporary-loop-with-canonical-verification	hold-operator	Operator-owned canonical verification evidence repair
+T-358-prevent-read-only-git-probes-from-refreshing-index	hold-operator	Exact-head CI follow-up; restore deterministic read-only Git probes before the next loop invocation
+T-359-make-containment-cleanup-timing-race-aware	hold-operator	Verification follow-up from T-358; separate race-instrumented timing fixture

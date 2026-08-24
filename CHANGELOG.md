@@ -237,6 +237,8 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ### Fixed
 
+- Read-only Git probes now suppress Git's optional locks and index refreshes, so
+  loop dry-runs cannot change `.git/index` merely by checking repository status.
 - The temporary source-checkout autonomous loop now recognizes and validates the
   stable verification identity fields introduced by T-285 while retaining strict
   rejection of malformed identities and unrelated report fields.

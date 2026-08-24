@@ -349,9 +349,21 @@ func gitNullable(root string, args ...string) *string {
 
 func gitCommand(root string, args ...string) (string, error) {
 	command := exec.Command("git", append([]string{"-C", root}, args...)...)
+	command.Env = readOnlyGitEnvironment()
 	output, err := command.Output()
 	if err != nil {
 		return "", err
 	}
 	return string(output), nil
+}
+
+func readOnlyGitEnvironment() []string {
+	values := make([]string, 0, len(os.Environ())+1)
+	for _, entry := range os.Environ() {
+		name, _, found := strings.Cut(entry, "=")
+		if !found || !strings.EqualFold(name, "GIT_OPTIONAL_LOCKS") {
+			values = append(values, entry)
+		}
+	}
+	return append(values, "GIT_OPTIONAL_LOCKS=0")
 }

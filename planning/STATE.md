@@ -1,6 +1,6 @@
 ---
 schema_version: 1
-updated_at: "2026-08-24T07:33:25Z"
+updated_at: "2026-08-24T07:56:32Z"
 active_spec_version: v0.5.0
 active_spec_path: specs/v0.5.0.md
 current_task: ""
@@ -8,9 +8,9 @@ current_task_title: ""
 status_summary: idle
 blockers: []
 next_action: Select the next eligible task
-last_verification_result: pass for T-357-make-late-result-parent-swap-test-capability-aware at 2026-08-23T20:11:57Z id 254216d48145c6cd9c2efcf6e5aeff07
-last_verification_id: 254216d48145c6cd9c2efcf6e5aeff07
-last_verified_completion_id: 69d5b49b3fef3ce86a796504969fb3f3
+last_verification_result: pass for T-358-prevent-read-only-git-probes-from-refreshing-index at 2026-08-24T07:56:32Z id f975a02f8b21195561f29981686d7a0b
+last_verification_id: f975a02f8b21195561f29981686d7a0b
+last_verified_completion_id: 224e829e19e7c9fbb49ad3dca94ed233
 relevant_artifacts: []
 continuation_notes:
     - This repository is temporarily dogfooding bootstrap workflow tooling until Taskrail v0.1.0 exists.
@@ -36,7 +36,7 @@ continuation_notes:
 
 ## Last Verification
 
-- pass for T-357-make-late-result-parent-swap-test-capability-aware at 2026-08-23T20:11:57Z id 254216d48145c6cd9c2efcf6e5aeff07
+- pass for T-358-prevent-read-only-git-probes-from-refreshing-index at 2026-08-24T07:56:32Z id f975a02f8b21195561f29981686d7a0b
 
 ## Next Action
 
@@ -52,8 +52,8 @@ continuation_notes:
 
 ## Task Counts
 
-- todo: 90
+- todo: 91
 - in_progress: 0
-- completed: 266
+- completed: 267
 - blocked: 0
 - cancelled: 0

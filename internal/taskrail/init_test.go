@@ -1,6 +1,7 @@
 package taskrail
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -66,6 +67,39 @@ func TestSnapshotTreeIgnoresTransientGitLocks(t *testing.T) {
 	}
 	if got := snapshotTree(t, repo); !reflect.DeepEqual(got, map[string]string{"tracked": "durable"}) {
 		t.Fatalf("snapshot = %#v", got)
+	}
+}
+
+func TestGitCommandDoesNotRefreshIndex(t *testing.T) {
+	repo := t.TempDir()
+	runGit(t, repo, "init")
+	runGit(t, repo, "config", "user.name", "Taskrail Test")
+	runGit(t, repo, "config", "user.email", "taskrail@example.invalid")
+	tracked := filepath.Join(repo, "tracked")
+	writeFile(t, tracked, "unchanged\n")
+	runGit(t, repo, "add", "tracked")
+	runGit(t, repo, "commit", "-m", "fixture")
+
+	before, err := os.ReadFile(filepath.Join(repo, ".git", "index"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	stale := time.Now().Add(-time.Hour)
+	if err := os.Chtimes(tracked, stale, stale); err != nil {
+		t.Fatal(err)
+	}
+	if status, err := gitCommand(repo, "status", "--porcelain=v1"); err != nil || status != "" {
+		t.Fatalf("git status = %q, %v", status, err)
+	}
+	after, err := os.ReadFile(filepath.Join(repo, ".git", "index"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(after, before) {
+		t.Fatal("read-only git command refreshed index bytes")
+	}
+	if _, err := os.Stat(filepath.Join(repo, ".git", "index.lock")); !os.IsNotExist(err) {
+		t.Fatalf("index lock remains after read-only command: %v", err)
 	}
 }
 
