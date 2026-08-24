@@ -253,6 +253,9 @@ func runParallelLoopChild() int {
 	if strings.HasPrefix(first, "Run the repository's full aggregate validation") {
 		return 0
 	}
+	if strings.HasPrefix(first, "Refresh this one open review change") {
+		return 0
+	}
 	fields := strings.Fields(first)
 	if len(fields) < 5 || strings.Join(fields[:4], " ") != "Implement the selected task" {
 		return 97

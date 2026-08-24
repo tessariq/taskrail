@@ -16,6 +16,10 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ### Added
 
+- Parallel loop delivery now supports an explicit caller-owned review adapter.
+  Taskrail exchanges one strict provider-neutral JSON request/result per branch,
+  change, inspection, update, or merge operation without embedding credentials,
+  provider clients, or provider-specific review state.
 - `lock status` now remains read-only under a valid recovery fence, and
   `recover --take-over-lock <id> --expect-sha256 <digest>` can explicitly take
   over that exact abandoned transaction lock before applying recovery.

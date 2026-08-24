@@ -102,8 +102,8 @@ func (w *lockedLoopWriter) Write(data []byte) (int, error) {
 }
 
 func (s *Service) loopParallelExecute(ctx context.Context, invocation LoopInvocation, snapshot LoopPreflightSnapshot) (LoopDiagnostic, error) {
-	if invocation.Delivery != "local" {
-		return LoopDiagnostic{}, WithMachineErrorCode(MachineCodeUnsupported, fmt.Errorf("parallel review delivery is not available"))
+	if invocation.Delivery != "local" && invocation.Delivery != "review" {
+		return LoopDiagnostic{}, invalidArgumentsf("unsupported parallel delivery mode")
 	}
 	if err := s.authorizeLoopExecutionPrompt(snapshot); err != nil {
 		return LoopDiagnostic{}, err
@@ -125,7 +125,7 @@ func (s *Service) loopParallelExecute(ctx context.Context, invocation LoopInvoca
 	diagnostic.LastIteration = nil
 	batch := ParallelBatch{Plan: plan, Workers: make([]ParallelWorker, len(plan.Frontier)),
 		Integration: ParallelIntegration{BaseHead: plan.BaseHead, AcceptedTasks: []string{}},
-		Delivery:    ParallelDelivery{Mode: "local", TargetRef: plan.BaseRef, HeadBefore: plan.BaseHead, PublishedTasks: []string{}, PendingTasks: []string{}, Remote: "not_checked"}}
+		Delivery:    ParallelDelivery{Mode: plan.Delivery, Adapter: plan.ReviewAdapter, TargetRef: plan.BaseRef, HeadBefore: plan.BaseHead, PublishedTasks: []string{}, PendingTasks: []string{}, Remote: "not_checked"}}
 	diagnostic.Parallel = &batch
 	if len(plan.Frontier) == 0 {
 		diagnostic.Outcome = "no_work"
@@ -172,13 +172,32 @@ func (s *Service) loopParallelExecute(ctx context.Context, invocation LoopInvoca
 	}
 	wait.Wait()
 
-	integrationRoot := filepath.Join(root, "integration")
-	if hasParallelCandidate(batch.Workers) {
-		value := integrationRoot
-		batch.Integration.Workspace = &value
-		s.integrateParallelWorkers(ctx, invocation, plan, integrationRoot, &batch, stdout, stderr)
+	if invocation.Delivery == "review" {
+		s.deliverParallelReviews(ctx, invocation, plan, root, &batch, stdout, stderr)
+	} else {
+		integrationRoot := filepath.Join(root, "integration")
+		if hasParallelCandidate(batch.Workers) {
+			value := integrationRoot
+			batch.Integration.Workspace = &value
+			s.integrateParallelWorkers(ctx, invocation, plan, integrationRoot, &batch, stdout, stderr)
+		}
+		s.finishParallelDelivery(snapshot, &diagnostic, &batch)
 	}
-	s.finishParallelDelivery(snapshot, &diagnostic, &batch)
+	if invocation.Delivery == "review" {
+		if inputs, inputErr := loopInputBytes(s.paths); inputErr != nil || !reflect.DeepEqual(inputs, snapshot.Inputs()) {
+			diagnostic.MutationViolations = append(diagnostic.MutationViolations, parallelViolation("source_drift", "source repository inputs changed during review delivery"))
+		} else if git, gitErr := loopGitSnapshot(s.paths.WorktreeRoot, s.paths.GitDir); gitErr != nil || !reflect.DeepEqual(git, snapshot.Git()) {
+			diagnostic.MutationViolations = append(diagnostic.MutationViolations, parallelViolation("source_drift", "source repository Git state changed during review delivery"))
+			if gitErr == nil {
+				diagnostic.Git = LoopGitDiagnostic{Ref: git.Ref, HeadBefore: snapshot.Git().Head, HeadAfter: git.Head, Clean: git.Clean, Descendant: false, Commits: []string{}}
+			}
+		}
+		parallelOutcome(&diagnostic, &batch)
+		if len(diagnostic.MutationViolations) != 0 {
+			diagnostic.Outcome = "batch_partial"
+			diagnostic.NextAction = "Inspect source drift and adapter diagnostics before another invocation."
+		}
+	}
 	if cleanup := s.cleanupParallelWorkspaces(owner, invocation.KeepWorkspaces, &batch); len(cleanup) != 0 {
 		diagnostic.MutationViolations = append(diagnostic.MutationViolations, cleanup...)
 		diagnostic.Outcome = "batch_partial"
@@ -348,7 +367,11 @@ func integrateParallelCandidate(ctx context.Context, invocation LoopInvocation, 
 }
 
 func parallelCandidateCommitEnvironment(root string) ([]string, error) {
-	output, err := exec.Command("git", "-C", root, "show", "-s", "--format=%cn%x00%ce%x00%cI", "FETCH_HEAD").Output()
+	return parallelCommitEnvironment(root, "FETCH_HEAD")
+}
+
+func parallelCommitEnvironment(root, revision string) ([]string, error) {
+	output, err := exec.Command("git", "-C", root, "show", "-s", "--format=%cn%x00%ce%x00%cI", revision).Output()
 	if err != nil {
 		return nil, fmt.Errorf("read candidate commit metadata: %w", err)
 	}
@@ -508,7 +531,8 @@ func parallelIntegratedCommits(workers []ParallelWorker) []string {
 }
 
 func parallelOutcome(diagnostic *LoopDiagnostic, batch *ParallelBatch) {
-	if len(batch.Delivery.PublishedTasks) == len(batch.Workers) && len(batch.Workers) != 0 && batch.Delivery.HeadAfter != nil {
+	if len(batch.Delivery.PublishedTasks) == len(batch.Workers) && len(batch.Workers) != 0 &&
+		batch.Delivery.HeadAfter != nil && batch.Integration.AggregatePass {
 		diagnostic.Outcome = "batch_pass"
 		diagnostic.NextAction = "All selected parallel tasks were integrated and published."
 		return
