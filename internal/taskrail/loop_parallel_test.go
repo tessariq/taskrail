@@ -11,6 +11,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestParallelCloneUsesShallowTransportClone(t *testing.T) {
@@ -78,13 +79,27 @@ func TestLoopExecuteDeliversParallelCloneBatch(t *testing.T) {
 	if report.LastIteration != nil || report.Parallel.Integration.Head == nil {
 		t.Fatalf("parallel diagnostic shape = %+v", report)
 	}
-	metadata, err := gitCommand(repo, "show", "-s", "--format=%an%n%ae%n%aI%n%cn%n%ce%n%cI%n%B", *report.Parallel.Integration.Head)
+	metadata, err := gitCommand(repo, "show", "-s", "--format=%an%x00%ae%x00%aI%x00%cn%x00%ce%x00%cI%x00%B", *report.Parallel.Integration.Head)
 	if err != nil {
 		t.Fatalf("read integrated metadata: %v", err)
 	}
-	wantMetadata := "Parallel Worker\nparallel-worker@example.com\n2001-02-03T04:05:06+00:00\nParallel Worker\nparallel-worker@example.com\n2001-02-03T04:05:06+00:00\ncomplete T-002-ready"
-	if strings.TrimSpace(metadata) != wantMetadata {
-		t.Fatalf("integrated metadata = %q, want %q", strings.TrimSpace(metadata), wantMetadata)
+	fields := strings.SplitN(strings.TrimSpace(metadata), "\x00", 7)
+	if len(fields) != 7 {
+		t.Fatalf("integrated metadata fields = %q", fields)
+	}
+	if fields[0] != "Parallel Worker" || fields[1] != "parallel-worker@example.com" ||
+		fields[3] != "Parallel Worker" || fields[4] != "parallel-worker@example.com" {
+		t.Fatalf("integrated author/committer identity = %q", fields[:6])
+	}
+	wantTimestamp := time.Date(2001, time.February, 3, 4, 5, 6, 0, time.UTC)
+	for _, field := range []int{2, 5} {
+		got, err := time.Parse(time.RFC3339, fields[field])
+		if err != nil || !got.Equal(wantTimestamp) {
+			t.Fatalf("integrated timestamp %q = %v, %v; want %v", fields[field], got, err, wantTimestamp)
+		}
+	}
+	if fields[6] != "complete T-002-ready" {
+		t.Fatalf("integrated commit message = %q", fields[6])
 	}
 	for _, taskID := range []string{"T-001-ready", "T-002-ready"} {
 		tasks, err := svc.loadTasks()
@@ -92,6 +107,35 @@ func TestLoopExecuteDeliversParallelCloneBatch(t *testing.T) {
 		if err != nil || !found || task.Frontmatter.Status != "completed" {
 			t.Fatalf("task %s after parallel delivery = %+v, %v", taskID, task, err)
 		}
+	}
+}
+
+func TestCanonicalParallelRootResolvesSymlinkedParent(t *testing.T) {
+	realParent := t.TempDir()
+	aliasParent := filepath.Join(t.TempDir(), "alias")
+	if err := os.Symlink(realParent, aliasParent); err != nil {
+		t.Skipf("create parent symlink: %v", err)
+	}
+	original, err := os.MkdirTemp(aliasParent, "taskrail-parallel-")
+	if err != nil {
+		t.Fatalf("create parallel root: %v", err)
+	}
+	canonical, err := canonicalParallelRoot(original)
+	if err != nil {
+		t.Fatalf("canonicalize parallel root: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(canonical) })
+	want, err := filepath.EvalSymlinks(original)
+	if err != nil {
+		t.Fatalf("resolve expected parallel root: %v", err)
+	}
+	if canonical != want {
+		t.Fatalf("canonical parallel root = %q, want %q", canonical, want)
+	}
+	worker := filepath.Join(canonical, "worker-01")
+	rel, err := filepath.Rel(canonical, worker)
+	if err != nil || rel != "worker-01" {
+		t.Fatalf("canonical worker containment = %q, %v", rel, err)
 	}
 }
 

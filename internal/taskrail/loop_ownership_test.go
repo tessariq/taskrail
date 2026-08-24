@@ -185,6 +185,28 @@ func TestStageLoopExecutableRefusesCollisionAndReplacementCleanup(t *testing.T) 
 	}
 }
 
+func TestStagedLoopExecutablePathPreservesWindowsSuffix(t *testing.T) {
+	dir := filepath.Join("git", "taskrail", "executables")
+	digest := "0123456789abcdef"
+	for _, tc := range []struct {
+		name   string
+		goos   string
+		source string
+		want   string
+	}{
+		{name: "windows executable", goos: "windows", source: filepath.Join("bin", "taskrail.exe"), want: digest + ".exe"},
+		{name: "windows uppercase suffix", goos: "windows", source: filepath.Join("bin", "taskrail.EXE"), want: digest + ".EXE"},
+		{name: "unix executable", goos: "linux", source: filepath.Join("bin", "taskrail"), want: digest},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := stagedLoopExecutablePath(dir, digest, tc.source, tc.goos)
+			if got != filepath.Join(dir, tc.want) {
+				t.Fatalf("staged executable path = %q, want %q", got, filepath.Join(dir, tc.want))
+			}
+		})
+	}
+}
+
 func TestLoopOwnershipRefusesToRotateAfterStagedBytesChange(t *testing.T) {
 	clearLoopChildEnvironment(t)
 	_, svc := loopFixture(t)

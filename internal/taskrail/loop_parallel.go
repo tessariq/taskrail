@@ -140,6 +140,10 @@ func (s *Service) loopParallelExecute(ctx context.Context, invocation LoopInvoca
 		_ = os.RemoveAll(root)
 		return LoopDiagnostic{}, fmt.Errorf("secure parallel workspace: %w", err)
 	}
+	root, err = canonicalParallelRoot(root)
+	if err != nil {
+		return LoopDiagnostic{}, fmt.Errorf("resolve parallel workspace: %w", err)
+	}
 	ownerRoot, err := os.OpenRoot(root)
 	if err != nil {
 		_ = os.RemoveAll(root)
@@ -181,6 +185,15 @@ func (s *Service) loopParallelExecute(ctx context.Context, invocation LoopInvoca
 	}
 	diagnostic.Parallel = &batch
 	return diagnostic, nil
+}
+
+func canonicalParallelRoot(root string) (string, error) {
+	canonical, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		_ = os.RemoveAll(root)
+		return "", err
+	}
+	return canonical, nil
 }
 
 func (s *Service) runParallelWorker(ctx context.Context, invocation LoopInvocation, plan ParallelPlan, worker ParallelWorker, stdout, stderr io.Writer) ParallelWorker {

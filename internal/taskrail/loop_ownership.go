@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 
 	"github.com/tessariq/taskrail/internal/repolock"
 )
@@ -144,7 +145,7 @@ func stageLoopExecutable(gitCommonDir, source string) (loopStagedExecutable, err
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return loopStagedExecutable{}, fmt.Errorf("create loop executable directory: %w", err)
 	}
-	path := filepath.Join(dir, expected)
+	path := stagedLoopExecutablePath(dir, expected, resolved, runtime.GOOS)
 	output, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o700)
 	if err != nil {
 		return loopStagedExecutable{}, fmt.Errorf("stage loop executable %s: %w", path, err)
@@ -196,6 +197,14 @@ func stageLoopExecutable(gitCommonDir, source string) (loopStagedExecutable, err
 		return loopStagedExecutable{}, fmt.Errorf("inspect staged executable guard: %w", err)
 	}
 	return loopStagedExecutable{Path: path, guardPath: guardPath, SHA256: expected, info: stagedInfo}, nil
+}
+
+func stagedLoopExecutablePath(dir, digest, source, goos string) string {
+	name := digest
+	if goos == "windows" {
+		name += filepath.Ext(source)
+	}
+	return filepath.Join(dir, name)
 }
 
 func executableFileDigest(file *os.File) (string, error) {
