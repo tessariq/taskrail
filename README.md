@@ -154,7 +154,7 @@ Taskrail commands intentionally use different write conventions based on risk:
 | Apply with preview option | `task rename`, `task repoint`, `task release`, `task dependency add/remove` | Write by default; `--dry-run` validates the candidate first. |
 | Lifecycle/state writers | `next`, `start`, `complete`, `block`, `unblock`, `task release`, `verify`, `spec activate`, `task new` | Rewrite `STATE.md` and sometimes task files; inspect `git status` afterward. |
 | Operator lock recovery | `lock clear <lock-id> --expect-sha256 <digest>` | Removes only the unchanged mutation lock observed via `lock status`; refuses a provably live same-host owner and never touches retained transaction data. Never rewrites tracked planning state. |
-| Operator transaction recovery | `recover <transaction-id> [--apply]` | Previews the single safe action a retained durable transaction derives (restore-original, accept-candidate, clear-fence); `--apply` performs exactly that action. Requires a free mutation lock; any holder refuses. |
+| Operator transaction recovery | `recover <transaction-id> [--take-over-lock <lock-id> --expect-sha256 <digest>] [--apply]` | Previews the single safe action a retained durable transaction derives (restore-original, accept-candidate, clear-fence); `--apply` performs exactly that action. A held lock requires the paired, exact observed takeover operands; a live same-host owner still refuses. |
 | Reviewed import writer | `import --apply <draft>` | Validates an external draft and writes its bounded task/spec/state set. |
 | Review publisher | `review publish --type task\|spec\|decomposition` | Validates an ignored proposal and exact reviewed subjects; `--dry-run` is read-only, while apply takes the writer lock and creates one absent review session directory without changing task lifecycle or planning state. |
 
@@ -179,7 +179,8 @@ verification metadata without changing repository-level verification history.
 All semantic command classes share one recovery admission fence: retained or
 malformed transaction state beneath the canonical repository runtime root makes
 readers and writers fail with `recovery_pending`, and writers do not begin.
-`recover` is the one command the fence admits. See
+`recover` and read-only `lock status` are the only fence-admitted operator
+surfaces. See
 [docs/commands.md](docs/commands.md#recovery-admission-fence).
 
 ### Coverage vs gap analysis

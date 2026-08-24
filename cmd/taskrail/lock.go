@@ -35,7 +35,7 @@ func newLockStatusCmd() *cobra.Command {
 		Short: "Report the repository mutation lock (read-only)",
 		Args:  machineArgs(cobra.NoArgs),
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return runCommand(cmd, func(svc *taskrail.Service) (commandResult, error) {
+			return runRecoveryTolerantCommand(cmd, func(svc *taskrail.Service) (commandResult, error) {
 				result, err := svc.LockStatus()
 				if err != nil {
 					return commandResult{}, err
@@ -72,6 +72,10 @@ func renderLockStatusText(r taskrail.LockStatusResult) string {
 		fmt.Fprintf(&b, "  delegation_digest: %s\n", *owner.DelegationDigest)
 	}
 	fmt.Fprintf(&b, "  sha256: %s\n", *r.SHA256)
+	if owner.TransactionID != nil {
+		fmt.Fprintf(&b, "recover: taskrail recover %s --take-over-lock %s --expect-sha256 %s", *owner.TransactionID, owner.LockID, *r.SHA256)
+		return b.String()
+	}
 	b.WriteString("clear (only when the owner is gone): taskrail lock clear " + owner.LockID + " --expect-sha256 " + *r.SHA256)
 	return b.String()
 }

@@ -51,6 +51,62 @@ type Request struct {
 	ExecutablePath string
 }
 
+var testHookBeforeTakeOverReplace func()
+
+// TakeOver atomically replaces one exact, operator-observed abandoned lock with
+// recovery ownership. It never leaves the lock name absent for another Taskrail
+// writer to claim between the old owner and the recovery owner.
+func TakeOver(ctx context.Context, clear ClearRequest, claim Request) (*Lock, error) {
+	if clear.Repository != claim.Repository {
+		return nil, errors.New("takeover clear and claim repositories differ")
+	}
+	if err := validateClaim(claim.Repository, claim.Command, claim.Capability); err != nil {
+		return nil, err
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	owner, delegation, err := newOwner(claim)
+	if err != nil {
+		return nil, err
+	}
+	data, err := json.Marshal(owner)
+	if err != nil {
+		return nil, fmt.Errorf("encode lock metadata: %w", err)
+	}
+	path := LockPath(claim.Repository)
+	if err := claimInProcess(path); err != nil {
+		return nil, err
+	}
+	staged, err := stageLock(path, data)
+	if err != nil {
+		releaseInProcess(path)
+		return nil, err
+	}
+	if testHookBeforeTakeOverReplace != nil {
+		testHookBeforeTakeOverReplace()
+	}
+	// Taskrail admission keeps every ordinary writer and lock clear from reaching
+	// this handoff while the recovery fence exists. The final exact observation
+	// therefore binds the atomic replacement against all protocol participants;
+	// hostile direct namespace changes after this check retain T-322's explicit
+	// external-race boundary.
+	if _, err := ObserveClear(clear); err != nil {
+		releaseInProcess(path)
+		return nil, errors.Join(err, removeLock(staged))
+	}
+	if err := os.Rename(staged, path); err != nil {
+		releaseInProcess(path)
+		return nil, errors.Join(fmt.Errorf("replace observed lock %s: %w", path, err), removeLock(staged))
+	}
+	lock := &Lock{path: path, repository: claim.Repository, owner: owner,
+		capability: claim.Capability.normalized(), delegation: delegation}
+	if err := ctx.Err(); err != nil {
+		return nil, errors.Join(err, lock.Release())
+	}
+	return lock, nil
+}
+
 // Lock is one acquired ownership of a repository's mutation lock. It is not safe
 // for concurrent use by multiple goroutines; a transaction owns exactly one.
 type Lock struct {

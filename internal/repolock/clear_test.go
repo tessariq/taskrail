@@ -1,12 +1,64 @@
 package repolock
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 )
+
+func TestTakeOverAtomicallyReplacesTheExactObservedLock(t *testing.T) {
+	repo := committedRepo(t)
+	old := staleOwner(repo, deadPID(t))
+	transaction := strings.Repeat("1", 32)
+	old.TransactionID = &transaction
+	raw := writeRawLock(t, repo, old)
+	claim := writerRequest(repo)
+	claim.Command = "recover"
+	claim.TransactionID = transaction
+	claim.Capability = Capability{Commands: []string{"recover"}}
+
+	lock, err := TakeOver(context.Background(), ClearRequest{
+		Repository: repo, LockID: old.LockID, ExpectSHA256: sha256Hex(raw),
+	}, claim)
+	if err != nil {
+		t.Fatalf("take over: %v", err)
+	}
+	defer func() { _ = lock.Release() }()
+	if lock.Owner().LockID == old.LockID || lock.Owner().TransactionID == nil || *lock.Owner().TransactionID != transaction {
+		t.Fatalf("takeover owner = %+v", lock.Owner())
+	}
+}
+
+func TestTakeOverRefusesAReplacementBeforePublishingRecoveryOwnership(t *testing.T) {
+	repo := committedRepo(t)
+	old := staleOwner(repo, deadPID(t))
+	transaction := strings.Repeat("1", 32)
+	old.TransactionID = &transaction
+	raw := writeRawLock(t, repo, old)
+	replacement := staleOwner(repo, deadPID(t))
+	replacement.LockID = strings.Repeat("c", 32)
+	replacement.TransactionID = &transaction
+	testHookBeforeTakeOverReplace = func() { writeRawLock(t, repo, replacement) }
+	t.Cleanup(func() { testHookBeforeTakeOverReplace = nil })
+	claim := writerRequest(repo)
+	claim.Command = "recover"
+	claim.TransactionID = transaction
+	claim.Capability = Capability{Commands: []string{"recover"}}
+
+	_, err := TakeOver(context.Background(), ClearRequest{
+		Repository: repo, LockID: old.LockID, ExpectSHA256: sha256Hex(raw),
+	}, claim)
+	if !errors.Is(err, ErrChanged) {
+		t.Fatalf("takeover replacement error = %v, want ErrChanged", err)
+	}
+	status, err := Inspect(repo)
+	if err != nil || !status.Held || status.Owner == nil || status.Owner.LockID != replacement.LockID {
+		t.Fatalf("replacement lock was changed: %+v, %v", status, err)
+	}
+}
 
 // deadPID uses a value above native PID allocation ranges rather than a
 // just-exited child whose PID may be recycled before Clear probes it.

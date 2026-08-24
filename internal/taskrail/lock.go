@@ -52,6 +52,9 @@ func (s *Service) lockRepository() repolock.Repository {
 // without writing anything. Unreadable lock metadata is a refusal — the bytes
 // stay exactly where they are for the operator to inspect.
 func (s *Service) LockStatus() (LockStatusResult, error) {
+	if err := s.checkLockStatusRecovery(); err != nil {
+		return LockStatusResult{}, err
+	}
 	status, err := repolock.Inspect(s.lockRepository())
 	if err != nil {
 		if errors.Is(err, repolock.ErrMalformed) {
@@ -65,7 +68,24 @@ func (s *Service) LockStatus() (LockStatusResult, error) {
 		result.SHA256 = &status.SHA256
 		result.Owner = status.Owner
 	}
+	if err := s.checkLockStatusRecovery(); err != nil {
+		return LockStatusResult{}, err
+	}
 	return result, nil
+}
+
+// checkLockStatusRecovery admits only a stable, canonical retained fence. It
+// lets status expose the lock blocking recovery while refusing malformed or
+// changing recovery state before it can publish a stale observation.
+func (s *Service) checkLockStatusRecovery() error {
+	current, err := observeRecovery(s.paths)
+	if err != nil {
+		return recoveryPending(s.paths, current)
+	}
+	if recoveryRetained(current) && canonicalRecovery(s.paths, current) == nil {
+		return recoveryPending(s.paths, current)
+	}
+	return nil
 }
 
 // LockClear removes exactly the named, unchanged lock the operator observed.

@@ -244,33 +244,76 @@ func TestLockClearRemovesTheUnchangedStaleLock(t *testing.T) {
 	}
 }
 
-// Retained transaction state beneath the lock root fences the whole command
-// family, including the lock operator surface: clearing is refused before it
-// begins and removes nothing, so retained recovery evidence can never be
-// disturbed as a side effect of clearing ownership.
-func TestLockCommandsAreFencedByRetainedTransactionState(t *testing.T) {
+// A recovery fence admits only the read-only observation needed to authorize
+// recovery takeover. Clearing remains refused and cannot disturb retained data.
+func TestLockStatusIsAdmittedButClearIsFencedByRetainedTransactionState(t *testing.T) {
 	root := setupRepo(t)
 	raw := seedStaleLock(t, root)
+	var owner repolock.Owner
+	if err := json.Unmarshal(raw, &owner); err != nil {
+		t.Fatalf("decode stale lock: %v", err)
+	}
+	transaction := "0123456789abcdef0123456789abcdef"
+	owner.TransactionID = &transaction
+	raw, err := json.Marshal(owner)
+	if err != nil {
+		t.Fatalf("encode transaction lock: %v", err)
+	}
+	if err := os.WriteFile(repolock.LockPath(gitLockRepository(root)), raw, 0o644); err != nil {
+		t.Fatalf("write transaction lock: %v", err)
+	}
 	installRecoveryFence(t, root, "verify")
 
-	for _, args := range [][]string{
-		{"lock", "status", "--json"},
-		{"lock", "clear", strings.Repeat("7", 32), "--expect-sha256", sha256Digest(raw), "--json"},
-	} {
-		out, err := runRoot(t, args...)
-		if err == nil {
-			t.Fatalf("%v succeeded: %s", args, out)
-		}
-		failure := decodeMachineError(t, out)
-		if failure.Code != "recovery_pending" {
-			t.Fatalf("%v code = %q, want recovery_pending (%s)", args, failure.Code, failure.Message)
-		}
+	out, err := runRoot(t, "lock", "status", "--json")
+	if err != nil {
+		t.Fatalf("fenced lock status: %v (%s)", err, out)
+	}
+	var status lockStatusJSON
+	decodeMachineResult(t, out, &status)
+	if !status.Held || status.SHA256 == nil || *status.SHA256 != sha256Digest(raw) {
+		t.Fatalf("fenced lock status = %+v", status)
+	}
+	text, err := runRoot(t, "lock", "status")
+	if err != nil {
+		t.Fatalf("fenced lock status text: %v (%s)", err, text)
+	}
+	if !strings.Contains(text, "recover: taskrail recover 0123456789abcdef0123456789abcdef --take-over-lock "+strings.Repeat("7", 32)+" --expect-sha256 "+sha256Digest(raw)) {
+		t.Fatalf("fenced lock status guidance = %q", text)
+	}
+
+	out, err = runRoot(t, "lock", "clear", strings.Repeat("7", 32), "--expect-sha256", sha256Digest(raw), "--json")
+	if err == nil {
+		t.Fatalf("fenced lock clear succeeded: %s", out)
+	}
+	failure := decodeMachineError(t, out)
+	if failure.Code != "recovery_pending" {
+		t.Fatalf("lock clear code = %q, want recovery_pending (%s)", failure.Code, failure.Message)
 	}
 	if _, err := os.Stat(repolock.LockPath(gitLockRepository(root))); err != nil {
 		t.Fatalf("a fenced clear removed the lock: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(root, ".git", "taskrail", "transactions")); err != nil {
 		t.Fatalf("a fenced clear disturbed retained transactions: %v", err)
+	}
+}
+
+func TestLockStatusRefusesMalformedRecoveryState(t *testing.T) {
+	root := setupRepo(t)
+	transaction := strings.Repeat("a", 32)
+	directory := filepath.Join(root, ".git", "taskrail", "transactions", transaction)
+	if err := os.MkdirAll(directory, 0o755); err != nil {
+		t.Fatalf("create malformed recovery directory: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(directory, "journal.json"), []byte("{"), 0o644); err != nil {
+		t.Fatalf("write malformed recovery journal: %v", err)
+	}
+
+	out, err := runRoot(t, "lock", "status", "--json")
+	if err == nil {
+		t.Fatalf("malformed recovery lock status succeeded: %s", out)
+	}
+	if failure := decodeMachineError(t, out); failure.Code != "recovery_pending" || failure.Details.Recovery != nil {
+		t.Fatalf("malformed recovery lock status = %+v", failure)
 	}
 }
 

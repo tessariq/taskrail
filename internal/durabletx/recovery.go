@@ -27,7 +27,10 @@ const (
 type RecoveryRequest struct {
 	TransactionID string
 	Apply         bool
-	Validate      func(command string, snapshots []Evidence) error
+	// ExpectedAction binds an apply to its prior operator preview. A changed
+	// transaction may not silently select a different recovery action.
+	ExpectedAction *Action
+	Validate       func(command string, snapshots []Evidence) error
 }
 
 // RecoveryResult is one previewed or applied mechanical action.
@@ -77,6 +80,10 @@ func Recover(ctx context.Context, own Ownership, repo repolock.Repository, req R
 	}
 	if err != nil {
 		return RecoveryResult{}, failure(KindConflict, req.TransactionID, doc.Phase, evidenceFrom(entries, current), err)
+	}
+	if req.ExpectedAction != nil && action != *req.ExpectedAction {
+		return RecoveryResult{}, failure(KindConflict, req.TransactionID, doc.Phase, evidenceFrom(entries, current),
+			fmt.Errorf("transaction action changed from %s to %s before recovery apply", *req.ExpectedAction, action))
 	}
 	result := RecoveryResult{TransactionID: req.TransactionID, Command: doc.Command, Phase: doc.Phase, Action: action, Snapshots: evidenceFrom(entries, current)}
 	if action == AcceptCandidate && completed == nil {

@@ -28,6 +28,38 @@ type ClearRequest struct {
 	ExpectSHA256 string
 }
 
+// ObserveClear validates the exact observation an operator must make before
+// clearing or taking over a lock. It never changes the record.
+func ObserveClear(req ClearRequest) (Owner, error) {
+	if err := req.Repository.validate(); err != nil {
+		return Owner{}, err
+	}
+	if !lockIDPattern.MatchString(req.LockID) {
+		return Owner{}, fmt.Errorf("lock id %q is not a lower-case 32-hex id", req.LockID)
+	}
+	if !digestPattern.MatchString(req.ExpectSHA256) {
+		return Owner{}, fmt.Errorf("expected digest %q is not a lower-case 64-hex digest", req.ExpectSHA256)
+	}
+
+	path := LockPath(req.Repository)
+	owner, digest, err := readOwner(path)
+	if err != nil {
+		return Owner{}, err
+	}
+	if owner.LockID != req.LockID {
+		return Owner{}, fmt.Errorf("%w: %s is held by %s, not %s", ErrChanged, path, owner.LockID, req.LockID)
+	}
+	if digest != req.ExpectSHA256 {
+		return Owner{}, fmt.Errorf("%w: %s now has digest %s, not the observed %s", ErrChanged, path, digest, req.ExpectSHA256)
+	}
+	if live, err := ownerProvablyLive(owner); err != nil {
+		return Owner{}, err
+	} else if live {
+		return Owner{}, fmt.Errorf("%w: pid %d is running %s since %s", ErrLiveOwner, owner.PID, owner.Command, owner.StartedAt)
+	}
+	return owner, nil
+}
+
 // Clear removes exactly the named, unchanged lock record and reports its prior
 // raw-file digest. It never touches anything else under the lock root, so
 // retained transaction data survives clearing ownership. The protocol treats
@@ -35,31 +67,9 @@ type ClearRequest struct {
 // owner refuses, an absent or provably dead one clears, and nothing is ever
 // removed automatically.
 func Clear(req ClearRequest) (string, error) {
-	if err := req.Repository.validate(); err != nil {
-		return "", err
-	}
-	if !lockIDPattern.MatchString(req.LockID) {
-		return "", fmt.Errorf("lock id %q is not a lower-case 32-hex id", req.LockID)
-	}
-	if !digestPattern.MatchString(req.ExpectSHA256) {
-		return "", fmt.Errorf("expected digest %q is not a lower-case 64-hex digest", req.ExpectSHA256)
-	}
-
 	path := LockPath(req.Repository)
-	owner, digest, err := readOwner(path)
-	if err != nil {
+	if _, err := ObserveClear(req); err != nil {
 		return "", err
-	}
-	if owner.LockID != req.LockID {
-		return "", fmt.Errorf("%w: %s is held by %s, not %s", ErrChanged, path, owner.LockID, req.LockID)
-	}
-	if digest != req.ExpectSHA256 {
-		return "", fmt.Errorf("%w: %s now has digest %s, not the observed %s", ErrChanged, path, digest, req.ExpectSHA256)
-	}
-	if live, err := ownerProvablyLive(owner); err != nil {
-		return "", err
-	} else if live {
-		return "", fmt.Errorf("%w: pid %d is running %s since %s", ErrLiveOwner, owner.PID, owner.Command, owner.StartedAt)
 	}
 
 	// The deletion is compare-and-delete in the same shape as Release: the
@@ -73,7 +83,7 @@ func Clear(req ClearRequest) (string, error) {
 		}
 		return "", fmt.Errorf("remove lock %s: %w", path, err)
 	}
-	return digest, nil
+	return req.ExpectSHA256, nil
 }
 
 // ownerProvablyLive reports whether the recorded owner is provably running on

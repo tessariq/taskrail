@@ -191,11 +191,14 @@ func writeRecoverCLIJSON(t *testing.T, path string, value any) {
 // assertions pin, so an accidental shape change fails here rather than only in
 // a consumer.
 type recoverResultJSON struct {
-	TransactionID string `json:"transaction_id"`
-	Command       string `json:"command"`
-	Action        string `json:"action"`
-	Applied       bool   `json:"applied"`
-	Snapshots     []struct {
+	TransactionID  string  `json:"transaction_id"`
+	Command        string  `json:"command"`
+	Action         string  `json:"action"`
+	Applied        bool    `json:"applied"`
+	Takeover       string  `json:"takeover"`
+	TakeOverLockID *string `json:"take_over_lock_id"`
+	TakeOverSHA256 *string `json:"take_over_sha256"`
+	Snapshots      []struct {
 		PathKind  string  `json:"path_kind"`
 		Path      string  `json:"path"`
 		Original  *string `json:"original_sha256"`
@@ -206,6 +209,88 @@ type recoverResultJSON struct {
 		Valid      bool     `json:"valid"`
 		Violations []string `json:"violations"`
 	} `json:"validation"`
+}
+
+func TestRecoverCommandTakesOverAnExactFencedLock(t *testing.T) {
+	root := setupRepo(t)
+	requireRecoveryDirectoryDurability(t, root)
+	fabricateRetainedCLI(t, gitLockRepository(root), recoverTxID, "init", "prepared", "", []recoverMember{
+		{kind: durabletx.Managed, reported: "planning/A.md", path: "planning/A.md",
+			original: []byte("before"), candidate: []byte("after"), present: true, onDisk: []byte("before")},
+	})
+	owner := repolock.Owner{
+		LockID:         strings.Repeat("9", 32),
+		Command:        "init",
+		PID:            deadCLIPID(t),
+		Host:           "another-host",
+		StartedAt:      "2001-02-03T04:05:06Z",
+		RepositoryRoot: root,
+		StorageMode:    repolock.ModeCommitted,
+		StorageRoot:    root,
+	}
+	transaction := recoverTxID
+	owner.TransactionID = &transaction
+	raw, err := json.Marshal(owner)
+	if err != nil {
+		t.Fatalf("marshal lock owner: %v", err)
+	}
+	lockPath := repolock.LockPath(gitLockRepository(root))
+	if err := os.WriteFile(lockPath, raw, 0o644); err != nil {
+		t.Fatalf("write lock: %v", err)
+	}
+	digest := sha256Digest(raw)
+
+	statusOut, err := runRoot(t, "lock", "status", "--json")
+	if err != nil {
+		t.Fatalf("fenced lock status: %v (%s)", err, statusOut)
+	}
+	var status lockStatusJSON
+	decodeMachineResult(t, statusOut, &status)
+	if !status.Held || status.Owner == nil || status.Owner.TransactionID == nil || *status.Owner.TransactionID != recoverTxID || status.SHA256 == nil || *status.SHA256 != digest {
+		t.Fatalf("fenced lock status = %+v", status)
+	}
+
+	partial, err := runRoot(t, "recover", recoverTxID, "--take-over-lock", owner.LockID, "--json")
+	if err == nil || decodeMachineError(t, partial).Code != "invalid_arguments" {
+		t.Fatalf("partial takeover = %q, %v", partial, err)
+	}
+	before := readAllFiles(t, root)
+	previewOut, err := runRoot(t, "recover", recoverTxID, "--take-over-lock", owner.LockID, "--expect-sha256", digest, "--json")
+	if err != nil {
+		t.Fatalf("takeover preview: %v (%s)", err, previewOut)
+	}
+	var preview recoverResultJSON
+	decodeMachineResult(t, previewOut, &preview)
+	if preview.Takeover != "preview" || preview.Action != "clear_fence" || preview.Applied {
+		t.Fatalf("takeover preview = %+v", preview)
+	}
+	if preview.TakeOverLockID == nil || *preview.TakeOverLockID != owner.LockID || preview.TakeOverSHA256 == nil || *preview.TakeOverSHA256 != digest {
+		t.Fatalf("takeover preview operands = %+v", preview)
+	}
+	if after := readAllFiles(t, root); !sameFileSet(before, after) {
+		t.Fatal("takeover preview changed lock or recovery bytes")
+	}
+	textOut, err := runRoot(t, "recover", recoverTxID, "--take-over-lock", owner.LockID, "--expect-sha256", digest)
+	if err != nil {
+		t.Fatalf("takeover preview text: %v (%s)", err, textOut)
+	}
+	wantApply := "apply with: taskrail recover " + recoverTxID + " --take-over-lock " + owner.LockID + " --expect-sha256 " + digest + " --apply"
+	if !strings.Contains(textOut, wantApply) {
+		t.Fatalf("takeover apply guidance = %q, want %q", textOut, wantApply)
+	}
+
+	appliedOut, err := runRoot(t, "recover", recoverTxID, "--take-over-lock", owner.LockID, "--expect-sha256", digest, "--apply", "--json")
+	if err != nil {
+		t.Fatalf("takeover apply: %v (%s)", err, appliedOut)
+	}
+	var applied recoverResultJSON
+	decodeMachineResult(t, appliedOut, &applied)
+	if !applied.Applied || applied.Takeover != "applied" || applied.Action != "clear_fence" {
+		t.Fatalf("takeover apply = %+v", applied)
+	}
+	if _, err := os.Stat(lockPath); !os.IsNotExist(err) {
+		t.Fatalf("takeover apply left lock: %v", err)
+	}
 }
 
 func TestRecoverCommandPreviewsClearFenceReadOnlyThenApplies(t *testing.T) {

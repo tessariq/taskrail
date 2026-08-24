@@ -24,8 +24,17 @@ func newRecoverCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return runUnfencedCommand(cmd, func(svc *taskrail.Service) (commandResult, error) {
-				result, err := svc.RecoverTransaction(cmd.Context(), args[0], apply)
+			return runRecoveryTolerantCommand(cmd, func(svc *taskrail.Service) (commandResult, error) {
+				takeOverLock, err := cmd.Flags().GetString("take-over-lock")
+				if err != nil {
+					return commandResult{}, err
+				}
+				expectSHA256, err := cmd.Flags().GetString("expect-sha256")
+				if err != nil {
+					return commandResult{}, err
+				}
+				result, err := svc.RecoverTransaction(cmd.Context(), args[0], apply,
+					taskrail.RecoverRequest{TakeOverLockID: takeOverLock, ExpectSHA256: expectSHA256})
 				if err != nil {
 					return commandResult{}, err
 				}
@@ -34,6 +43,9 @@ func newRecoverCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().Bool("apply", false, "perform the previewed action instead of only reporting it")
+	cmd.Flags().String("take-over-lock", "", "exact abandoned lock id authorizing recovery takeover")
+	cmd.Flags().String("expect-sha256", "", "raw lock digest observed via lock status")
+	cmd.MarkFlagsRequiredTogether("take-over-lock", "expect-sha256")
 	addMachineJSONFlag(cmd)
 	return cmd
 }
@@ -47,11 +59,18 @@ func renderRecoverText(r taskrail.RecoverResult) string {
 		state = "applied"
 	}
 	fmt.Fprintf(&b, "transaction %s (%s) %s: %s\n", r.TransactionID, r.Command, state, r.Action)
+	if r.Takeover != "none" {
+		fmt.Fprintf(&b, "  takeover: %s\n", r.Takeover)
+	}
 	for _, snapshot := range r.Snapshots {
 		fmt.Fprintf(&b, "  %s %s\n", snapshot.PathKind, snapshot.Path)
 	}
 	if !r.Applied {
-		fmt.Fprintf(&b, "apply with: taskrail recover %s --apply", r.TransactionID)
+		fmt.Fprintf(&b, "apply with: taskrail recover %s", r.TransactionID)
+		if r.TakeOverLockID != nil && r.TakeOverSHA256 != nil {
+			fmt.Fprintf(&b, " --take-over-lock %s --expect-sha256 %s", *r.TakeOverLockID, *r.TakeOverSHA256)
+		}
+		b.WriteString(" --apply")
 	}
 	return b.String()
 }

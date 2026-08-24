@@ -462,6 +462,172 @@ func TestRecoverTransactionRefusesLockHolder(t *testing.T) {
 	}
 }
 
+func TestRecoverTransactionTakesOverExactAbandonedTransactionLock(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	requireRecoveryDirectoryDurability(t, root)
+	paths := committedRecoverPaths(t, root)
+	repo := paths.LockRepository()
+	fabricateRetained(t, repo, recoverFixtureID, "init", "prepared", []recoverMember{
+		{kind: durabletx.Managed, reported: "planning/A.md", path: "planning/A.md",
+			original: []byte("before"), candidate: []byte("after"), present: true, onDisk: []byte("before")},
+	}, "")
+	owner := lockOwnerFixture(root, 1, "another-host")
+	transaction := recoverFixtureID
+	owner.TransactionID = &transaction
+	raw, err := json.Marshal(owner)
+	if err != nil {
+		t.Fatalf("marshal lock owner: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(repolock.LockPath(repo)), 0o755); err != nil {
+		t.Fatalf("create lock directory: %v", err)
+	}
+	if err := os.WriteFile(repolock.LockPath(repo), raw, 0o644); err != nil {
+		t.Fatalf("write lock: %v", err)
+	}
+	svc := newRecoverService(t, paths)
+	request := RecoverRequest{TakeOverLockID: owner.LockID, ExpectSHA256: sha256Of(raw)}
+	before := readTree(t, root)
+
+	preview, err := svc.RecoverTransaction(context.Background(), recoverFixtureID, false, request)
+	if err != nil {
+		t.Fatalf("preview recovery takeover: %v", err)
+	}
+	if preview.Action != "clear_fence" || preview.Takeover != "preview" {
+		t.Fatalf("preview = %+v", preview)
+	}
+	assertTreeUnchanged(t, root, before)
+
+	applied, err := svc.RecoverTransaction(context.Background(), recoverFixtureID, true, request)
+	if err != nil {
+		t.Fatalf("apply recovery takeover: %v", err)
+	}
+	if !applied.Applied || applied.Takeover != "applied" || applied.Action != "clear_fence" {
+		t.Fatalf("applied = %+v", applied)
+	}
+	if _, err := os.Stat(repolock.LockPath(repo)); !os.IsNotExist(err) {
+		t.Fatalf("recovery lock remains: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(durabletx.TransactionsDir(repo), recoverFixtureID)); !os.IsNotExist(err) {
+		t.Fatalf("recovery fence remains: %v", err)
+	}
+}
+
+func TestRecoverTransactionTakeoverRefusalsPreserveFence(t *testing.T) {
+	t.Parallel()
+	for _, test := range []struct {
+		name    string
+		request func(t *testing.T, repo repolock.Repository) RecoverRequest
+		want    string
+	}{
+		{name: "unpaired lock id", request: func(_ *testing.T, _ repolock.Repository) RecoverRequest {
+			return RecoverRequest{TakeOverLockID: strings.Repeat("a", 32)}
+		}, want: MachineCodeInvalidArguments},
+		{name: "changed digest", request: func(t *testing.T, repo repolock.Repository) RecoverRequest {
+			owner := lockOwnerFixture(repo.Root, 1, "another-host")
+			transaction := recoverFixtureID
+			owner.TransactionID = &transaction
+			_ = seedRecoveryLock(t, repo, owner)
+			return RecoverRequest{TakeOverLockID: owner.LockID, ExpectSHA256: strings.Repeat("a", 64)}
+		}, want: MachineCodeSourceChanged},
+		{name: "transaction mismatch", request: func(t *testing.T, repo repolock.Repository) RecoverRequest {
+			owner := lockOwnerFixture(repo.Root, 1, "another-host")
+			other := strings.Repeat("b", 32)
+			owner.TransactionID = &other
+			raw := seedRecoveryLock(t, repo, owner)
+			return RecoverRequest{TakeOverLockID: owner.LockID, ExpectSHA256: sha256Of(raw)}
+		}, want: MachineCodeInvalidArguments},
+		{name: "live same host", request: func(t *testing.T, repo repolock.Repository) RecoverRequest {
+			host, err := os.Hostname()
+			if err != nil {
+				t.Fatalf("hostname: %v", err)
+			}
+			owner := lockOwnerFixture(repo.Root, os.Getpid(), host)
+			transaction := recoverFixtureID
+			owner.TransactionID = &transaction
+			raw := seedRecoveryLock(t, repo, owner)
+			return RecoverRequest{TakeOverLockID: owner.LockID, ExpectSHA256: sha256Of(raw)}
+		}, want: MachineCodeLockHeld},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			root := t.TempDir()
+			paths := committedRecoverPaths(t, root)
+			repo := paths.LockRepository()
+			fabricateRetained(t, repo, recoverFixtureID, "init", "prepared", []recoverMember{
+				{kind: durabletx.Managed, reported: "planning/A.md", path: "planning/A.md",
+					original: []byte("before"), candidate: []byte("after"), present: true, onDisk: []byte("before")},
+			}, "")
+			request := test.request(t, repo)
+			before := readTree(t, root)
+			_, err := newRecoverService(t, paths).RecoverTransaction(context.Background(), recoverFixtureID, false, request)
+			if err == nil || MachineFailureFor(err).Code != test.want {
+				t.Fatalf("code = %q, want %q (%v)", MachineFailureFor(err).Code, test.want, err)
+			}
+			assertTreeUnchanged(t, root, before)
+		})
+	}
+}
+
+func TestRecoverTransactionTakeoverAppliesEveryRecoveryAction(t *testing.T) {
+	for _, test := range []struct {
+		name       string
+		command    string
+		phase      string
+		completion string
+		members    []recoverMember
+		want       string
+	}{
+		{name: "clear fence", command: "init", phase: "prepared", want: "clear_fence", members: []recoverMember{
+			{kind: durabletx.Managed, reported: "planning/A.md", path: "planning/A.md", original: []byte("before"), candidate: []byte("after"), present: true, onDisk: []byte("before")},
+		}},
+		{name: "restore original", command: "init", phase: "publishing", want: "restore_original", members: []recoverMember{
+			{kind: durabletx.Managed, reported: "planning/A.md", path: "planning/A.md", original: []byte("before"), candidate: []byte("after"), present: true, onDisk: []byte("after")},
+			{kind: durabletx.Managed, reported: "planning/B.md", path: "planning/B.md", original: []byte("before-b"), candidate: []byte("after-b"), present: true, onDisk: []byte("before-b")},
+		}},
+		{name: "accept candidate", command: "import", phase: "recovery_accepting", completion: "accept_candidate", want: "accept_candidate", members: []recoverMember{
+			{kind: durabletx.Managed, reported: "planning/A.md", path: "planning/A.md", original: []byte("before"), candidate: []byte("after"), present: true, onDisk: []byte("after")},
+		}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			root := t.TempDir()
+			requireRecoveryDirectoryDurability(t, root)
+			paths := committedRecoverPaths(t, root)
+			repo := paths.LockRepository()
+			fabricateRetained(t, repo, recoverFixtureID, test.command, test.phase, test.members, test.completion)
+			owner := lockOwnerFixture(root, 1, "another-host")
+			transaction := recoverFixtureID
+			owner.TransactionID = &transaction
+			raw := seedRecoveryLock(t, repo, owner)
+			result, err := newRecoverService(t, paths).RecoverTransaction(context.Background(), recoverFixtureID, true,
+				RecoverRequest{TakeOverLockID: owner.LockID, ExpectSHA256: sha256Of(raw)})
+			if err != nil {
+				t.Fatalf("takeover recovery: %v", err)
+			}
+			if !result.Applied || result.Action != test.want || result.Takeover != "applied" {
+				t.Fatalf("takeover result = %+v", result)
+			}
+			if _, err := os.Stat(filepath.Join(durabletx.TransactionsDir(repo), recoverFixtureID)); !os.IsNotExist(err) {
+				t.Fatalf("takeover retained recovery fence: %v", err)
+			}
+		})
+	}
+}
+
+func seedRecoveryLock(t *testing.T, repo repolock.Repository, owner repolock.Owner) []byte {
+	t.Helper()
+	raw, err := json.Marshal(owner)
+	if err != nil {
+		t.Fatalf("marshal lock owner: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(repolock.LockPath(repo)), 0o755); err != nil {
+		t.Fatalf("create lock directory: %v", err)
+	}
+	if err := os.WriteFile(repolock.LockPath(repo), raw, 0o644); err != nil {
+		t.Fatalf("write lock: %v", err)
+	}
+	return raw
+}
+
 func TestRecoverTransactionRefusesAcceptWithoutRegisteredValidator(t *testing.T) {
 	t.Parallel()
 	root := t.TempDir()

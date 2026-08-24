@@ -56,7 +56,10 @@ over it.
 owner metadata (lock ID, command, PID, host, start time, repository identity,
 transaction, and — for delegated owners — executable and delegation-token
 *digests*, never the token itself) plus the raw lock-file digest. It writes
-nothing, so it is always safe to run against a lock a live writer holds.
+nothing, so it is always safe to run against a lock a live writer holds. It is
+also admitted through a valid recovery fence, so an operator can observe the
+lock that blocks recovery. Malformed or substituted fence state still fails
+closed.
 
 `taskrail lock clear <lock-id> --expect-sha256 <digest>` is the guarded
 compare-and-delete for an abandoned lock: it removes only the unchanged lock
@@ -65,8 +68,7 @@ when the bytes moved on (`source_changed`), when no lock matches the expected
 digest (`invalid_digest`), and when the recorded owner is provably alive on
 this host (`lock_held`) — signal-level liveness, not an age heuristic.
 Clearing ownership never removes retained transaction data sharing the lock
-root, and a pending recovery fence fences the lock commands like every other
-semantic family (`recovery_pending`).
+root. A pending recovery fence still refuses `lock clear` (`recovery_pending`).
 
 ## Recovering retained transactions
 
@@ -79,7 +81,16 @@ complete, command-validated candidate), or `clear_fence` (nothing semantic was
 published) — and never Git reset, checkout, or semantic inference. Preview is
 read-only and reports the typed whole-set evidence; `--apply` performs exactly
 the previewed action and is itself interruption-safe, so an interrupted apply
-can simply be retried.
+can simply be retried. When the interrupted writer left its mutation lock, first
+use `lock status`, then supply its exact observation to `recover
+<transaction-id> --take-over-lock <lock-id> --expect-sha256 <digest>`. Both
+operands are required in preview and apply; the recorded lock transaction must
+match the requested transaction. Preview leaves the lock and fenced bytes
+unchanged. Apply compare-and-deletes that unchanged lock, acquires recovery
+ownership, rechecks the complete transaction snapshot, and performs only the
+previewed action. A local provably live owner refuses with `lock_held`; a
+different-host owner is never inferred dead, so its exact operands are the
+operator's explicit authorization.
 
 Recovery requires the repository mutation lock, acquired naming exactly the
 retained transaction: any holder — live or abandoned — refuses with `lock_held`

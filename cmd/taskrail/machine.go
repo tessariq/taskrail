@@ -53,11 +53,9 @@ func runCommand(cmd *cobra.Command, produce func(*taskrail.Service) (commandResu
 	return finishCommand(cmd, svc, produce, true)
 }
 
-// runUnfencedCommand runs `recover`, the one command retained transaction state
-// exists to be handed to. The service is constructed past the admission fence,
-// and no post-operation fence re-check runs, because a successful recovery is
-// exactly the snapshot change that check would refuse.
-func runUnfencedCommand(cmd *cobra.Command, produce func(*taskrail.Service) (commandResult, error)) error {
+// runRecoveryTolerantCommand runs the narrow operator surfaces that must inspect
+// a retained fence without admitting ordinary semantic reads or writes.
+func runRecoveryTolerantCommand(cmd *cobra.Command, produce func(*taskrail.Service) (commandResult, error)) error {
 	svc, err := taskrail.NewRecoveryService(".")
 	if err != nil {
 		return publishMachineError(cmd, err, nil)

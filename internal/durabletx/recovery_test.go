@@ -85,6 +85,36 @@ func TestRecoverClearsPreparedFence(t *testing.T) {
 	}
 }
 
+func TestRecoverExpectedActionRefusesAChangedRecoveryDecision(t *testing.T) {
+	repo := newRepository(t)
+	lock := acquire(t, repo, ownerCapability())
+	seed(t, repo, "planning/STATE.md", "before")
+	testHookAfterPhase = func(phase Phase) error {
+		if phase == PhasePublishing {
+			return errors.New("interrupted before publication")
+		}
+		return nil
+	}
+	t.Cleanup(func() { testHookAfterPhase = nil })
+	_, err := Run(context.Background(), lock, repo, request("init", member("planning/STATE.md", "after")))
+	id := txError(t, err).TransactionID
+	testHookAfterPhase = nil
+	expected := RestoreOriginal
+
+	_, err = Recover(context.Background(), lock, repo, RecoveryRequest{
+		TransactionID: id, Apply: true, ExpectedAction: &expected,
+	})
+	if err == nil || txError(t, err).Kind != KindConflict {
+		t.Fatalf("expected action mismatch = %v", err)
+	}
+	if retained(t, repo) != id {
+		t.Fatalf("retained transaction = %q, want %q", retained(t, repo), id)
+	}
+	if got, _ := read(t, repo, "planning/STATE.md"); got != "before" {
+		t.Fatalf("state = %q, want original", got)
+	}
+}
+
 func TestCompletedRecoveryResumesCleanupWithoutOriginalsOrJournal(t *testing.T) {
 	repo := newRepository(t)
 	lock := acquire(t, repo, ownerCapability())

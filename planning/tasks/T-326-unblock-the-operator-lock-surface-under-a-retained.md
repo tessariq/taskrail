@@ -1,12 +1,17 @@
 ---
 id: T-326-unblock-the-operator-lock-surface-under-a-retained
 title: Unblock the operator lock surface under a retained recovery fence
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#repository-discovery-locking-and-recovery
 dependencies:
     - T-232-recover-v0-5-transactions-through-one-command
-updated_at: "2026-08-17T12:18:28Z"
+updated_at: "2026-08-24T08:38:13Z"
+completion_id: "4ff190822d38329d6d8bade517a4135f"
+last_verification_id: "0608359d5d69897e46dfd91164214043"
+last_verification_result: pass
+last_verified_at: "2026-08-24T08:38:13Z"
+last_verified_completion_id: "4ff190822d38329d6d8bade517a4135f"
 ---
 
 # T-326-unblock-the-operator-lock-surface-under-a-retained Unblock the operator lock surface under a retained recovery fence
@@ -52,3 +57,8 @@ dead or clears a lock from PID, host, or age alone.
 - Re-run recovery admission, durable transaction, lock, machine-contract, race,
   full test, vet, build, cross-platform, Taskrail validation, and manual sandbox
   checks with portable evidence.
+
+## Implementation Notes
+
+- 2026-08-24T08:38:02Z: Added fenced lock inspection and exact operator-authorized recovery takeover with race and action coverage.
+- 2026-08-24T08:38:13Z: verification pass id 0608359d5d69897e46dfd91164214043 previous none completion 4ff190822d38329d6d8bade517a4135f

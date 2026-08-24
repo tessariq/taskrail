@@ -25,12 +25,22 @@ import (
 // of the repository state the boundary observed — the current state for a
 // preview, the resulting state for an apply.
 type RecoverResult struct {
-	TransactionID string            `json:"transaction_id"`
-	Command       string            `json:"command"`
-	Action        string            `json:"action"`
-	Applied       bool              `json:"applied"`
-	Snapshots     []MachineSnapshot `json:"snapshots"`
-	Validation    ValidationResult  `json:"validation"`
+	TransactionID  string            `json:"transaction_id"`
+	Command        string            `json:"command"`
+	Action         string            `json:"action"`
+	Applied        bool              `json:"applied"`
+	Takeover       string            `json:"takeover"`
+	TakeOverLockID *string           `json:"take_over_lock_id"`
+	TakeOverSHA256 *string           `json:"take_over_sha256"`
+	Snapshots      []MachineSnapshot `json:"snapshots"`
+	Validation     ValidationResult  `json:"validation"`
+}
+
+// RecoverRequest supplies the optional, exact operator authorization to take
+// over the abandoned lock an interrupted transaction left behind.
+type RecoverRequest struct {
+	TakeOverLockID string
+	ExpectSHA256   string
 }
 
 // NewRecoveryService discovers the repository for the recovery boundary itself.
@@ -54,9 +64,15 @@ func NewRecoveryService(start string) (*Service, error) {
 // lock is acquired naming exactly that transaction, so a live or abandoned lock
 // holder refuses before any evidence is read, and the engine's whole-set checks
 // refuse every unexpected byte without overwriting it.
-func (s *Service) RecoverTransaction(ctx context.Context, transactionID string, apply bool) (result RecoverResult, err error) {
+func (s *Service) RecoverTransaction(ctx context.Context, transactionID string, apply bool, requests ...RecoverRequest) (result RecoverResult, err error) {
 	if !transactionIDPattern.MatchString(transactionID) {
 		return RecoverResult{}, invalidArgumentsf("transaction id %q is not a lower-case 32-hex id", transactionID)
+	}
+	if len(requests) > 1 {
+		return RecoverResult{}, invalidArgumentsf("recover accepts at most one takeover request")
+	}
+	if len(requests) == 1 && (requests[0].TakeOverLockID != "" || requests[0].ExpectSHA256 != "") {
+		return s.recoverWithTakeover(ctx, transactionID, apply, requests[0])
 	}
 	if delegatedInvocation() {
 		return RecoverResult{}, WithMachineErrorCode(MachineCodeDelegatedRefused,
@@ -118,9 +134,134 @@ func (s *Service) RecoverTransaction(ctx context.Context, transactionID string, 
 		Command:       recovered.Command,
 		Action:        string(recovered.Action),
 		Applied:       recovered.Applied,
+		Takeover:      "none",
 		Snapshots:     recoverySnapshots(recovered.Snapshots),
 		Validation:    validation,
 	}, nil
+}
+
+// recoveryPreviewOwnership lets an explicitly authorized takeover preview the
+// retained transaction without first clearing or replacing the observed lock.
+type recoveryPreviewOwnership struct {
+	repository    repolock.Repository
+	transactionID string
+}
+
+func (o recoveryPreviewOwnership) Owner() repolock.Owner {
+	id := o.transactionID
+	return repolock.Owner{RepositoryRoot: o.repository.Root, StorageMode: o.repository.Mode,
+		StorageRoot: o.repository.StorageRoot(), TransactionID: &id}
+}
+func (o recoveryPreviewOwnership) Repository() repolock.Repository { return o.repository }
+func (o recoveryPreviewOwnership) Capability() repolock.Capability {
+	return repolock.Capability{Commands: []string{"recover"}}
+}
+func (o recoveryPreviewOwnership) Authorize(string, ...string) error { return nil }
+func (o recoveryPreviewOwnership) IsDelegate() bool                  { return false }
+
+func (s *Service) recoverWithTakeover(ctx context.Context, transactionID string, apply bool, request RecoverRequest) (result RecoverResult, err error) {
+	if request.TakeOverLockID == "" || request.ExpectSHA256 == "" {
+		return RecoverResult{}, invalidArgumentsf("--take-over-lock and --expect-sha256 must be supplied together")
+	}
+	if !transactionIDPattern.MatchString(request.TakeOverLockID) {
+		return RecoverResult{}, invalidArgumentsf("lock id %q is not a lower-case 32-hex id", request.TakeOverLockID)
+	}
+	if !lockDigestPattern.MatchString(request.ExpectSHA256) {
+		return RecoverResult{}, WithMachineErrorCode(MachineCodeInvalidDigest,
+			fmt.Errorf("expected digest %q is not a lower-case 64-hex digest", request.ExpectSHA256))
+	}
+	if delegatedInvocation() {
+		return RecoverResult{}, WithMachineErrorCode(MachineCodeDelegatedRefused,
+			fmt.Errorf("delegated loop children cannot invoke recover"))
+	}
+	clear := repolock.ClearRequest{Repository: s.paths.LockRepository(), LockID: request.TakeOverLockID, ExpectSHA256: request.ExpectSHA256}
+	owner, err := repolock.ObserveClear(clear)
+	if err != nil {
+		return RecoverResult{}, recoveryTakeoverError(err)
+	}
+	if owner.TransactionID == nil || *owner.TransactionID != transactionID {
+		return RecoverResult{}, invalidArgumentsf("lock %s does not name transaction %s", request.TakeOverLockID, transactionID)
+	}
+	preview, err := s.runRecovery(ctx, recoveryPreviewOwnership{repository: s.paths.LockRepository(), transactionID: transactionID}, transactionID, false)
+	if err != nil {
+		return RecoverResult{}, s.mapRecoveryError(transactionID, err)
+	}
+	if !apply {
+		return s.recoveryResult(preview, "preview", &request)
+	}
+	lock, err := repolock.TakeOver(ctx, clear, repolock.Request{
+		Repository: s.paths.LockRepository(), Command: "recover", TransactionID: transactionID,
+		Capability: repolock.Capability{Commands: []string{"recover"}},
+	})
+	if err != nil {
+		return RecoverResult{}, recoveryTakeoverError(err)
+	}
+	defer func() {
+		if releaseErr := lock.Release(); releaseErr != nil && err == nil {
+			err = WithMachineFailure(MachineFailure{Code: MachineCodeRepositoryInvalid, Applied: result.Applied}, releaseErr)
+		}
+	}()
+	confirmed, err := s.runRecovery(ctx, lock, transactionID, false)
+	if err != nil {
+		return RecoverResult{}, s.mapRecoveryError(transactionID, err)
+	}
+	if confirmed.Action != preview.Action || confirmed.Command != preview.Command || !slices.Equal(confirmed.Snapshots, preview.Snapshots) {
+		return RecoverResult{}, WithMachineFailure(MachineFailure{Code: MachineCodeWriteConflict, Recovery: s.recoveryRef(transactionID)},
+			fmt.Errorf("retained transaction changed between takeover preview and recovery ownership"))
+	}
+	recovered, err := s.runRecoveryExpected(ctx, lock, transactionID, true, &preview.Action)
+	if err != nil {
+		return RecoverResult{}, s.mapRecoveryError(transactionID, err)
+	}
+	return s.recoveryResult(recovered, "applied", &request)
+}
+
+func (s *Service) runRecovery(ctx context.Context, ownership durabletx.Ownership, transactionID string, apply bool) (durabletx.RecoveryResult, error) {
+	return s.runRecoveryExpected(ctx, ownership, transactionID, apply, nil)
+}
+
+func (s *Service) runRecoveryExpected(ctx context.Context, ownership durabletx.Ownership, transactionID string, apply bool, expectedAction *durabletx.Action) (durabletx.RecoveryResult, error) {
+	return durabletx.Recover(ctx, ownership, s.paths.LockRepository(), durabletx.RecoveryRequest{
+		TransactionID:  transactionID,
+		Apply:          apply,
+		ExpectedAction: expectedAction,
+		Validate: func(command string, snapshots []durabletx.Evidence) error {
+			if command != initMigrationCommand {
+				return fmt.Errorf("no recovery validator is registered for %q", command)
+			}
+			return s.validateInitRecovery(transactionID, snapshots)
+		},
+	})
+}
+
+func (s *Service) recoveryResult(recovered durabletx.RecoveryResult, takeover string, request *RecoverRequest) (RecoverResult, error) {
+	validation, err := s.recoveredValidation(recovered)
+	if err != nil {
+		return RecoverResult{}, err
+	}
+	result := RecoverResult{TransactionID: recovered.TransactionID, Command: recovered.Command,
+		Action: string(recovered.Action), Applied: recovered.Applied, Takeover: takeover,
+		Snapshots: recoverySnapshots(recovered.Snapshots), Validation: validation}
+	if request != nil {
+		result.TakeOverLockID = &request.TakeOverLockID
+		result.TakeOverSHA256 = &request.ExpectSHA256
+	}
+	return result, nil
+}
+
+func recoveryTakeoverError(err error) error {
+	switch {
+	case errors.Is(err, repolock.ErrLiveOwner), errors.Is(err, repolock.ErrHeld), errors.Is(err, repolock.ErrSameProcess):
+		return recoveryLockError(err)
+	case errors.Is(err, repolock.ErrChanged):
+		return WithMachineErrorCode(MachineCodeSourceChanged, err)
+	case errors.Is(err, repolock.ErrNotHeld):
+		return WithMachineErrorCode(MachineCodeInvalidDigest, err)
+	case errors.Is(err, repolock.ErrMalformed):
+		return WithMachineErrorCode(MachineCodeRepositoryInvalid, err)
+	default:
+		return err
+	}
 }
 
 // recoveredValidation reports the coherence of the state a recovery leaves
@@ -245,9 +386,9 @@ func transactionRetained(paths Paths, transactionID string) (bool, error) {
 // abandoned holder is the guarded lock surface, never this command.
 func recoveryLockError(err error) error {
 	switch {
-	case errors.Is(err, repolock.ErrHeld), errors.Is(err, repolock.ErrSameProcess):
+	case errors.Is(err, repolock.ErrHeld), errors.Is(err, repolock.ErrSameProcess), errors.Is(err, repolock.ErrLiveOwner):
 		return WithMachineErrorCode(MachineCodeLockHeld, fmt.Errorf(
-			"the repository mutation lock is held: inspect it with taskrail lock status and clear an abandoned owner with taskrail lock clear before recovering: %w", err))
+			"the repository mutation lock is held: inspect it with taskrail lock status and use its exact --take-over-lock and --expect-sha256 operands before recovering: %w", err))
 	case errors.Is(err, repolock.ErrMalformed):
 		return WithMachineErrorCode(MachineCodeRepositoryInvalid,
 			fmt.Errorf("repository mutation lock metadata is unreadable: %w", err))

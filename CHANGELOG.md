@@ -6,6 +6,9 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ### Added
 
+- `lock status` now remains read-only under a valid recovery fence, and
+  `recover --take-over-lock <id> --expect-sha256 <digest>` can explicitly take
+  over that exact abandoned transaction lock before applying recovery.
 - `taskrail loop --result-file <path>` now publishes one terminal schema-1
   envelope to an absent external file while child output continues streaming.
   Publication rejects repository, Git, symlinked, replaced, and existing
