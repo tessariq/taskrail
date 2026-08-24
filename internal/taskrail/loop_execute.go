@@ -3,6 +3,7 @@ package taskrail
 import (
 	"context"
 	"fmt"
+	"io"
 	"path/filepath"
 )
 
@@ -23,6 +24,7 @@ type LoopDiagnostic struct {
 	ProcessViolations   []MachineViolation  `json:"process_violations"`
 	Remote              string              `json:"remote"`
 	NextAction          string              `json:"next_action"`
+	Parallel            *ParallelBatch      `json:"parallel"`
 }
 
 type LoopValidation struct {
@@ -51,15 +53,16 @@ func (s *Service) LoopExecute(ctx context.Context, invocation LoopInvocation) (L
 	if invocation.DryRun {
 		return LoopDiagnostic{}, invalidArgumentsf("loop execution does not accept --dry-run")
 	}
-	if invocation.Parallel > 1 {
-		return LoopDiagnostic{}, WithMachineErrorCode(MachineCodeUnsupported, fmt.Errorf("parallel loop execution is not available; use --dry-run to preview the frontier"))
-	}
 	snapshot, err := s.LoopPreflight(invocation)
 	if err != nil {
 		return LoopDiagnostic{}, err
 	}
+	invocation = snapshot.Invocation()
 	if err := s.authorizeLoopExecutionPrompt(snapshot); err != nil {
 		return LoopDiagnostic{}, err
+	}
+	if invocation.Parallel > 1 {
+		return s.loopParallelExecute(ctx, invocation, snapshot)
 	}
 	selection, err := s.loopFrozenSelection(snapshot)
 	if err != nil {
@@ -136,11 +139,15 @@ func loopDiagnosticBase(snapshot LoopPreflightSnapshot, ownership *loopOwnership
 		Review:             LoopReviewPolicy{ConfiguredMaxRounds: review.ConfiguredMaxRounds, EffectiveMaxRounds: review.EffectiveMaxRounds, MaxReviewersPerRound: review.MaxReviewersPerRound, FinalDiffReviewRequiredOnChange: review.FinalDiffReviewRequiredOnChange, Source: review.Source},
 		Execution:          loopExecutionBudget(snapshot.Invocation()),
 		Executable:         LoopExecutable{InvocationID: ownership.invocation, Path: ownership.executable.Path, SHA256: ownership.executable.SHA256},
-		MutationViolations: []MachineViolation{}, ProcessViolations: []MachineViolation{}, Remote: "not_checked",
+		MutationViolations: []MachineViolation{}, ProcessViolations: []MachineViolation{}, Remote: "not_checked", Parallel: nil,
 	}
 }
 
 func (s *Service) runLoopIteration(ctx context.Context, snapshot LoopPreflightSnapshot, ownership *loopOwnership, selected TaskLoopRow) (LoopIteration, int, []MachineViolation, []MachineViolation) {
+	return s.runLoopIterationTo(ctx, snapshot, ownership, selected, nil, nil)
+}
+
+func (s *Service) runLoopIterationTo(ctx context.Context, snapshot LoopPreflightSnapshot, ownership *loopOwnership, selected TaskLoopRow, stdout, stderr io.Writer) (LoopIteration, int, []MachineViolation, []MachineViolation) {
 	task, _ := taskByIDFromSlice(s.mustLoadTasks(), selected.TaskID)
 	if task == nil {
 		return LoopIteration{TaskID: selected.TaskID, Outcome: "invalid_postflight", Policy: selected}, 0, []MachineViolation{{Code: "postflight_evidence_missing", Message: "selected task is unavailable"}}, []MachineViolation{}
@@ -153,7 +160,7 @@ func (s *Service) runLoopIteration(ctx context.Context, snapshot LoopPreflightSn
 	if err != nil {
 		return LoopIteration{TaskID: selected.TaskID, Outcome: "invalid_postflight", Policy: selected}, 0, []MachineViolation{{Code: "executable_changed", Message: err.Error()}}, []MachineViolation{}
 	}
-	execution, launchErr := launchLoopChild(loopChildLaunch{Command: snapshot.Invocation().Child, Context: ctx, Timeout: snapshot.Invocation().Timeout, Prompt: []byte(prompt.Content), RepositoryRoot: s.paths.WorktreeRoot, Identity: identity})
+	execution, launchErr := launchLoopChild(loopChildLaunch{Command: snapshot.Invocation().Child, Context: ctx, Timeout: snapshot.Invocation().Timeout, Prompt: []byte(prompt.Content), RepositoryRoot: s.paths.WorktreeRoot, Identity: identity, Stdout: stdout, Stderr: stderr})
 	if launchErr != nil {
 		return LoopIteration{TaskID: selected.TaskID, Outcome: "child_failed", Child: loopIterationChild(execution), Policy: selected, Prompt: loopIterationPrompt(prompt)}, 0, []MachineViolation{}, []MachineViolation{{Code: "launch_failed", Message: launchErr.Error()}}
 	}

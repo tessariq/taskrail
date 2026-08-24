@@ -275,9 +275,15 @@ Use `taskrail loop --dry-run --json` to inspect the highest-ranked explicitly
 allowed task, its frozen implementation prompt, and delivery/review limits. Use
 `--parallel <n>` to preview one ranked, dependency-ready clone frontier without
 creating workspaces or launching workers; clone and delivery options are refused
-when their effective width is one. A replacement implementation prompt requires
-its exact template SHA-256 through `--allow-prompt-override-sha256`; dry run
-never launches a child process.
+when their effective width is one. With a width above one, execution runs that
+frozen frontier in private `--no-local` shallow clones, replays valid worker
+commits in selection order in a separate integration clone, and fast-forwards the
+source branch only after aggregate validation. `--clone-depth full` opts out of
+the shallow boundary; `--keep-workspaces` retains failed workspaces by default.
+Only local delivery is available in this release: a failed worker is not retried,
+but other independently valid worker results can still be integrated. A
+replacement implementation prompt requires its exact template SHA-256 through
+`--allow-prompt-override-sha256`; dry run never launches a child process.
 
 Execution keeps child output streaming, so use `--result-file <external-path>`
 to receive its one terminal schema-1 envelope. The target must be absent in an

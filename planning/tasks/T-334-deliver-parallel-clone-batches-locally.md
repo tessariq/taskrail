@@ -1,7 +1,7 @@
 ---
 id: T-334-deliver-parallel-clone-batches-locally
 title: Deliver parallel clone batches locally
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#parallel-isolated-clone-batches
 dependencies:
@@ -9,7 +9,12 @@ dependencies:
     - T-314-integrate-loop-continuation-and-terminal
     - T-244-publish-streamed-loop-results-out-of-band
     - T-360-authenticate-delegated-lifecycle-writes-against-loop-grant
-updated_at: "2026-08-18T15:50:12Z"
+updated_at: "2026-08-24T10:05:31Z"
+completion_id: "1bba04b1b3cead2c6db4ff916c26ad42"
+last_verification_id: "f4e1594efe711d1afc361f178659afc4"
+last_verification_result: pass
+last_verified_at: "2026-08-24T10:05:31Z"
+last_verified_completion_id: "1bba04b1b3cead2c6db4ff916c26ad42"
 ---
 
 # T-334-deliver-parallel-clone-batches-locally Deliver parallel clone batches locally
@@ -91,3 +96,6 @@ publishing the verified aggregate through one guarded fast-forward.
   Taskrail validation, skill parity, and task-body hygiene on supported platforms.
 
 ## Implementation Notes
+
+- 2026-08-24T10:05:17Z: Delivered local parallel clone workers with ordered aggregate integration.
+- 2026-08-24T10:05:31Z: verification pass id f4e1594efe711d1afc361f178659afc4 previous none completion 1bba04b1b3cead2c6db4ff916c26ad42

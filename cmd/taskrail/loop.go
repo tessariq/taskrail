@@ -184,7 +184,7 @@ func (f *loopStringFlag) Set(value string) error {
 func (f *loopStringFlag) Type() string { return "string" }
 
 func loopDiagnosticGate(report taskrail.LoopDiagnostic) error {
-	if report.Outcome == "no_work" || report.Outcome == "iteration_limit" {
+	if report.Outcome == "no_work" || report.Outcome == "iteration_limit" || report.Outcome == "batch_pass" {
 		return nil
 	}
 	return taskrail.WithMachineErrorCode(report.Outcome, fmt.Errorf("loop stopped after %s", report.Outcome))
