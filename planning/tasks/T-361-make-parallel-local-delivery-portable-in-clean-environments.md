@@ -1,12 +1,17 @@
 ---
 id: T-361-make-parallel-local-delivery-portable-in-clean-environments
 title: Make parallel local delivery portable in clean environments
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#parallel-isolated-clone-batches
 dependencies:
     - T-334-deliver-parallel-clone-batches-locally
-updated_at: "2026-08-24T10:15:22Z"
+updated_at: "2026-08-24T10:34:57Z"
+completion_id: "0bfe4d713912c718b11996aa7ac708af"
+last_verification_id: "729193e6529e836b04031deafd7384f5"
+last_verification_result: pass
+last_verified_at: "2026-08-24T10:34:57Z"
+last_verified_completion_id: "0bfe4d713912c718b11996aa7ac708af"
 ---
 
 # T-361-make-parallel-local-delivery-portable-in-clean-environments Make parallel local delivery portable in clean environments
@@ -37,3 +42,6 @@ paths and executables.
   exact-head CI matrix before resuming T-335.
 
 ## Implementation Notes
+
+- 2026-08-24T10:34:48Z: Preserved candidate commit identity in clean integration clones, accepted filesystem-equivalent delegated roots, and replaced the shell-only parallel fixture with a native child helper; focused repetitions, full tests, vet, and manual acceptance passed.
+- 2026-08-24T10:34:57Z: verification pass id 729193e6529e836b04031deafd7384f5 previous none completion 0bfe4d713912c718b11996aa7ac708af

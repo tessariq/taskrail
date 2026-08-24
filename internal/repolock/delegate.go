@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"os"
 )
 
 // Delegation is the secret an owner hands to the child writers it launches. The
@@ -73,7 +74,7 @@ func Join(req JoinRequest) (*Joined, error) {
 // and storage identity come first so a mixed-mode caller is turned away before
 // any secret is compared at all.
 func matchesOwner(req JoinRequest, owner Owner) (Capability, error) {
-	if owner.RepositoryRoot != req.Repository.Root {
+	if !sameRoot(owner.RepositoryRoot, req.Repository.Root) {
 		return Capability{}, fmt.Errorf("%w: lock belongs to repository %s, not %s",
 			ErrRefused, owner.RepositoryRoot, req.Repository.Root)
 	}
@@ -81,7 +82,7 @@ func matchesOwner(req JoinRequest, owner Owner) (Capability, error) {
 		return Capability{}, fmt.Errorf("%w: lock is %s storage, not %s",
 			ErrRefused, owner.StorageMode, req.Repository.Mode)
 	}
-	if owner.StorageRoot != req.Repository.StorageRoot() {
+	if !sameRoot(owner.StorageRoot, req.Repository.StorageRoot()) {
 		return Capability{}, fmt.Errorf("%w: lock storage root is %s, not %s",
 			ErrRefused, owner.StorageRoot, req.Repository.StorageRoot())
 	}
@@ -105,6 +106,15 @@ func matchesOwner(req JoinRequest, owner Owner) (Capability, error) {
 		return Capability{}, fmt.Errorf("%w: executable identity does not match lock %s", ErrRefused, owner.LockID)
 	}
 	return grant, nil
+}
+
+func sameRoot(left, right string) bool {
+	if left == right {
+		return true
+	}
+	leftInfo, leftErr := os.Stat(left)
+	rightInfo, rightErr := os.Stat(right)
+	return leftErr == nil && rightErr == nil && os.SameFile(leftInfo, rightInfo)
 }
 
 func delegationGrant(capability Capability) (Capability, error) {

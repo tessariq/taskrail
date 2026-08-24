@@ -3,9 +3,12 @@ package taskrail
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -51,30 +54,20 @@ func TestLoopExecuteDeliversParallelCloneBatch(t *testing.T) {
 	previous := loopExecutablePath
 	loopExecutablePath = func() (string, error) { return binary, nil }
 	t.Cleanup(func() { loopExecutablePath = previous })
-	script := filepath.Join(t.TempDir(), "worker.sh")
-	writeFile(t, script, `#!/bin/sh
-set -eu
-read first
-cat >/dev/null
-case "$first" in
-  "Run the repository's full aggregate validation"*) exit 0 ;;
-esac
-set -- $first
-task_id=$5
-task_id=${task_id%.}
-"$TASKRAIL" start "$task_id"
-"$TASKRAIL" complete "$task_id" --note "parallel test"
-"$TASKRAIL" verify "$task_id" --result pass --summary "parallel test" --details "parallel test"
-git config user.email test@example.com
-git config user.name Test
-git add planning
-git commit -m "complete $task_id"
-`)
-	if err := os.Chmod(script, 0o700); err != nil {
-		t.Fatalf("make worker executable: %v", err)
+	t.Setenv("GO_WANT_LOOP_CHILD", "1")
+	isolatedConfig := t.TempDir()
+	t.Setenv("HOME", isolatedConfig)
+	t.Setenv("USERPROFILE", isolatedConfig)
+	t.Setenv("XDG_CONFIG_HOME", isolatedConfig)
+	t.Setenv("GIT_CONFIG_GLOBAL", filepath.Join(isolatedConfig, "missing-global-config"))
+	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+	helper, err := os.Executable()
+	if err != nil {
+		t.Fatalf("resolve test helper: %v", err)
 	}
+	child := []string{helper, "-test.run=^TestLoopLaunchChildHelper$", "--", "parallel-worker", filepath.Join(t.TempDir(), "unused")}
 
-	report, err := svc.LoopExecute(context.Background(), LoopInvocation{MaxIterations: 2, Parallel: 2, Child: []string{script}})
+	report, err := svc.LoopExecute(context.Background(), LoopInvocation{MaxIterations: 2, Parallel: 2, Child: child})
 	if err != nil {
 		t.Fatalf("LoopExecute: %v", err)
 	}
@@ -84,6 +77,14 @@ git commit -m "complete $task_id"
 	}
 	if report.LastIteration != nil || report.Parallel.Integration.Head == nil {
 		t.Fatalf("parallel diagnostic shape = %+v", report)
+	}
+	metadata, err := gitCommand(repo, "show", "-s", "--format=%an%n%ae%n%aI%n%cn%n%ce%n%cI%n%B", *report.Parallel.Integration.Head)
+	if err != nil {
+		t.Fatalf("read integrated metadata: %v", err)
+	}
+	wantMetadata := "Parallel Worker\nparallel-worker@example.com\n2001-02-03T04:05:06+00:00\nParallel Worker\nparallel-worker@example.com\n2001-02-03T04:05:06+00:00\ncomplete T-002-ready"
+	if strings.TrimSpace(metadata) != wantMetadata {
+		t.Fatalf("integrated metadata = %q, want %q", strings.TrimSpace(metadata), wantMetadata)
 	}
 	for _, taskID := range []string{"T-001-ready", "T-002-ready"} {
 		tasks, err := svc.loadTasks()
@@ -101,10 +102,49 @@ func buildParallelTaskrail(t *testing.T) string {
 		t.Fatalf("resolve module root: %v", err)
 	}
 	binary := filepath.Join(t.TempDir(), "taskrail")
+	if runtime.GOOS == "windows" {
+		binary += ".exe"
+	}
 	command := exec.Command("go", "build", "-o", binary, "./cmd/taskrail")
 	command.Dir = root
 	if output, err := command.CombinedOutput(); err != nil {
 		t.Fatalf("build taskrail: %v\n%s", err, output)
 	}
 	return binary
+}
+
+func runParallelLoopChild() int {
+	prompt, err := io.ReadAll(os.Stdin)
+	if err != nil {
+		return 98
+	}
+	first := strings.SplitN(string(prompt), "\n", 2)[0]
+	if strings.HasPrefix(first, "Run the repository's full aggregate validation") {
+		return 0
+	}
+	fields := strings.Fields(first)
+	if len(fields) < 5 || strings.Join(fields[:4], " ") != "Implement the selected task" {
+		return 97
+	}
+	taskID := strings.TrimSuffix(fields[4], ".")
+	commands := [][]string{
+		{os.Getenv("TASKRAIL"), "start", taskID},
+		{os.Getenv("TASKRAIL"), "complete", taskID, "--note", "parallel test"},
+		{os.Getenv("TASKRAIL"), "verify", taskID, "--result", "pass", "--summary", "parallel test", "--details", "parallel test"},
+		{"git", "add", "planning"},
+		{"git", "commit", "-m", "complete " + taskID},
+	}
+	for _, args := range commands {
+		command := exec.Command(args[0], args[1:]...)
+		if args[0] == "git" && args[1] == "commit" {
+			command.Env = append(os.Environ(),
+				"GIT_AUTHOR_NAME=Parallel Worker", "GIT_AUTHOR_EMAIL=parallel-worker@example.com", "GIT_AUTHOR_DATE=2001-02-03T04:05:06Z",
+				"GIT_COMMITTER_NAME=Parallel Worker", "GIT_COMMITTER_EMAIL=parallel-worker@example.com", "GIT_COMMITTER_DATE=2001-02-03T04:05:06Z")
+		}
+		if output, err := command.CombinedOutput(); err != nil {
+			_, _ = fmt.Fprintf(os.Stderr, "%v: %v\n%s", args, err, output)
+			return 96
+		}
+	}
+	return 0
 }

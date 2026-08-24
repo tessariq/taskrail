@@ -232,6 +232,30 @@ func TestJoinAcceptsAMatchingDelegateWithoutMutatingTheLock(t *testing.T) {
 	}
 }
 
+func TestJoinAcceptsFilesystemEquivalentRepositoryRoots(t *testing.T) {
+	repo := committedRepo(t)
+	aliasParent := t.TempDir()
+	alias := filepath.Join(aliasParent, "repo-alias")
+	if err := os.Symlink(repo.Root, alias); err != nil {
+		t.Skipf("filesystem does not permit directory symlinks: %v", err)
+	}
+	_, delegation := acquireDelegating(t, repo, stageExecutable(t, "taskrail-bytes"))
+
+	equivalent := repo
+	equivalent.Root = alias
+	equivalent.GitCommonDir = filepath.Join(alias, ".git")
+	joined, err := Join(joinRequest(equivalent, delegation))
+	if err != nil {
+		t.Fatalf("join through equivalent repository root: %v", err)
+	}
+	if joined.Repository() != equivalent {
+		t.Fatalf("joined repository = %+v, want request context %+v", joined.Repository(), equivalent)
+	}
+	if sameRoot(repo.Root, t.TempDir()) {
+		t.Fatal("genuinely different repository roots compared equal")
+	}
+}
+
 func TestJoinRefusesEveryMismatchWithoutMutation(t *testing.T) {
 	executable := stageExecutable(t, "taskrail-bytes")
 

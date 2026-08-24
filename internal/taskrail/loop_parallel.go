@@ -319,11 +319,34 @@ func integrateParallelCandidate(ctx context.Context, invocation LoopInvocation, 
 		parallelResetIntegration(root)
 		return nil, fmt.Errorf("reproject integration state: %w", err)
 	}
-	if output, err := exec.Command("git", "-C", root, "commit", "-C", "FETCH_HEAD").CombinedOutput(); err != nil {
+	commitEnvironment, err := parallelCandidateCommitEnvironment(root)
+	if err != nil {
+		parallelResetIntegration(root)
+		return nil, err
+	}
+	command := exec.Command("git", "-C", root, "commit", "-C", "FETCH_HEAD")
+	command.Env = append(os.Environ(), commitEnvironment...)
+	if output, err := command.CombinedOutput(); err != nil {
 		parallelResetIntegration(root)
 		return nil, fmt.Errorf("commit integrated candidate: %w: %s", err, strings.TrimSpace(string(output)))
 	}
 	return nil, nil
+}
+
+func parallelCandidateCommitEnvironment(root string) ([]string, error) {
+	output, err := exec.Command("git", "-C", root, "show", "-s", "--format=%cn%x00%ce%x00%cI", "FETCH_HEAD").Output()
+	if err != nil {
+		return nil, fmt.Errorf("read candidate commit metadata: %w", err)
+	}
+	fields := strings.Split(strings.TrimRight(string(output), "\r\n"), "\x00")
+	if len(fields) != 3 || fields[0] == "" || fields[1] == "" || fields[2] == "" {
+		return nil, fmt.Errorf("candidate commit has invalid committer metadata")
+	}
+	return []string{
+		"GIT_COMMITTER_NAME=" + fields[0],
+		"GIT_COMMITTER_EMAIL=" + fields[1],
+		"GIT_COMMITTER_DATE=" + fields[2],
+	}, nil
 }
 
 func runParallelIntegrationChild(ctx context.Context, invocation LoopInvocation, root, commit string, stdout, stderr io.Writer) LoopIterationChild {

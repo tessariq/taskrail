@@ -316,6 +316,9 @@ func TestLoopLaunchChildHelper(t *testing.T) {
 		os.Exit(99)
 	}
 	mode, record := args[separator+1], args[separator+2]
+	if mode == "parallel-worker" {
+		os.Exit(runParallelLoopChild())
+	}
 	count := 0
 	if previous, err := os.ReadFile(record + ".launches"); err == nil {
 		count, _ = strconv.Atoi(string(previous))

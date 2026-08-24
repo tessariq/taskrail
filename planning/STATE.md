@@ -1,6 +1,6 @@
 ---
 schema_version: 1
-updated_at: "2026-08-24T10:15:34Z"
+updated_at: "2026-08-24T10:34:57Z"
 active_spec_version: v0.5.0
 active_spec_path: specs/v0.5.0.md
 current_task: ""
@@ -8,9 +8,9 @@ current_task_title: ""
 status_summary: idle
 blockers: []
 next_action: Select the next eligible task
-last_verification_result: pass for T-358-prevent-read-only-git-probes-from-refreshing-index at 2026-08-24T07:56:32Z id f975a02f8b21195561f29981686d7a0b
-last_verification_id: f975a02f8b21195561f29981686d7a0b
-last_verified_completion_id: 224e829e19e7c9fbb49ad3dca94ed233
+last_verification_result: pass for T-361-make-parallel-local-delivery-portable-in-clean-environments at 2026-08-24T10:34:57Z id 729193e6529e836b04031deafd7384f5
+last_verification_id: 729193e6529e836b04031deafd7384f5
+last_verified_completion_id: 0bfe4d713912c718b11996aa7ac708af
 relevant_artifacts: []
 continuation_notes:
     - This repository is temporarily dogfooding bootstrap workflow tooling until Taskrail v0.1.0 exists.
@@ -36,7 +36,7 @@ continuation_notes:
 
 ## Last Verification
 
-- pass for T-358-prevent-read-only-git-probes-from-refreshing-index at 2026-08-24T07:56:32Z id f975a02f8b21195561f29981686d7a0b
+- pass for T-361-make-parallel-local-delivery-portable-in-clean-environments at 2026-08-24T10:34:57Z id 729193e6529e836b04031deafd7384f5
 
 ## Next Action
 
@@ -52,8 +52,8 @@ continuation_notes:
 
 ## Task Counts
 
-- todo: 90
+- todo: 89
 - in_progress: 0
-- completed: 270
+- completed: 271
 - blocked: 0
 - cancelled: 0

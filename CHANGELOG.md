@@ -6,6 +6,9 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ### Fixed
 
+- Parallel local delivery now preserves candidate commit identity without Git
+  user configuration, accepts filesystem-equivalent delegated repository roots,
+  and exercises its native child flow across the CI platform matrix.
 - Delegated loop lifecycle writers now authenticate the loop's one canonical
   task-scoped grant before narrowing to each command's exact task fields and
   transaction paths. One child token can therefore safely cover `start`,
