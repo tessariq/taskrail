@@ -7,6 +7,7 @@ spec_ref: specs/v0.5.0.md#parallel-isolated-clone-batches
 dependencies:
     - T-333-preview-deterministic-parallel-clone-batches
     - T-314-integrate-loop-continuation-and-terminal
+    - T-244-publish-streamed-loop-results-out-of-band
 updated_at: "2026-08-18T15:50:12Z"
 ---
 
@@ -58,7 +59,10 @@ publishing the verified aggregate through one guarded fast-forward.
   pass/partial/fail diagnostics report ranked worker, integration, workspace,
   commit, cleanup, and safe-next-action evidence; partial/fail exits non-zero and
   launches no more work. Retention defaults to failed workspaces only and cleanup
-  removes only invocation-owned identity-matching roots.
+  removes only invocation-owned identity-matching roots. Cleanup is final
+  postflight before the immutable result-file publication: removed workspaces are
+  null, retained failed workspaces keep exact paths, cleanup failure is terminal
+  evidence, and publication failure never recreates already-cleaned workspaces.
 - Parallel execution rejects local ignored Taskrail storage, source-checkout use,
   recursive-submodule requirements, and linked-worktree workers before cloning.
   Sequential `--parallel 1` behavior remains unchanged. README, command docs,
@@ -74,6 +78,9 @@ publishing the verified aggregate through one guarded fast-forward.
 - Worker matrices cover pass, block, rework, timeout, signal, malformed delivery,
   dirty clone, extra commit/ref/process, sibling failure, and no-refill behavior;
   partial batches prove every valid independent success still publishes.
+- Retention/result matrices cover never/failure/always, worker and integration
+  cleanup refusal, null-after-cleanup diagnostics, retained exact paths, and final
+  publication failure after cleanup without workspace recreation.
 - Integration matrices cover clean replay, mechanical `STATE.md` conflict repair,
   semantic product/test conflict closed by one agent attempt, unresolved conflict,
   later independent acceptance, aggregate-test failure, source drift at every

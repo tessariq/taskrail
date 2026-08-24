@@ -118,7 +118,7 @@ T-319-reject-run-mode-queue-rows-scoped-to-the-loop	hold-operator	Verification f
 T-320-clarify-loop-prompt-stop-and-budget-rules	hold-operator	Loop-owned prompt contract; operator-executed outside the delegated loop
 T-321-align-temporary-loop-with-the-maximum-review	hold-operator	Operator-owned temporary-loop review-budget alignment
 T-325-simplify-v0-5-implementation-review-loop	hold-operator	Operator-owned v0.5 review-loop contract simplification
-T-326-unblock-the-operator-lock-surface-under-a-retained	hold-operator	Verification follow-up from T-232-recover-v0-5-transactions-through-one-command; operator review required
+T-326-unblock-the-operator-lock-surface-under-a-retained	run	-
 T-327-validate-temporary-loop-commit-metadata	hold-operator	Operator-owned temporary-loop delivery metadata hardening
 T-328-skip-recovery-apply-tests-when-directory	hold-operator	Operator-owned repair for the current native Windows CI failure
 T-329-gate-layout-migration-apply-tests-on-directory	hold-operator	Operator-owned repair for T-280 native Windows CI

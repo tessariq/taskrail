@@ -7,6 +7,7 @@ spec_ref: specs/v0.5.0.md#cross-platform-autonomous-loop
 dependencies:
     - T-244-publish-streamed-loop-results-out-of-band
     - T-335-deliver-parallel-batches-through-review-adapters
+    - T-326-unblock-the-operator-lock-surface-under-a-retained
 updated_at: "2026-08-20T11:57:50Z"
 ---
 
@@ -59,9 +60,11 @@ reprojects state, updates refs, and publishes results.
 - On every exit, including non-zero and interruption, the skill reads the result
   file when present and reports its safe next action, worker/integration retention,
   delivery state, and lifecycle evidence. For product transaction recovery it
-  inspects `taskrail lock status --json`, previews an identified transaction with
-  `taskrail recover <transaction-id> --json`, explains the mechanically derived
-  action, and requires fresh explicit confirmation before `--apply`. It routes
+  inspects `taskrail lock status --json`; when the retained transaction is blocked
+  by that exact owner, it previews with `taskrail recover <transaction-id>
+  --take-over-lock <lock-id> --expect-sha256 <digest> --json`, explains both the
+  exact-observation takeover and mechanically derived action, and requires fresh
+  explicit confirmation before repeating those operands with `--apply`. It routes
   `completed_unverified` to verification-only recovery and never repeats complete,
   clears a lock, applies recovery, reuses a failed candidate, or retries work
   automatically.
@@ -110,9 +113,10 @@ reprojects state, updates refs, and publishes results.
   pending-to-fail, unknown, timeout, adapter refusal, and no false green claim.
 - Recovery fixtures cover absent/present/malformed result files, retained worker
   and integration workspaces, transaction preview, declined/approved apply,
-  lock-held and mixed-byte refusal, completed-unverified verify-only guidance, and
-  assertions that no retry, lock clear, recovery apply, or temporary-loop bundle
-  handling occurs without its exact authorization.
+  takeover-required exact lock identity, same-host live and changed/mixed-byte
+  refusal, cross-host attribution, completed-unverified verify-only guidance, and
+  assertions that no retry, lock clear, takeover, recovery apply, or temporary-loop
+  bundle handling occurs without its exact authorization.
 - Quota fixtures cover attributed sequential failure; parallel failure with
   completion order differing from rank and an independently successful sibling;
   ordinary integration and unpublished candidates; absent, malformed, relative,
