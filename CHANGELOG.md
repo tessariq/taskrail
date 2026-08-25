@@ -16,6 +16,10 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ### Added
 
+- `taskrail task author <task-id> --body <proposal> --expect-sha256 <digest>`
+  now applies a reviewed three-section task body only after a digest-bound,
+  locked compare-and-swap. It preserves task frontmatter, H1, Implementation
+  Notes, and `STATE.md`; dry runs return the exact candidate digest and diff.
 - `taskrail task loop allow|hold <task-id> --reason <reason>` and
   `taskrail task loop clear <task-id>` now atomically manage task-local
   unattended policy for `todo` and `blocked` tasks. Dry runs return the same

@@ -41,6 +41,7 @@ var (
 	taskNewWriter     = taskWriterCommand{command: "task new"}
 	taskRenameWriter  = taskWriterCommand{command: "task rename", taskFields: []string{"id", "updated_at", "dependencies"}}
 	taskRepointWriter = taskWriterCommand{command: "task repoint", taskFields: []string{"spec_ref", "updated_at"}}
+	taskAuthorWriter  = taskWriterCommand{command: "task author", taskFields: []string{"description", "acceptance", "verification_notes"}}
 )
 
 // dependencyTaskWriter names one exact-ID dependency editor. It rewrites only

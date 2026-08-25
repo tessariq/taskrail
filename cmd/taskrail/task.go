@@ -18,9 +18,46 @@ func newTaskCmd() *cobra.Command {
 	cmd.AddCommand(newTaskRenameCmd())
 	cmd.AddCommand(newTaskRepointCmd())
 	cmd.AddCommand(newTaskReleaseCmd())
+	cmd.AddCommand(newTaskAuthorCmd())
 	cmd.AddCommand(newTaskDependencyCmd())
 	cmd.AddCommand(newTaskLoopCmd())
 	return cmd
+}
+
+func newTaskAuthorCmd() *cobra.Command {
+	var input taskrail.TaskAuthorInput
+	cmd := &cobra.Command{
+		Use:   "author <task-id>",
+		Short: "Apply one reviewed body proposal to a todo task",
+		Args:  machineArgs(cobra.ExactArgs(1)),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			input.TaskID = args[0]
+			return runCommand(cmd, func(svc *taskrail.Service) (commandResult, error) {
+				result, err := svc.TaskAuthor(input)
+				if err != nil {
+					return commandResult{}, err
+				}
+				return commandResult{shape: "TaskAuthorResult", value: result, text: taskAuthorSummary(result)}, nil
+			})
+		},
+	}
+	cmd.Flags().StringVar(&input.BodyPath, "body", "", "reviewed Markdown body proposal")
+	cmd.Flags().StringVar(&input.ExpectSHA256, "expect-sha256", "", "expected exact task SHA-256")
+	cmd.Flags().BoolVar(&input.DryRun, "dry-run", false, "validate and report the candidate without writing")
+	_ = cmd.MarkFlagRequired("body")
+	_ = cmd.MarkFlagRequired("expect-sha256")
+	addMachineJSONFlag(cmd)
+	return cmd
+}
+
+func taskAuthorSummary(result taskrail.TaskAuthorResult) string {
+	action := "dry run"
+	if result.Applied {
+		action = "applied"
+	}
+	return fmt.Sprintf("task author %s: %s\nsha256: %s -> %s\nvalidation: %s\n%s",
+		action, result.TaskID, result.TaskSHA256Before, result.TaskSHA256After,
+		validationLabel(&result.Validation), result.Diff)
 }
 
 func newTaskShowCmd() *cobra.Command {

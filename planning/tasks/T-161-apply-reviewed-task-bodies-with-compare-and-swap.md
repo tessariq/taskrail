@@ -1,13 +1,18 @@
 ---
 id: T-161-apply-reviewed-task-bodies-with-compare-and-swap
 title: Apply reviewed task bodies with compare-and-swap safety
-status: todo
+status: completed
 priority: medium
 spec_ref: specs/v0.5.0.md#outcome-focused-task-authoring
 dependencies:
     - T-223-run-every-v0-5-command-against-local-storage
     - T-251-ship-the-outcome-focused-task-authoring-prompt
-updated_at: "2026-08-04T21:32:13Z"
+updated_at: "2026-08-25T20:18:01Z"
+completion_id: "3a3499ed7e4fb7a90779e2a58f81520e"
+last_verification_id: "b34f1d38e3b4f3d9f7680ce88d11a265"
+last_verification_result: pass
+last_verified_at: "2026-08-25T20:18:01Z"
+last_verified_completion_id: "3a3499ed7e4fb7a90779e2a58f81520e"
 ---
 
 # T-161-apply-reviewed-task-bodies-with-compare-and-swap Apply reviewed task bodies with compare-and-swap safety
@@ -44,3 +49,6 @@ proposal to an existing todo task. Producer alignment remains T-303 and T-304.
   authorized body sections change.
 
 ## Implementation Notes
+
+- 2026-08-25T20:17:45Z: Implemented digest-bound task authoring with transactional body-only updates.
+- 2026-08-25T20:18:01Z: verification pass id b34f1d38e3b4f3d9f7680ce88d11a265 previous none completion 3a3499ed7e4fb7a90779e2a58f81520e

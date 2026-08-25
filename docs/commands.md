@@ -240,6 +240,26 @@ status mutator and not a bulk migrator. Completed and cancelled tasks are delive
 history and are rejected. Because it re-projects `planning/STATE.md`, run `git
 status` afterwards and stage the regenerated file with the change.
 
+## Applying a reviewed task body
+
+After an external review accepts body-only changes, apply its exact three-section
+proposal to a `todo` task with the digest shown by `task show --json`:
+
+```sh
+taskrail task author T-215 --body reviewed-body.md --expect-sha256 <task-sha256> --dry-run
+taskrail task author T-215 --body reviewed-body.md --expect-sha256 <task-sha256>
+```
+
+The proposal is repository-relative UTF-8 Markdown containing exactly non-empty
+`## Description`, `## Acceptance`, and `## Verification Notes` sections in that
+order. It cannot contain frontmatter, an H1, `## Implementation Notes`, another
+level-two heading, or reside under `planning/artifacts/`. Apply takes the writer
+lock and rechecks the target bytes and `todo` status before atomically replacing
+only those sections. Frontmatter, the H1, and Implementation Notes remain exact;
+`STATE.md` is not rewritten. Dry run and apply report the same candidate SHA-256
+values and unified diff, while a stale digest or concurrent edit refuses without
+writing.
+
 ## Releasing interrupted active work
 
 When a direct operator deliberately gives up an interrupted or rework-pending

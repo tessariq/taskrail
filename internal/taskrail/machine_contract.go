@@ -263,7 +263,7 @@ var machineInventory = []MachineCommandEntry{
 		warns(warnsBootstrap), errs(taskReleaseErrors)),
 	migrated("`task show`", "task show", []string{"TaskShowResult"}, "never",
 		warns(), errs(readErrors, "task_not_found")),
-	planned("`task author`", "task author", []string{"TaskAuthorResult"}, "never",
+	migrated("`task author`", "task author", []string{"TaskAuthorResult"}, "never",
 		warns(warnsBootstrap), errs(taskAuthorErrors)),
 	migrated("`task dependency add`", "task dependency add", []string{"DependencyResult"}, "never",
 		warns(), errs(dependencyErrors)),
