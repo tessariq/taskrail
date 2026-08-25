@@ -102,8 +102,9 @@ type reviewParent struct {
 }
 
 var (
-	testHookAfterReviewParent      func()
-	testHookBeforeTaskReviewCommit func()
+	testHookAfterReviewParent               func()
+	testHookBeforeTaskReviewCommit          func()
+	testHookBeforeDecompositionReviewCommit func()
 )
 
 type decompositionReviewPublication struct {
@@ -636,6 +637,9 @@ func (s *Service) publishDecompositionReview(input ReviewPublishInput) (ReviewPu
 			return nil
 		},
 		ValidateCommit: func() error {
+			if testHookBeforeDecompositionReviewCommit != nil {
+				testHookBeforeDecompositionReviewCommit()
+			}
 			current, err := s.decompositionReviewPublication(input)
 			if err != nil {
 				return err

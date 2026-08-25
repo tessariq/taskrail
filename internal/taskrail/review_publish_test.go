@@ -1,6 +1,7 @@
 package taskrail
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -333,6 +334,195 @@ func TestReviewPublishDecompositionAcceptsTwoConsecutivePasses(t *testing.T) {
 	published, err := os.ReadFile(filepath.Join(repo, "planning", "reviews", "decomposition", "v0.5.0", "decomposition-1", "review-2.json"))
 	if err != nil || string(published) != string(files["review-2.json"]) {
 		t.Fatalf("published second pass = %q, err=%v", published, err)
+	}
+}
+
+func TestReviewPublishDecompositionRequiresExactPromptBindingFields(t *testing.T) {
+	for _, test := range []struct {
+		name     string
+		oldValue string
+		newValue string
+		code     string
+		pass     int
+	}{
+		{"role", `"prompt_id":"task-decomposition-adversarial"`, `"prompt_id":"task-review"`, MachineCodeInvalidProposal, 0},
+		{"contract", `"prompt_contract_version":"v1"`, `"prompt_contract_version":"v2"`, MachineCodeInvalidProposal, 0},
+		{"template digest", builtinPromptDigest(t, "task-decomposition-adversarial"), reviewDigestA, MachineCodeSourceChanged, 0},
+		{"source", `"prompt_source":"builtin"`, `"prompt_source":"replacement"`, MachineCodeSourceChanged, 0},
+		{"second pass source", `"prompt_source":"builtin"`, `"prompt_source":"replacement"`, MachineCodeSourceChanged, 2},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			repo, svc, input, files := decompositionReviewPublishFixture(t)
+			pass := test.pass
+			if pass == 0 {
+				pass = 1
+			}
+			if pass == 2 {
+				addSecondDecompositionPublishPass(t, repo, input, files)
+			}
+			name := fmt.Sprintf("review-%d.json", pass)
+			files[name] = []byte(strings.Replace(string(files[name]), test.oldValue, test.newValue, 1))
+			replaceManifestDigest(files, "sha256", digestRaw(files[name]), pass)
+			writeDecompositionProposalFiles(t, repo, input.Proposal, files, name, "manifest.json")
+
+			_, err := svc.ReviewPublish(input)
+			if err == nil || MachineFailureFor(err).Code != test.code {
+				t.Fatalf("ReviewPublish error = %v, code = %q, want %q", err, MachineFailureFor(err).Code, test.code)
+			}
+			assertDecompositionReviewDestinationAbsent(t, repo)
+		})
+	}
+}
+
+func TestReviewPublishDecompositionPromptBindingPrecedence(t *testing.T) {
+	for _, test := range []struct {
+		name  string
+		setup func(t *testing.T, repo string, input ReviewPublishInput, files map[string][]byte)
+		code  string
+	}{
+		{
+			name: "malformed binding before invalid replacement",
+			setup: func(t *testing.T, repo string, input ReviewPublishInput, files map[string][]byte) {
+				files["review-1.json"] = []byte(strings.Replace(string(files["review-1.json"]), `"prompt_id":"task-decomposition-adversarial"`, `"prompt_id":"task-review"`, 1))
+				replaceManifestDigest(files, "sha256", digestRaw(files["review-1.json"]), 1)
+				writeDecompositionProposalFiles(t, repo, input.Proposal, files, "review-1.json", "manifest.json")
+				writeFile(t, filepath.Join(repo, ".taskrail", "prompts", "v1", "task-decomposition-adversarial.md"), "")
+			},
+			code: MachineCodeInvalidProposal,
+		},
+		{
+			name: "invalid replacement",
+			setup: func(t *testing.T, repo string, _ ReviewPublishInput, _ map[string][]byte) {
+				writeFile(t, filepath.Join(repo, ".taskrail", "prompts", "v1", "task-decomposition-adversarial.md"), "")
+			},
+			code: MachineCodePromptInvalid,
+		},
+		{
+			name: "equal byte replacement changes source",
+			setup: func(t *testing.T, repo string, _ ReviewPublishInput, _ map[string][]byte) {
+				writeFile(t, filepath.Join(repo, ".taskrail", "prompts", "v1", "task-decomposition-adversarial.md"), string(builtinPromptTemplate(t, "task-decomposition-adversarial")))
+			},
+			code: MachineCodeSourceChanged,
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			repo, svc, input, files := decompositionReviewPublishFixture(t)
+			test.setup(t, repo, input, files)
+			_, err := svc.ReviewPublish(input)
+			if err == nil || MachineFailureFor(err).Code != test.code {
+				t.Fatalf("ReviewPublish error = %v, code = %q, want %q", err, MachineFailureFor(err).Code, test.code)
+			}
+			assertDecompositionReviewDestinationAbsent(t, repo)
+		})
+	}
+}
+
+func TestReviewPublishDecompositionPreservesReplacementPromptBindings(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows reports directory durability as unsupported")
+	}
+	for _, twoPasses := range []bool{false, true} {
+		name := "one pass"
+		if twoPasses {
+			name = "two passes"
+		}
+		t.Run(name, func(t *testing.T) {
+			repo, svc, input, files := decompositionReviewPublishFixture(t)
+			if twoPasses {
+				addSecondDecompositionPublishPass(t, repo, input, files)
+			}
+			replacement := []byte("replacement decomposition review prompt\n")
+			writeFile(t, filepath.Join(repo, ".taskrail", "prompts", "v1", "task-decomposition-adversarial.md"), string(replacement))
+			reviewFiles := []string{"review-1.json"}
+			if twoPasses {
+				reviewFiles = append(reviewFiles, "review-2.json")
+			}
+			for pass, name := range reviewFiles {
+				files[name] = []byte(strings.ReplaceAll(string(files[name]), `"prompt_source":"builtin"`, `"prompt_source":"replacement"`))
+				files[name] = []byte(strings.ReplaceAll(string(files[name]), builtinPromptDigest(t, "task-decomposition-adversarial"), promptDigest(replacement)))
+				replaceManifestDigest(files, "sha256", digestRaw(files[name]), pass+1)
+			}
+			writeDecompositionProposalFiles(t, repo, input.Proposal, files, append(reviewFiles, "manifest.json")...)
+
+			if _, err := svc.ReviewPublish(input); err != nil {
+				t.Fatalf("ReviewPublish: %v", err)
+			}
+			for _, name := range reviewFiles {
+				published, err := os.ReadFile(filepath.Join(repo, "planning", "reviews", "decomposition", "v0.5.0", "decomposition-1", name))
+				if err != nil || string(published) != string(files[name]) {
+					t.Fatalf("published %s = %q, err=%v", name, published, err)
+				}
+			}
+			manifest, err := os.ReadFile(filepath.Join(repo, "planning", "reviews", "decomposition", "v0.5.0", "decomposition-1", "manifest.json"))
+			if err != nil || strings.Contains(string(manifest), "prompt_") {
+				t.Fatalf("published manifest = %q, err=%v", manifest, err)
+			}
+		})
+	}
+}
+
+func TestReviewShowDecompositionDoesNotRevalidateHistoricalPrompt(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows reports directory durability as unsupported")
+	}
+	repo, svc, input, files := decompositionReviewPublishFixture(t)
+	if _, err := svc.ReviewPublish(input); err != nil {
+		t.Fatalf("ReviewPublish: %v", err)
+	}
+	writeFile(t, filepath.Join(repo, ".taskrail", "prompts", "v1", "task-decomposition-adversarial.md"), "changed prompt bytes\n")
+
+	result, err := svc.ReviewShow(input.Destination + "/review-1.json")
+	if err != nil {
+		t.Fatalf("ReviewShow: %v", err)
+	}
+	if result.Content != string(files["review-1.json"]) {
+		t.Fatalf("historical content = %q", result.Content)
+	}
+}
+
+func TestReviewPublishDecompositionRechecksPromptAndConfigBeforeCommit(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows reports directory durability as unsupported")
+	}
+	for _, test := range []struct {
+		name  string
+		setup func(t *testing.T, repo string)
+		code  string
+	}{
+		{
+			name: "prompt source transition",
+			setup: func(t *testing.T, repo string) {
+				writeFile(t, filepath.Join(repo, ".taskrail", "prompts", "v1", "task-decomposition-adversarial.md"), string(builtinPromptTemplate(t, "task-decomposition-adversarial")))
+			},
+			code: MachineCodeSourceChanged,
+		},
+		{
+			name: "configuration bytes",
+			setup: func(t *testing.T, repo string) {
+				writeFile(t, filepath.Join(repo, ".taskrail", "config.yml"), "layout_version: 1\nspecs_dir: specs\nplanning_dir: planning\n# changed\n")
+			},
+			code: MachineCodeWriteConflict,
+		},
+	} {
+		for _, twoPasses := range []bool{false, true} {
+			name := "one pass"
+			if twoPasses {
+				name = "two passes"
+			}
+			t.Run(test.name+"/"+name, func(t *testing.T) {
+				repo, svc, input, files := decompositionReviewPublishFixture(t)
+				if twoPasses {
+					addSecondDecompositionPublishPass(t, repo, input, files)
+				}
+				testHookBeforeDecompositionReviewCommit = func() { test.setup(t, repo) }
+				t.Cleanup(func() { testHookBeforeDecompositionReviewCommit = nil })
+				_, err := svc.ReviewPublish(input)
+				if err == nil || MachineFailureFor(err).Code != test.code {
+					t.Fatalf("ReviewPublish error = %v, code = %q, want %q", err, MachineFailureFor(err).Code, test.code)
+				}
+				assertDecompositionReviewDestinationAbsent(t, repo)
+			})
+		}
 	}
 }
 
@@ -690,6 +880,27 @@ func decompositionReviewPublishFixture(t *testing.T) (string, *Service, ReviewPu
 	return repo, svc, input, files
 }
 
+func addSecondDecompositionPublishPass(t *testing.T, repo string, input ReviewPublishInput, files map[string][]byte) {
+	t.Helper()
+	spec, err := os.ReadFile(filepath.Join(repo, "specs", "v0.5.0.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	specReview, err := os.ReadFile(filepath.Join(repo, filepath.FromSlash(input.SpecReview)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	addSecondDecompositionPass(files, DecompositionSubjects{SpecPath: "specs/v0.5.0.md", Spec: spec, SpecReviewManifestPath: input.SpecReview, SpecReviewManifest: specReview})
+	writeDecompositionProposalFiles(t, repo, input.Proposal, files, "review-2.json", "manifest.json")
+}
+
+func writeDecompositionProposalFiles(t *testing.T, repo, proposal string, files map[string][]byte, names ...string) {
+	t.Helper()
+	for _, name := range names {
+		writeFile(t, filepath.Join(repo, filepath.FromSlash(proposal), name), string(files[name]))
+	}
+}
+
 func builtinPromptDigest(t *testing.T, id string) string {
 	t.Helper()
 	definition, err := promptDefinitionFor(id, "v1")
@@ -731,6 +942,13 @@ func assertTaskReviewDestinationAbsent(t *testing.T, repo string) {
 func assertSpecReviewDestinationAbsent(t *testing.T, repo string) {
 	t.Helper()
 	if _, err := os.Stat(filepath.Join(repo, "planning", "reviews", "spec", "v0.1.0", "session-1")); !os.IsNotExist(err) {
+		t.Fatalf("prompt binding rejection created destination: %v", err)
+	}
+}
+
+func assertDecompositionReviewDestinationAbsent(t *testing.T, repo string) {
+	t.Helper()
+	if _, err := os.Stat(filepath.Join(repo, "planning", "reviews", "decomposition", "v0.5.0", "decomposition-1")); !os.IsNotExist(err) {
 		t.Fatalf("prompt binding rejection created destination: %v", err)
 	}
 }

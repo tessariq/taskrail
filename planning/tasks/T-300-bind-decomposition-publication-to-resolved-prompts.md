@@ -1,13 +1,18 @@
 ---
 id: T-300-bind-decomposition-publication-to-resolved-prompts
 title: Bind decomposition publication to resolved prompts
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#safe-review-artifact-publication
 dependencies:
     - T-255-bind-review-artifacts-to-resolved-prompt-templates
     - T-293-publish-decomposition-review-bundles-safely
-updated_at: "2026-08-08T14:23:09Z"
+updated_at: "2026-08-25T19:28:56Z"
+completion_id: "ac64541954721e93d0603cf13f0d42cf"
+last_verification_id: "153bcd72a9a96c3f27c4949429af7ccf"
+last_verification_result: pass
+last_verified_at: "2026-08-25T19:28:56Z"
+last_verified_completion_id: "ac64541954721e93d0603cf13f0d42cf"
 ---
 
 # T-300-bind-decomposition-publication-to-resolved-prompts Bind decomposition publication to resolved prompts
@@ -39,3 +44,6 @@ Bind each decomposition adversarial review pass to the exact current
   changes; wording checks reject delivery and independence attestations.
 
 ## Implementation Notes
+
+- 2026-08-25T19:28:43Z: Added decomposition prompt-binding matrices and final commit recheck coverage.
+- 2026-08-25T19:28:56Z: verification pass id 153bcd72a9a96c3f27c4949429af7ccf previous none completion ac64541954721e93d0603cf13f0d42cf
