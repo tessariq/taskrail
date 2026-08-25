@@ -1,13 +1,18 @@
 ---
 id: T-247-install-packaged-skills-safely-in-local-mode
 title: Plan local packaged skill destinations safely
-status: todo
+status: completed
 priority: medium
 spec_ref: specs/v0.5.0.md#local-planning-mode
 dependencies:
     - T-201-make-packaged-skills-agent-skills-compliant
     - T-222-initialize-and-discover-ignored-local-taskrail
-updated_at: "2026-08-08T08:40:49Z"
+updated_at: "2026-08-25T19:38:24Z"
+completion_id: "9ea9f2b65a8f82c11c7b656616d4a0ff"
+last_verification_id: "a4aac6b4965af1667ef9a46bf5b79b9b"
+last_verification_result: pass
+last_verified_at: "2026-08-25T19:38:24Z"
+last_verified_completion_id: "9ea9f2b65a8f82c11c7b656616d4a0ff"
 ---
 
 # T-247-install-packaged-skills-safely-in-local-mode Plan local packaged skill destinations safely
@@ -42,3 +47,6 @@ separate transactions.
   refresh, status, and promotion contract fixtures.
 
 ## Implementation Notes
+
+- 2026-08-25T19:38:12Z: Added a deterministic, read-only local packaged-skill plan with fail-closed Git and filesystem classification.
+- 2026-08-25T19:38:24Z: verification pass id a4aac6b4965af1667ef9a46bf5b79b9b previous none completion 9ea9f2b65a8f82c11c7b656616d4a0ff
