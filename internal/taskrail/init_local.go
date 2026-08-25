@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -22,7 +23,8 @@ const localInitCommand = "init"
 const localExcludeBegin = "# taskrail local planning begin"
 const localExcludeEnd = "# taskrail local planning end"
 
-var testHookLocalTasksCreated func() error
+var testHookLocalTransactionReady func() error
+var testHookLocalSkillsPlanned func() error
 
 type localOrigin struct {
 	SchemaVersion int     `json:"schema_version"`
@@ -40,8 +42,8 @@ func (s *Service) initLocal(in InitInput) (InitResult, error) {
 	if err := rejectUpgradeOnlyInputs(in); err != nil {
 		return InitResult{}, err
 	}
-	if in.WithSkills || in.ForceSkills {
-		return InitResult{}, invalidArgumentsf("init --local does not install skills; run init --with-skills after local initialization")
+	if in.ForceSkills {
+		return InitResult{}, invalidArgumentsf("init --local --with-skills creates only absent skills; run init --with-skills --force after local initialization")
 	}
 	if _, found, err := readMarker(s.paths.RepoRoot); err != nil {
 		return InitResult{}, err
@@ -62,10 +64,10 @@ func (s *Service) initLocal(in InitInput) (InitResult, error) {
 	}
 	local := *s
 	local.paths = paths
-	return local.applyLocalInit()
+	return local.applyLocalInit(in)
 }
 
-func (s *Service) applyLocalInit() (result InitResult, err error) {
+func (s *Service) applyLocalInit(in InitInput) (result InitResult, err error) {
 	excludePath, err := localExcludePath(s.paths)
 	if err != nil {
 		return InitResult{}, err
@@ -78,8 +80,22 @@ func (s *Service) applyLocalInit() (result InitResult, err error) {
 	if err != nil {
 		return InitResult{}, err
 	}
-	if err := s.preflightLocalPaths(); err != nil {
+	if err := s.preflightLocalPaths(false); err != nil {
 		return InitResult{}, err
+	}
+	var skillPlan localSkillPlan
+	if in.WithSkills {
+		skillPlan, err = s.planLocalSkills()
+		if err != nil {
+			return InitResult{}, err
+		}
+		if err := validateFreshLocalSkillPlan(skillPlan, localSkillCreate, localSkillExclusionCreate); err != nil {
+			return InitResult{}, err
+		}
+		exclude, err = localSkillExclusionCandidate(exclude, skillPlan)
+		if err != nil {
+			return InitResult{}, err
+		}
 	}
 	transactionID, err := newMigrationTransactionID()
 	if err != nil {
@@ -112,12 +128,31 @@ func (s *Service) applyLocalInit() (result InitResult, err error) {
 	if err != nil {
 		return InitResult{}, err
 	}
-	if err := s.preflightLocalPaths(); err != nil {
+	s.recoverEmptyLocalInitDirectories()
+	if err := s.preflightLocalPaths(true); err != nil {
 		return InitResult{}, err
 	}
-	// durabletx binds managed members at the storage root. Create the empty root
-	// only after all refusal checks; any handled publication failure removes it
-	// again so callers never retain a partial local scaffold.
+	if in.WithSkills {
+		skillPlan, err = s.planLocalSkills()
+		if err != nil {
+			return InitResult{}, err
+		}
+		if err := validateFreshLocalSkillPlan(skillPlan, localSkillCreate, localSkillExclusionCreate); err != nil {
+			return InitResult{}, err
+		}
+		exclude, err = localSkillExclusionCandidate(exclude, skillPlan)
+		if err != nil {
+			return InitResult{}, err
+		}
+		if testHookLocalSkillsPlanned != nil {
+			if err := testHookLocalSkillsPlanned(); err != nil {
+				return InitResult{}, err
+			}
+		}
+	}
+	// durabletx requires an existing managed root. These empty directories are
+	// removed on handled failure and safely discarded by the next local init if a
+	// process dies before the transaction journal is prepared.
 	if err := os.MkdirAll(s.paths.StorageRoot, 0o755); err != nil {
 		return InitResult{}, fmt.Errorf("create local storage root: %w", err)
 	}
@@ -127,19 +162,9 @@ func (s *Service) applyLocalInit() (result InitResult, err error) {
 			s.cleanupEmptyLocalInitDirectories()
 		}
 	}()
-	// The state and notes publications below durably sync PlanningDir, which also
-	// makes this pre-created empty child's namespace entry durable. Creating it
-	// before durabletx keeps every normal reader and writer usable immediately;
-	// the failure cleanup removes only known-empty directories and never recurses.
 	if err := os.MkdirAll(s.paths.TasksDir, 0o755); err != nil {
 		return InitResult{}, fmt.Errorf("create local tasks directory: %w", err)
 	}
-	if testHookLocalTasksCreated != nil {
-		if err := testHookLocalTasksCreated(); err != nil {
-			return InitResult{}, err
-		}
-	}
-
 	marker := Layout2Config{
 		LayoutVersion: layout2Version, SpecsDir: defaultSpecsDir, PlanningDir: defaultPlanningDir,
 		StorageMode: StorageLocal, ImplementationReviewMaxRounds: 1,
@@ -173,6 +198,29 @@ func (s *Service) applyLocalInit() (result InitResult, err error) {
 		}
 		members = append(members, durabletx.Member{Kind: durabletx.Managed, Reported: file.logical, Path: file.logical, Content: content})
 	}
+	installed := SkillInstallResult{}
+	if in.WithSkills {
+		for _, destination := range skillPlan.Destinations {
+			packaged, readErr := shippableSkillsFS.ReadFile(path.Join(shippableSkillsRoot, destination.PackagePath))
+			if readErr != nil {
+				return InitResult{}, fmt.Errorf("read embedded skill %s: %w", destination.PackagePath, readErr)
+			}
+			if validateErr := validateAgentSkill(packaged); validateErr != nil {
+				return InitResult{}, fmt.Errorf("validate embedded skill %s: %w", destination.PackagePath, validateErr)
+			}
+			stamped, stampErr := stampSkillVersion(packaged, in.SkillVersion)
+			if stampErr != nil {
+				return InitResult{}, fmt.Errorf("stamp embedded skill %s: %w", destination.PackagePath, stampErr)
+			}
+			members = append(members, durabletx.Member{Kind: durabletx.Worktree, Reported: destination.Path, Path: destination.Path, Content: stamped})
+			installed.Written = append(installed.Written, destination.Path)
+		}
+	}
+	if testHookLocalTransactionReady != nil {
+		if err := testHookLocalTransactionReady(); err != nil {
+			return InitResult{}, err
+		}
+	}
 	expected := map[string]string{string(durabletx.Git) + "\x00" + filepath.ToSlash(excludePath): digestBytes(excludeOriginal)}
 	for _, member := range members[1:] {
 		expected[string(member.Kind)+"\x00"+member.Reported] = ""
@@ -183,29 +231,109 @@ func (s *Service) applyLocalInit() (result InitResult, err error) {
 				return fmt.Errorf("%s changed after local-init preflight", item.Reported)
 			}
 		}
+		if in.WithSkills {
+			plan, planErr := s.planLocalSkills()
+			if planErr != nil {
+				return planErr
+			}
+			if localSkillCandidatesPublished(evidence) {
+				if planErr := validateFreshLocalSkillPlan(plan, localSkillRefresh, localSkillExclusionManaged); planErr != nil {
+					return planErr
+				}
+			} else if planErr := validateFreshLocalSkillPlan(plan, localSkillCreate, ""); planErr != nil {
+				return planErr
+			}
+		}
 		return s.verifyLocalIgnored()
+	}
+	validateBeforeCandidates := validate
+	if in.WithSkills {
+		validateBeforeCandidates = func(evidence []durabletx.Evidence) error {
+			plan, planErr := s.planLocalSkills()
+			if planErr != nil {
+				return planErr
+			}
+			return validateFreshLocalSkillPlan(plan, localSkillCreate, localSkillExclusionManaged)
+		}
 	}
 	if _, err := durabletx.Run(context.Background(), lock, s.paths.LockRepository(), durabletx.Request{
 		Command:                  localInitCommand,
 		Members:                  members,
 		Validate:                 validate,
-		ValidateBeforeCandidates: validate,
+		ValidateBeforeCandidates: validateBeforeCandidates,
 	}); err != nil {
 		return InitResult{}, s.mapMigrationFailure(transactionID, err)
 	}
 	committed = true
-
 	digest, err := markerDigestBytes(markerBytes)
 	if err != nil {
 		return InitResult{}, err
 	}
 	result = InitResult{
 		Outcome: InitCreated, ToVersion: layout2Version, Applied: true, StorageMode: string(StorageLocal),
-		Config: InitConfig{Path: markerRelPath(), Action: configActionCreate, CandidateSHA256: digest},
+		Config: InitConfig{Path: markerRelPath(), Action: configActionCreate, CandidateSHA256: digest}, SkillInstall: installed,
 		Writes: s.localInitWrites(), Notes: s.initNotes(true, false, nil), Skills: []InitSkill{}, SkillExclusions: []InitSkillExclusion{}, ContinuationNotes: []string{},
 		Validation: &ValidationResult{Valid: true, Violations: []string{}},
 	}
+	if in.WithSkills {
+		result.Skills, _, err = s.skillReport(installed)
+		if err != nil {
+			return InitResult{}, err
+		}
+		result.SkillExclusions = localSkillExclusionReport(skillPlan)
+	}
 	return result, nil
+}
+
+func localSkillExclusionCandidate(exclude []byte, plan localSkillPlan) ([]byte, error) {
+	for _, exclusion := range plan.Exclusions {
+		if exclusion.Ownership != localSkillExclusionCreate {
+			return nil, fmt.Errorf("local skill exclusion %s is not safe to create", exclusion.Path)
+		}
+	}
+	paths := make([]string, 0, len(plan.Exclusions))
+	for _, exclusion := range plan.Exclusions {
+		paths = append(paths, exclusion.Path)
+	}
+	return []byte(strings.Replace(string(exclude), localExcludeEnd, strings.Join(paths, "\n")+"\n"+localExcludeEnd, 1)), nil
+}
+
+func validateFreshLocalSkillPlan(plan localSkillPlan, destinationAction, exclusionOwnership string) error {
+	if len(plan.Unexpected) != 0 {
+		return fmt.Errorf("local skill destination %s contains adopter-owned content", plan.Unexpected[0].Path)
+	}
+	for _, destination := range plan.Destinations {
+		if destination.Action != destinationAction {
+			return fmt.Errorf("local skill destination %s is not safe to %s", destination.Path, destinationAction)
+		}
+	}
+	for _, exclusion := range plan.Exclusions {
+		if exclusionOwnership != "" && exclusion.Ownership != exclusionOwnership {
+			return fmt.Errorf("local skill exclusion %s is not %s", exclusion.Path, exclusionOwnership)
+		}
+	}
+	return nil
+}
+
+func localSkillCandidatesPublished(evidence []durabletx.Evidence) bool {
+	for _, item := range evidence {
+		if isSkillDestination(item.Reported) && item.CurrentSHA256 != item.CandidateSHA256 {
+			return false
+		}
+	}
+	return true
+}
+
+func localSkillExclusionReport(plan localSkillPlan) []InitSkillExclusion {
+	report := make([]InitSkillExclusion, 0, len(plan.Exclusions))
+	for _, exclusion := range plan.Exclusions {
+		report = append(report, InitSkillExclusion{Path: exclusion.Path, Action: writeActionCreate})
+	}
+	return report
+}
+
+func (s *Service) recoverEmptyLocalInitDirectories() {
+	s.cleanupEmptyLocalInitDirectories()
 }
 
 func (s *Service) cleanupEmptyLocalInitDirectories() {
@@ -273,20 +401,24 @@ func localExcludeCandidate(original []byte) ([]byte, error) {
 	return []byte(text + localExcludeBegin + "\n.taskrail/config.yml\n.taskrail/local/\n" + localExcludeEnd + "\n"), nil
 }
 
-func (s *Service) preflightLocalPaths() error {
-	if entries, err := os.ReadDir(s.paths.StorageRoot); err == nil {
-		if len(entries) != 0 {
-			return WithMachineErrorCode(MachineCodePathBlocked, fmt.Errorf("local storage root %s already exists", localStorageRoot))
-		}
-	} else if !os.IsNotExist(err) {
-		return err
-	}
-	for _, physical := range []string{s.paths.SpecsDir, s.paths.PlanningDir, filepath.Join(s.paths.RuntimeDir, "origin.json")} {
-		if _, err := os.Lstat(physical); !os.IsNotExist(err) {
-			if err == nil {
-				return WithMachineErrorCode(MachineCodePathBlocked, fmt.Errorf("local destination %s already exists", relPath(s.paths.RepoRoot, physical)))
+func (s *Service) preflightLocalPaths(checkStorageRoot bool) error {
+	if checkStorageRoot {
+		if entries, err := os.ReadDir(s.paths.StorageRoot); err == nil {
+			if len(entries) != 0 {
+				return WithMachineErrorCode(MachineCodePathBlocked, fmt.Errorf("local storage root %s already exists", localStorageRoot))
 			}
+		} else if !os.IsNotExist(err) {
 			return err
+		}
+	}
+	if checkStorageRoot {
+		for _, physical := range []string{s.paths.SpecsDir, s.paths.PlanningDir, filepath.Join(s.paths.RuntimeDir, "origin.json")} {
+			if _, err := os.Lstat(physical); !os.IsNotExist(err) {
+				if err == nil {
+					return WithMachineErrorCode(MachineCodePathBlocked, fmt.Errorf("local destination %s already exists", relPath(s.paths.RepoRoot, physical)))
+				}
+				return err
+			}
 		}
 	}
 	for _, path := range []string{localStorageRoot, markerRelPath()} {
@@ -318,7 +450,11 @@ func (s *Service) verifyLocalIgnored() error {
 		}
 		return fmt.Errorf("Git exclusion is missing the Taskrail local-storage entry")
 	}
-	for _, path := range []string{markerRelPath(), localStorageRoot, filepath.ToSlash(relPath(s.paths.RepoRoot, s.paths.RuntimeDir))} {
+	for _, path := range []string{
+		markerRelPath(),
+		filepath.ToSlash(relPath(s.paths.RepoRoot, s.paths.PlanningDir)),
+		filepath.ToSlash(relPath(s.paths.RepoRoot, s.paths.RuntimeDir)),
+	} {
 		if _, err := gitCommand(s.paths.WorktreeRoot, "check-ignore", "-q", "--no-index", path); err != nil {
 			return fmt.Errorf("local destination %s is not effectively ignored", path)
 		}

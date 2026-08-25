@@ -243,6 +243,8 @@ func TestDiscoverPathsRefusesMismatchMixedAndUnsafeTraversal(t *testing.T) {
 	}{
 		{name: "committed bytes in local mode", mode: "local", path: "planning/STATE.md"},
 		{name: "local bytes in committed mode", mode: "committed", path: ".taskrail/local/planning/STATE.md"},
+		{name: "local runtime bytes in committed mode", mode: "committed", path: ".taskrail/local/runtime/origin.json"},
+		{name: "unknown local bytes in committed mode", mode: "committed", path: ".taskrail/local/unexpected/decoy"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			repo := initGitRepo(t)

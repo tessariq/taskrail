@@ -1,13 +1,18 @@
 ---
 id: T-301-install-fresh-local-packaged-skills
 title: Install fresh local packaged skills transactionally
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#local-planning-mode
 dependencies:
     - T-247-install-packaged-skills-safely-in-local-mode
     - T-287-initialize-ignored-local-planning-storage-durably
-updated_at: "2026-08-08T14:23:09Z"
+updated_at: "2026-08-25T20:21:35Z"
+completion_id: "e5ee429446a95ae3d08ad9b311685aae"
+last_verification_id: "511e7644913cf39a3ac60f2dd5fd1338"
+last_verification_result: pass
+last_verified_at: "2026-08-25T20:21:35Z"
+last_verified_completion_id: "e5ee429446a95ae3d08ad9b311685aae"
 ---
 
 # T-301-install-fresh-local-packaged-skills Install fresh local packaged skills transactionally
@@ -41,3 +46,6 @@ the scaffold's durable transaction and recovery boundary.
   clean visible worktree.
 
 ## Implementation Notes
+
+- 2026-08-25T20:21:15Z: Installed fresh local packaged skills transactionally with recovery checks.
+- 2026-08-25T20:21:35Z: verification pass id 511e7644913cf39a3ac60f2dd5fd1338 previous none completion e5ee429446a95ae3d08ad9b311685aae

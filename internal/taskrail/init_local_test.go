@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/tessariq/taskrail/internal/durabletx"
 )
 
 func TestInitLocalCreatesIgnoredOverlay(t *testing.T) {
@@ -99,6 +101,114 @@ func TestInitLocalCreatesIgnoredOverlay(t *testing.T) {
 	output := gitOutput(t, repo, "status", "--porcelain")
 	if output != "" {
 		t.Fatalf("git status = %q, want clean", output)
+	}
+}
+
+func TestInitLocalWithSkillsPublishesSkillsAndExclusions(t *testing.T) {
+	repo := t.TempDir()
+	initLocalGitRepo(t, repo)
+	requireRecoveryDirectoryDurability(t, repo)
+	svc := newTestService(t, repo, time.Date(2026, 8, 25, 12, 0, 0, 0, time.UTC))
+
+	result, err := svc.Init(InitInput{Local: true, WithSkills: true, SkillVersion: "v9.9.9"})
+	if err != nil {
+		t.Fatalf("init local with skills: %v", err)
+	}
+	files, err := packagedSkillFiles()
+	if err != nil {
+		t.Fatalf("packaged skill files: %v", err)
+	}
+	assertSkillInventory(t, result.Skills, len(files)*len(shippableSkillTargets), writeActionCreate)
+	names, err := packagedSkillNames()
+	if err != nil {
+		t.Fatalf("packaged skill names: %v", err)
+	}
+	if got, want := len(result.SkillExclusions), len(names)*len(shippableSkillTargets); got != want {
+		t.Fatalf("skill exclusions = %d, want %d", got, want)
+	}
+	for _, skill := range result.Skills {
+		data, readErr := os.ReadFile(filepath.Join(repo, filepath.FromSlash(skill.Path)))
+		if readErr != nil {
+			t.Fatalf("read installed skill %s: %v", skill.Path, readErr)
+		}
+		version, versionErr := skillVersionOf(data)
+		if versionErr != nil || version != "v9.9.9" {
+			t.Fatalf("installed skill %s version = %q, %v", skill.Path, version, versionErr)
+		}
+	}
+	exclude, err := os.ReadFile(filepath.Join(repo, ".git", "info", "exclude"))
+	if err != nil {
+		t.Fatalf("read exclusion: %v", err)
+	}
+	managed, _ := splitLocalExclusions(string(exclude))
+	for _, exclusion := range result.SkillExclusions {
+		if exclusion.Action != writeActionCreate || !managed[exclusion.Path] {
+			t.Fatalf("skill exclusion = %+v, managed = %v", exclusion, managed[exclusion.Path])
+		}
+	}
+	if output := gitOutput(t, repo, "status", "--porcelain"); output != "" {
+		t.Fatalf("git status = %q, want clean", output)
+	}
+}
+
+func TestInitLocalWithSkillsRejectsPlanDriftWithoutScaffold(t *testing.T) {
+	repo := t.TempDir()
+	initLocalGitRepo(t, repo)
+	requireRecoveryDirectoryDurability(t, repo)
+	files, err := packagedSkillFiles()
+	if err != nil {
+		t.Fatalf("packaged skill files: %v", err)
+	}
+	drift := filepath.Join(repo, ".agents", "skills", filepath.Dir(files[0]), "adopter.md")
+	testHookLocalSkillsPlanned = func() error {
+		if err := os.MkdirAll(filepath.Dir(drift), 0o755); err != nil {
+			return err
+		}
+		return os.WriteFile(drift, []byte("keep me\n"), 0o644)
+	}
+	t.Cleanup(func() { testHookLocalSkillsPlanned = nil })
+
+	_, err = newTestService(t, repo, time.Now()).Init(InitInput{Local: true, WithSkills: true, SkillVersion: "v9.9.9"})
+	if err == nil || !strings.Contains(err.Error(), "adopter-owned content") {
+		t.Fatalf("init local with post-plan collision error = %v", err)
+	}
+	if _, statErr := os.Stat(filepath.Join(repo, ".taskrail")); !os.IsNotExist(statErr) {
+		t.Fatalf("post-plan collision retained local scaffold: %v", statErr)
+	}
+	if data, readErr := os.ReadFile(drift); readErr != nil || string(data) != "keep me\n" {
+		t.Fatalf("post-plan collision did not preserve adopter content: %q, %v", data, readErr)
+	}
+	if output := gitOutput(t, repo, "status", "--porcelain"); output != "?? .agents/" {
+		t.Fatalf("post-plan collision status = %q, want only adopter content", output)
+	}
+}
+
+func TestInitLocalSkillRecoveryRejectsAdopterContent(t *testing.T) {
+	repo := t.TempDir()
+	initLocalGitRepo(t, repo)
+	requireRecoveryDirectoryDurability(t, repo)
+	setup := newTestService(t, repo, time.Now())
+	result, err := setup.Init(InitInput{Local: true, WithSkills: true, SkillVersion: "v9.9.9"})
+	if err != nil {
+		t.Fatalf("init local with skills: %v", err)
+	}
+	marker, err := os.ReadFile(filepath.Join(repo, ".taskrail", "config.yml"))
+	if err != nil {
+		t.Fatalf("read marker: %v", err)
+	}
+	adopterPath := filepath.Join(repo, filepath.Dir(result.Skills[0].Path), "adopter.md")
+	writeFile(t, adopterPath, "keep me\n")
+	local, err := NewService(repo)
+	if err != nil {
+		t.Fatalf("new local service: %v", err)
+	}
+
+	err = local.validateInitRecovery("0123456789abcdef0123456789abcdef", []durabletx.Evidence{
+		{Kind: durabletx.Worktree, Reported: markerRelPath(), CandidateSHA256: digestBytes(marker)},
+		{Kind: durabletx.Worktree, Reported: result.Skills[0].Path, CandidateSHA256: "candidate"},
+	})
+	if err == nil || !strings.Contains(err.Error(), "adopter-owned content") {
+		t.Fatalf("local skill recovery error = %v", err)
 	}
 }
 
@@ -403,15 +513,15 @@ func TestLocalTaskMutationRollbackStaysInOverlay(t *testing.T) {
 	}
 }
 
-func TestInitLocalRemovesEmptyTaskDirectoryOnPrepublicationFailure(t *testing.T) {
+func TestInitLocalHasNoPretransactionScaffold(t *testing.T) {
 	repo := t.TempDir()
 	initLocalGitRepo(t, repo)
 	requireRecoveryDirectoryDurability(t, repo)
-	testHookLocalTasksCreated = func() error { return errors.New("injected after local tasks creation") }
-	t.Cleanup(func() { testHookLocalTasksCreated = nil })
+	testHookLocalTransactionReady = func() error { return errors.New("injected before local transaction") }
+	t.Cleanup(func() { testHookLocalTransactionReady = nil })
 
 	_, err := newTestService(t, repo, time.Now()).Init(InitInput{Local: true})
-	if err == nil || !strings.Contains(err.Error(), "injected after local tasks creation") {
+	if err == nil || !strings.Contains(err.Error(), "injected before local transaction") {
 		t.Fatalf("init local error = %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(repo, ".taskrail")); !os.IsNotExist(err) {
@@ -419,6 +529,22 @@ func TestInitLocalRemovesEmptyTaskDirectoryOnPrepublicationFailure(t *testing.T)
 	}
 	if output := gitOutput(t, repo, "status", "--porcelain"); output != "" {
 		t.Fatalf("failed local init changed Git status: %q", output)
+	}
+}
+
+func TestInitLocalRecoversEmptyPretransactionScaffold(t *testing.T) {
+	repo := t.TempDir()
+	initLocalGitRepo(t, repo)
+	requireRecoveryDirectoryDurability(t, repo)
+	if err := os.MkdirAll(filepath.Join(repo, ".taskrail", "local", "planning", "tasks"), 0o755); err != nil {
+		t.Fatalf("create abandoned local scaffold: %v", err)
+	}
+
+	if _, err := newTestService(t, repo, time.Now()).Init(InitInput{Local: true, WithSkills: true, SkillVersion: "v9.9.9"}); err != nil {
+		t.Fatalf("recover empty local scaffold: %v", err)
+	}
+	if output := gitOutput(t, repo, "status", "--porcelain"); output != "" {
+		t.Fatalf("recovered local scaffold changed Git status: %q", output)
 	}
 }
 

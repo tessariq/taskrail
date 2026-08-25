@@ -346,6 +346,9 @@ func (s *Service) validateInitRecovery(transactionID string, snapshots []durable
 		if err != nil || marker.StorageMode != StorageLocal || marker.MigrationFence != nil {
 			return fmt.Errorf("retained local init marker is invalid")
 		}
+		if err := s.validateRecoveredLocalSkills(snapshots); err != nil {
+			return err
+		}
 		return nil
 	}
 	var found bool
@@ -373,6 +376,27 @@ func (s *Service) validateInitRecovery(transactionID string, snapshots []durable
 		return fmt.Errorf("retained migration marker still carries a fence")
 	}
 	return nil
+}
+
+func (s *Service) validateRecoveredLocalSkills(snapshots []durabletx.Evidence) error {
+	installed := false
+	for _, snapshot := range snapshots {
+		if snapshot.Kind == durabletx.Worktree && isSkillDestination(snapshot.Reported) {
+			installed = true
+			break
+		}
+	}
+	if !installed {
+		return nil
+	}
+	plan, err := s.planLocalSkills()
+	if err != nil {
+		return err
+	}
+	if err := validateFreshLocalSkillPlan(plan, localSkillRefresh, localSkillExclusionManaged); err != nil {
+		return err
+	}
+	return s.verifyLocalIgnored()
 }
 
 // mapMigrationFailure classifies a durable migration outcome onto the command's

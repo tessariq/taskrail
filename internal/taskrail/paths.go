@@ -3,6 +3,7 @@ package taskrail
 import (
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path"
 	"path/filepath"
@@ -451,6 +452,13 @@ func validateDiscoveredPaths(paths Paths) error {
 			}
 		}
 	} else {
+		localRoot := filepath.Join(paths.ManagedRoot, filepath.FromSlash(localStorageRoot))
+		if err := validateTargetPath(localRoot); err != nil {
+			return err
+		}
+		if exists(localRoot) && !isEmptyLocalInitScaffold(localRoot) {
+			return fmt.Errorf("mixed committed/local Taskrail state at %s", localRoot)
+		}
 		for _, local := range []string{
 			filepath.Join(paths.ManagedRoot, filepath.FromSlash(localStorageRoot), filepath.FromSlash(paths.LogicalSpecsDir)),
 			filepath.Join(paths.ManagedRoot, filepath.FromSlash(localStorageRoot), filepath.FromSlash(paths.LogicalPlanningDir)),
@@ -459,12 +467,35 @@ func validateDiscoveredPaths(paths Paths) error {
 			if err := validateTargetPath(local); err != nil {
 				return err
 			}
-			if exists(local) {
+			if exists(local) && !isEmptyLocalInitScaffold(filepath.Join(paths.ManagedRoot, filepath.FromSlash(localStorageRoot))) {
 				return fmt.Errorf("mixed committed/local Taskrail state at %s", local)
 			}
 		}
 	}
 	return nil
+}
+
+func isEmptyLocalInitScaffold(root string) bool {
+	allowed := map[string]bool{
+		".":              true,
+		"planning":       true,
+		"planning/tasks": true,
+		"specs":          true,
+		"runtime":        true,
+	}
+	return filepath.WalkDir(root, func(physical string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(root, physical)
+		if err != nil {
+			return err
+		}
+		if !entry.IsDir() || entry.Type()&os.ModeSymlink != 0 || !allowed[filepath.ToSlash(rel)] {
+			return fmt.Errorf("not an empty local initialization scaffold")
+		}
+		return nil
+	}) == nil
 }
 
 func validateLogicalDir(field, value string) error {
