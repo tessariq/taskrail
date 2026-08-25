@@ -1,6 +1,6 @@
 ---
 schema_version: 1
-updated_at: "2026-08-25T20:22:32Z"
+updated_at: "2026-08-25T20:35:54Z"
 active_spec_version: v0.5.0
 active_spec_path: specs/v0.5.0.md
 current_task: ""
@@ -8,9 +8,9 @@ current_task_title: ""
 status_summary: idle
 blockers: []
 next_action: Select the next eligible task
-last_verification_result: pass for T-363-align-prompt-snapshot-race-tests-with-windows at 2026-08-25T18:24:59Z id b94344ab25a83feaf17049cc738925e1
-last_verification_id: b94344ab25a83feaf17049cc738925e1
-last_verified_completion_id: 04152576ad541ee0e8aa95a83b091b11
+last_verification_result: pass for T-364-normalize-task-author-logical-paths-portably at 2026-08-25T20:35:54Z id 4cca21f9c62350ab582d5eae9a84c154
+last_verification_id: 4cca21f9c62350ab582d5eae9a84c154
+last_verified_completion_id: 7ff75a20dd0ab94ffc34358271d6cbe6
 relevant_artifacts: []
 continuation_notes:
     - This repository is temporarily dogfooding bootstrap workflow tooling until Taskrail v0.1.0 exists.
@@ -36,7 +36,7 @@ continuation_notes:
 
 ## Last Verification
 
-- pass for T-363-align-prompt-snapshot-race-tests-with-windows at 2026-08-25T18:24:59Z id b94344ab25a83feaf17049cc738925e1
+- pass for T-364-normalize-task-author-logical-paths-portably at 2026-08-25T20:35:54Z id 4cca21f9c62350ab582d5eae9a84c154
 
 ## Next Action
 
@@ -54,6 +54,6 @@ continuation_notes:
 
 - todo: 79
 - in_progress: 0
-- completed: 283
+- completed: 284
 - blocked: 0
 - cancelled: 0

@@ -6,6 +6,9 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ### Fixed
 
+- `task author` now validates slash-delimited repository proposal paths
+  consistently on Windows, including the intended rejection of ignored artifact
+  paths as invalid proposals.
 - Parallel local delivery now preserves candidate commit identity without Git
   user configuration, accepts filesystem-equivalent delegated repository roots,
   and exercises its native child flow across the CI platform matrix.

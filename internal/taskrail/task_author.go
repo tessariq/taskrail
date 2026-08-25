@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"unicode/utf8"
@@ -162,7 +163,7 @@ func (s *Service) requireLayout2ForTaskAuthor() error {
 }
 
 func (s *Service) readTaskAuthorProposal(bodyPath string) ([]byte, error) {
-	if filepath.IsAbs(bodyPath) || filepath.ToSlash(bodyPath) != bodyPath || filepath.Clean(bodyPath) != bodyPath {
+	if filepath.IsAbs(bodyPath) || filepath.ToSlash(bodyPath) != bodyPath || path.Clean(bodyPath) != bodyPath {
 		return nil, invalidArgumentsf("body must be a canonical repository-relative path")
 	}
 	artifactPrefix := s.paths.LogicalPlanningDir + "/artifacts/"
