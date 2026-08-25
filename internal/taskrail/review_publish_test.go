@@ -28,7 +28,7 @@ func TestReviewPublishTaskPreviewAndApplyBindExactBytes(t *testing.T) {
 		t.Fatal(err)
 	}
 	proposal := "planning/artifacts/review-proposals/task/session-1"
-	review := `{"schema_version":1,"prompt_id":"task-review","prompt_contract_version":"v1","prompt_template_sha256":"` + reviewDigestB + `","prompt_source":"builtin","session_id":"session-1","task_id":"T-215-review","task_path":"` + taskPath + `","task_sha256":"` + digestRaw(taskBytes) + `","spec_path":"` + specPath + `","spec_sha256":"` + digestRaw(specBytes) + `","context_mode":"fresh","generated_at":"2026-08-12T10:00:00Z","findings":[]}`
+	review := `{"schema_version":1,"prompt_id":"task-review","prompt_contract_version":"v1","prompt_template_sha256":"` + builtinPromptDigest(t, "task-review") + `","prompt_source":"builtin","session_id":"session-1","task_id":"T-215-review","task_path":"` + taskPath + `","task_sha256":"` + digestRaw(taskBytes) + `","spec_path":"` + specPath + `","spec_sha256":"` + digestRaw(specBytes) + `","context_mode":"fresh","generated_at":"2026-08-12T10:00:00Z","findings":[]}`
 	writeFile(t, filepath.Join(repo, filepath.FromSlash(proposal), "review.json"), review)
 	svc, err := NewService(repo)
 	if err != nil {
@@ -251,6 +251,128 @@ func TestReviewPublishTaskRefusesChangedSubjectAndLeavesDestinationAbsent(t *tes
 	}
 }
 
+func TestReviewPublishTaskRefusesChangedPromptTemplateWithoutPublication(t *testing.T) {
+	repo, svc, input := reviewPublishFixture(t)
+	proposalFile := filepath.Join(repo, filepath.FromSlash(input.Proposal), "review.json")
+	data, err := os.ReadFile(proposalFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, proposalFile, strings.Replace(string(data), builtinPromptDigest(t, "task-review"), reviewDigestA, 1))
+	_, err = svc.ReviewPublish(input)
+	if err == nil || MachineFailureFor(err).Code != MachineCodeSourceChanged {
+		t.Fatalf("ReviewPublish error = %v, code = %q", err, MachineFailureFor(err).Code)
+	}
+	if _, statErr := os.Stat(filepath.Join(repo, "planning", "reviews", "task", "T-215-review", "session-1")); !os.IsNotExist(statErr) {
+		t.Fatalf("changed prompt binding created destination: %v", statErr)
+	}
+}
+
+func TestReviewPublishTaskPromptBindingPrecedence(t *testing.T) {
+	for _, test := range []struct {
+		name  string
+		setup func(t *testing.T, repo, proposal string)
+		code  string
+	}{
+		{
+			name: "malformed binding before invalid replacement",
+			setup: func(t *testing.T, repo, proposal string) {
+				proposalFile := filepath.Join(repo, filepath.FromSlash(proposal), "review.json")
+				data, err := os.ReadFile(proposalFile)
+				if err != nil {
+					t.Fatal(err)
+				}
+				writeFile(t, proposalFile, strings.Replace(string(data), `"prompt_id":"task-review"`, `"prompt_id":"spec-gaps"`, 1))
+				writeFile(t, filepath.Join(repo, ".taskrail", "prompts", "v1", "task-review.md"), "")
+			},
+			code: MachineCodeInvalidProposal,
+		},
+		{
+			name: "invalid replacement",
+			setup: func(t *testing.T, repo, _ string) {
+				writeFile(t, filepath.Join(repo, ".taskrail", "prompts", "v1", "task-review.md"), "")
+			},
+			code: MachineCodePromptInvalid,
+		},
+		{
+			name: "equal byte replacement changes source",
+			setup: func(t *testing.T, repo, _ string) {
+				writeFile(t, filepath.Join(repo, ".taskrail", "prompts", "v1", "task-review.md"), string(builtinPromptTemplate(t, "task-review")))
+			},
+			code: MachineCodeSourceChanged,
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			repo, svc, input := reviewPublishFixture(t)
+			test.setup(t, repo, input.Proposal)
+			_, err := svc.ReviewPublish(input)
+			if err == nil || MachineFailureFor(err).Code != test.code {
+				t.Fatalf("ReviewPublish error = %v, code = %q, want %q", err, MachineFailureFor(err).Code, test.code)
+			}
+			assertTaskReviewDestinationAbsent(t, repo)
+		})
+	}
+}
+
+func TestReviewPublishTaskRechecksPromptSnapshotsBeforeCommit(t *testing.T) {
+	for _, test := range []struct {
+		name  string
+		setup func(t *testing.T, repo, proposal string)
+		race  func(t *testing.T, repo string)
+	}{
+		{
+			name: "source transition",
+			race: func(t *testing.T, repo string) {
+				writeFile(t, filepath.Join(repo, ".taskrail", "prompts", "v1", "task-review.md"), string(builtinPromptTemplate(t, "task-review")))
+			},
+		},
+		{
+			name: "replacement bytes",
+			setup: func(t *testing.T, repo, proposal string) {
+				first := []byte("first replacement\n")
+				writeFile(t, filepath.Join(repo, ".taskrail", "prompts", "v1", "task-review.md"), string(first))
+				proposalFile := filepath.Join(repo, filepath.FromSlash(proposal), "review.json")
+				data, err := os.ReadFile(proposalFile)
+				if err != nil {
+					t.Fatal(err)
+				}
+				data = []byte(strings.Replace(string(data), `"prompt_source":"builtin"`, `"prompt_source":"replacement"`, 1))
+				writeFile(t, proposalFile, strings.Replace(string(data), builtinPromptDigest(t, "task-review"), promptDigest(first), 1))
+			},
+			race: func(t *testing.T, repo string) {
+				writeFile(t, filepath.Join(repo, ".taskrail", "prompts", "v1", "task-review.md"), "second replacement\n")
+			},
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			repo, svc, input := reviewPublishFixture(t)
+			if test.setup != nil {
+				test.setup(t, repo, input.Proposal)
+			}
+			testHookAfterReviewParent = func() { test.race(t, repo) }
+			t.Cleanup(func() { testHookAfterReviewParent = nil })
+			_, err := svc.ReviewPublish(input)
+			if err == nil || MachineFailureFor(err).Code != MachineCodeSourceChanged {
+				t.Fatalf("ReviewPublish error = %v, code = %q", err, MachineFailureFor(err).Code)
+			}
+			assertTaskReviewDestinationAbsent(t, repo)
+		})
+	}
+}
+
+func TestResolveReviewPromptBindingRejectsUnregisteredRole(t *testing.T) {
+	_, svc, _ := reviewPublishFixture(t)
+	_, err := svc.resolveReviewPromptBinding(ReviewPromptBinding{
+		PromptID:              "task-implementation",
+		PromptContractVersion: "v1",
+		PromptTemplateSHA256:  builtinPromptDigest(t, "task-implementation"),
+		PromptSource:          "builtin",
+	})
+	if err == nil || MachineFailureFor(err).Code != MachineCodeInvalidProposal {
+		t.Fatalf("resolveReviewPromptBinding error = %v, code = %q", err, MachineFailureFor(err).Code)
+	}
+}
+
 func TestReviewPublishTaskRefusesExistingDestinationWithoutClobbering(t *testing.T) {
 	repo, svc, input := reviewPublishFixture(t)
 	destination := filepath.Join(repo, "planning", "reviews", "task", "T-215-review", "session-1")
@@ -310,7 +432,7 @@ func reviewPublishFixture(t *testing.T) (string, *Service, ReviewPublishInput) {
 		t.Fatal(err)
 	}
 	proposal := "planning/artifacts/review-proposals/task/session-1"
-	review := `{"schema_version":1,"prompt_id":"task-review","prompt_contract_version":"v1","prompt_template_sha256":"` + reviewDigestB + `","prompt_source":"builtin","session_id":"session-1","task_id":"T-215-review","task_path":"` + taskPath + `","task_sha256":"` + digestRaw(taskBytes) + `","spec_path":"` + specPath + `","spec_sha256":"` + digestRaw(specBytes) + `","context_mode":"fresh","generated_at":"2026-08-12T10:00:00Z","findings":[]}`
+	review := `{"schema_version":1,"prompt_id":"task-review","prompt_contract_version":"v1","prompt_template_sha256":"` + builtinPromptDigest(t, "task-review") + `","prompt_source":"builtin","session_id":"session-1","task_id":"T-215-review","task_path":"` + taskPath + `","task_sha256":"` + digestRaw(taskBytes) + `","spec_path":"` + specPath + `","spec_sha256":"` + digestRaw(specBytes) + `","context_mode":"fresh","generated_at":"2026-08-12T10:00:00Z","findings":[]}`
 	writeFile(t, filepath.Join(repo, filepath.FromSlash(proposal), "review.json"), review)
 	svc, err := NewService(repo)
 	if err != nil {
@@ -331,6 +453,9 @@ func specReviewPublishFixture(t *testing.T) (string, *Service, ReviewPublishInpu
 		t.Fatal(err)
 	}
 	files := specReviewGolden()
+	for _, lens := range specReviewLensOrder {
+		files[lens+".json"] = replacePromptBindingDigest(t, files[lens+".json"], "spec-"+lens)
+	}
 	for name, content := range files {
 		content = []byte(strings.ReplaceAll(string(content), reviewDigestA, digestRaw(specBytes)))
 		content = []byte(strings.ReplaceAll(string(content), "specs/v0.5.0.md", specPath))
@@ -357,6 +482,8 @@ func decompositionReviewPublishFixture(t *testing.T) (string, *Service, ReviewPu
 	writeFile(t, filepath.Join(repo, ".taskrail", "config.yml"), "layout_version: 1\nspecs_dir: specs\nplanning_dir: planning\n")
 	writeFile(t, filepath.Join(repo, ".gitignore"), "planning/artifacts/\n")
 	files, subjects := decompositionGolden()
+	files["review-1.json"] = replacePromptBindingDigest(t, files["review-1.json"], "task-decomposition-adversarial")
+	replaceManifestDigest(files, "sha256", digestRaw(files["review-1.json"]), 1)
 	writeFile(t, filepath.Join(repo, "specs", "v0.5.0.md"), string(subjects.Spec))
 	writeFile(t, filepath.Join(repo, filepath.FromSlash(subjects.SpecReviewManifestPath)), string(subjects.SpecReviewManifest))
 	proposal := "planning/artifacts/review-proposals/decomposition/decomposition-1"
@@ -377,4 +504,42 @@ func decompositionReviewPublishFixture(t *testing.T) (string, *Service, ReviewPu
 		ExpectSpecReviewSHA256: digestRaw(subjects.SpecReviewManifest),
 	}
 	return repo, svc, input, files
+}
+
+func builtinPromptDigest(t *testing.T, id string) string {
+	t.Helper()
+	definition, err := promptDefinitionFor(id, "v1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := builtinPrompts.ReadFile(definition.asset)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return promptDigest(data)
+}
+
+func replacePromptBindingDigest(t *testing.T, data []byte, id string) []byte {
+	t.Helper()
+	return []byte(strings.Replace(string(data), reviewDigestB, builtinPromptDigest(t, id), 1))
+}
+
+func builtinPromptTemplate(t *testing.T, id string) []byte {
+	t.Helper()
+	definition, err := promptDefinitionFor(id, "v1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := builtinPrompts.ReadFile(definition.asset)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return data
+}
+
+func assertTaskReviewDestinationAbsent(t *testing.T, repo string) {
+	t.Helper()
+	if _, err := os.Stat(filepath.Join(repo, "planning", "reviews", "task", "T-215-review", "session-1")); !os.IsNotExist(err) {
+		t.Fatalf("prompt binding rejection created destination: %v", err)
+	}
 }

@@ -75,6 +75,7 @@ type taskReviewPublication struct {
 	taskSHA256   string
 	specSHA256   string
 	review       TaskReview
+	prompt       reviewPromptSnapshot
 }
 
 type specReviewPublication struct {
@@ -85,6 +86,14 @@ type specReviewPublication struct {
 	specPath    string
 	specSHA256  string
 	bundle      SpecReviewBundle
+	prompts     []reviewPromptSnapshot
+}
+
+// reviewPromptSnapshot retains publication-time prompt bytes without carrying a
+// replacement path into the durable review artifact.
+type reviewPromptSnapshot struct {
+	source   string
+	template []byte
 }
 
 type reviewParent struct {
@@ -99,6 +108,7 @@ type decompositionReviewPublication struct {
 	config, spec, specReview                        []byte
 	specSHA256, specReviewSHA256                    string
 	bundle                                          DecompositionBundle
+	prompts                                         []reviewPromptSnapshot
 }
 
 // ReviewPublish validates a proposal without writing in preview mode. Apply
@@ -360,6 +370,10 @@ func (s *Service) taskReviewPublication(input ReviewPublishInput) (taskReviewPub
 	if err != nil {
 		return out, WithMachineErrorCode(MachineCodeInvalidProposal, err)
 	}
+	prompt, err := s.resolveReviewPromptBinding(review.Binding)
+	if err != nil {
+		return out, err
+	}
 	destination := path.Clean(input.Destination)
 	if destination != input.Destination || destination != path.Join(s.paths.LogicalPlanningDir, "reviews", "task", input.TaskID, review.SessionID) {
 		return out, WithMachineErrorCode(MachineCodeInvalidProposal, fmt.Errorf("task review destination does not match task and session identity"))
@@ -427,7 +441,7 @@ func (s *Service) taskReviewPublication(input ReviewPublishInput) (taskReviewPub
 	if err != nil {
 		return out, reviewInputError("read Taskrail configuration", err)
 	}
-	out = taskReviewPublication{proposal: proposal, destination: destination, proposalFile: proposalFile, config: config, task: taskBytes, spec: specBytes, taskPath: task.Path, specPath: s.paths.logicalManagedPath(specFile), taskSHA256: digestRaw(taskBytes), specSHA256: digestRaw(specBytes), review: review}
+	out = taskReviewPublication{proposal: proposal, destination: destination, proposalFile: proposalFile, config: config, task: taskBytes, spec: specBytes, taskPath: task.Path, specPath: s.paths.logicalManagedPath(specFile), taskSHA256: digestRaw(taskBytes), specSHA256: digestRaw(specBytes), review: review, prompt: prompt}
 	if out.taskSHA256 != input.ExpectTaskSHA256 || out.specSHA256 != input.ExpectSpecSHA256 || review.TaskID != input.TaskID || review.TaskPath != task.Path || review.TaskSHA256 != out.taskSHA256 || review.SpecPath != out.specPath || review.SpecSHA256 != out.specSHA256 {
 		return taskReviewPublication{}, WithMachineErrorCode(MachineCodeSourceChanged, fmt.Errorf("task review bindings do not match current task and spec snapshots"))
 	}
@@ -464,6 +478,14 @@ func (s *Service) specReviewPublication(input ReviewPublishInput) (specReviewPub
 	if err != nil {
 		return out, WithMachineErrorCode(MachineCodeInvalidProposal, err)
 	}
+	bindings := make([]ReviewPromptBinding, len(bundle.Lenses))
+	for i, lens := range bundle.Lenses {
+		bindings[i] = lens.Binding
+	}
+	prompts, err := s.resolveReviewPromptBindings(bindings)
+	if err != nil {
+		return out, err
+	}
 	destination := path.Clean(input.Destination)
 	if destination != input.Destination || destination != path.Join(s.paths.LogicalPlanningDir, "reviews", "spec", version, bundle.Manifest.SessionID) {
 		return out, WithMachineErrorCode(MachineCodeInvalidProposal, fmt.Errorf("spec review destination does not match spec version and session identity"))
@@ -494,7 +516,7 @@ func (s *Service) specReviewPublication(input ReviewPublishInput) (specReviewPub
 	if err != nil {
 		return out, reviewInputError("read Taskrail configuration", err)
 	}
-	out = specReviewPublication{proposal: proposal, destination: destination, config: config, spec: spec, specPath: specPath, specSHA256: digestRaw(spec), bundle: bundle}
+	out = specReviewPublication{proposal: proposal, destination: destination, config: config, spec: spec, specPath: specPath, specSHA256: digestRaw(spec), bundle: bundle, prompts: prompts}
 	if out.specSHA256 != input.ExpectSpecSHA256 || bundle.Manifest.SpecPath != specPath || bundle.Manifest.SpecSHA256 != out.specSHA256 {
 		return specReviewPublication{}, WithMachineErrorCode(MachineCodeSourceChanged, fmt.Errorf("spec review bindings do not match current spec snapshot"))
 	}
@@ -677,6 +699,14 @@ func (s *Service) decompositionReviewPublication(input ReviewPublishInput) (deco
 	if err != nil {
 		return out, WithMachineErrorCode(MachineCodeInvalidProposal, err)
 	}
+	bindings := make([]ReviewPromptBinding, len(bundle.Reviews))
+	for i, review := range bundle.Reviews {
+		bindings[i] = review.Binding
+	}
+	prompts, err := s.resolveReviewPromptBindings(bindings)
+	if err != nil {
+		return out, err
+	}
 	destination := path.Clean(input.Destination)
 	if destination != input.Destination || destination != path.Join(s.paths.LogicalPlanningDir, "reviews", "decomposition", version, bundle.Manifest.SessionID) {
 		return out, WithMachineErrorCode(MachineCodeInvalidProposal, fmt.Errorf("decomposition review destination does not match spec version and session identity"))
@@ -701,7 +731,7 @@ func (s *Service) decompositionReviewPublication(input ReviewPublishInput) (deco
 	}
 	out = decompositionReviewPublication{
 		proposal: proposal, destination: destination, specPath: specPath, specReviewPath: input.SpecReview,
-		config: config, spec: spec, specReview: specReview, specSHA256: digestRaw(spec), specReviewSHA256: digestRaw(specReview), bundle: bundle,
+		config: config, spec: spec, specReview: specReview, specSHA256: digestRaw(spec), specReviewSHA256: digestRaw(specReview), bundle: bundle, prompts: prompts,
 	}
 	if out.specSHA256 != input.ExpectSpecSHA256 || out.specReviewSHA256 != input.ExpectSpecReviewSHA256 {
 		return decompositionReviewPublication{}, WithMachineErrorCode(MachineCodeSourceChanged, fmt.Errorf("decomposition review bindings do not match current spec and spec-review snapshots"))
@@ -758,7 +788,7 @@ func (p decompositionReviewPublication) result(applied bool) ReviewPublishResult
 }
 
 func sameDecompositionReviewPublication(a, b decompositionReviewPublication) bool {
-	if a.proposal != b.proposal || a.destination != b.destination || a.specPath != b.specPath || a.specReviewPath != b.specReviewPath || a.specSHA256 != b.specSHA256 || a.specReviewSHA256 != b.specReviewSHA256 || !bytes.Equal(a.config, b.config) || !bytes.Equal(a.spec, b.spec) || !bytes.Equal(a.specReview, b.specReview) || len(a.bundle.Raw) != len(b.bundle.Raw) {
+	if a.proposal != b.proposal || a.destination != b.destination || a.specPath != b.specPath || a.specReviewPath != b.specReviewPath || a.specSHA256 != b.specSHA256 || a.specReviewSHA256 != b.specReviewSHA256 || !bytes.Equal(a.config, b.config) || !bytes.Equal(a.spec, b.spec) || !bytes.Equal(a.specReview, b.specReview) || !sameReviewPromptSnapshots(a.prompts, b.prompts) || len(a.bundle.Raw) != len(b.bundle.Raw) {
 		return false
 	}
 	for name, raw := range a.bundle.Raw {
@@ -813,7 +843,7 @@ func (p taskReviewPublication) result(applied bool) ReviewPublishResult {
 }
 
 func sameTaskReviewPublication(a, b taskReviewPublication) bool {
-	return a.proposal == b.proposal && a.destination == b.destination && a.taskPath == b.taskPath && a.specPath == b.specPath && a.taskSHA256 == b.taskSHA256 && a.specSHA256 == b.specSHA256 && string(a.proposalFile) == string(b.proposalFile) && string(a.config) == string(b.config) && string(a.task) == string(b.task) && string(a.spec) == string(b.spec)
+	return a.proposal == b.proposal && a.destination == b.destination && a.taskPath == b.taskPath && a.specPath == b.specPath && a.taskSHA256 == b.taskSHA256 && a.specSHA256 == b.specSHA256 && bytes.Equal(a.proposalFile, b.proposalFile) && bytes.Equal(a.config, b.config) && bytes.Equal(a.task, b.task) && bytes.Equal(a.spec, b.spec) && sameReviewPromptSnapshots([]reviewPromptSnapshot{a.prompt}, []reviewPromptSnapshot{b.prompt})
 }
 
 func (p specReviewPublication) files() []reviewdir.File {
@@ -836,7 +866,7 @@ func (p specReviewPublication) result(applied bool) ReviewPublishResult {
 }
 
 func sameSpecReviewPublication(a, b specReviewPublication) bool {
-	if a.proposal != b.proposal || a.destination != b.destination || a.specPath != b.specPath || a.specSHA256 != b.specSHA256 || string(a.config) != string(b.config) || string(a.spec) != string(b.spec) {
+	if a.proposal != b.proposal || a.destination != b.destination || a.specPath != b.specPath || a.specSHA256 != b.specSHA256 || !bytes.Equal(a.config, b.config) || !bytes.Equal(a.spec, b.spec) || !sameReviewPromptSnapshots(a.prompts, b.prompts) {
 		return false
 	}
 	return sameReviewFiles(a.files(), b.files())
@@ -848,6 +878,58 @@ func sameReviewFiles(a, b []reviewdir.File) bool {
 	}
 	for i := range a {
 		if a[i].Name != b[i].Name || string(a[i].Content) != string(b[i].Content) {
+			return false
+		}
+	}
+	return true
+}
+
+func (s *Service) resolveReviewPromptBindings(bindings []ReviewPromptBinding) ([]reviewPromptSnapshot, error) {
+	result := make([]reviewPromptSnapshot, len(bindings))
+	for i, binding := range bindings {
+		prompt, err := s.resolveReviewPromptBinding(binding)
+		if err != nil {
+			return nil, err
+		}
+		result[i] = prompt
+	}
+	return result, nil
+}
+
+func (s *Service) resolveReviewPromptBinding(binding ReviewPromptBinding) (reviewPromptSnapshot, error) {
+	if !isReviewPromptID(binding.PromptID) || binding.PromptContractVersion == "" {
+		return reviewPromptSnapshot{}, WithMachineErrorCode(MachineCodeInvalidProposal, fmt.Errorf("review artifact has an unregistered prompt role"))
+	}
+	definition, err := promptDefinitionFor(binding.PromptID, binding.PromptContractVersion)
+	if err != nil {
+		return reviewPromptSnapshot{}, WithMachineErrorCode(MachineCodeInvalidProposal, err)
+	}
+	resolved, err := s.promptShowSnapshot(definition, false)
+	if err != nil {
+		return reviewPromptSnapshot{}, err
+	}
+	prompt := reviewPromptSnapshot{source: resolved.Source, template: []byte(resolved.Content)}
+	if binding.PromptSource != prompt.source || binding.PromptTemplateSHA256 != promptDigest(prompt.template) {
+		return reviewPromptSnapshot{}, WithMachineErrorCode(MachineCodeSourceChanged, fmt.Errorf("review prompt binding does not match current resolved template"))
+	}
+	return prompt, nil
+}
+
+func isReviewPromptID(id string) bool {
+	switch id {
+	case "task-review", "spec-consistency", "spec-gaps", "spec-additions", "spec-adversarial", "task-decomposition-adversarial", "workflow-adversarial":
+		return true
+	default:
+		return false
+	}
+}
+
+func sameReviewPromptSnapshots(a, b []reviewPromptSnapshot) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i].source != b[i].source || !bytes.Equal(a[i].template, b[i].template) {
 			return false
 		}
 	}
