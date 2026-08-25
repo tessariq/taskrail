@@ -143,6 +143,84 @@ func TestShippableSkillsConsumeStructuredResultsAsJSON(t *testing.T) {
 	}
 }
 
+// Full-task skills must carry the complete lifecycle guidance because they can
+// start, implement, review, and close a selected task without another workflow
+// prompt supplying the missing branches.
+func TestFullTaskSkillsFollowCanonicalLifecycle(t *testing.T) {
+	for _, name := range []string{"autonomous-backlog", "autonomous-task"} {
+		t.Run(name, func(t *testing.T) {
+			body := strings.Join(strings.Fields(readShippableSkill(t, name)), " ")
+			for _, want := range []string{
+				"Do not open logical managed paths directly.",
+				"one independently meaningful observable outcome",
+				"reviewed decomposition or clarification",
+				"Do not rewrite scope after lifecycle work begins.",
+				"failing test whenever practical",
+				"sandbox-first manual testing",
+				"one fresh reviewer by default",
+				"one to three reviewers, each with a named, non-duplicative lens",
+				"`fix-now`, `separate-followup`, `blocked`, or `rejected`",
+				"Repair all current-scope findings.",
+				"second broad round is allowed only",
+				"final-diff review",
+				"objective closure evidence permits completion",
+				"completed-unverified",
+				"completed-audit-fail",
+				"Never repeat completion or compensate with block.",
+				"committed mode",
+				"local mode",
+				"status --json",
+				"never force-add ignored Taskrail metadata",
+				"task release",
+				"selected-task `verify --create-followup`",
+				"never invoke `local promote`",
+				"remain caller-owned",
+			} {
+				if !strings.Contains(body, want) {
+					t.Errorf("%s skill must describe %q", name, want)
+				}
+			}
+
+			complete := strings.Index(body, "complete <task-id> --note \"...\" --json")
+			pass := strings.Index(body, "verify <task-id> --result pass --summary \"...\" --json")
+			if complete < 0 || pass < 0 || complete > pass {
+				t.Errorf("%s skill must complete before passing verification", name)
+			}
+			block := strings.Index(body, "block <task-id> --reason \"...\" --json")
+			fail := strings.Index(body, "verify <task-id> --result fail --summary \"...\" --json")
+			if block < 0 || fail < 0 || block > fail {
+				t.Errorf("%s skill must block before failing verification", name)
+			}
+
+			cannotProceedStart := strings.Index(body, "If work cannot proceed")
+			reworkStart := strings.Index(body, "For deliberate rework")
+			if cannotProceedStart < 0 || reworkStart < 0 || cannotProceedStart > reworkStart {
+				t.Errorf("%s skill must define distinct cannot-proceed and rework branches", name)
+			} else {
+				cannotProceed := body[cannotProceedStart:reworkStart]
+				cannotProceedBlock := strings.Index(cannotProceed, "block <task-id> --reason \"...\" --json")
+				cannotProceedFail := strings.Index(cannotProceed, "verify <task-id> --result fail --summary \"...\" --json")
+				if cannotProceedBlock < 0 || cannotProceedFail < 0 || cannotProceedBlock > cannotProceedFail {
+					t.Errorf("%s skill must block then fail verification in its cannot-proceed branch", name)
+				}
+				if strings.Contains(cannotProceed, "complete <task-id>") {
+					t.Errorf("%s skill must not complete in its cannot-proceed branch", name)
+				}
+				if !strings.Contains(cannotProceed, "check its exit") || !strings.Contains(cannotProceed, "and stop.") {
+					t.Errorf("%s skill must check and stop after its cannot-proceed branch", name)
+				}
+			}
+
+			if !strings.Contains(body, "Immediately before every state writer, apply the source-checkout guard") {
+				t.Errorf("%s skill must require a source-checkout guard immediately before every writer", name)
+			}
+			if strings.Contains(body, ".taskrail/local") {
+				t.Errorf("%s skill must not derive a local managed path", name)
+			}
+		})
+	}
+}
+
 // The loop skill is the interactive parent supervisor, not another coordinator.
 // Its instructions must bind every mutating launch to a reviewed dry-run and
 // leave selection, lifecycle, integration, delivery, and recovery writes to the

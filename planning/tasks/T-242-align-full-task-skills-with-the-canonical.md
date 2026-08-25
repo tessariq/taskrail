@@ -1,13 +1,18 @@
 ---
 id: T-242-align-full-task-skills-with-the-canonical
 title: Align full-task skills with the canonical lifecycle
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#lifecycle-complete-skill-flows
 dependencies:
     - T-160-ship-the-lifecycle-complete-task-implementation
     - T-201-make-packaged-skills-agent-skills-compliant
-updated_at: "2026-08-08T08:40:49Z"
+updated_at: "2026-08-25T21:04:56Z"
+completion_id: "bb8786dcf9aa1a0ec8fc1dcf3b39b259"
+last_verification_id: "ba28d66b9a94939fc42094aaca357d94"
+last_verification_result: pass
+last_verified_at: "2026-08-25T21:04:56Z"
+last_verified_completion_id: "bb8786dcf9aa1a0ec8fc1dcf3b39b259"
 ---
 
 # T-242-align-full-task-skills-with-the-canonical Align full-task skills with the canonical lifecycle
@@ -65,3 +70,6 @@ lifecycle transition.
   and no required selected-task scope escapes into a follow-up.
 
 ## Implementation Notes
+
+- 2026-08-25T21:04:41Z: Aligned full-task skills with the canonical lifecycle, review, recovery, and delivery contract.
+- 2026-08-25T21:04:56Z: verification pass id ba28d66b9a94939fc42094aaca357d94 previous none completion bb8786dcf9aa1a0ec8fc1dcf3b39b259
