@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -148,6 +149,157 @@ func TestInitLocalWithSkillsPublishesSkillsAndExclusions(t *testing.T) {
 	}
 	if output := gitOutput(t, repo, "status", "--porcelain"); output != "" {
 		t.Fatalf("git status = %q, want clean", output)
+	}
+}
+
+func TestInitLocalSkillsRefreshPreservesParityAndNormalizesLegacyMarker(t *testing.T) {
+	repo := t.TempDir()
+	initLocalGitRepo(t, repo)
+	requireRecoveryDirectoryDurability(t, repo)
+	svc := newTestService(t, repo, time.Date(2026, 8, 25, 12, 0, 0, 0, time.UTC))
+
+	installed, err := svc.Init(InitInput{Local: true, WithSkills: true, SkillVersion: "v9.9.8"})
+	if err != nil {
+		t.Fatalf("init local with skills: %v", err)
+	}
+	svc, err = NewService(repo)
+	if err != nil {
+		t.Fatalf("rediscover local service: %v", err)
+	}
+	parityPath := installed.Skills[0].Path
+	parityPackagePath := strings.TrimPrefix(parityPath, ".agents/skills/")
+	if strings.HasPrefix(parityPackagePath, ".claude/") {
+		parityPackagePath = strings.TrimPrefix(parityPath, ".claude/skills/")
+	}
+	parity, err := shippableSkillsFS.ReadFile(path.Join(shippableSkillsRoot, parityPackagePath))
+	if err != nil {
+		t.Fatalf("read parity package: %v", err)
+	}
+	writeFile(t, filepath.Join(repo, filepath.FromSlash(parityPath)), string(parity))
+
+	legacyPath := installed.Skills[1].Path
+	legacy, err := os.ReadFile(filepath.Join(repo, filepath.FromSlash(legacyPath)))
+	if err != nil {
+		t.Fatalf("read installed skill: %v", err)
+	}
+	legacy = []byte(strings.Replace(string(legacy), "metadata:\n    taskrail_version: v9.9.8", "taskrail_version: v9.9.8", 1))
+	writeFile(t, filepath.Join(repo, filepath.FromSlash(legacyPath)), string(legacy))
+
+	refreshed, err := svc.Init(InitInput{WithSkills: true, ForceSkills: true, SkillVersion: "v9.9.9"})
+	if err != nil {
+		t.Fatalf("refresh local skills: %v", err)
+	}
+	for _, skill := range refreshed.Skills {
+		switch skill.Path {
+		case parityPath:
+			if skill.Action != writeActionPreserve {
+				t.Fatalf("parity skill = %+v, want preserve", skill)
+			}
+		case legacyPath:
+			if skill.Action != writeActionRefresh {
+				t.Fatalf("legacy skill = %+v, want refresh", skill)
+			}
+		}
+	}
+	gotParity, err := os.ReadFile(filepath.Join(repo, filepath.FromSlash(parityPath)))
+	if err != nil {
+		t.Fatalf("read preserved parity skill: %v", err)
+	}
+	if string(gotParity) != string(parity) {
+		t.Fatal("refresh stamped or changed a marker-free parity mirror")
+	}
+	gotLegacy, err := os.ReadFile(filepath.Join(repo, filepath.FromSlash(legacyPath)))
+	if err != nil {
+		t.Fatalf("read refreshed legacy skill: %v", err)
+	}
+	if strings.Contains(string(gotLegacy), "\ntaskrail_version:") || !strings.Contains(string(gotLegacy), "metadata:\n    taskrail_version: v9.9.9") {
+		t.Fatalf("refresh did not normalize legacy marker:\n%s", gotLegacy)
+	}
+	for _, exclusion := range refreshed.SkillExclusions {
+		if exclusion.Action != writeActionPreserve {
+			t.Fatalf("refresh changed managed exclusion %+v", exclusion)
+		}
+	}
+	if output := gitOutput(t, repo, "status", "--porcelain"); output != "" {
+		t.Fatalf("refresh exposed local skills to Git: %q", output)
+	}
+}
+
+func TestInitLocalSkillsRefreshRefusesDivergentDestination(t *testing.T) {
+	repo := t.TempDir()
+	initLocalGitRepo(t, repo)
+	requireRecoveryDirectoryDurability(t, repo)
+	svc := newTestService(t, repo, time.Date(2026, 8, 25, 12, 0, 0, 0, time.UTC))
+	installed, err := svc.Init(InitInput{Local: true, WithSkills: true, SkillVersion: "v9.9.8"})
+	if err != nil {
+		t.Fatalf("init local with skills: %v", err)
+	}
+	svc, err = NewService(repo)
+	if err != nil {
+		t.Fatalf("rediscover local service: %v", err)
+	}
+	diverged := filepath.Join(repo, filepath.FromSlash(installed.Skills[0].Path))
+	writeFile(t, diverged, "---\nname: altered\ndescription: adopter owned\n---\n")
+	before := snapshotTree(t, repo)
+
+	if _, err := svc.Init(InitInput{WithSkills: true, ForceSkills: true, SkillVersion: "v9.9.9"}); err == nil {
+		t.Fatal("refresh accepted divergent local skill bytes")
+	}
+	if after := snapshotTree(t, repo); !reflect.DeepEqual(after, before) {
+		t.Fatal("refused refresh changed local skill or exclusion bytes")
+	}
+}
+
+func TestInitLocalSkillsRefreshRequiresForce(t *testing.T) {
+	repo := t.TempDir()
+	initLocalGitRepo(t, repo)
+	requireRecoveryDirectoryDurability(t, repo)
+	setup := newTestService(t, repo, time.Date(2026, 8, 25, 12, 0, 0, 0, time.UTC))
+	installed, err := setup.Init(InitInput{Local: true, WithSkills: true, SkillVersion: "v9.9.8"})
+	if err != nil {
+		t.Fatalf("init local with skills: %v", err)
+	}
+	svc, err := NewService(repo)
+	if err != nil {
+		t.Fatalf("rediscover local service: %v", err)
+	}
+	changed := filepath.Join(repo, filepath.FromSlash(installed.Skills[0].Path))
+	data, err := os.ReadFile(changed)
+	if err != nil {
+		t.Fatalf("read installed skill: %v", err)
+	}
+	writeFile(t, changed, strings.Replace(string(data), "v9.9.8", "v0.0.1", 1))
+	before := snapshotTree(t, repo)
+
+	if _, err := svc.Init(InitInput{WithSkills: true, SkillVersion: "v9.9.9"}); err == nil {
+		t.Fatal("local skill refresh without --force succeeded")
+	}
+	if after := snapshotTree(t, repo); !reflect.DeepEqual(after, before) {
+		t.Fatal("local skill refresh without --force changed bytes")
+	}
+}
+
+func TestInitLocalSkillsRefreshPreservesCurrentBytes(t *testing.T) {
+	repo := t.TempDir()
+	initLocalGitRepo(t, repo)
+	requireRecoveryDirectoryDurability(t, repo)
+	setup := newTestService(t, repo, time.Date(2026, 8, 25, 12, 0, 0, 0, time.UTC))
+	if _, err := setup.Init(InitInput{Local: true, WithSkills: true, SkillVersion: "v9.9.9"}); err != nil {
+		t.Fatalf("init local with skills: %v", err)
+	}
+	svc, err := NewService(repo)
+	if err != nil {
+		t.Fatalf("rediscover local service: %v", err)
+	}
+
+	refreshed, err := svc.Init(InitInput{WithSkills: true, ForceSkills: true, SkillVersion: "v9.9.9"})
+	if err != nil {
+		t.Fatalf("refresh current local skills: %v", err)
+	}
+	for _, skill := range refreshed.Skills {
+		if skill.Action != writeActionPreserve {
+			t.Fatalf("current skill = %+v, want preserve", skill)
+		}
 	}
 }
 

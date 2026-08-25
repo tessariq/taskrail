@@ -289,10 +289,12 @@ func TestInitCommittedSkillInventory(t *testing.T) {
 func TestInitLocalSkillInventoryReportsExclusions(t *testing.T) {
 	t.Parallel()
 
-	repo := initGitRepo(t)
-	svc := newLocalTestService(t, repo, time.Date(2026, 3, 31, 12, 0, 0, 0, time.UTC))
+	repo := t.TempDir()
+	initLocalGitRepo(t, repo)
+	requireRecoveryDirectoryDurability(t, repo)
+	svc := newTestService(t, repo, time.Date(2026, 3, 31, 12, 0, 0, 0, time.UTC))
 
-	result, err := svc.Init(InitInput{WithSkills: true, SkillVersion: "v9.9.9"})
+	result, err := svc.Init(InitInput{Local: true, WithSkills: true, SkillVersion: "v9.9.9"})
 	if err != nil {
 		t.Fatalf("init --with-skills: %v", err)
 	}

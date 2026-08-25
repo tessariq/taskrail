@@ -1,13 +1,18 @@
 ---
 id: T-302-refresh-local-packaged-skills-safely
 title: Refresh local packaged skills safely
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#local-planning-mode
 dependencies:
     - T-247-install-packaged-skills-safely-in-local-mode
     - T-301-install-fresh-local-packaged-skills
-updated_at: "2026-08-08T14:23:09Z"
+updated_at: "2026-08-25T21:20:57Z"
+completion_id: "3d03c2e67935f26e929ad2549e09a85f"
+last_verification_id: "06a4795d89ca50b3d3b0304f50e42a61"
+last_verification_result: pass
+last_verified_at: "2026-08-25T21:20:57Z"
+last_verified_completion_id: "3d03c2e67935f26e929ad2549e09a85f"
 ---
 
 # T-302-refresh-local-packaged-skills-safely Refresh local packaged skills safely
@@ -40,3 +45,6 @@ Refresh an existing local packaged-skill installation only through explicit
   clean Git visibility, deterministic results, and unchanged promotion ownership.
 
 ## Implementation Notes
+
+- 2026-08-25T21:18:38Z: Added transactional forced local skill refresh with ownership and drift checks.
+- 2026-08-25T21:20:57Z: verification pass id 06a4795d89ca50b3d3b0304f50e42a61 previous none completion 3d03c2e67935f26e929ad2549e09a85f

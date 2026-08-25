@@ -351,6 +351,9 @@ func (s *Service) validateInitRecovery(transactionID string, snapshots []durable
 		}
 		return nil
 	}
+	if hasLocalSkillRefreshMembers(snapshots) {
+		return s.validateRecoveredLocalSkillRefresh(snapshots)
+	}
 	var found bool
 	for _, snapshot := range snapshots {
 		if snapshot.Kind != durabletx.Managed || snapshot.Reported != markerReported {
@@ -376,6 +379,40 @@ func (s *Service) validateInitRecovery(transactionID string, snapshots []durable
 		return fmt.Errorf("retained migration marker still carries a fence")
 	}
 	return nil
+}
+
+func hasLocalSkillRefreshMembers(snapshots []durabletx.Evidence) bool {
+	foundSkill := false
+	for _, snapshot := range snapshots {
+		switch snapshot.Kind {
+		case durabletx.Git:
+			continue
+		case durabletx.Worktree:
+			if !isSkillDestination(snapshot.Reported) {
+				return false
+			}
+			foundSkill = true
+		default:
+			return false
+		}
+	}
+	return foundSkill
+}
+
+func (s *Service) validateRecoveredLocalSkillRefresh(snapshots []durabletx.Evidence) error {
+	for _, snapshot := range snapshots {
+		if snapshot.Kind == durabletx.Worktree && !isSkillDestination(snapshot.Reported) {
+			return fmt.Errorf("local skill refresh transaction publishes non-skill path %s", snapshot.Reported)
+		}
+	}
+	plan, err := s.planLocalSkills()
+	if err != nil {
+		return err
+	}
+	if err := validateLocalSkillRefreshPlan(plan); err != nil {
+		return err
+	}
+	return s.verifyLocalIgnored()
 }
 
 func (s *Service) validateRecoveredLocalSkills(snapshots []durabletx.Evidence) error {

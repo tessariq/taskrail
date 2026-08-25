@@ -28,6 +28,12 @@ func (s *Service) Init(in InitInput) (InitResult, error) {
 	if in.Local {
 		return s.initLocal(in)
 	}
+	if s.paths.Storage.Mode == StorageLocal && in.WithSkills {
+		if !in.ForceSkills {
+			return InitResult{}, invalidArgumentsf("initialized local storage refreshes packaged skills only with init --with-skills --force")
+		}
+		return s.refreshLocalSkills(in)
+	}
 	previewSnapshot, err := s.snapshotInitPreview("")
 	if err != nil {
 		return InitResult{}, err
