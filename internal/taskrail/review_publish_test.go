@@ -178,6 +178,116 @@ func TestReviewPublishSpecRequiresAcceptedReferencesInSelectedSpec(t *testing.T)
 	}
 }
 
+func TestReviewPublishSpecPromptBindingPrecedence(t *testing.T) {
+	for _, test := range []struct {
+		name  string
+		setup func(t *testing.T, repo, proposal string)
+		code  string
+	}{
+		{
+			name: "malformed lens binding before invalid replacement",
+			setup: func(t *testing.T, repo, proposal string) {
+				lensPath := filepath.Join(repo, filepath.FromSlash(proposal), "gaps.json")
+				data, err := os.ReadFile(lensPath)
+				if err != nil {
+					t.Fatal(err)
+				}
+				data = []byte(strings.Replace(string(data), `"prompt_id":"spec-gaps"`, `"prompt_id":"spec-consistency"`, 1))
+				writeFile(t, lensPath, string(data))
+				manifestPath := filepath.Join(repo, filepath.FromSlash(proposal), "manifest.json")
+				manifest, err := os.ReadFile(manifestPath)
+				if err != nil {
+					t.Fatal(err)
+				}
+				files := map[string][]byte{"gaps.json": data, "manifest.json": manifest}
+				refreshManifestDigest(files, "gaps.json")
+				writeFile(t, manifestPath, string(files["manifest.json"]))
+				writeFile(t, filepath.Join(repo, ".taskrail", "prompts", "v1", "spec-gaps.md"), "")
+			},
+			code: MachineCodeInvalidProposal,
+		},
+		{
+			name: "invalid replacement",
+			setup: func(t *testing.T, repo, _ string) {
+				writeFile(t, filepath.Join(repo, ".taskrail", "prompts", "v1", "spec-adversarial.md"), "")
+			},
+			code: MachineCodePromptInvalid,
+		},
+		{
+			name: "equal byte replacement changes source",
+			setup: func(t *testing.T, repo, _ string) {
+				writeFile(t, filepath.Join(repo, ".taskrail", "prompts", "v1", "spec-consistency.md"), string(builtinPromptTemplate(t, "spec-consistency")))
+			},
+			code: MachineCodeSourceChanged,
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			repo, svc, input, _ := specReviewPublishFixture(t)
+			test.setup(t, repo, input.Proposal)
+			_, err := svc.ReviewPublish(input)
+			if err == nil || MachineFailureFor(err).Code != test.code {
+				t.Fatalf("ReviewPublish error = %v, code = %q, want %q", err, MachineFailureFor(err).Code, test.code)
+			}
+			assertSpecReviewDestinationAbsent(t, repo)
+		})
+	}
+}
+
+func TestReviewPublishSpecRechecksEveryPromptSnapshotBeforeCommit(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows reports directory durability as unsupported")
+	}
+	for _, lens := range specReviewLensOrder {
+		t.Run(lens, func(t *testing.T) {
+			repo, svc, input, _ := specReviewPublishFixture(t)
+			testHookAfterReviewParent = func() {
+				writeFile(t, filepath.Join(repo, ".taskrail", "prompts", "v1", "spec-"+lens+".md"), string(builtinPromptTemplate(t, "spec-"+lens)))
+			}
+			t.Cleanup(func() { testHookAfterReviewParent = nil })
+			_, err := svc.ReviewPublish(input)
+			if err == nil || MachineFailureFor(err).Code != MachineCodeSourceChanged {
+				t.Fatalf("ReviewPublish error = %v, code = %q", err, MachineFailureFor(err).Code)
+			}
+			assertSpecReviewDestinationAbsent(t, repo)
+		})
+	}
+}
+
+func TestReviewPublishSpecPreservesMixedPromptBindingsInLensFiles(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows reports directory durability as unsupported")
+	}
+	repo, svc, input, files := specReviewPublishFixture(t)
+	for _, lens := range []string{"gaps", "adversarial"} {
+		promptID := "spec-" + lens
+		replacement := []byte("replacement " + lens + "\n")
+		writeFile(t, filepath.Join(repo, ".taskrail", "prompts", "v1", promptID+".md"), string(replacement))
+		name := lens + ".json"
+		files[name] = []byte(strings.ReplaceAll(string(files[name]), `"prompt_source":"builtin"`, `"prompt_source":"replacement"`))
+		files[name] = []byte(strings.ReplaceAll(string(files[name]), builtinPromptDigest(t, promptID), promptDigest(replacement)))
+		refreshManifestDigest(files, name)
+		writeFile(t, filepath.Join(repo, filepath.FromSlash(input.Proposal), name), string(files[name]))
+	}
+	writeFile(t, filepath.Join(repo, filepath.FromSlash(input.Proposal), "manifest.json"), string(files["manifest.json"]))
+
+	if _, err := svc.ReviewPublish(input); err != nil {
+		t.Fatalf("ReviewPublish: %v", err)
+	}
+	for _, name := range []string{"consistency.json", "gaps.json", "additions.json", "adversarial.json"} {
+		published, err := os.ReadFile(filepath.Join(repo, "planning", "reviews", "spec", "v0.1.0", "session-1", name))
+		if err != nil || string(published) != string(files[name]) {
+			t.Fatalf("published %s = %q, err=%v", name, published, err)
+		}
+	}
+	manifest, err := os.ReadFile(filepath.Join(repo, "planning", "reviews", "spec", "v0.1.0", "session-1", "manifest.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(manifest), "prompt_") {
+		t.Fatalf("manifest duplicated prompt binding: %s", manifest)
+	}
+}
+
 func TestReviewPublishSpecCleansNewParentsAfterLateSnapshotConflict(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("Windows reports directory durability as unsupported")
@@ -614,6 +724,13 @@ func builtinPromptTemplate(t *testing.T, id string) []byte {
 func assertTaskReviewDestinationAbsent(t *testing.T, repo string) {
 	t.Helper()
 	if _, err := os.Stat(filepath.Join(repo, "planning", "reviews", "task", "T-215-review", "session-1")); !os.IsNotExist(err) {
+		t.Fatalf("prompt binding rejection created destination: %v", err)
+	}
+}
+
+func assertSpecReviewDestinationAbsent(t *testing.T, repo string) {
+	t.Helper()
+	if _, err := os.Stat(filepath.Join(repo, "planning", "reviews", "spec", "v0.1.0", "session-1")); !os.IsNotExist(err) {
 		t.Fatalf("prompt binding rejection created destination: %v", err)
 	}
 }
