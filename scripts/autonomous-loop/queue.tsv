@@ -57,35 +57,35 @@ T-250-render-prompts-from-storage-neutral-context	run	-
 T-295-resolve-managed-prompt-subjects-through-active	run	-
 T-296-authorize-transient-prompt-context-paths-safely	run	-
 T-297-ship-complete-storage-neutral-prompt-rendering	run	-
-T-255-bind-review-artifacts-to-resolved-prompt-templates	hold-operator	Temporarily deferred to prioritize the T-337 prerequisite chain
-T-298-bind-task-review-publication-to-resolved-prompts	hold-operator	Temporarily deferred to prioritize the T-337 prerequisite chain
-T-299-bind-spec-review-publication-to-resolved-prompts	hold-operator	Temporarily deferred to prioritize the T-337 prerequisite chain
-T-300-bind-decomposition-publication-to-resolved-prompts	hold-operator	Temporarily deferred to prioritize the T-337 prerequisite chain
+T-255-bind-review-artifacts-to-resolved-prompt-templates	run	-
+T-298-bind-task-review-publication-to-resolved-prompts	run	-
+T-299-bind-spec-review-publication-to-resolved-prompts	run	-
+T-300-bind-decomposition-publication-to-resolved-prompts	run	-
 T-241-warn-on-passing-verification-before-completion	run	-
 T-217-release-interrupted-active-work-safely	run	-
 T-237-report-task-local-loop-policy-deterministically	run	-
 T-169-select-autonomous-work-through-policy-barriers	run	-
-T-238-mutate-task-local-loop-policy-safely	hold-operator	Temporarily deferred to prioritize the T-337 prerequisite chain
+T-238-mutate-task-local-loop-policy-safely	run	-
 T-239-edit-exact-id-dependencies-safely	run	-
-T-247-install-packaged-skills-safely-in-local-mode	hold-operator	Temporarily deferred to prioritize the T-337 prerequisite chain
-T-301-install-fresh-local-packaged-skills	hold-operator	Temporarily deferred to prioritize the T-337 prerequisite chain
-T-302-refresh-local-packaged-skills-safely	hold-operator	Temporarily deferred to prioritize the T-337 prerequisite chain
+T-247-install-packaged-skills-safely-in-local-mode	run	-
+T-301-install-fresh-local-packaged-skills	run	-
+T-302-refresh-local-packaged-skills-safely	run	-
 T-251-ship-the-outcome-focused-task-authoring-prompt	run	-
-T-161-apply-reviewed-task-bodies-with-compare-and-swap	hold-operator	Temporarily deferred to prioritize the T-337 prerequisite chain
+T-161-apply-reviewed-task-bodies-with-compare-and-swap	run	-
 T-303-align-native-task-producers-with-the-body-contract	run	-
 T-160-ship-the-lifecycle-complete-task-implementation	run	-
-T-242-align-full-task-skills-with-the-canonical	hold-operator	Temporarily deferred to prioritize the T-337 prerequisite chain
-T-165-maintain-bounded-workflow-adversarial-review	hold-operator	Temporarily deferred to prioritize the T-337 prerequisite chain
-T-166-publish-workflow-review-index-and-reports-with-cas	hold-operator	Temporarily deferred to prioritize the T-337 prerequisite chain
-T-305-publish-workflow-review-reports-and-memory	hold-operator	Temporarily deferred to prioritize the T-337 prerequisite chain
-T-306-ship-the-sandboxed-workflow-adversarial-review	hold-operator	Temporarily deferred to prioritize the T-337 prerequisite chain
-T-162-productize-digest-bound-post-spec-review-lenses	hold-operator	Temporarily deferred to prioritize the T-337 prerequisite chain
-T-252-validate-reviewed-decomposition-bundles	hold-operator	Temporarily deferred to prioritize the T-337 prerequisite chain
-T-304-align-imported-and-decomposed-task-bodies	hold-operator	Temporarily deferred to prioritize the T-337 prerequisite chain
-T-163-validate-and-apply-importdraft-v2-transactionally	hold-operator	Temporarily deferred to prioritize the T-337 prerequisite chain
-T-164-orchestrate-adversarial-spec-to-task-decomposition	hold-operator	Temporarily deferred to prioritize the T-337 prerequisite chain
-T-202-ship-the-lightweight-sdd-handoff-skill	hold-operator	Temporarily deferred to prioritize the T-337 prerequisite chain
-T-216-ship-digest-bound-existing-task-review	hold-operator	Temporarily deferred to prioritize the T-337 prerequisite chain
+T-242-align-full-task-skills-with-the-canonical	run	-
+T-165-maintain-bounded-workflow-adversarial-review	run	-
+T-166-publish-workflow-review-index-and-reports-with-cas	run	-
+T-305-publish-workflow-review-reports-and-memory	run	-
+T-306-ship-the-sandboxed-workflow-adversarial-review	run	-
+T-162-productize-digest-bound-post-spec-review-lenses	run	-
+T-252-validate-reviewed-decomposition-bundles	run	-
+T-304-align-imported-and-decomposed-task-bodies	run	-
+T-163-validate-and-apply-importdraft-v2-transactionally	run	-
+T-164-orchestrate-adversarial-spec-to-task-decomposition	run	-
+T-202-ship-the-lightweight-sdd-handoff-skill	run	-
+T-216-ship-digest-bound-existing-task-review	run	-
 T-170-add-deterministic-autonomous-loop-preflight-and	run	-
 T-308-publish-deterministic-loop-selection-and-dry-run	run	-
 T-171-contain-and-pin-autonomous-loop-child-processes	run	-
@@ -98,19 +98,19 @@ T-312-enforce-frozen-input-and-ledger-mutation-integrity	run	-
 T-313-validate-committed-and-local-loop-delivery-shapes	run	-
 T-314-integrate-loop-continuation-and-terminal	run	-
 T-244-publish-streamed-loop-results-out-of-band	run	-
-T-245-cover-the-complete-implicit-local-bootstrap-matrix	hold-operator	Temporarily deferred to prioritize the T-337 prerequisite chain
-T-291-prove-inherited-command-parity-in-local-storage	hold-operator	Temporarily deferred to prioritize the T-337 prerequisite chain
-T-254-make-every-packaged-skill-storage-neutral	hold-operator	Temporarily deferred to prioritize the T-337 prerequisite chain
-T-218-add-maintainer-skill-release-evaluations	hold-operator	Temporarily deferred to prioritize the T-337 prerequisite chain
-T-307-run-paired-maintainer-skill-evaluations	hold-operator	Temporarily deferred to prioritize the T-337 prerequisite chain
-T-249-allow-explicit-skill-evaluation-release-waivers	hold-operator	Temporarily deferred to prioritize the T-337 prerequisite chain
-T-225-prove-local-autonomous-delivery-across-git	hold-operator	Temporarily deferred to prioritize the T-337 prerequisite chain
+T-245-cover-the-complete-implicit-local-bootstrap-matrix	run	-
+T-291-prove-inherited-command-parity-in-local-storage	run	-
+T-254-make-every-packaged-skill-storage-neutral	run	-
+T-218-add-maintainer-skill-release-evaluations	run	-
+T-307-run-paired-maintainer-skill-evaluations	run	-
+T-249-allow-explicit-skill-evaluation-release-waivers	run	-
+T-225-prove-local-autonomous-delivery-across-git	run	-
 T-338-guide-temporary-loop-orchestration-and-delivery	hold-operator	Operator-owned temporary-loop orchestration and recovery guidance
 T-258-retire-the-temporary-source-checkout-autonomous	hold-self-removal	Remove this complete directory after product loop delivery is proven
-T-224-promote-local-taskrail-state-into-committed	hold-operator	Temporarily deferred to prioritize the T-337 prerequisite chain
-T-315-promote-local-packaged-skills-with-explicit	hold-operator	Temporarily deferred to prioritize the T-337 prerequisite chain
-T-246-classify-every-v0-5-writer-transaction-and	hold-operator	Temporarily deferred to prioritize the T-337 prerequisite chain
-T-167-add-active-spec-scoped-statistics	hold-operator	Temporarily deferred to prioritize the T-337 prerequisite chain
+T-224-promote-local-taskrail-state-into-committed	run	-
+T-315-promote-local-packaged-skills-with-explicit	run	-
+T-246-classify-every-v0-5-writer-transaction-and	run	-
+T-167-add-active-spec-scoped-statistics	run	-
 T-256-retire-bootstrap-planning-reviews	hold-operator	Requires deliberate bootstrap-evidence disposition
 T-316-harden-temporary-autonomous-loop-timeout-and	hold-operator	Operator-owned temporary loop timeout and recovery hardening
 T-317-bind-delegated-grants-to-the-owner-s-declared-task	hold-operator	Verification follow-up from T-156-protect-existing-semantic-writers-with-snapshot; operator review required
@@ -123,7 +123,7 @@ T-327-validate-temporary-loop-commit-metadata	hold-operator	Operator-owned tempo
 T-328-skip-recovery-apply-tests-when-directory	hold-operator	Operator-owned repair for the current native Windows CI failure
 T-329-gate-layout-migration-apply-tests-on-directory	hold-operator	Operator-owned repair for T-280 native Windows CI
 T-330-canonicalize-verification-write-set-test-paths-on	hold-operator	Operator-owned repair for T-281 native Windows CI
-T-331-snapshot-full-raw-task-bytes-in-the-transactional	hold-operator	Verification follow-up from T-282-protect-inherited-task-mutation-writers; operator review required
+T-331-snapshot-full-raw-task-bytes-in-the-transactional	run	-
 T-332-gate-task-mutation-permission-fault-tests-on	hold-operator	Operator-owned repair for T-282 native Windows CI
 T-333-preview-deterministic-parallel-clone-batches	run	-
 T-360-authenticate-delegated-lifecycle-writes-against-loop-grant	run	-
@@ -141,4 +141,4 @@ T-342-bind-verification-identities-across-temporary-loop	hold-operator	Operator-
 T-343-make-local-inspection-tests-portable	hold-operator	Operator-owned cross-platform CI repair for T-288
 T-344-align-temporary-loop-with-canonical-verification	hold-operator	Operator-owned canonical verification evidence repair
 T-358-prevent-read-only-git-probes-from-refreshing-index	hold-operator	Exact-head CI follow-up; restore deterministic read-only Git probes before the next loop invocation
-T-359-make-containment-cleanup-timing-race-aware	hold-operator	Verification follow-up from T-358; separate race-instrumented timing fixture
+T-359-make-containment-cleanup-timing-race-aware	run	-
