@@ -128,6 +128,9 @@ var (
 		"task_not_found", "invalid_status", "dependency_exists",
 		"dependency_absent", "dependency_cycle", "cancelled_dependency",
 	})
+	loopPolicyMutationErrors = mergeCodes(writerErrors, []string{
+		"task_not_found", "invalid_status", "invalid_reason", "policy_invalid",
+	})
 	reviewErrors = []string{
 		"invalid_arguments", "not_initialized", "incompatible_layout",
 		"migration_in_progress", "repository_invalid", "invalid_digest", "source_changed",
@@ -268,12 +271,12 @@ var machineInventory = []MachineCommandEntry{
 		warns(), errs(dependencyErrors)),
 	migrated("`task loop list`", "task loop list", []string{"TaskLoopListResult"}, "non-empty `violations`",
 		warns(), errs(readErrors)),
-	planned("`task loop allow`", "task loop allow", []string{"LoopPolicyMutationResult"}, "never",
-		warns(warnsBootstrap), errs(lifecycleErrors, "invalid_reason", "policy_invalid")),
-	planned("`task loop hold`", "task loop hold", []string{"LoopPolicyMutationResult"}, "never",
-		warns(warnsBootstrap), errs(lifecycleErrors, "invalid_reason", "policy_invalid")),
-	planned("`task loop clear`", "task loop clear", []string{"LoopPolicyMutationResult"}, "never",
-		warns(warnsBootstrap), errs(lifecycleErrors, "invalid_reason", "policy_invalid")),
+	migrated("`task loop allow`", "task loop allow", []string{"LoopPolicyMutationResult"}, "never",
+		warns(warnsBootstrap), errs(loopPolicyMutationErrors)),
+	migrated("`task loop hold`", "task loop hold", []string{"LoopPolicyMutationResult"}, "never",
+		warns(warnsBootstrap), errs(loopPolicyMutationErrors)),
+	migrated("`task loop clear`", "task loop clear", []string{"LoopPolicyMutationResult"}, "never",
+		warns(warnsBootstrap), errs(loopPolicyMutationErrors)),
 	migrated("`spec list`", "spec list", []string{"SpecListResult"}, "never",
 		warns(), errs(readErrors)),
 	migrated("`spec show`", "spec show", []string{"SpecShowResult"}, "never",

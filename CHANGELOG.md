@@ -16,6 +16,11 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ### Added
 
+- `taskrail task loop allow|hold <task-id> --reason <reason>` and
+  `taskrail task loop clear <task-id>` now atomically manage task-local
+  unattended policy for `todo` and `blocked` tasks. Dry runs return the same
+  prior and candidate policy report without writing; delegated loop children
+  are refused and clearing restores the deterministic implicit hold.
 - Added the provider-neutral `taskrail-loop` packaged skill for one confirmed,
   bounded loop invocation. It supervises structured dry-run, result-file,
   recovery, and caller-owned adapter evidence without gaining coordinator or

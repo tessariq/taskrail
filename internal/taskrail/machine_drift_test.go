@@ -77,11 +77,11 @@ func TestCheckMachineEntryPolicyRejectsPerturbedEntries(t *testing.T) {
 		{
 			name: "planned command claiming implemented coverage",
 			entry: func() MachineCommandEntry {
-				e := entry("task loop allow")
+				e := entry("task author")
 				e.JSONState = MachineJSONInherited
 				return e
 			}(),
-			wantErr: `command "task loop allow" publishes "inherited" but is not constructed`,
+			wantErr: `command "task author" publishes "inherited" but is not constructed`,
 		},
 		{
 			name: "ungated command claiming a report-result exit exception",
@@ -134,7 +134,7 @@ var migratedCommands = []string{
 	"block", "complete", "coverage", "import", "init", "lock clear", "lock status",
 	"local path", "local status", "next", "recover", "repair", "retrofit",
 	"prompt list", "prompt render", "prompt show", "review publish", "review show", "spec activate", "spec add", "spec diff", "spec list", "spec show", "start",
-	"stats", "status", "task new", "task rename", "task repoint", "task release", "task show", "task loop list", "unblock",
+	"stats", "status", "task new", "task rename", "task repoint", "task release", "task show", "task loop allow", "task loop hold", "task loop clear", "task loop list", "unblock",
 	"task dependency add", "task dependency remove", "validate", "verify",
 	"loop",
 }
@@ -202,11 +202,11 @@ func TestCheckMachineRegistrationsRejectsDrift(t *testing.T) {
 			wantErr: `publishes "version stdout" with no v0.5 machine inventory entry`,
 		},
 		{
-			name: "planned command masquerading as implemented",
+			name: "uninventoried planned command masquerading as implemented",
 			mutate: func(registrations []MachineRegistration) []MachineRegistration {
-				return append(registrations, MachineRegistration{Command: "task loop allow", Surface: MachineSurfaceStdout})
+				return append(registrations, MachineRegistration{Command: "task author", Surface: MachineSurfaceStdout})
 			},
-			wantErr: `"task loop allow stdout" publishes no machine document yet`,
+			wantErr: `"task author stdout" publishes no machine document yet`,
 		},
 	}
 	for _, tc := range cases {
@@ -415,12 +415,12 @@ func TestCheckMachinePublicationRejectsDrift(t *testing.T) {
 		{
 			name: "planned command publishing early",
 			publication: MachinePublication{
-				Command:  "task loop allow",
+				Command:  "task author",
 				Surface:  MachineSurfaceStdout,
-				Result:   "LoopPolicyMutationResult",
-				Document: machineDocumentBytes("task loop allow", "[]", `"result":{}`),
+				Result:   "TaskAuthorResult",
+				Document: machineDocumentBytes("task author", "[]", `"result":{}`),
 			},
-			wantErr: `"task loop allow stdout" publishes no machine document yet`,
+			wantErr: `"task author stdout" publishes no machine document yet`,
 		},
 	}
 	for _, tc := range cases {

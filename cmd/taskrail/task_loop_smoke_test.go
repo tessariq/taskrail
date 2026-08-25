@@ -41,6 +41,53 @@ func TestTaskLoopListPublishesRowsAndStaysReadOnly(t *testing.T) {
 	}
 }
 
+func TestTaskLoopMutationPublishesPreviewAndApply(t *testing.T) {
+	root := setupRepo(t)
+	writeTask(t, root, "T-001-target", "todo", "")
+	taskPath := filepath.Join(root, "planning", "tasks", "T-001-target.md")
+	before := readAllFiles(t, root)
+
+	stdout, err := runRoot(t, "task", "loop", "allow", "T-001-target", "--reason", "bounded change", "--dry-run", "--json")
+	if err != nil {
+		t.Fatalf("allow preview: %v (%s)", err, stdout)
+	}
+	var preview taskrail.LoopPolicyMutationResult
+	decodeMachineResult(t, stdout, &preview)
+	if preview.Applied || preview.Operation != taskrail.LoopPolicyAllow || preview.Prior.Source != "default" || preview.Candidate.EffectivePolicy != "allow" || preview.Candidate.PersistedReason == nil || *preview.Candidate.PersistedReason != "bounded change" || !preview.Validation.Valid {
+		t.Fatalf("allow preview = %+v", preview)
+	}
+	if after := readAllFiles(t, root); !reflect.DeepEqual(after, before) {
+		t.Fatal("allow preview changed repository files")
+	}
+
+	stdout, err = runRoot(t, "task", "loop", "allow", "T-001-target", "--reason", "bounded change", "--json")
+	if err != nil {
+		t.Fatalf("allow apply: %v (%s)", err, stdout)
+	}
+	var applied taskrail.LoopPolicyMutationResult
+	decodeMachineResult(t, stdout, &applied)
+	if !applied.Applied || !reflect.DeepEqual(applied.Prior, preview.Prior) || !reflect.DeepEqual(applied.Candidate, preview.Candidate) {
+		t.Fatalf("allow apply = %+v, preview = %+v", applied, preview)
+	}
+	data, err := os.ReadFile(taskPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "loop_policy: allow") || !strings.Contains(string(data), "loop_reason: \"bounded change\"") {
+		t.Fatalf("allow did not persist pair:\n%s", data)
+	}
+
+	stdout, err = runRoot(t, "task", "loop", "clear", "T-001-target", "--json")
+	if err != nil {
+		t.Fatalf("clear apply: %v (%s)", err, stdout)
+	}
+	var cleared taskrail.LoopPolicyMutationResult
+	decodeMachineResult(t, stdout, &cleared)
+	if !cleared.Applied || cleared.Candidate.Source != "default" || cleared.Candidate.PersistedPolicy != nil || cleared.Candidate.PersistedReason != nil {
+		t.Fatalf("clear result = %+v", cleared)
+	}
+}
+
 func TestLoopDryRunPublishesRunAndInvalidReportsWithoutMutation(t *testing.T) {
 	root := setupLoopDryRunRepo(t)
 	writeTask(t, root, "T-001-ready", "todo", "")

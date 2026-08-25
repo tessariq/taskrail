@@ -49,6 +49,10 @@ func dependencyTaskWriter(operation DependencyOperation) taskWriterCommand {
 	return taskWriterCommand{command: "task dependency " + string(operation), taskFields: []string{"dependencies"}}
 }
 
+func loopPolicyTaskWriter(operation LoopPolicyOperation) taskWriterCommand {
+	return taskWriterCommand{command: "task loop " + string(operation), taskFields: []string{"loop_policy", "loop_reason", "updated_at"}}
+}
+
 // beginTaskWriterWrite takes the repository mutation lock for one
 // non-delegable task-mutation writer. A delegated loop child is refused
 // before anything is read: `verify --create-followup` is the only task
@@ -121,6 +125,9 @@ type taskWriterLedger struct {
 	written   []*Task
 	corpus    []string
 	baseline  ValidationResult
+	// taskSHA256Before binds a selected-task candidate to the bytes it was
+	// derived from, so a later unmodeled-byte edit cannot be overwritten.
+	taskSHA256Before string
 	// strict refuses any invalid candidate. Rename and the dependency
 	// editors shipped refusing a preview that leaves the repository invalid;
 	// task new and repoint follow the lifecycle rule and refuse only
@@ -158,11 +165,12 @@ func (s *Service) commitTaskWriter(own repotx.Ownership, w taskWriterCommand, le
 	}
 
 	request := repotx.Request{
-		Command:      w.command,
-		SelectedTask: ledger.selected,
-		TaskFields:   w.taskFields,
-		Consumed:     consumed,
-		Published:    published,
+		Command:                w.command,
+		SelectedTask:           ledger.selected,
+		TaskFields:             w.taskFields,
+		Consumed:               consumed,
+		Published:              published,
+		ExpectedOriginalSHA256: expectedTaskWriterDigest(ledger),
 		Validate: func([]repotx.Snapshot) error {
 			if testHookWriterValidated != nil {
 				testHookWriterValidated()
@@ -190,6 +198,13 @@ func (s *Service) commitTaskWriter(own repotx.Ownership, w taskWriterCommand, le
 		return ValidationResult{}, writerTransactionError(err)
 	}
 	return validation, nil
+}
+
+func expectedTaskWriterDigest(ledger taskWriterLedger) map[string]string {
+	if len(ledger.written) != 1 || ledger.taskSHA256Before == "" {
+		return nil
+	}
+	return map[string]string{ledger.written[0].Path: ledger.taskSHA256Before}
 }
 
 // managedRemoval is one published absence of a managed semantic path, the

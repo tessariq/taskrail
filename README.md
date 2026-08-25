@@ -271,6 +271,13 @@ Use `taskrail task loop list [--json]` to inspect every task's effective loop
 policy, held dependency closure, and unattended eligibility without changing
 task files, `STATE.md`, or ordinary lifecycle selection.
 
+Direct operators can set one `todo` or `blocked` task's policy with
+`taskrail task loop allow|hold <task-id> --reason <reason> [--dry-run] [--json]`.
+Use `taskrail task loop clear <task-id> [--dry-run] [--json]` to remove both
+persisted fields and return the task to its deterministic implicit hold. These
+commands preserve all other task bytes, reproject `STATE.md` transactionally,
+and refuse delegated loop children.
+
 Use `taskrail loop --dry-run --json` to inspect the highest-ranked explicitly
 allowed task, its frozen implementation prompt, and delivery/review limits. Use
 `--parallel <n>` to preview one ranked, dependency-ready clone frontier without

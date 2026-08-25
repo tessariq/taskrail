@@ -24,6 +24,7 @@ const (
 	MachineCodeReviewNotFound      = "review_not_found"
 	MachineCodePromptNotFound      = "prompt_not_found"
 	MachineCodePromptInvalid       = "prompt_invalid"
+	MachineCodePolicyInvalid       = "policy_invalid"
 	MachineCodeInvalidStatus       = "invalid_status"
 	MachineCodeInvalidReason       = "invalid_reason"
 	MachineCodeInvalidDigest       = "invalid_digest"

@@ -14,7 +14,49 @@ func newTaskLoopCmd() *cobra.Command {
 		Short: "Inspect and manage task-local unattended loop policy",
 	}
 	cmd.AddCommand(newTaskLoopListCmd())
+	cmd.AddCommand(newTaskLoopMutationCmd(taskrail.LoopPolicyAllow))
+	cmd.AddCommand(newTaskLoopMutationCmd(taskrail.LoopPolicyHold))
+	cmd.AddCommand(newTaskLoopMutationCmd(taskrail.LoopPolicyClear))
 	return cmd
+}
+
+func newTaskLoopMutationCmd(operation taskrail.LoopPolicyOperation) *cobra.Command {
+	var (
+		reason string
+		dryRun bool
+	)
+	cmd := &cobra.Command{
+		Use:   string(operation) + " <task-id>",
+		Short: strings.ToUpper(string(operation[:1])) + string(operation[1:]) + " one task's unattended loop policy",
+		Args:  machineArgs(cobra.ExactArgs(1)),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runCommand(cmd, func(svc *taskrail.Service) (commandResult, error) {
+				result, err := svc.MutateTaskLoopPolicy(taskrail.LoopPolicyMutationInput{
+					TaskID: args[0], Operation: operation, Reason: reason, DryRun: dryRun,
+				})
+				if err != nil {
+					return commandResult{}, err
+				}
+				return commandResult{shape: "LoopPolicyMutationResult", value: result, text: loopPolicyMutationSummary(result)}, nil
+			})
+		},
+	}
+	if operation != taskrail.LoopPolicyClear {
+		cmd.Flags().StringVar(&reason, "reason", "", "trimmed operator reason for this policy decision")
+		_ = cmd.MarkFlagRequired("reason")
+	}
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "validate and report the candidate without writing")
+	addMachineJSONFlag(cmd)
+	return cmd
+}
+
+func loopPolicyMutationSummary(result taskrail.LoopPolicyMutationResult) string {
+	action := "dry run"
+	if result.Applied {
+		action = "applied"
+	}
+	return fmt.Sprintf("loop policy %s %s: %s -> %s\nvalidation: %s", result.Operation, action,
+		result.Prior.EffectivePolicy, result.Candidate.EffectivePolicy, validationLabel(&result.Validation))
 }
 
 func newTaskLoopListCmd() *cobra.Command {
