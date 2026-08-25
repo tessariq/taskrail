@@ -1,6 +1,6 @@
 ---
 schema_version: 1
-updated_at: "2026-08-25T18:09:47Z"
+updated_at: "2026-08-25T18:24:59Z"
 active_spec_version: v0.5.0
 active_spec_path: specs/v0.5.0.md
 current_task: ""
@@ -8,9 +8,9 @@ current_task_title: ""
 status_summary: idle
 blockers: []
 next_action: Select the next eligible task
-last_verification_result: pass for T-362-diagnose-macos-parallel-dry-run-byte-mutation at 2026-08-24T12:13:52Z id af2d010a6eb2b64f3267b8b66d007c77
-last_verification_id: af2d010a6eb2b64f3267b8b66d007c77
-last_verified_completion_id: 27d8f4d0329c838fdcdbb72a1437ef74
+last_verification_result: pass for T-363-align-prompt-snapshot-race-tests-with-windows at 2026-08-25T18:24:59Z id b94344ab25a83feaf17049cc738925e1
+last_verification_id: b94344ab25a83feaf17049cc738925e1
+last_verified_completion_id: 04152576ad541ee0e8aa95a83b091b11
 relevant_artifacts: []
 continuation_notes:
     - This repository is temporarily dogfooding bootstrap workflow tooling until Taskrail v0.1.0 exists.
@@ -36,7 +36,7 @@ continuation_notes:
 
 ## Last Verification
 
-- pass for T-362-diagnose-macos-parallel-dry-run-byte-mutation at 2026-08-24T12:13:52Z id af2d010a6eb2b64f3267b8b66d007c77
+- pass for T-363-align-prompt-snapshot-race-tests-with-windows at 2026-08-25T18:24:59Z id b94344ab25a83feaf17049cc738925e1
 
 ## Next Action
 
@@ -54,6 +54,6 @@ continuation_notes:
 
 - todo: 85
 - in_progress: 0
-- completed: 276
+- completed: 277
 - blocked: 0
 - cancelled: 0

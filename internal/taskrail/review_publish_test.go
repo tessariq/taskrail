@@ -315,6 +315,9 @@ func TestReviewPublishTaskPromptBindingPrecedence(t *testing.T) {
 }
 
 func TestReviewPublishTaskRechecksPromptSnapshotsBeforeCommit(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows reports directory durability as unsupported")
+	}
 	for _, test := range []struct {
 		name  string
 		setup func(t *testing.T, repo, proposal string)

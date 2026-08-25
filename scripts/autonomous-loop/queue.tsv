@@ -142,3 +142,4 @@ T-343-make-local-inspection-tests-portable	hold-operator	Operator-owned cross-pl
 T-344-align-temporary-loop-with-canonical-verification	hold-operator	Operator-owned canonical verification evidence repair
 T-358-prevent-read-only-git-probes-from-refreshing-index	hold-operator	Exact-head CI follow-up; restore deterministic read-only Git probes before the next loop invocation
 T-359-make-containment-cleanup-timing-race-aware	run	-
+T-363-align-prompt-snapshot-race-tests-with-windows	hold-operator	Exact-head CI repair for T-255 native Windows durability coverage
