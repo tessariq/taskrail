@@ -101,7 +101,10 @@ type reviewParent struct {
 	identity durablefs.Identity
 }
 
-var testHookAfterReviewParent func()
+var (
+	testHookAfterReviewParent      func()
+	testHookBeforeTaskReviewCommit func()
+)
 
 type decompositionReviewPublication struct {
 	proposal, destination, specPath, specReviewPath string
@@ -183,6 +186,9 @@ func (s *Service) reviewPublishTask(input ReviewPublishInput) (ReviewPublishResu
 			return nil
 		},
 		ValidateCommit: func() error {
+			if testHookBeforeTaskReviewCommit != nil {
+				testHookBeforeTaskReviewCommit()
+			}
 			current, err := s.taskReviewPublication(input)
 			if err != nil {
 				return err

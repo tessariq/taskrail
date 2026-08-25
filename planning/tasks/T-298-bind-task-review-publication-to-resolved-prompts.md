@@ -1,13 +1,18 @@
 ---
 id: T-298-bind-task-review-publication-to-resolved-prompts
 title: Bind task review publication to resolved prompts
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#safe-review-artifact-publication
 dependencies:
     - T-255-bind-review-artifacts-to-resolved-prompt-templates
     - T-215-add-the-generic-review-artifact-publisher
-updated_at: "2026-08-08T14:23:08Z"
+updated_at: "2026-08-25T19:05:34Z"
+completion_id: "8333eb649132d40996387de50493e716"
+last_verification_id: "34f98b9c0e9c8d55a02a20e9fc3f9c24"
+last_verification_result: pass
+last_verified_at: "2026-08-25T19:05:34Z"
+last_verified_completion_id: "8333eb649132d40996387de50493e716"
 ---
 
 # T-298-bind-task-review-publication-to-resolved-prompts Bind task review publication to resolved prompts
@@ -37,3 +42,6 @@ observation is bound to the current role-mandated task-review template.
   assertions reject delivery, independence, and certification claims.
 
 ## Implementation Notes
+
+- 2026-08-25T19:05:25Z: Added commit-stage task-review prompt binding coverage for exact fields and all bound snapshot inputs.
+- 2026-08-25T19:05:34Z: verification pass id 34f98b9c0e9c8d55a02a20e9fc3f9c24 previous none completion 8333eb649132d40996387de50493e716

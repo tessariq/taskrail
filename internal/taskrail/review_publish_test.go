@@ -268,6 +268,36 @@ func TestReviewPublishTaskRefusesChangedPromptTemplateWithoutPublication(t *test
 	}
 }
 
+func TestReviewPublishTaskRequiresExactPromptBindingFields(t *testing.T) {
+	for _, test := range []struct {
+		name     string
+		oldValue string
+		newValue string
+		code     string
+	}{
+		{"role", `"prompt_id":"task-review"`, `"prompt_id":"spec-gaps"`, MachineCodeInvalidProposal},
+		{"contract", `"prompt_contract_version":"v1"`, `"prompt_contract_version":"v2"`, MachineCodeInvalidProposal},
+		{"template digest", builtinPromptDigest(t, "task-review"), reviewDigestA, MachineCodeSourceChanged},
+		{"source", `"prompt_source":"builtin"`, `"prompt_source":"replacement"`, MachineCodeSourceChanged},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			repo, svc, input := reviewPublishFixture(t)
+			proposalFile := filepath.Join(repo, filepath.FromSlash(input.Proposal), "review.json")
+			data, err := os.ReadFile(proposalFile)
+			if err != nil {
+				t.Fatal(err)
+			}
+			writeFile(t, proposalFile, strings.Replace(string(data), test.oldValue, test.newValue, 1))
+
+			_, err = svc.ReviewPublish(input)
+			if err == nil || MachineFailureFor(err).Code != test.code {
+				t.Fatalf("ReviewPublish error = %v, code = %q, want %q", err, MachineFailureFor(err).Code, test.code)
+			}
+			assertTaskReviewDestinationAbsent(t, repo)
+		})
+	}
+}
+
 func TestReviewPublishTaskPromptBindingPrecedence(t *testing.T) {
 	for _, test := range []struct {
 		name  string
@@ -314,7 +344,7 @@ func TestReviewPublishTaskPromptBindingPrecedence(t *testing.T) {
 	}
 }
 
-func TestReviewPublishTaskRechecksPromptSnapshotsBeforeCommit(t *testing.T) {
+func TestReviewPublishTaskRechecksBoundSnapshotsBeforeCommit(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("Windows reports directory durability as unsupported")
 	}
@@ -322,12 +352,14 @@ func TestReviewPublishTaskRechecksPromptSnapshotsBeforeCommit(t *testing.T) {
 		name  string
 		setup func(t *testing.T, repo, proposal string)
 		race  func(t *testing.T, repo string)
+		code  string
 	}{
 		{
 			name: "source transition",
 			race: func(t *testing.T, repo string) {
 				writeFile(t, filepath.Join(repo, ".taskrail", "prompts", "v1", "task-review.md"), string(builtinPromptTemplate(t, "task-review")))
 			},
+			code: MachineCodeSourceChanged,
 		},
 		{
 			name: "replacement bytes",
@@ -345,6 +377,45 @@ func TestReviewPublishTaskRechecksPromptSnapshotsBeforeCommit(t *testing.T) {
 			race: func(t *testing.T, repo string) {
 				writeFile(t, filepath.Join(repo, ".taskrail", "prompts", "v1", "task-review.md"), "second replacement\n")
 			},
+			code: MachineCodeSourceChanged,
+		},
+		{
+			name: "configuration bytes",
+			race: func(t *testing.T, repo string) {
+				writeFile(t, filepath.Join(repo, ".taskrail", "config.yml"), "layout_version: 1\nspecs_dir: specs\nplanning_dir: planning\n# changed\n")
+			},
+			code: MachineCodeWriteConflict,
+		},
+		{
+			name: "proposal bytes",
+			race: func(t *testing.T, repo string) {
+				proposalFile := filepath.Join(repo, "planning", "artifacts", "review-proposals", "task", "session-1", "review.json")
+				data, err := os.ReadFile(proposalFile)
+				if err != nil {
+					t.Fatal(err)
+				}
+				writeFile(t, proposalFile, strings.Replace(string(data), `"context_mode":"fresh"`, `"context_mode":"same-context"`, 1))
+			},
+			code: MachineCodeWriteConflict,
+		},
+		{
+			name: "task bytes",
+			race: func(t *testing.T, repo string) {
+				path := filepath.Join(repo, "planning", "tasks", "T-215-review.md")
+				data, err := os.ReadFile(path)
+				if err != nil {
+					t.Fatal(err)
+				}
+				writeFile(t, path, string(data)+"\nchanged task bytes\n")
+			},
+			code: MachineCodeSourceChanged,
+		},
+		{
+			name: "spec bytes",
+			race: func(t *testing.T, repo string) {
+				writeFile(t, filepath.Join(repo, "specs", "v0.1.0.md"), "# changed\n")
+			},
+			code: MachineCodeSourceChanged,
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -352,11 +423,11 @@ func TestReviewPublishTaskRechecksPromptSnapshotsBeforeCommit(t *testing.T) {
 			if test.setup != nil {
 				test.setup(t, repo, input.Proposal)
 			}
-			testHookAfterReviewParent = func() { test.race(t, repo) }
-			t.Cleanup(func() { testHookAfterReviewParent = nil })
+			testHookBeforeTaskReviewCommit = func() { test.race(t, repo) }
+			t.Cleanup(func() { testHookBeforeTaskReviewCommit = nil })
 			_, err := svc.ReviewPublish(input)
-			if err == nil || MachineFailureFor(err).Code != MachineCodeSourceChanged {
-				t.Fatalf("ReviewPublish error = %v, code = %q", err, MachineFailureFor(err).Code)
+			if err == nil || MachineFailureFor(err).Code != test.code {
+				t.Fatalf("ReviewPublish error = %v, code = %q, want %q", err, MachineFailureFor(err).Code, test.code)
 			}
 			assertTaskReviewDestinationAbsent(t, repo)
 		})
