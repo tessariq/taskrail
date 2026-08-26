@@ -440,7 +440,8 @@ func snapshotTreeWithoutGitHousekeeping(t *testing.T, repo string) map[string]st
 	t.Helper()
 	tree := snapshotTree(t, repo)
 	// Read-only Git commands may repack objects or refresh info/refs; the test
-	// separately compares semantic Git state and verifies object integrity.
+	// separately compares semantic Git state and verifies object integrity. Every
+	// other Git control file remains in the byte-for-byte tree comparison.
 	objects := filepath.Join(".git", "objects") + string(filepath.Separator)
 	infoRefs := filepath.Join(".git", "info", "refs")
 	for name := range tree {

@@ -34,6 +34,8 @@ changes that violate dry-run behavior.
 
 - Run the focused loop preflight test repeatedly, the full suite, and exact-head
   native macOS CI.
+- Preserve byte checks for all other Git control files, compare refs/index/status,
+  root refs, and configuration semantically, and run full object-integrity fsck.
 
 ## Implementation Notes
 
