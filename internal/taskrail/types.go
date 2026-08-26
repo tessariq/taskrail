@@ -326,6 +326,8 @@ type Warning struct {
 	TaskID         string `json:"task_id,omitempty"`
 	SpecRef        string `json:"spec_ref,omitempty"`
 	ActiveSpecPath string `json:"active_spec_path,omitempty"`
+	StorageMode    string `json:"storage_mode,omitempty"`
+	StorageRoot    string `json:"storage_root,omitempty"`
 	Status         string `json:"status,omitempty"`
 	ExpectedStatus string `json:"expected_status,omitempty"`
 }

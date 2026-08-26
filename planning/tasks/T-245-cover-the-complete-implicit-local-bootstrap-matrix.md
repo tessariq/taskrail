@@ -1,7 +1,7 @@
 ---
 id: T-245-cover-the-complete-implicit-local-bootstrap-matrix
 title: Cover the complete implicit local bootstrap matrix
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#local-planning-mode
 dependencies:
@@ -11,7 +11,12 @@ dependencies:
     - T-314-integrate-loop-continuation-and-terminal
     - T-238-mutate-task-local-loop-policy-safely
     - T-239-edit-exact-id-dependencies-safely
-updated_at: "2026-08-06T13:46:30Z"
+updated_at: "2026-08-26T12:57:56Z"
+completion_id: "b05b25626be184a54bd68c3b85fca7db"
+last_verification_id: "02da8524ec6160847fc1fed76c4728a9"
+last_verification_result: pass
+last_verified_at: "2026-08-26T12:57:56Z"
+last_verified_completion_id: "b05b25626be184a54bd68c3b85fca7db"
 ---
 
 # T-245-cover-the-complete-implicit-local-bootstrap-matrix Cover the complete implicit local bootstrap matrix
@@ -43,3 +48,6 @@ remains write-free.
   exclusion source.
 
 ## Implementation Notes
+
+- 2026-08-26T12:57:44Z: Added implicit local bootstrap dispatch, warning propagation, and complete command-matrix coverage.
+- 2026-08-26T12:57:56Z: verification pass id 02da8524ec6160847fc1fed76c4728a9 previous none completion b05b25626be184a54bd68c3b85fca7db

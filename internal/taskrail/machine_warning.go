@@ -47,6 +47,8 @@ func MachineWarnings(warnings []Warning) []MachineWarning {
 			TaskID:         warning.TaskID,
 			SpecRef:        warning.SpecRef,
 			ActiveSpecPath: warning.ActiveSpecPath,
+			StorageMode:    warning.StorageMode,
+			StorageRoot:    warning.StorageRoot,
 			Status:         warning.Status,
 			ExpectedStatus: warning.ExpectedStatus,
 		})

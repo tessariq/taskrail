@@ -50,7 +50,11 @@ func runCommand(cmd *cobra.Command, produce func(*taskrail.Service) (commandResu
 	if err != nil {
 		return publishMachineError(cmd, err, nil)
 	}
-	return finishCommand(cmd, svc, produce, true)
+	bootstrapWarnings, svc, err := bootstrapLocalForCommand(cmd, svc)
+	if err != nil {
+		return publishMachineError(cmd, err, bootstrapWarnings)
+	}
+	return finishCommand(cmd, svc, produce, true, bootstrapWarnings)
 }
 
 // runRecoveryTolerantCommand runs the narrow operator surfaces that must inspect
@@ -60,11 +64,12 @@ func runRecoveryTolerantCommand(cmd *cobra.Command, produce func(*taskrail.Servi
 	if err != nil {
 		return publishMachineError(cmd, err, nil)
 	}
-	return finishCommand(cmd, svc, produce, false)
+	return finishCommand(cmd, svc, produce, false, nil)
 }
 
-func finishCommand(cmd *cobra.Command, svc *taskrail.Service, produce func(*taskrail.Service) (commandResult, error), fenced bool) error {
+func finishCommand(cmd *cobra.Command, svc *taskrail.Service, produce func(*taskrail.Service) (commandResult, error), fenced bool, initialWarnings []taskrail.Warning) error {
 	result, err := produce(svc)
+	result.warnings = append(initialWarnings, result.warnings...)
 	if fenced {
 		if recoveryErr := svc.CheckRecovery(); recoveryErr != nil {
 			return publishMachineError(cmd, recoveryErr, result.warnings)
@@ -100,6 +105,46 @@ func finishCommand(cmd *cobra.Command, svc *taskrail.Service, produce func(*task
 		return err
 	}
 	return result.gate
+}
+
+func bootstrapLocalForCommand(cmd *cobra.Command, svc *taskrail.Service) ([]taskrail.Warning, *taskrail.Service, error) {
+	if !implicitLocalBootstrapCommand(cmd) {
+		return nil, svc, nil
+	}
+	initialized, err := svc.BootstrapLocalIfUninitialized()
+	if err != nil || !initialized {
+		return nil, svc, err
+	}
+	refreshed, err := serviceFromCmd(cmd)
+	if err != nil {
+		return nil, nil, err
+	}
+	return []taskrail.Warning{{
+		Code:        "local_initialized",
+		Message:     "local storage was initialized",
+		StorageMode: "local",
+		StorageRoot: ".taskrail/local",
+	}}, refreshed, nil
+}
+
+func implicitLocalBootstrapCommand(cmd *cobra.Command) bool {
+	if flag := cmd.Flags().Lookup("dry-run"); flag != nil && flag.Value.String() == "true" {
+		return false
+	}
+	switch machineCommandPath(cmd) {
+	case "next", "start", "complete", "block", "unblock", "verify", "task new",
+		"task rename", "task repoint", "task release", "task author", "task loop allow",
+		"task loop hold", "task loop clear", "spec add", "spec activate":
+		return true
+	case "repair":
+		return cmd.Flags().Lookup("apply") != nil && cmd.Flags().Lookup("apply").Value.String() == "true"
+	case "import":
+		return cmd.Flags().Lookup("apply") != nil && cmd.Flags().Lookup("apply").Value.String() != ""
+	case "loop":
+		return cmd.Flags().Lookup("dry-run") != nil && cmd.Flags().Lookup("dry-run").Value.String() == "false"
+	default:
+		return false
+	}
 }
 
 // publishMachineError writes cause as this command's error envelope when the

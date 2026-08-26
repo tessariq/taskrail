@@ -49,3 +49,19 @@ func (s *Service) CheckRecovery() error {
 	}
 	return nil
 }
+
+// BootstrapLocalIfUninitialized creates the ignored local layout only when the
+// caller has already selected a writer eligible for implicit bootstrap.
+func (s *Service) BootstrapLocalIfUninitialized() (bool, error) {
+	_, found, err := readMarker(s.paths.RepoRoot)
+	if err != nil {
+		return false, err
+	}
+	if found {
+		return false, nil
+	}
+	if _, err := s.Init(InitInput{Local: true}); err != nil {
+		return false, err
+	}
+	return true, nil
+}

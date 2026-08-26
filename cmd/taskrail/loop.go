@@ -102,7 +102,7 @@ func runLoopWithResultFile(cmd *cobra.Command, input taskrail.LoopInvocation) er
 	}
 	svc, err := serviceFromCmd(cmd)
 	if err != nil {
-		if publishErr := publishLoopResultFile(cmd, result, nil, err); publishErr != nil {
+		if publishErr := publishLoopResultFile(cmd, result, nil, err, nil); publishErr != nil {
 			return publishErr
 		}
 		return err
@@ -112,14 +112,21 @@ func runLoopWithResultFile(cmd *cobra.Command, input taskrail.LoopInvocation) er
 	}
 	if len(input.Child) == 0 {
 		err := invalidArgumentsf("loop execution requires a child command after --")
-		if publishErr := publishLoopResultFile(cmd, result, nil, err); publishErr != nil {
+		if publishErr := publishLoopResultFile(cmd, result, nil, err, nil); publishErr != nil {
 			return publishErr
 		}
 		return err
 	}
 	if machineJSONRequested(cmd) {
 		err := invalidArgumentsf("loop execution does not support --json")
-		if publishErr := publishLoopResultFile(cmd, result, nil, err); publishErr != nil {
+		if publishErr := publishLoopResultFile(cmd, result, nil, err, nil); publishErr != nil {
+			return publishErr
+		}
+		return err
+	}
+	warnings, svc, err := bootstrapLocalForCommand(cmd, svc)
+	if err != nil {
+		if publishErr := publishLoopResultFile(cmd, result, nil, err, warnings); publishErr != nil {
 			return publishErr
 		}
 		return err
@@ -137,15 +144,15 @@ func runLoopWithResultFile(cmd *cobra.Command, input taskrail.LoopInvocation) er
 			executeErr = loopDiagnosticGate(report)
 		}
 	}
-	if publishErr := publishLoopResultFile(cmd, result, &report, executeErr); publishErr != nil {
+	if publishErr := publishLoopResultFile(cmd, result, &report, executeErr, warnings); publishErr != nil {
 		return publishErr
 	}
 	fmt.Fprintln(cmd.OutOrStdout(), renderLoopDiagnostic(report))
 	return executeErr
 }
 
-func publishLoopResultFile(cmd *cobra.Command, result *taskrail.LoopResultFile, report *taskrail.LoopDiagnostic, cause error) error {
-	document, err := taskrail.EncodeLoopResultFileDocument(report, cause, envelopeWarnings(cmd, nil))
+func publishLoopResultFile(cmd *cobra.Command, result *taskrail.LoopResultFile, report *taskrail.LoopDiagnostic, cause error, warnings []taskrail.Warning) error {
+	document, err := taskrail.EncodeLoopResultFileDocument(report, cause, envelopeWarnings(cmd, warnings))
 	if err != nil {
 		return taskrail.WithMachineErrorCode("result_file_publish_failed", fmt.Errorf("encode result file: %w", err))
 	}
