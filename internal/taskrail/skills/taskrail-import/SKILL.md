@@ -27,14 +27,17 @@ do not contain the source helper and skip this source-only guard.
    `${TASKRAIL:-taskrail} import <source.md> --to <tasks|spec|planning> --emit-prompt`
    `--emit-prompt` is an exact-text exception because its prompt bytes are the
    workflow input, not a structured result.
-2. Follow that prompt: read the embedded source and produce a single JSON draft
-   that conforms to the schema the prompt describes (`schema_version`, `target`,
-   `tasks`, `spec_sections`). Do the real work — split coherent tasks, write
-   clear titles, set `spec_ref` to real spec headings, wire `dependencies`.
+2. Follow that prompt and produce one compatibility ImportDraft v1 JSON object.
+   Do the semantic work: give each task one independently meaningful outcome,
+   split independently useful results, merge file/layer/phase fragments that only
+   establish one result, name the integrated-behavior owner, use real headings,
+   and wire real dependencies and operator gates. The optional legacy `body`
+   member is accepted but ignored by v1 apply.
 3. Save your JSON to a file, e.g. `draft.json`.
 4. Apply it: `${TASKRAIL:-taskrail} import --apply draft.json --json`. The binary validates the draft
-   and writes spec/task files, scaffolding each task through the same path as
-   `${TASKRAIL:-taskrail} task new`.
+   and writes spec/task files. Each task receives the standard outcome-focused
+   Description, Acceptance, Verification Notes, and Implementation Notes
+   scaffold. The scaffold is structural and does not certify semantic sizing.
 5. Review the created files. Run `${TASKRAIL:-taskrail} validate --json`.
 
 Apply publishes the validated draft as one repository-locked transaction. A
@@ -51,6 +54,9 @@ rollback evidence.
 - never hand-edit task status fields
 - return only the JSON draft in step 2; no prose, no code fence
 - every `spec_ref` must point at a heading that already exists
-- keep drafts small and focused; prefer several tasks over one broad task
+- omit `loop_policy` and `loop_reason`; imported tasks remain implicitly held
+- split independently useful outcomes, but never split one result by file, layer,
+  discipline, phase, or estimate
+- require durable evidence and one owner for required integrated behavior
 - the thin `--llm` adapter (binary calling a model directly) is not available; it
   is deferred to a later version by design

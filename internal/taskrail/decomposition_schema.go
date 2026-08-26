@@ -720,28 +720,54 @@ func validateReviewedBody(body, what string) error {
 	}
 	for i, line := range lines {
 		level, _ := markdownATXHeading(line)
-		if level == 1 || (i > 0 && strings.TrimSpace(lines[i-1]) != "" && markdownSetextH1Underline(line)) {
+		setextCandidate := i > 0 && markdownSetextTextCandidate(lines[i-1])
+		if level == 1 || (setextCandidate && markdownSetextH1Underline(line)) {
 			return fmt.Errorf("%s body contains top-level heading", what)
 		}
-	}
-	for _, heading := range []string{"## Description", "## Acceptance", "## Verification Notes"} {
-		if countMarkdownHeading(lines, heading) != 1 {
-			return fmt.Errorf("%s body must contain exactly one %s", what, heading)
+		if setextCandidate && markdownSetextH2Underline(line) {
+			return fmt.Errorf("%s body contains unrelated H2 %q", what, strings.TrimSpace(lines[i-1]))
 		}
-		start := indexMarkdownHeading(lines, heading) + 1
-		end := len(lines)
-		for i := start; i < len(lines); i++ {
-			if level, _ := markdownATXHeading(lines[i]); level == 2 {
-				end = i
-				break
+	}
+	want := []string{"Description", "Acceptance", "Verification Notes"}
+	headings := make([]string, 0, 4)
+	starts := make([]int, 0, 4)
+	for i, line := range lines {
+		level, text := markdownATXHeading(line)
+		if level != 2 {
+			continue
+		}
+		if !slices.Contains(append(want, "Implementation Notes"), text) {
+			return fmt.Errorf("%s body contains unrelated H2 %q", what, text)
+		}
+		headings = append(headings, text)
+		starts = append(starts, i+1)
+	}
+	for _, heading := range append(slices.Clone(want), "Implementation Notes") {
+		count := 0
+		for _, got := range headings {
+			if got == heading {
+				count++
 			}
 		}
-		if strings.TrimSpace(strings.Join(lines[start:end], "\n")) == "" {
-			return fmt.Errorf("%s body section %s is empty", what, heading)
+		if count != 1 && (heading != "Implementation Notes" || count > 1) {
+			return fmt.Errorf("%s body must contain exactly one ## %s", what, heading)
 		}
 	}
-	if countMarkdownHeading(lines, "## Implementation Notes") > 1 {
-		return fmt.Errorf("%s body repeats ## Implementation Notes", what)
+	expected := want
+	if len(headings) == 4 && headings[3] == "Implementation Notes" {
+		expected = append(slices.Clone(want), "Implementation Notes")
+	}
+	if !slices.Equal(headings, expected) {
+		return fmt.Errorf("%s body must contain exactly one Description, Acceptance, and Verification Notes H2 in order, followed only by optional Implementation Notes", what)
+	}
+	for i, heading := range want {
+		end := len(lines)
+		if i+1 < len(starts) {
+			end = starts[i+1] - 1
+		}
+		if strings.TrimSpace(strings.Join(lines[starts[i]:end], "\n")) == "" {
+			return fmt.Errorf("%s body section ## %s is empty", what, heading)
+		}
 	}
 	return nil
 }
@@ -835,4 +861,31 @@ func markdownSetextH1Underline(line string) bool {
 	}
 	line = strings.TrimSpace(line[indent:])
 	return line != "" && strings.Trim(line, "=") == ""
+}
+
+func markdownSetextH2Underline(line string) bool {
+	indent := len(line) - len(strings.TrimLeft(line, " "))
+	if indent > 3 {
+		return false
+	}
+	line = strings.TrimSpace(line[indent:])
+	return line != "" && strings.Trim(line, "-") == ""
+}
+
+func markdownSetextTextCandidate(line string) bool {
+	indent := len(line) - len(strings.TrimLeft(line, " "))
+	if indent > 3 {
+		return false
+	}
+	line = strings.TrimSpace(line)
+	if line == "" {
+		return false
+	}
+	if level, _ := markdownATXHeading(line); level > 0 {
+		return false
+	}
+	if strings.HasPrefix(line, ">") || strings.HasPrefix(line, "<") || topBulletPattern.MatchString(line) {
+		return false
+	}
+	return true
 }

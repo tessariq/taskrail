@@ -1,6 +1,8 @@
 package taskrail
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
@@ -163,6 +165,65 @@ func TestDecodeDecompositionBundleValidatesReviewedBodyMarkdownStructure(t *test
 	})
 }
 
+func TestValidateReviewedBodyRequiresExactOrderedSections(t *testing.T) {
+	valid := []string{
+		"## Description\n\nOutcome.\n\n## Acceptance\n\n- Observable.\n\n## Verification Notes\n\n- Durable evidence.",
+		"## Description\r\n\r\nOutcome.\r\n\r\n### Detail\r\n\r\nMore.\r\n\r\n## Acceptance\r\n\r\n- Observable.\r\n\r\n## Verification Notes\r\n\r\n```markdown\r\n## Unrelated\r\n```\r\n\r\n## Implementation Notes\r\n",
+		"## Description\n\nOutcome.\n\n### Boundary\n---\n\n## Acceptance\n\n- Observable.\n\n## Verification Notes\n\n- Durable evidence.",
+		"## Description\n\nOutcome.\n\n> Boundary note\n---\n\n- List boundary\n---\n\n## Acceptance\n\n- Observable.\n\n## Verification Notes\n\n- Durable evidence.",
+	}
+	for i, body := range valid {
+		if err := validateReviewedBody(body, "task"); err != nil {
+			t.Errorf("valid body %d: %v", i, err)
+		}
+	}
+
+	invalid := []struct {
+		name string
+		body string
+		want string
+	}{
+		{"reordered", "## Acceptance\n\nA.\n\n## Description\n\nD.\n\n## Verification Notes\n\nV.", "in order"},
+		{"unrelated h2", "## Description\n\nD.\n\n## Scope\n\nS.\n\n## Acceptance\n\nA.\n\n## Verification Notes\n\nV.", "unrelated H2"},
+		{"setext h2", "## Description\n\nD.\n\nScope\n---\n\n## Acceptance\n\nA.\n\n## Verification Notes\n\nV.", "unrelated H2"},
+		{"implementation before verification", "## Description\n\nD.\n\n## Acceptance\n\nA.\n\n## Implementation Notes\n\nI.\n\n## Verification Notes\n\nV.", "in order"},
+		{"content after implementation", "## Description\n\nD.\n\n## Acceptance\n\nA.\n\n## Verification Notes\n\nV.\n\n## Implementation Notes\n\nI.\n\n## Other\n\nNo.", "unrelated H2"},
+		{"empty description", "## Description\n\n## Acceptance\n\nA.\n\n## Verification Notes\n\nV.", "is empty"},
+		{"duplicate implementation", "## Description\n\nD.\n\n## Acceptance\n\nA.\n\n## Verification Notes\n\nV.\n\n## Implementation Notes\n\n## Implementation Notes\n", "exactly one"},
+	}
+	for _, tc := range invalid {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validateReviewedBody(tc.body, "task")
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("error = %v, want containing %q", err, tc.want)
+			}
+		})
+	}
+}
+
+func TestDecodeReviewedDraftPreservesExactBodyBytesAndRejectsLoopPolicy(t *testing.T) {
+	body := "  ## Description  \r\n\r\nOutcome with trailing spaces.  \r\n\r\n## Acceptance\r\n\r\n- Observable.\r\n\r\n## Verification Notes\r\n\r\n- Evidence.\r\n\r\n## Implementation Notes\r\n"
+	rawBody, err := json.Marshal(body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	draft := []byte(`{"schema_version":2,"review_session_id":"decomposition-1","target":"tasks","tasks":[{"key":"first","title":"First","dependencies":[],"body":` + string(rawBody) + `,"spec_ref":"specs/v0.5.0.md#first-area"}],"spec_sections":[]}`)
+	decoded, err := decodeReviewedDraft(draft)
+	if err != nil {
+		t.Fatalf("decode reviewed draft: %v", err)
+	}
+	if decoded.Tasks[0].Body != body {
+		t.Fatalf("body = %q, want exact %q", decoded.Tasks[0].Body, body)
+	}
+
+	for _, member := range []string{`"loop_policy":"allow",`, `"loop_reason":"unattended",`} {
+		mutated := bytes.Replace(draft, []byte(`"title":"First",`), []byte(`"title":"First",`+member), 1)
+		if _, err := decodeReviewedDraft(mutated); err == nil || !strings.Contains(err.Error(), "unknown member") {
+			t.Fatalf("loop member %s error = %v", member, err)
+		}
+	}
+}
+
 func TestDecodeDecompositionBundleRejectsFirstPassSpecDrift(t *testing.T) {
 	files, subjects := decompositionGolden()
 	addSecondDecompositionPass(files, subjects)
@@ -219,12 +280,12 @@ func TestDecodeDecompositionBundleRejectsMarkdownEquivalentBodyHeadings(t *testi
 	}
 }
 
-func TestDecodeDecompositionBundlePreservesUnseparatedATXTrailingHashes(t *testing.T) {
+func TestDecodeDecompositionBundleRejectsUnseparatedATXHeadingAsUnrelatedH2(t *testing.T) {
 	files, subjects := decompositionGolden()
 	replaceDecomposition(files, "draft.json", `- Test it.`, `- Test it.\n\n## Description##\n\nNot a duplicate.`)
 	refreshDecompositionFinalDigests(files)
-	if _, err := DecodeDecompositionBundle(files, subjects); err != nil {
-		t.Fatalf("DecodeDecompositionBundle heading with unseparated trailing hashes: %v", err)
+	if _, err := DecodeDecompositionBundle(files, subjects); err == nil || !strings.Contains(err.Error(), "unrelated H2") {
+		t.Fatalf("error = %v, want unrelated H2", err)
 	}
 }
 

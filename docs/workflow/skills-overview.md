@@ -40,9 +40,9 @@ Tracked-work and spec skills (each bullet notes how it creates tasks, if at all)
 - `taskrail-spec-review` — stage four independent advisory post-spec lenses and
   publish their human-dispositioned digest-bound bundle before decomposition
   (shipped in T-162).
-- `taskrail-decompose` — draft spec-anchored tasks for uncovered active-spec areas
-  by composing `coverage --json`, `spec show --anchors`, and `import --apply`
-  (shipped in T-098).
+- `taskrail-decompose` — author strict spec-anchored ImportDraft v2 bodies, run at
+  most two fresh-context adversarial passes, publish an immutable manifest-bound
+  bundle, and apply its exact digests (shipped in T-098; reviewed flow in T-304).
 - `taskrail-gap` — review covered active-spec areas for missing work: run
   `coverage --gaps --json` for structural candidates, add agent semantic judgement,
   and propose tasks a human promotes via `task new` / `import --apply` (shipped in
@@ -58,7 +58,8 @@ Tracked-work and spec skills (each bullet notes how it creates tasks, if at all)
 
 Onboarding skills (create tasks with `${TASKRAIL:-taskrail} import --apply`):
 
-- `taskrail-import` — notes/draft -> spec/task import.
+- `taskrail-import` — notes/draft -> compatibility ImportDraft v1 -> scaffolded,
+  implicitly held spec/task import; legacy v1 task bodies are ignored on apply.
 - `taskrail-retrofit` — guided retrofit of an existing repository into a Taskrail
   layout.
 

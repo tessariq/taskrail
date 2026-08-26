@@ -103,6 +103,37 @@ func TestTaskAuthoringPromptDefinesOutcomeFocusedBodyContract(t *testing.T) {
 	}
 }
 
+func TestDecompositionPromptsDefineReviewedOutcomeContract(t *testing.T) {
+	common := []string{
+		"one independently meaningful user, operator, or system outcome",
+		"Split independently useful outcomes",
+		"Do not split one outcome by file, layer, discipline, phase, or estimate",
+		"integrated behavior",
+		"public or durable oracle",
+		"shallow oracle",
+		"failure and boundary",
+		"operator gates",
+		"real specification heading",
+		"real dependencies",
+		"omit `loop_policy` and `loop_reason`",
+		"implicitly held",
+		"exact SHA-256",
+		"fresh context",
+		"Do not mutate",
+	}
+	for _, id := range []string{"task-decomposition", "task-decomposition-adversarial"} {
+		content := strings.Join(strings.Fields(string(builtinPromptTemplate(t, id))), " ")
+		for _, want := range common {
+			if !strings.Contains(content, want) {
+				t.Errorf("%s missing %q:\n%s", id, want, content)
+			}
+		}
+		if !strings.Contains(content, "## Description") || !strings.Contains(content, "## Acceptance") || !strings.Contains(content, "## Verification Notes") {
+			t.Errorf("%s lacks strict body headings", id)
+		}
+	}
+}
+
 func TestTaskImplementationPromptDefinesLifecycleCompleteWorkflow(t *testing.T) {
 	repo := seedFixtureRepo(t)
 	writeTask(t, repo, "T-001-implement", "Implement", "todo", "high", "specs/v0.1.0.md#summary", nil)

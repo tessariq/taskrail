@@ -1,6 +1,7 @@
 package taskrail
 
 import (
+	"bytes"
 	"encoding/json"
 	"maps"
 	"os"
@@ -688,11 +689,47 @@ func TestApplyImportDraftRoundTripsThroughFile(t *testing.T) {
 	}
 }
 
+func TestApplyImportDraftV1IgnoresLegacyBodyAndUsesStandardScaffold(t *testing.T) {
+	svc := applyFixture(t)
+	draft := ImportDraft{
+		SchemaVersion: 1,
+		Target:        "tasks",
+		Tasks: []TaskDraft{{
+			Title: "Scaffolded outcome", SpecRef: "specs/v0.1.0.md#summary",
+			Body: "LEGACY BODY MUST NOT BE PUBLISHED",
+		}},
+	}
+	rel := writeDraftFile(t, svc.paths.RepoRoot, "planning/imports/scaffold.json", draft)
+	result, err := svc.ApplyImportDraft(ApplyDraftInput{DraftPath: rel})
+	if err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+	data := readBytes(t, filepath.Join(svc.paths.RepoRoot, result.Tasks[0].Path))
+	if strings.Contains(data, draft.Tasks[0].Body) {
+		t.Fatalf("v1 apply published legacy body: %q", data)
+	}
+	for _, heading := range []string{"## Description", "## Acceptance", "## Verification Notes", "## Implementation Notes"} {
+		if strings.Count(data, heading) != 1 {
+			t.Errorf("task has %d %s headings: %q", strings.Count(data, heading), heading, data)
+		}
+	}
+	if strings.Contains(data, "loop_policy:") || strings.Contains(data, "loop_reason:") {
+		t.Fatalf("imported task must remain implicitly held: %q", data)
+	}
+}
+
 func TestApplyImportDraftV2PublishesExactReviewedBodies(t *testing.T) {
 	svc := applyFixture(t)
 	writeFile(t, filepath.Join(svc.paths.RepoRoot, ".taskrail", "config.yml"), layout2Marker("committed", "specs", "planning"))
 	svc = newTestService(t, svc.paths.RepoRoot, time.Date(2026, 7, 5, 12, 0, 0, 0, time.UTC))
 	files, subjects := decompositionGolden()
+	exactBody := "  ## Description  \r\n\r\nDeliver exact bytes.  \r\n\r\n### Boundary\r\n\r\nKeep CRLF.\r\n\r\n## Acceptance\r\n\r\n- Works.\r\n\r\n## Verification Notes\r\n\r\n- Test it.\r\n\r\n## Implementation Notes\r\n"
+	rawBody, err := json.Marshal(exactBody)
+	if err != nil {
+		t.Fatal(err)
+	}
+	files["draft.json"] = bytes.Replace(files["draft.json"], []byte(`"body":"## Description\n\nDeliver one outcome.\n\n## Acceptance\n\n- Works.\n\n## Verification Notes\n\n- Test it."`), []byte(`"body":`+string(rawBody)), 1)
+	refreshDecompositionFinalDigests(files)
 	writeTask(t, svc.paths.RepoRoot, "T-240-implement-the-normative-review-schema-decoders", "Existing dependency", "completed", "medium", "specs/v0.1.0.md#summary", nil)
 	writeFile(t, filepath.Join(svc.paths.RepoRoot, "specs", "v0.5.0.md"), string(subjects.Spec))
 	statePath := filepath.Join(svc.paths.RepoRoot, "planning", "STATE.md")
@@ -732,6 +769,9 @@ func TestApplyImportDraftV2PublishesExactReviewedBodies(t *testing.T) {
 		if strings.Contains(data, "loop_policy:") || strings.Contains(data, "loop_reason:") {
 			t.Fatalf("%s must remain implicitly held: %q", created.TaskID, data)
 		}
+	}
+	if body := filesBody(t, files["draft.json"], 0); body != exactBody {
+		t.Fatalf("decoded body = %q, want exact CRLF body %q", body, exactBody)
 	}
 }
 

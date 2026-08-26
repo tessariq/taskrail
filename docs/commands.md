@@ -147,7 +147,8 @@ v0.5 roadmap adds distinct advisory stages rather than one overloaded "review":
 
 - post-spec consistency, gap, addition, and adversarial lenses before decomposition;
 - one existing-task review for alignment, dependencies, acceptance, and evidence;
-- adversarial review of an unpublished decomposed task set;
+- adversarial review of an unpublished ImportDraft v2 task set, with at most two
+  fresh-context passes before digest-bound publication and exact-body apply;
 - separate implementation review before completion and passing verification; and
 - post-implementation workflow-adversarial probes with bounded review memory.
 

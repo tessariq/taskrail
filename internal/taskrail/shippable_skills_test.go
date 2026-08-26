@@ -133,7 +133,7 @@ func TestShippableSkillsConsumeStructuredResultsAsJSON(t *testing.T) {
 		"taskrail-repair":        {"} validate --json", "} repair --json", "} repair --apply --json"},
 		"taskrail-spec":          {"} spec list --json", "} spec show <version> --anchors --json", "} spec diff <current-version> <target-version> --json", "} spec activate <version> --json", "} task new --title \"...\" --area", "<anchor> --json", "} task repoint <id> --area <anchor> --dry-run --json", "} task repoint <id> --area <anchor> --json", "} spec add <version> --json", "} validate --json"},
 		"taskrail-spec-review":   {"} spec show <version> --json", "} prompt render spec-consistency --spec <version> --review <proposal-dir>/consistency.json --json", "} review publish --type spec --proposal <proposal-dir> --destination <planning-dir>/reviews/spec/<version>/<session-id> --spec <version> --expect-spec-sha256 <digest> --json"},
-		"taskrail-decompose":     {"} coverage --json", "} spec show <version> --anchors --json", "} import --apply draft.json --json", "} validate --json"},
+		"taskrail-decompose":     {"} coverage --json", "} spec show <version> --json", "} spec show <version> --anchors --json", "} prompt render task-decomposition", "} prompt render task-decomposition-adversarial", "} review publish --type decomposition", "--dry-run --json", "} import --apply <published>/draft.json --expect-sha256 <draft-sha256> --review-manifest <published>/manifest.json --expect-review-sha256 <manifest-sha256> --json", "} validate --json"},
 		"taskrail-gap":           {"} coverage --gaps --json", "} coverage --gaps --area <anchor> --json", "} task new --title \"...\" --area <anchor> --json", "} import --apply <draft.json> --json", "} validate --json"},
 		"taskrail-task-review":   {"} task show <task-id> --json", "} spec show <version> --json", "} coverage --area <spec-anchor> --json", "} prompt render task-review --task <task-id> --review <proposal>/review.json --json", "} review publish --type task --proposal <proposal> --destination <destination> --task <task-id> --expect-task-sha256 <digest> --expect-spec-sha256 <digest> --dry-run --json", "} review publish --type task --proposal <proposal> --destination <destination> --task <task-id> --expect-task-sha256 <digest> --expect-spec-sha256 <digest> --json"},
 	}
@@ -274,14 +274,40 @@ func TestTaskrailLoopSkillSupervisesOneConfirmedInvocation(t *testing.T) {
 
 func TestShippableSkillsNameExactTextExceptions(t *testing.T) {
 	exceptions := map[string]string{
-		"taskrail-spec":      "spec show <version>` is an exact-text exception",
-		"taskrail-import":    "--emit-prompt` is an exact-text exception",
-		"taskrail-retrofit":  "--emit-prompt` is an exact-text exception",
-		"taskrail-decompose": "--emit-prompt` is an exact-text exception",
+		"taskrail-spec":     "spec show <version>` is an exact-text exception",
+		"taskrail-import":   "--emit-prompt` is an exact-text exception",
+		"taskrail-retrofit": "--emit-prompt` is an exact-text exception",
 	}
 	for name, exception := range exceptions {
 		assertSkillReferences(t, name, exception)
 	}
+}
+
+func TestDecomposeSkillDefinesReviewedV2Flow(t *testing.T) {
+	assertSkillReferences(t, "taskrail-decompose",
+		"ImportDraft v2",
+		"at most two passes",
+		"fresh-context",
+		"exact SHA-256",
+		"source freshness",
+		"one outcome",
+		"do-not-split",
+		"integrated-behavior owner",
+		"durable-oracle",
+		"implicitly held",
+		"Preview publication",
+		"Never apply proposal bytes",
+	)
+}
+
+func TestImportSkillDocumentsV1CompatibilityAndImplicitHold(t *testing.T) {
+	assertSkillReferences(t, "taskrail-import",
+		"ImportDraft v1",
+		"legacy `body` member is accepted but ignored",
+		"does not certify semantic sizing",
+		"omit `loop_policy` and `loop_reason`",
+		"implicitly held",
+	)
 }
 
 // Shippable skills create tasks through the real command, not hand-authored

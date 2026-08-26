@@ -45,6 +45,30 @@ func TestEmitImportPromptEmbedsSourceSchemaAndConventions(t *testing.T) {
 	}
 }
 
+func TestEmitImportPromptDefinesV1OutcomeScaffoldAndImplicitHold(t *testing.T) {
+	svc := importFixture(t)
+	result, err := svc.EmitImportPrompt(EmitPromptInput{SourcePath: "notes.md", Target: "tasks"})
+	if err != nil {
+		t.Fatalf("emit prompt: %v", err)
+	}
+	content := strings.Join(strings.Fields(result.Prompt), " ")
+	for _, want := range []string{
+		"ImportDraft v1",
+		"body is legacy input and is ignored on apply",
+		"standard non-empty Description, Acceptance, and Verification Notes scaffold",
+		"does not certify that an imported task is semantically right-sized",
+		"Split independently useful outcomes",
+		"Do not split one outcome by file, layer, discipline, phase, or estimate",
+		"Name the task that owns required integrated behavior",
+		"omit `loop_policy` and `loop_reason`",
+		"remain implicitly held",
+	} {
+		if !strings.Contains(content, want) {
+			t.Errorf("prompt missing %q:\n%s", want, result.Prompt)
+		}
+	}
+}
+
 func TestEmitImportPromptFencesSourceContainingBackticks(t *testing.T) {
 	t.Parallel()
 	svc := importFixture(t)

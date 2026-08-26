@@ -1,6 +1,6 @@
 ---
 schema_version: 1
-updated_at: "2026-08-26T11:27:00Z"
+updated_at: "2026-08-26T12:19:51Z"
 active_spec_version: v0.5.0
 active_spec_path: specs/v0.5.0.md
 current_task: ""
@@ -8,9 +8,9 @@ current_task_title: ""
 status_summary: idle
 blockers: []
 next_action: Select the next eligible task
-last_verification_result: pass for T-370-restore-windows-durable-transaction-barriers at 2026-08-26T11:27:00Z id c6b7e3667864a2844ecb95c7695c3d62
-last_verification_id: c6b7e3667864a2844ecb95c7695c3d62
-last_verified_completion_id: 981c3e4a290bc552caeeccced0baff78
+last_verification_result: pass for T-304-align-imported-and-decomposed-task-bodies at 2026-08-26T12:19:51Z id 6bc0649b72aa2dfdba4aa3a04d9d56a8
+last_verification_id: 6bc0649b72aa2dfdba4aa3a04d9d56a8
+last_verified_completion_id: c52e15085fadf8ea7cf5d228c029c72e
 relevant_artifacts: []
 continuation_notes:
     - This repository is temporarily dogfooding bootstrap workflow tooling until Taskrail v0.1.0 exists.
@@ -36,7 +36,7 @@ continuation_notes:
 
 ## Last Verification
 
-- pass for T-370-restore-windows-durable-transaction-barriers at 2026-08-26T11:27:00Z id c6b7e3667864a2844ecb95c7695c3d62
+- pass for T-304-align-imported-and-decomposed-task-bodies at 2026-08-26T12:19:51Z id 6bc0649b72aa2dfdba4aa3a04d9d56a8
 
 ## Next Action
 
@@ -52,8 +52,8 @@ continuation_notes:
 
 ## Task Counts
 
-- todo: 70
+- todo: 69
 - in_progress: 0
-- completed: 299
+- completed: 300
 - blocked: 0
 - cancelled: 0

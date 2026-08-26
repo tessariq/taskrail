@@ -5,74 +5,91 @@ description: Draft spec-anchored Taskrail tasks for uncovered active-spec areas,
 
 # taskrail-decompose
 
-Turn uncovered areas of the active spec into reviewable draft tasks, each anchored
-to a real `spec_ref` heading. The `taskrail` binary never calls a model; you, the
-agent, do the semantic lift between deterministic binary steps. This composes
-shipped primitives — `coverage --json`, `spec show <version> --anchors`, and
-`import --apply` — and adds no new binary surface.
+Turn an approved active specification into an immutable, adversarially reviewed
+ImportDraft v2 bundle, then apply its exact published bytes. The binary remains
+provider-neutral and makes no model call; the agent authors and reviews between
+deterministic Taskrail reads, validation, publication, and apply.
 
-Requires the installed `taskrail` binary on `PATH`. Run it from the managed
-repository's root.
-
-## When to use this vs the sibling skills
-
-- **taskrail-decompose** (this skill) is **spec-driven**: it starts from the active
-  spec's own headings and fills coverage gaps against anchors that already exist.
-- **taskrail-import** is **arbitrary-source-driven**: it turns external notes or a
-  draft doc into tasks and may propose new spec sections.
-- **taskrail-retrofit** is **whole-repo bootstrap**: it brings an unmanaged
-  repository under Taskrail before any tracked work exists.
-- **taskrail-spec** inspects and authors specs and anchors single tasks; reach for
-  it to add or discover the headings this skill then decomposes against.
+Requires the installed `taskrail` binary on `PATH`. Run from the managed
+repository root. This flow requires layout version 2 and an already published
+post-spec review bundle.
 
 ## Source Checkout Guard
 
 Before every command that can write tracked state, check whether the repository
 is the Taskrail source checkout (it contains both `Taskfile.yml` and
 `internal/toolchain/cmd/freshcheck`). If so, run `task taskrail:check`
-immediately before the writer. This checks the exact `${TASKRAIL:-taskrail}`
-binary the workflow will invoke. If it fails, stop, apply the remedy it names,
-and rerun the guard; do not run the writer first. Installed adopter repositories
-do not contain the source helper and skip this source-only guard.
+immediately before the writer. Stop and apply its named remedy on failure.
+Installed adopter repositories skip this source-only guard.
 
 ## Flow
 
-1. **Find uncovered areas.** Run `${TASKRAIL:-taskrail} coverage --json`. Each entry
-   in `areas` with `"covered": false` is a coverable active-spec area with no linked
-   task — those are the decomposition targets. `coverage` is read-only and writes
-   nothing.
-2. **Confirm the live anchors.** Run
-   `${TASKRAIL:-taskrail} spec show <version> --anchors --json` for the active spec
-   (derive `<version>` from step 1's `active_spec_path`, e.g. `specs/v0.3.0.md` →
-   `v0.3.0`). Match each uncovered area to its real heading anchor; never hand-craft
-   a `path#anchor` string.
-3. **Author a draft.** Produce a single JSON `ImportDraft` (`schema_version` 1,
-   `target` `"tasks"`, `tasks`). Do the real work — split each uncovered area into
-   coherent tasks, write clear imperative titles, wire `dependencies`, and set every
-   `spec_ref` to an anchor discovered in step 2. Save it to `draft.json`. To scaffold
-   the exact schema, emit the prompt over the active spec file itself (the
-   decomposition source, always present):
-    `${TASKRAIL:-taskrail} import <active-spec-path> --to tasks --emit-prompt`.
-    `--emit-prompt` is an exact-text exception because its prompt bytes are the workflow input.
-4. **Apply (single writer).** Run `${TASKRAIL:-taskrail} import --apply draft.json --json`.
-   The binary validates the draft and writes real task files through the same path
-   as `${TASKRAIL:-taskrail} task new`, rejecting any `spec_ref` whose anchor does
-   not exist. Steps 1–3 write no committed state; this reviewed, human-invoked apply
-   is the only writer.
-5. **Validate.** Review the created task files and run
-    `${TASKRAIL:-taskrail} validate --json`. Confirm the state is valid and re-run
-   `${TASKRAIL:-taskrail} coverage --json` to see the gaps now closed.
+1. **Freeze sources.** Run `${TASKRAIL:-taskrail} coverage --json`,
+   `${TASKRAIL:-taskrail} spec show <version> --json`,
+   `${TASKRAIL:-taskrail} spec show <version> --anchors --json`, and
+   `${TASKRAIL:-taskrail} review show <post-spec-manifest> --json`. Preserve the
+   plain show result's exact content bytes and compute their exact SHA-256; anchors-only
+   output does not carry content or a digest. Record the post-spec manifest's
+   exact returned SHA-256 and require its `spec_sha256` to equal the selected
+   content digest. Stop on a mismatch or unresolved high/medium review work.
+2. **Create an ignored proposal directory.** Choose one portable session ID and
+   an effectively ignored directory under
+   `planning/artifacts/review-proposals/decomposition/<session>/`. Never stage or
+   publish from a non-ignored proposal.
+3. **Render the author prompt.** Run
+   `${TASKRAIL:-taskrail} prompt render task-decomposition --spec <version> --spec-review <post-spec-manifest> --draft <proposal>/draft.json --trace <proposal>/trace.json --json`.
+   Preserve its reported template source and exact template SHA-256.
+4. **Author v2 draft and trace.** In fresh context follow the rendered prompt.
+   Produce strict `draft.json` schema 2 and `trace.json` schema 1. Each task owns
+   one outcome, uses a real anchor and dependency, has the ordered non-empty
+   Description/Acceptance/Verification Notes body, omits loop-policy fields, and
+   remains implicitly held. Apply the split, do-not-split, anti-fragmentation,
+   integrated-owner, boundary, negative, operator-gate, and durable-oracle rules.
+5. **Guard freshness.** Re-read the selected spec and post-spec manifest through
+   Taskrail and compare exact digests before review. Any source change invalidates
+   this candidate and stops the session; do not silently regenerate bindings.
+6. **Run adversarial pass 1.** Render
+   `${TASKRAIL:-taskrail} prompt render task-decomposition-adversarial --spec <version> --spec-review <post-spec-manifest> --draft <proposal>/draft.json --trace <proposal>/trace.json --review <proposal>/review-1.json --json`.
+   A fresh-context reviewer writes only `review-1.json`, bound to exact spec,
+   draft, trace, and prompt-template bytes. The reviewer never edits inputs.
+7. **Disposition once.** Human-disposition every finding. High and medium findings
+   must be resolved or rejected, never deferred. If accepted fixes change draft
+   or trace bytes, recheck source freshness, author one revised candidate, and run
+   exactly one new fresh-context review as `review-2.json`. Do not exceed two
+   passes. A source change stops rather than opening an automatic replacement
+   session.
+8. **Write the manifest.** Create strict `manifest.json` schema 1 in the proposal.
+   Bind the session, published post-spec manifest path and digest, selected spec
+   path and digest, final `draft.json` and `trace.json` exact digests, one or two
+   consecutive fresh-context review paths and exact digests, timestamps, and a
+   disposition for every finding. The last review must bind the final exact spec,
+   draft, and trace bytes. Hash raw files; never normalize or reserialize them.
+9. **Preview publication.** Recheck all source digests, then run the source guard
+   and `${TASKRAIL:-taskrail} review publish --type decomposition --proposal <proposal> --destination planning/reviews/decomposition/<version>/<session> --spec <version> --expect-spec-sha256 <spec-sha256> --spec-review <post-spec-manifest> --expect-spec-review-sha256 <review-manifest-sha256> --dry-run --json`.
+   Resolve every deterministic refusal before continuing; do not mutate the
+   candidate after a successful preview.
+10. **Publish immutable evidence.** Re-run the source guard and the same command
+    without `--dry-run`. Consume the returned destination. Publication preserves
+    exact bytes in an absent durable directory and does not create tasks.
+11. **Apply by digest.** Read the published `draft.json` and `manifest.json`
+    through `review show`, record their returned exact digests, run the source
+    guard, then execute
+    `${TASKRAIL:-taskrail} import --apply <published>/draft.json --expect-sha256 <draft-sha256> --review-manifest <published>/manifest.json --expect-review-sha256 <manifest-sha256> --json`.
+    Never apply proposal bytes or substitute freshly serialized content.
+12. **Validate.** Run `${TASKRAIL:-taskrail} validate --json` and
+    `${TASKRAIL:-taskrail} coverage --json`. Confirm every created task preserves
+    its reviewed body, has no `loop_policy`/`loop_reason`, and is implicitly held.
 
 ## Rules
 
-- never hand-edit `planning/STATE.md` frontmatter or task status fields
-- treat `planning/STATE.md` as current state, never as a task/session log; put
-  durable context in task implementation notes or follow-up tasks
-- create tasks with `import --apply`, never by hand-authoring task markdown
-- every `spec_ref` must point at an anchor from `spec show --anchors`; apply verifies it
-- decompose only uncovered areas (`"covered": false`); do not duplicate covered ones
-- discovery and authoring stay draft-only; `import --apply` is the single reviewed writer
-- return only the JSON draft in step 3; no prose, no code fence
-- keep drafts small and focused; prefer several tasks over one broad task
-- the thin `--llm` adapter (binary calling a model directly) is not available; it
-  is deferred to a later version by design
+- never hand-edit `planning/STATE.md`, task status, or task loop policy
+- never mutate a published review session; start a separately human-authorized
+  session after any later source change
+- author and review only exact snapshots; every digest is lower-case SHA-256 of
+  raw bytes
+- require fresh context for each adversarial pass, with at most two passes
+- use real selected-spec anchors and real dependency IDs; never infer them
+- refuse shallow evidence, unresolved operator decisions, fragmented tasks,
+  oversized bundles, and missing integrated-behavior ownership
+- `review publish` is the evidence writer; digest-bound `import --apply` is the
+  only task writer

@@ -61,6 +61,15 @@ func TestParseImportDraftRejectsUnknownFields(t *testing.T) {
 	}
 }
 
+func TestParseImportDraftV1RejectsLoopPolicyMembers(t *testing.T) {
+	for _, member := range []string{`"loop_policy":"allow"`, `"loop_reason":"unattended"`} {
+		raw := []byte(`{"schema_version":1,"target":"tasks","tasks":[{"title":"Task","spec_ref":"specs/v0.2.0.md#taskrail-import",` + member + `}]}`)
+		if _, err := ParseImportDraft(raw); err == nil || !strings.Contains(err.Error(), "unknown field") {
+			t.Fatalf("member %s error = %v", member, err)
+		}
+	}
+}
+
 func TestParseImportDraftRejectsTrailingContent(t *testing.T) {
 	t.Parallel()
 	_, err := ParseImportDraft([]byte(`{"schema_version":1,"target":"tasks"}{"extra":true}`))

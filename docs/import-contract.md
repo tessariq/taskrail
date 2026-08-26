@@ -1,10 +1,8 @@
 # Taskrail Import Contract (Draft Schema)
 
-Status: contract and schema. The deterministic structural command surface is
-implemented by T-033 (`taskrail import <src> --to tasks|spec|planning`, preview
-by default with `--apply`); the agent-driven `--emit-prompt`/`--apply <draft.json>`
-path is implemented later by T-034. This document is the agreement both build
-against.
+Status: shipped contract and schema. ImportDraft v1 remains the compatibility
+format emitted by `--emit-prompt`; reviewed decomposition uses the separately
+validated ImportDraft v2 publication flow.
 
 T-033's structural import is the crude, no-LLM baseline: it mechanically parses
 markdown structure into an `ImportDraft` (headings → spec sections; subheadings
@@ -49,7 +47,7 @@ The `--to` target selects what an applied draft produces:
 ```
 taskrail import notes.md --to tasks --emit-prompt   # binary emits prompt + schema
         -> agent reads source, returns an ImportDraft JSON document
-taskrail import --apply draft.json --to tasks       # binary validates + ingests
+taskrail import --apply draft.json                  # binary validates + ingests
 ```
 
 `--emit-prompt` is pure output: it produces the instructions and this schema for
@@ -112,7 +110,7 @@ incompatible change.
 | `spec_ref`     | no\*\*   | task `spec_ref`; `path#anchor` shape                        |
 | `priority`     | no       | task `priority` (`high`/`medium`/`low`); defaults `medium`  |
 | `dependencies` | no       | another draft `key` or an existing task id (`T-NNN`)         |
-| `body`         | no       | task markdown body                                          |
+| `body`         | no       | legacy v1 input; accepted but ignored when tasks are applied |
 
 \*\* `spec_ref` is optional in the draft because a `planning` bootstrap may emit
 the spec section and the task that references it together; the reference is
@@ -150,6 +148,34 @@ Apply-time (reused from T-027 `CreateTask`):
 - `spec_ref` file exists and the heading anchor is present.
 - each dependency resolves to a real task id.
 - priority validity and id assignment.
+
+V1 apply emits the same standard outcome-focused task scaffold as `task new`:
+non-empty Description, Acceptance, and Verification Notes sections followed by
+Implementation Notes. It does not publish the legacy `body` value and does not
+claim the scaffold is semantically right-sized. Authors must split independently
+useful outcomes, merge file/layer/phase fragments that establish only one result,
+name required integration ownership, and use real dependencies and operator
+gates. Task members cannot contain `loop_policy` or `loop_reason`; imported tasks
+therefore remain implicitly held.
+
+## Reviewed Decomposition (Version 2)
+
+ImportDraft v2 is accepted only from an immutable, manifest-bound decomposition
+publication with exact expected draft and manifest SHA-256 values. It is not the
+`--emit-prompt` compatibility schema. Each reviewed task requires one exact body
+containing exactly one non-empty `## Description`, `## Acceptance`, and
+`## Verification Notes` section in that order. One optional
+`## Implementation Notes` section may appear only last and may be empty. Other
+H2s, duplicates, and reordering are rejected; H3+ detail and fenced examples are
+allowed. Decoding and apply preserve exact body bytes, including CRLF and
+whitespace. V2 task objects also forbid loop-policy members and remain implicitly
+held.
+
+The existing decomposition validators continue to own schema membership, real
+spec anchors, dependencies, requirement trace coverage, review pass count,
+fresh-context and exact-digest bindings, manifest dispositions, and source
+freshness. Import continues to own transactional publication; body validation
+does not replace those checks.
 
 This split keeps one source of truth for the heavier checks: `--apply` does not
 reimplement spec/dependency existence, it ingests through `CreateTask`.

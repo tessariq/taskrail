@@ -6,6 +6,10 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ### Fixed
 
+- Imported tasks now consistently use the outcome-focused scaffold and remain
+  implicitly held. Reviewed decomposition enforces ordered exact body sections,
+  preserves body bytes, and ships complete author/reviewer and digest-bound skill
+  guidance while legacy ImportDraft v1 remains schema-compatible.
 - `task author` now validates slash-delimited repository proposal paths
   consistently on Windows, including the intended rejection of ignored artifact
   paths as invalid proposals.
