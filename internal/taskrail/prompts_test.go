@@ -375,7 +375,7 @@ func TestPromptRenderComposesEveryDeclaredContextWithoutWrites(t *testing.T) {
 	seedFixtureTree(t, repo)
 	writeTask(t, repo, "T-001-render", "Render", "todo", "high", "specs/v0.1.0.md#summary", nil)
 	writeFile(t, filepath.Join(repo, "planning", "reviews", "spec", "v0.1.0", "session", "review.json"), "review\n")
-	writeFile(t, filepath.Join(repo, "planning", "reviews", "workflow-adversarial", "memory.json"), "memory\n")
+	writeFile(t, filepath.Join(repo, "planning", "reviews", "workflow-adversarial", "INDEX.json"), "memory\n")
 	writeFile(t, filepath.Join(repo, ".git", "info", "exclude"), "planning/artifacts/\n")
 	for _, proposal := range []string{
 		"planning/artifacts/review-proposals/task/task-1",
@@ -399,7 +399,7 @@ func TestPromptRenderComposesEveryDeclaredContextWithoutWrites(t *testing.T) {
 		{ID: "spec-adversarial", Spec: "v0.1.0", ReviewPath: "planning/artifacts/review-proposals/spec/spec-1/adversarial.json"},
 		{ID: "task-decomposition", Spec: "v0.1.0", SpecReviewPath: "planning/reviews/spec/v0.1.0/session/review.json", TracePath: "planning/artifacts/review-proposals/decomposition/decomposition-1/trace.json", DraftPath: "planning/artifacts/review-proposals/decomposition/decomposition-1/draft.json"},
 		{ID: "task-decomposition-adversarial", Spec: "v0.1.0", SpecReviewPath: "planning/reviews/spec/v0.1.0/session/review.json", TracePath: "planning/artifacts/review-proposals/decomposition/decomposition-1/trace.json", DraftPath: "planning/artifacts/review-proposals/decomposition/decomposition-1/draft.json", ReviewPath: "planning/artifacts/review-proposals/decomposition/decomposition-1/review.json"},
-		{ID: "workflow-adversarial", Spec: "v0.1.0", MemoryPath: "planning/reviews/workflow-adversarial/memory.json", ReviewPath: "planning/artifacts/review-proposals/workflow-adversarial/workflow-1/review.json"},
+		{ID: "workflow-adversarial", Spec: "v0.1.0", MemoryPath: "planning/reviews/workflow-adversarial/INDEX.json", ReviewPath: "planning/artifacts/review-proposals/workflow-adversarial/workflow-1/review.json"},
 	}
 	for _, input := range inputs {
 		result, err := svc.PromptRender(input)
@@ -510,7 +510,7 @@ func TestResolvePromptManagedContextValidatesSubjectsAndReadsDurableReviews(t *t
 	repo := seedFixtureRepo(t)
 	writeTask(t, repo, "T-001-subject", "Subject", "todo", "high", "specs/v0.1.0.md#summary", nil)
 	writeFile(t, filepath.Join(repo, "planning", "reviews", "spec", "v0.1.0", "session", "review.json"), "durable review")
-	writeFile(t, filepath.Join(repo, "planning", "reviews", "workflow-adversarial", "memory.json"), "durable memory")
+	writeFile(t, filepath.Join(repo, "planning", "reviews", "workflow-adversarial", "INDEX.json"), "durable memory")
 	svc := newTestService(t, repo, time.Date(2026, 8, 22, 12, 0, 0, 0, time.UTC))
 
 	for _, spec := range []string{"v0.1.0", "specs/v0.1.0.md"} {
@@ -537,12 +537,12 @@ func TestResolvePromptManagedContextValidatesSubjectsAndReadsDurableReviews(t *t
 	result, err = svc.ResolvePromptManagedContext(PromptManagedContextInput{
 		ID:         "workflow-adversarial",
 		Spec:       "v0.1.0",
-		MemoryPath: "planning/reviews/workflow-adversarial/memory.json",
+		MemoryPath: "planning/reviews/workflow-adversarial/INDEX.json",
 	})
 	if err != nil {
 		t.Fatalf("resolve workflow context: %v", err)
 	}
-	if result.Values["MEMORY_PATH"] != "planning/reviews/workflow-adversarial/memory.json" {
+	if result.Values["MEMORY_PATH"] != "planning/reviews/workflow-adversarial/INDEX.json" {
 		t.Fatalf("memory path = %q", result.Values["MEMORY_PATH"])
 	}
 
@@ -558,6 +558,102 @@ func TestResolvePromptManagedContextValidatesSubjectsAndReadsDurableReviews(t *t
 		if _, err := svc.ResolvePromptManagedContext(input); err == nil {
 			t.Fatalf("context %#v unexpectedly resolved", input)
 		}
+	}
+}
+
+func TestResolveWorkflowPromptAllowsOnlyAbsentCanonicalMemory(t *testing.T) {
+	repo := seedFixtureRepo(t)
+	svc := newTestService(t, repo, time.Date(2026, 8, 22, 12, 0, 0, 0, time.UTC))
+	memory := "planning/reviews/workflow-adversarial/INDEX.json"
+
+	result, err := svc.ResolvePromptManagedContext(PromptManagedContextInput{
+		ID:         "workflow-adversarial",
+		Spec:       "v0.1.0",
+		MemoryPath: memory,
+	})
+	if err != nil {
+		t.Fatalf("resolve absent first-run memory: %v", err)
+	}
+	if result.Values["MEMORY_PATH"] != memory {
+		t.Fatalf("memory path = %q, want %q", result.Values["MEMORY_PATH"], memory)
+	}
+	if _, ok := result.Snapshots["review:"+memory]; ok {
+		t.Fatal("absent first-run memory unexpectedly produced a digest snapshot")
+	}
+
+	_, err = svc.ResolvePromptManagedContext(PromptManagedContextInput{
+		ID:         "workflow-adversarial",
+		Spec:       "v0.1.0",
+		MemoryPath: "planning/reviews/workflow-adversarial/missing.json",
+	})
+	if code := MachineFailureFor(err).Code; code != MachineCodePathBlocked {
+		t.Fatalf("noncanonical memory code = %q, want %q (error %v)", code, MachineCodePathBlocked, err)
+	}
+}
+
+func TestPromptRenderRejectsFirstRunMemoryAppearanceRace(t *testing.T) {
+	repo := seedFixtureRepo(t)
+	initLocalGitRepo(t, repo)
+	writeFile(t, filepath.Join(repo, ".git", "info", "exclude"), "planning/artifacts/\n")
+	proposal := filepath.Join(repo, "planning", "artifacts", "review-proposals", "workflow-adversarial", "race")
+	if err := os.MkdirAll(proposal, 0o755); err != nil {
+		t.Fatalf("create proposal: %v", err)
+	}
+	memory := filepath.Join(repo, "planning", "reviews", "workflow-adversarial", "INDEX.json")
+	var rechecks int
+	testHookReadOnlyRecheck = func() {
+		rechecks++
+		if rechecks == 3 {
+			writeFile(t, memory, "appeared\n")
+		}
+	}
+	t.Cleanup(func() { testHookReadOnlyRecheck = nil })
+	svc := newTestService(t, repo, time.Date(2026, 8, 22, 12, 0, 0, 0, time.UTC))
+
+	_, err := svc.PromptRender(PromptRenderCommandInput{
+		ID:         "workflow-adversarial",
+		Spec:       "v0.1.0",
+		MemoryPath: "planning/reviews/workflow-adversarial/INDEX.json",
+		ReviewPath: "planning/artifacts/review-proposals/workflow-adversarial/race/report.json",
+	})
+	if code := MachineFailureFor(err).Code; code != MachineCodePromptInvalid {
+		t.Fatalf("memory appearance race code = %q, want %q (error %v)", code, MachineCodePromptInvalid, err)
+	}
+}
+
+func TestResolveWorkflowPromptUsesLogicalFirstRunMemoryInLocalMode(t *testing.T) {
+	repo := initGitRepo(t)
+	seedFixtureTree(t, filepath.Join(repo, localStorageRoot))
+	writeFile(t, filepath.Join(repo, "planning", "reviews", "workflow-adversarial", "INDEX.json"), "committed decoy")
+	svc := newLocalTestService(t, repo, time.Date(2026, 8, 22, 12, 0, 0, 0, time.UTC))
+	memory := "planning/reviews/workflow-adversarial/INDEX.json"
+
+	result, err := svc.ResolvePromptManagedContext(PromptManagedContextInput{
+		ID:         "workflow-adversarial",
+		Spec:       "v0.1.0",
+		MemoryPath: memory,
+	})
+	if err != nil {
+		t.Fatalf("resolve local first-run memory: %v", err)
+	}
+	if result.Values["MEMORY_PATH"] != memory {
+		t.Fatalf("memory path = %q, want logical path %q", result.Values["MEMORY_PATH"], memory)
+	}
+	if _, ok := result.Snapshots["review:"+memory]; ok {
+		t.Fatal("committed decoy became the local memory snapshot")
+	}
+	localMemory := filepath.Join(repo, localStorageRoot, "planning", "reviews", "workflow-adversarial", "INDEX.json")
+	writeFile(t, localMemory, "local memory\n")
+	result, err = svc.ResolvePromptManagedContext(PromptManagedContextInput{
+		ID:         "workflow-adversarial",
+		Spec:       "v0.1.0",
+		MemoryPath: memory,
+	})
+	if err != nil {
+		t.Fatalf("resolve existing local memory: %v", err)
+	}
+	if got := result.Snapshots["review:"+memory]; got != promptDigest([]byte("local memory\n")) {
+		t.Fatalf("local memory snapshot = %q, want local bytes", got)
 	}
 }
 

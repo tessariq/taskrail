@@ -31,6 +31,7 @@ var shippableSkills = []string{
 	"taskrail-decompose",
 	"taskrail-gap",
 	"taskrail-task-review",
+	"taskrail-workflow-adversarial",
 }
 
 // taskAuthoringSkills create tracked tasks via `taskrail task new`. taskrail-import
@@ -122,20 +123,21 @@ func TestShippableSkillsUseConfigurableEntryPoint(t *testing.T) {
 
 func TestShippableSkillsConsumeStructuredResultsAsJSON(t *testing.T) {
 	required := map[string][]string{
-		"autonomous-backlog":     {"} validate --json", "} next --json", "} start <task-id> --json", "} verify <task-id> --result pass --summary \"...\" --json", "} verify <task-id> --result fail --summary \"...\" --json", "} task new --follow-up <task-id> --title \"...\" --json", "} complete <task-id> --note \"...\" --json", "} block <task-id> --reason \"...\" --json"},
-		"autonomous-task":        {"} validate --json", "} start <task-id> --json", "} verify <task-id> --result pass --summary \"...\" --json", "} verify <task-id> --result fail --summary \"...\" --json", "} task new --follow-up <task-id> --title \"...\" --json", "} complete <task-id> --note \"...\" --json", "} block <task-id> --reason \"...\" --json"},
-		"autonomous-verify":      {"} validate --json", "} verify <task-id> --result pass --summary \"...\" --json", "} verify <task-id> --result fail --summary \"...\" --json", "} task new --follow-up <task-id> --title \"...\" --json", "} verify <task-id> --result fail --summary \"...\" --create-followup --json"},
-		"autonomous-recovery":    {"} validate --json", "} repair --json", "} repair --apply --json"},
-		"autonomous-manual-test": {"} validate --json"},
-		"taskrail-loop":          {"} loop --dry-run --json", "} loop", "--result-file <absolute-external-path>", "--parallel <n>", "--workspace-root <absolute-external-path>", "--clone-depth <n|full>", "--keep-workspaces <never|failure|always>", "--delivery <local|review>", "--review-adapter <path>", "--allow-prompt-override-sha256 <digest>", "-- <child-command> <args...>", "} lock status --json", "} recover <transaction-id>", "--take-over-lock <lock-id> --expect-sha256 <digest> --json", "--apply"},
-		"taskrail-import":        {"} import --apply draft.json --json", "} validate --json"},
-		"taskrail-retrofit":      {"} retrofit <notes.md> --json", "} retrofit --json", "} retrofit <notes.md> --apply --json", "} import --apply draft.json --json", "} validate --json"},
-		"taskrail-repair":        {"} validate --json", "} repair --json", "} repair --apply --json"},
-		"taskrail-spec":          {"} spec list --json", "} spec show <version> --anchors --json", "} spec diff <current-version> <target-version> --json", "} spec activate <version> --json", "} task new --title \"...\" --area", "<anchor> --json", "} task repoint <id> --area <anchor> --dry-run --json", "} task repoint <id> --area <anchor> --json", "} spec add <version> --json", "} validate --json"},
-		"taskrail-spec-review":   {"} spec show <version> --json", "} prompt render spec-consistency --spec <version> --review <proposal-dir>/consistency.json --json", "} review publish --type spec --proposal <proposal-dir> --destination <planning-dir>/reviews/spec/<version>/<session-id> --spec <version> --expect-spec-sha256 <digest> --json"},
-		"taskrail-decompose":     {"} coverage --json", "} spec show <version> --json", "} spec show <version> --anchors --json", "} prompt render task-decomposition", "} prompt render task-decomposition-adversarial", "} review publish --type decomposition", "--dry-run --json", "} import --apply <published>/draft.json --expect-sha256 <draft-sha256> --review-manifest <published>/manifest.json --expect-review-sha256 <manifest-sha256> --json", "} validate --json"},
-		"taskrail-gap":           {"} coverage --gaps --json", "} coverage --gaps --area <anchor> --json", "} task new --title \"...\" --area <anchor> --json", "} import --apply <draft.json> --json", "} validate --json"},
-		"taskrail-task-review":   {"} task show <task-id> --json", "} spec show <version> --json", "} coverage --area <spec-anchor> --json", "} prompt render task-review --task <task-id> --review <proposal>/review.json --json", "} review publish --type task --proposal <proposal> --destination <destination> --task <task-id> --expect-task-sha256 <digest> --expect-spec-sha256 <digest> --dry-run --json", "} review publish --type task --proposal <proposal> --destination <destination> --task <task-id> --expect-task-sha256 <digest> --expect-spec-sha256 <digest> --json"},
+		"autonomous-backlog":            {"} validate --json", "} next --json", "} start <task-id> --json", "} verify <task-id> --result pass --summary \"...\" --json", "} verify <task-id> --result fail --summary \"...\" --json", "} task new --follow-up <task-id> --title \"...\" --json", "} complete <task-id> --note \"...\" --json", "} block <task-id> --reason \"...\" --json"},
+		"autonomous-task":               {"} validate --json", "} start <task-id> --json", "} verify <task-id> --result pass --summary \"...\" --json", "} verify <task-id> --result fail --summary \"...\" --json", "} task new --follow-up <task-id> --title \"...\" --json", "} complete <task-id> --note \"...\" --json", "} block <task-id> --reason \"...\" --json"},
+		"autonomous-verify":             {"} validate --json", "} verify <task-id> --result pass --summary \"...\" --json", "} verify <task-id> --result fail --summary \"...\" --json", "} task new --follow-up <task-id> --title \"...\" --json", "} verify <task-id> --result fail --summary \"...\" --create-followup --json"},
+		"autonomous-recovery":           {"} validate --json", "} repair --json", "} repair --apply --json"},
+		"autonomous-manual-test":        {"} validate --json"},
+		"taskrail-loop":                 {"} loop --dry-run --json", "} loop", "--result-file <absolute-external-path>", "--parallel <n>", "--workspace-root <absolute-external-path>", "--clone-depth <n|full>", "--keep-workspaces <never|failure|always>", "--delivery <local|review>", "--review-adapter <path>", "--allow-prompt-override-sha256 <digest>", "-- <child-command> <args...>", "} lock status --json", "} recover <transaction-id>", "--take-over-lock <lock-id> --expect-sha256 <digest> --json", "--apply"},
+		"taskrail-import":               {"} import --apply draft.json --json", "} validate --json"},
+		"taskrail-retrofit":             {"} retrofit <notes.md> --json", "} retrofit --json", "} retrofit <notes.md> --apply --json", "} import --apply draft.json --json", "} validate --json"},
+		"taskrail-repair":               {"} validate --json", "} repair --json", "} repair --apply --json"},
+		"taskrail-spec":                 {"} spec list --json", "} spec show <version> --anchors --json", "} spec diff <current-version> <target-version> --json", "} spec activate <version> --json", "} task new --title \"...\" --area", "<anchor> --json", "} task repoint <id> --area <anchor> --dry-run --json", "} task repoint <id> --area <anchor> --json", "} spec add <version> --json", "} validate --json"},
+		"taskrail-spec-review":          {"} spec show <version> --json", "} prompt render spec-consistency --spec <version> --review <proposal-dir>/consistency.json --json", "} review publish --type spec --proposal <proposal-dir> --destination <planning-dir>/reviews/spec/<version>/<session-id> --spec <version> --expect-spec-sha256 <digest> --json"},
+		"taskrail-decompose":            {"} coverage --json", "} spec show <version> --json", "} spec show <version> --anchors --json", "} prompt render task-decomposition", "} prompt render task-decomposition-adversarial", "} review publish --type decomposition", "--dry-run --json", "} import --apply <published>/draft.json --expect-sha256 <draft-sha256> --review-manifest <published>/manifest.json --expect-review-sha256 <manifest-sha256> --json", "} validate --json"},
+		"taskrail-gap":                  {"} coverage --gaps --json", "} coverage --gaps --area <anchor> --json", "} task new --title \"...\" --area <anchor> --json", "} import --apply <draft.json> --json", "} validate --json"},
+		"taskrail-task-review":          {"} task show <task-id> --json", "} spec show <version> --json", "} coverage --area <spec-anchor> --json", "} prompt render task-review --task <task-id> --review <proposal>/review.json --json", "} review publish --type task --proposal <proposal> --destination <destination> --task <task-id> --expect-task-sha256 <digest> --expect-spec-sha256 <digest> --dry-run --json", "} review publish --type task --proposal <proposal> --destination <destination> --task <task-id> --expect-task-sha256 <digest> --expect-spec-sha256 <digest> --json"},
+		"taskrail-workflow-adversarial": {"} status --json", "} spec show <version> --json", "} task loop list --json", "} task show <task-id> --json", "} review show <memory> --json", "} prompt render workflow-adversarial --spec <version> --memory <memory> --review <proposal>/report.json --json", "} review publish --type workflow --review <proposal>/report.json --memory <memory> --destination <destination> --spec <version> --expect-spec-sha256 <digest> --expect-head <head> --expect-product-sha256 <digest>", "--dry-run --json"},
 	}
 	for _, name := range shippableSkills {
 		body := strings.Join(strings.Fields(readShippableSkill(t, name)), " ")
@@ -385,6 +387,35 @@ func TestTaskReviewSkillPreservesAdvisoryDigestBoundBoundary(t *testing.T) {
 		"explicitly invoked consuming workflow or the human",
 		"do not start another review session",
 		"remain reviewable but are not authored through this skill",
+	)
+}
+
+func TestWorkflowAdversarialSkillPreservesSandboxedReportOnlyBoundary(t *testing.T) {
+	assertSkillReferences(t, "taskrail-workflow-adversarial",
+		"exact `review_not_found`",
+		"at most three",
+		"clean attached source worktree",
+		"isolated sandbox",
+		"terminal observable evidence",
+		"Manual evidence requires all four nullable members to be null.",
+		"Only command or file evidence",
+		"cleanup failure",
+		"exactly one strict transient `report.json`",
+		"stale",
+		"finding dispositions",
+		"never writes `INDEX.json` or a final run file directly",
+		"never edits product code, specs, tasks, lifecycle status, task-local loop policy, verification results, or Git history",
+		"never promotes a finding",
+		"committed and local storage modes",
+		"fresh context",
+		"same-context",
+		"Exact V1 Derivation Reference",
+		"never stages, commits, merges, pushes",
+		"index_sha256_after",
+		"two-space indentation",
+		"SetEscapeHTML(false)",
+		"256 KiB",
+		"256 surface rows",
 	)
 }
 

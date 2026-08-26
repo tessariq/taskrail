@@ -127,6 +127,7 @@ committed `.agents/skills/` and `.claude/skills/` copies:
 | `taskrail-decompose` | Shippable | Authors strict ImportDraft v2 task bodies, performs at most two fresh-context adversarial passes, publishes one manifest-bound bundle, and applies its exact digests; spec-driven and provider-neutral (T-098, T-304). |
 | `taskrail-gap` | Shippable | Composes `coverage --gaps --json` (structural candidates) with agent semantic gap review over covered active-spec areas, proposing tasks a human promotes via `task new` / `import --apply`; advisory-only, adds no binary surface (T-101). |
 | `taskrail-task-review` | Shippable | Reviews one existing task as a strict digest-bound advisory snapshot, then publishes it through `review publish --type task`; accepted changes remain human-routed through existing task authoring, exact-ID dependency editing, or reviewed task production (T-216). |
+| `taskrail-workflow-adversarial` | Shippable | Runs one bounded post-implementation review in an isolated sandbox and publishes only the strict Git/spec/product-bound report plus Taskrail-derived serial memory; it has no product, lifecycle, or finding-promotion authority (T-306). |
 
 T-029 may revise this list, but must justify any change against the three
 decisions above.

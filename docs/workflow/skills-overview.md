@@ -55,6 +55,9 @@ Tracked-work and spec skills (each bullet notes how it creates tasks, if at all)
   related tasks, and dependencies; stage one strict digest-bound advisory review
   and publish it through `review publish --type task` without directly changing
   task state (shipped in T-216).
+- `taskrail-workflow-adversarial` — run one bounded post-implementation review in
+  an isolated sandbox and publish only the strict Git/spec/product-bound report
+  and Taskrail-derived serial memory (shipped in T-306).
 
 Onboarding skills (create tasks with `${TASKRAIL:-taskrail} import --apply`):
 
@@ -87,8 +90,8 @@ The active v0.5 roadmap adds `taskrail-spec-review`, `taskrail-task-review`,
 skills consume structured command facts through the common machine-result
 envelope. `spec show` bodies and `--emit-prompt` output intentionally remain exact
 text because those bytes are workflow input rather than a report to interpret.
-The additional skills and safe review publication contracts remain planned until
-their tracked tasks complete.
+The SDD handoff and remaining safe review workflows stay planned until their
+tracked tasks complete.
 
 Behavioral eval definitions for the packaged set are maintainer-only test assets.
 They are deliberately outside `internal/taskrail/skills/`, so neither

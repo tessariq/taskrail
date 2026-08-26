@@ -23,6 +23,10 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ### Added
 
+- Added the `taskrail-workflow-adversarial` packaged skill for one bounded,
+  sandboxed post-implementation review. First-run prompt rendering now accepts
+  only the absent canonical workflow memory path; publication remains the sole
+  writer of strict report and derived index evidence.
 - `review publish --type workflow` now validates a clean Git-bound staged
   workflow report, exact spec/HEAD/product and prior-memory snapshots, and
   Taskrail-derived index bytes before durably publishing the immutable run and

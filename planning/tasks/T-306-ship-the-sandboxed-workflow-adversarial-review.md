@@ -1,14 +1,19 @@
 ---
 id: T-306-ship-the-sandboxed-workflow-adversarial-review
 title: Ship the sandboxed workflow adversarial review skill
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#workflow-adversarial-review-memory
 dependencies:
     - T-201-make-packaged-skills-agent-skills-compliant
     - T-297-ship-complete-storage-neutral-prompt-rendering
     - T-305-publish-workflow-review-reports-and-memory
-updated_at: "2026-08-08T14:23:09Z"
+updated_at: "2026-08-26T14:22:57Z"
+completion_id: "a75c83839033b06006c76c4c8db24380"
+last_verification_id: "7b0aff4767bf6807d01a1632b6b7c89b"
+last_verification_result: pass
+last_verified_at: "2026-08-26T14:22:57Z"
+last_verified_completion_id: "a75c83839033b06006c76c4c8db24380"
 ---
 
 # T-306-ship-the-sandboxed-workflow-adversarial-review Ship the sandboxed workflow adversarial review skill
@@ -45,3 +50,6 @@ bounded sandboxed review and publishes only validated report/memory evidence.
   provider-independence checks plus one reproducible manual two-run review.
 
 ## Implementation Notes
+
+- 2026-08-26T14:22:50Z: Ship the storage-neutral sandboxed workflow review skill, exact v1 derivation guidance, canonical first-run memory rendering, mirrored package, tests, and documentation.
+- 2026-08-26T14:22:57Z: verification pass id 7b0aff4767bf6807d01a1632b6b7c89b previous none completion a75c83839033b06006c76c4c8db24380

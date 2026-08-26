@@ -1,6 +1,6 @@
 ---
 schema_version: 1
-updated_at: "2026-08-26T13:40:05Z"
+updated_at: "2026-08-26T14:22:57Z"
 active_spec_version: v0.5.0
 active_spec_path: specs/v0.5.0.md
 current_task: ""
@@ -8,9 +8,9 @@ current_task_title: ""
 status_summary: idle
 blockers: []
 next_action: Select the next eligible task
-last_verification_result: pass for T-371-gate-implicit-local-bootstrap-tests-by-durability at 2026-08-26T13:40:05Z id 1e92ded682cc91b8ed18e506b357559a
-last_verification_id: 1e92ded682cc91b8ed18e506b357559a
-last_verified_completion_id: 0287f337aeb984a740add85d1f4c4070
+last_verification_result: pass for T-306-ship-the-sandboxed-workflow-adversarial-review at 2026-08-26T14:22:57Z id 7b0aff4767bf6807d01a1632b6b7c89b
+last_verification_id: 7b0aff4767bf6807d01a1632b6b7c89b
+last_verified_completion_id: a75c83839033b06006c76c4c8db24380
 relevant_artifacts: []
 continuation_notes:
     - This repository is temporarily dogfooding bootstrap workflow tooling until Taskrail v0.1.0 exists.
@@ -36,7 +36,7 @@ continuation_notes:
 
 ## Last Verification
 
-- pass for T-371-gate-implicit-local-bootstrap-tests-by-durability at 2026-08-26T13:40:05Z id 1e92ded682cc91b8ed18e506b357559a
+- pass for T-306-ship-the-sandboxed-workflow-adversarial-review at 2026-08-26T14:22:57Z id 7b0aff4767bf6807d01a1632b6b7c89b
 
 ## Next Action
 
@@ -52,8 +52,8 @@ continuation_notes:
 
 ## Task Counts
 
-- todo: 67
+- todo: 66
 - in_progress: 0
-- completed: 303
+- completed: 304
 - blocked: 0
 - cancelled: 0

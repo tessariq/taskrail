@@ -146,12 +146,21 @@ func (s *Service) resolvePromptManagedContext(input PromptManagedContextInput, r
 		snapshots["review:"+review.Path] = review.SHA256
 	}
 	if requirements.memory {
+		expected := path.Join(s.paths.LogicalPlanningDir, "reviews", "workflow-adversarial", "INDEX.json")
+		if input.ID != "workflow-adversarial" || input.MemoryPath != expected {
+			return PromptManagedContext{}, WithMachineErrorCode(MachineCodePathBlocked,
+				fmt.Errorf("workflow prompt memory must be %q", expected))
+		}
 		review, err := s.ReviewShow(input.MemoryPath)
 		if err != nil {
-			return PromptManagedContext{}, err
+			if MachineFailureFor(err).Code != MachineCodeReviewNotFound {
+				return PromptManagedContext{}, err
+			}
+			values["MEMORY_PATH"] = expected
+		} else {
+			values["MEMORY_PATH"] = review.Path
+			snapshots["review:"+review.Path] = review.SHA256
 		}
-		values["MEMORY_PATH"] = review.Path
-		snapshots["review:"+review.Path] = review.SHA256
 	}
 	return PromptManagedContext{Values: values, Snapshots: snapshots}, nil
 }
