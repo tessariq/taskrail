@@ -439,6 +439,8 @@ func TestLoopDryRunBuildsParallelFrontierWithoutMutation(t *testing.T) {
 func snapshotTreeWithoutGitHousekeeping(t *testing.T, repo string) map[string]string {
 	t.Helper()
 	tree := snapshotTree(t, repo)
+	// Read-only Git commands may repack objects or refresh info/refs; the test
+	// separately compares semantic Git state and verifies object integrity.
 	objects := filepath.Join(".git", "objects") + string(filepath.Separator)
 	infoRefs := filepath.Join(".git", "info", "refs")
 	for name := range tree {
