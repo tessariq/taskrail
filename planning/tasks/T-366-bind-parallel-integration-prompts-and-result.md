@@ -1,13 +1,18 @@
 ---
 id: T-366-bind-parallel-integration-prompts-and-result
 title: Bind parallel integration prompts and result evidence
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#parallel-isolated-clone-batches
 dependencies:
     - T-334-deliver-parallel-clone-batches-locally
     - T-335-deliver-parallel-batches-through-review-adapters
-updated_at: "2026-08-26T09:03:46Z"
+updated_at: "2026-08-26T10:56:38Z"
+completion_id: "6e4e818f852fe133da32c85e178b708e"
+last_verification_id: "7f863131a5932ce7d36ba8619d1551bb"
+last_verification_result: pass
+last_verified_at: "2026-08-26T10:56:38Z"
+last_verified_completion_id: "6e4e818f852fe133da32c85e178b708e"
 ---
 
 # T-366-bind-parallel-integration-prompts-and-result Bind parallel integration prompts and result evidence
@@ -38,3 +43,6 @@ bound to the exact worker candidate and integration head it assessed.
   and cross-platform CI.
 
 ## Implementation Notes
+
+- 2026-08-26T10:56:17Z: Bound coordinator-owned parallel integration prompts and ordered child evidence across local and review delivery.
+- 2026-08-26T10:56:38Z: verification pass id 7f863131a5932ce7d36ba8619d1551bb previous none completion 6e4e818f852fe133da32c85e178b708e

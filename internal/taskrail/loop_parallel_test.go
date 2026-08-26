@@ -167,6 +167,14 @@ func TestLoopExecuteDeliversParallelCloneBatch(t *testing.T) {
 	if report.LastIteration != nil || report.Parallel.Integration.Head == nil {
 		t.Fatalf("parallel diagnostic shape = %+v", report)
 	}
+	children := report.Parallel.Integration.Children
+	if len(children) != 1 || children[0].Role != "aggregate_gate" || children[0].Outcome != "pass" ||
+		children[0].BoundHead != *report.Parallel.Integration.Head || children[0].TaskID != nil ||
+		children[0].CandidateHead != nil || children[0].WorkerEvidenceSHA256 != nil ||
+		children[0].Prompt.ID != "loop-integration" || len(children[0].AffectedChecks) == 0 {
+		encoded, _ := json.MarshalIndent(report.Parallel.Integration, "", "  ")
+		t.Fatalf("parallel integration evidence = %s", encoded)
+	}
 	metadata, err := gitCommand(repo, "show", "-s", "--format=%an%x00%ae%x00%aI%x00%cn%x00%ce%x00%cI%x00%B", *report.Parallel.Integration.Head)
 	if err != nil {
 		t.Fatalf("read integrated metadata: %v", err)
@@ -206,7 +214,12 @@ func TestParallelAggregateRejectsGitConfigurationMutation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolve test helper: %v", err)
 	}
-	accepted, violations := runParallelAggregateChild(context.Background(), LoopInvocation{Child: []string{helper, "-test.run=^TestLoopLaunchChildHelper$", "--", "mutate-git-config", filepath.Join(t.TempDir(), "record")}}, repo, &ParallelBatch{}, nil, nil)
+	svc := newTestService(t, repo, time.Date(2026, 8, 22, 12, 0, 0, 0, time.UTC))
+	snapshot, err := svc.LoopPreflight(LoopInvocation{MaxIterations: 1, Child: []string{"child"}})
+	if err != nil {
+		t.Fatalf("preflight: %v", err)
+	}
+	accepted, violations := svc.runParallelAggregateChild(context.Background(), LoopInvocation{Child: []string{helper, "-test.run=^TestLoopLaunchChildHelper$", "--", "mutate-git-config", filepath.Join(t.TempDir(), "record")}}, snapshot, repo, &ParallelBatch{}, nil, nil)
 	if accepted || !hasLoopIntegrityCode(violations, "git_config_changed") {
 		t.Fatalf("parallel aggregate = accepted:%t violations:%+v, want Git configuration rejection", accepted, violations)
 	}
@@ -215,14 +228,81 @@ func TestParallelAggregateRejectsGitConfigurationMutation(t *testing.T) {
 func TestParallelIntegrationChildRejectsGitConfigurationMutation(t *testing.T) {
 	clearLoopChildEnvironment(t)
 	t.Setenv("GO_WANT_LOOP_CHILD", "1")
-	repo, _ := loopFixture(t)
+	repo, svc := loopFixture(t)
+	writeTask(t, repo, "T-001-ready", "Ready", "todo", "high", "specs/v0.1.0.md#summary", nil)
+	runGit(t, repo, "add", ".")
+	runGit(t, repo, "commit", "-m", "add ready task")
 	helper, err := os.Executable()
 	if err != nil {
 		t.Fatalf("resolve test helper: %v", err)
 	}
-	_, err = runParallelIntegrationChild(context.Background(), LoopInvocation{Child: []string{helper, "-test.run=^TestLoopLaunchChildHelper$", "--", "mutate-git-config", filepath.Join(t.TempDir(), "record")}}, repo, "candidate", nil, nil)
+	worker := &ParallelWorker{Task: TaskLoopRow{TaskID: "T-001-ready"}, CandidateHead: stringPtr("candidate")}
+	binding, err := parallelConflictBinding(repo, worker)
+	if err != nil {
+		t.Fatalf("bind conflict child: %v", err)
+	}
+	snapshot, err := svc.LoopPreflight(LoopInvocation{MaxIterations: 1, Child: []string{"child"}})
+	if err != nil {
+		t.Fatalf("preflight: %v", err)
+	}
+	_, err = svc.runParallelIntegrationChild(context.Background(), LoopInvocation{Child: []string{helper, "-test.run=^TestLoopLaunchChildHelper$", "--", "mutate-git-config", filepath.Join(t.TempDir(), "record")}}, snapshot, repo, worker, binding, nil, nil)
 	if !errors.Is(err, errLoopGitConfigChanged) {
 		t.Fatalf("integration child error = %v, want Git configuration rejection", err)
+	}
+}
+
+func TestParallelIntegrationBindingRejectsStaleWorkerEvidence(t *testing.T) {
+	repo, _ := loopFixture(t)
+	worker := &ParallelWorker{Task: TaskLoopRow{TaskID: "T-001-ready"}, CandidateHead: stringPtr("candidate")}
+	binding, err := parallelConflictBinding(repo, worker)
+	if err != nil {
+		t.Fatalf("bind conflict child: %v", err)
+	}
+	worker.CandidateHead = stringPtr("different-candidate")
+	if err := validateParallelIntegrationBinding(repo, worker, binding); err == nil {
+		t.Fatal("stale worker evidence was accepted")
+	}
+}
+
+func TestParallelIntegrationChildRecordsSuccessfulConflictBinding(t *testing.T) {
+	clearLoopChildEnvironment(t)
+	t.Setenv("GO_WANT_LOOP_CHILD", "1")
+	repo, svc := loopFixture(t)
+	writeTask(t, repo, "T-001-ready", "Ready", "todo", "high", "specs/v0.1.0.md#summary", nil)
+	runGit(t, repo, "add", ".")
+	runGit(t, repo, "commit", "-m", "add ready task")
+	worker := &ParallelWorker{Task: TaskLoopRow{TaskID: "T-001-ready"}, CandidateHead: stringPtr("candidate")}
+	binding, err := parallelConflictBinding(repo, worker)
+	if err != nil {
+		t.Fatalf("bind conflict child: %v", err)
+	}
+	snapshot, err := svc.LoopPreflight(LoopInvocation{MaxIterations: 1, Child: []string{"child"}})
+	if err != nil {
+		t.Fatalf("preflight: %v", err)
+	}
+	helper, err := os.Executable()
+	if err != nil {
+		t.Fatalf("resolve test helper: %v", err)
+	}
+	child, err := svc.runParallelIntegrationChild(context.Background(), LoopInvocation{Child: []string{helper, "-test.run=^TestLoopLaunchChildHelper$", "--", "observe", filepath.Join(t.TempDir(), "record")}}, snapshot, repo, worker, binding, nil, nil)
+	if err != nil || child.Outcome != "pass" || child.Prompt.ID != "loop-integration" || child.TaskID == nil ||
+		child.CandidateHead == nil || child.WorkerEvidenceSHA256 == nil || child.Child.ExitCode == nil || *child.Child.ExitCode != 0 {
+		t.Fatalf("successful conflict child = %+v, %v", child, err)
+	}
+}
+
+func TestParallelIntegrationBindingRejectsStaleBoundHead(t *testing.T) {
+	repo, _ := loopFixture(t)
+	worker := &ParallelWorker{Task: TaskLoopRow{TaskID: "T-001-ready"}, CandidateHead: stringPtr("candidate")}
+	binding, err := parallelConflictBinding(repo, worker)
+	if err != nil {
+		t.Fatalf("bind conflict child: %v", err)
+	}
+	writeFile(t, filepath.Join(repo, "head-drift.txt"), "drift\n")
+	runGit(t, repo, "add", "head-drift.txt")
+	runGit(t, repo, "commit", "-m", "advance integration head")
+	if err := validateParallelIntegrationBinding(repo, worker, binding); err == nil {
+		t.Fatal("stale integration head was accepted")
 	}
 }
 
@@ -230,6 +310,10 @@ func TestParallelIntegrationStopsAfterGitConfigurationMutation(t *testing.T) {
 	clearLoopChildEnvironment(t)
 	t.Setenv("GO_WANT_LOOP_CHILD", "1")
 	repo, svc := loopFixture(t)
+	writeTask(t, repo, "T-001-ready", "First", "todo", "high", "specs/v0.1.0.md#summary", nil)
+	writeTask(t, repo, "T-002-ready", "Second", "todo", "medium", "specs/v0.1.0.md#summary", nil)
+	runGit(t, repo, "add", ".")
+	runGit(t, repo, "commit", "-m", "add conflict tasks")
 	writeFile(t, filepath.Join(repo, "conflict.txt"), "base\n")
 	runGit(t, repo, "add", "conflict.txt")
 	runGit(t, repo, "commit", "-m", "base conflict")
@@ -280,14 +364,18 @@ func TestParallelIntegrationStopsAfterGitConfigurationMutation(t *testing.T) {
 	}
 	record := filepath.Join(t.TempDir(), "record")
 	batch := ParallelBatch{Workers: []ParallelWorker{
-		{Outcome: "completed_pass", CandidateCommit: stringPtr(strings.TrimSpace(firstCandidate)), Workspace: &firstWorkerRoot},
-		{Outcome: "completed_pass", CandidateCommit: stringPtr(strings.TrimSpace(candidate)), Workspace: &workerRoot},
+		{Task: TaskLoopRow{TaskID: "T-001-ready"}, Outcome: "completed_pass", CandidateHead: stringPtr(strings.TrimSpace(firstCandidate)), CandidateCommit: stringPtr(strings.TrimSpace(firstCandidate)), Workspace: &firstWorkerRoot},
+		{Task: TaskLoopRow{TaskID: "T-002-ready"}, Outcome: "completed_pass", CandidateHead: stringPtr(strings.TrimSpace(candidate)), CandidateCommit: stringPtr(strings.TrimSpace(candidate)), Workspace: &workerRoot},
 	}}
 	plan := ParallelPlan{BaseRef: strings.TrimSpace(ref), BaseHead: strings.TrimSpace(head), Workspace: ParallelWorkspace{Root: t.TempDir()}}
 	aggregateLaunched := false
 	testHookBeforeParallelAggregate = func() { aggregateLaunched = true }
 	t.Cleanup(func() { testHookBeforeParallelAggregate = nil })
-	violations := svc.integrateParallelWorkers(context.Background(), LoopInvocation{Child: []string{helper, "-test.run=^TestLoopLaunchChildHelper$", "--", "mutate-git-config", record}}, plan, filepath.Join(t.TempDir(), "integration"), &batch, nil, nil)
+	snapshot, err := svc.LoopPreflight(LoopInvocation{MaxIterations: 1, Child: []string{"child"}})
+	if err != nil {
+		t.Fatalf("preflight: %v", err)
+	}
+	violations := svc.integrateParallelWorkers(context.Background(), LoopInvocation{Child: []string{helper, "-test.run=^TestLoopLaunchChildHelper$", "--", "mutate-git-config", record}}, snapshot, plan, filepath.Join(t.TempDir(), "integration"), &batch, nil, nil)
 	if !hasLoopIntegrityCode(violations, "git_config_changed") || batch.Integration.AggregatePass {
 		t.Fatalf("integration = %+v, violations = %+v, want stopped configuration rejection", batch.Integration, violations)
 	}
@@ -296,6 +384,13 @@ func TestParallelIntegrationStopsAfterGitConfigurationMutation(t *testing.T) {
 	}
 	if launches := string(readBytes(t, record+".launches")); launches != "1" {
 		t.Fatalf("child launches = %q, want conflict child only", launches)
+	}
+	children := batch.Integration.Children
+	if len(children) != 1 || children[0].Role != "conflict_resolution" || children[0].Outcome != "fail" ||
+		children[0].TaskID == nil || *children[0].TaskID != "T-002-ready" || children[0].CandidateHead == nil ||
+		children[0].WorkerEvidenceSHA256 == nil || children[0].Prompt.ID != "loop-integration" {
+		encoded, _ := json.MarshalIndent(batch.Integration, "", "  ")
+		t.Fatalf("conflict integration evidence = %s", encoded)
 	}
 }
 
@@ -352,6 +447,9 @@ func runParallelLoopChild() int {
 		return 98
 	}
 	first := strings.SplitN(string(prompt), "\n", 2)[0]
+	if strings.HasPrefix(first, "Use this coordinator-owned parallel integration prompt") {
+		return 0
+	}
 	if strings.HasPrefix(first, "Run the repository's full aggregate validation") {
 		return 0
 	}

@@ -58,11 +58,11 @@ func (s *Service) LoopExecute(ctx context.Context, invocation LoopInvocation) (L
 		return LoopDiagnostic{}, err
 	}
 	invocation = snapshot.Invocation()
-	if err := s.authorizeLoopExecutionPrompt(snapshot); err != nil {
-		return LoopDiagnostic{}, err
-	}
 	if invocation.Parallel > 1 {
 		return s.loopParallelExecute(ctx, invocation, snapshot)
+	}
+	if err := s.authorizeLoopExecutionPrompts(snapshot, "task-implementation"); err != nil {
+		return LoopDiagnostic{}, err
 	}
 	selection, err := s.loopFrozenSelection(snapshot)
 	if err != nil {
@@ -265,19 +265,39 @@ func (s *Service) nextLoopIterationSnapshot(previous LoopPreflightSnapshot) (Loo
 		storage: previous.Storage(), review: previous.Review(), lock: previous.Lock(), rootRefs: rootRefs, gitConfig: gitConfig}, nil
 }
 
-func (s *Service) authorizeLoopExecutionPrompt(snapshot LoopPreflightSnapshot) error {
-	template, source, _, err := s.loopDryRunTemplate(snapshot)
+func (s *Service) authorizeLoopExecutionPrompts(snapshot LoopPreflightSnapshot, ids ...string) error {
+	authorization := snapshot.Invocation().AllowPromptOverrideSHA256
+	replacements, err := s.loopPromptReplacementDigests(snapshot, ids...)
 	if err != nil {
 		return err
 	}
-	authorization := snapshot.Invocation().AllowPromptOverrideSHA256
-	if source == "builtin" && authorization != "" {
+	if len(replacements) == 0 && authorization != "" {
 		return invalidArgumentsf("--allow-prompt-override-sha256 requires a replacement prompt")
 	}
-	if source == "replacement" && authorization != promptDigest(template) {
+	if len(replacements) != 0 {
+		if len(replacements) != 1 {
+			return WithMachineErrorCode(MachineCodePromptInvalid, fmt.Errorf("parallel replacement prompts require one shared authorized template SHA-256"))
+		}
+		if _, ok := replacements[authorization]; ok {
+			return nil
+		}
 		return WithMachineErrorCode(MachineCodePromptInvalid, fmt.Errorf("replacement prompt authorization does not match its template SHA-256"))
 	}
 	return nil
+}
+
+func (s *Service) loopPromptReplacementDigests(snapshot LoopPreflightSnapshot, ids ...string) (map[string]struct{}, error) {
+	replacements := make(map[string]struct{})
+	for _, id := range ids {
+		template, source, _, err := s.loopPromptTemplate(snapshot, id)
+		if err != nil {
+			return nil, err
+		}
+		if source == "replacement" {
+			replacements[promptDigest(template)] = struct{}{}
+		}
+	}
+	return replacements, nil
 }
 
 func loopExecutionBudget(invocation LoopInvocation) LoopExecutionBudget {

@@ -2,12 +2,14 @@ package taskrail
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/url"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -29,12 +31,37 @@ type ParallelWorker struct {
 }
 
 type ParallelIntegration struct {
-	BaseHead      string              `json:"base_head"`
-	Head          *string             `json:"head"`
-	AcceptedTasks []string            `json:"accepted_tasks"`
-	AggregatePass bool                `json:"aggregate_pass"`
-	Child         *LoopIterationChild `json:"child"`
-	Workspace     *string             `json:"workspace"`
+	BaseHead      string                     `json:"base_head"`
+	Head          *string                    `json:"head"`
+	AcceptedTasks []string                   `json:"accepted_tasks"`
+	AggregatePass bool                       `json:"aggregate_pass"`
+	Children      []ParallelIntegrationChild `json:"children"`
+	Workspace     *string                    `json:"workspace"`
+}
+
+// ParallelIntegrationChild binds one coordinator-launched integration child to
+// the candidate or final head it was permitted to assess.
+type ParallelIntegrationChild struct {
+	Role                 string              `json:"role"`
+	TaskID               *string             `json:"task_id"`
+	BoundHead            string              `json:"bound_head"`
+	CandidateHead        *string             `json:"candidate_head"`
+	WorkerEvidenceSHA256 *string             `json:"worker_evidence_sha256"`
+	Prompt               LoopIterationPrompt `json:"prompt"`
+	Child                LoopIterationChild  `json:"child"`
+	Outcome              string              `json:"outcome"`
+	AffectedChecks       []string            `json:"affected_checks"`
+}
+
+type parallelIntegrationBinding struct {
+	role                 string
+	taskID               *string
+	boundHead            string
+	boundRef             string
+	conflictPaths        string
+	candidateHead        *string
+	workerEvidenceSHA256 *string
+	affectedChecks       []string
 }
 
 type ParallelDelivery struct {
@@ -107,7 +134,11 @@ func (s *Service) loopParallelExecute(ctx context.Context, invocation LoopInvoca
 	if invocation.Delivery != "local" && invocation.Delivery != "review" {
 		return LoopDiagnostic{}, invalidArgumentsf("unsupported parallel delivery mode")
 	}
-	if err := s.authorizeLoopExecutionPrompt(snapshot); err != nil {
+	if err := s.authorizeLoopExecutionPrompts(snapshot, "task-implementation", "loop-integration"); err != nil {
+		return LoopDiagnostic{}, err
+	}
+	_, implementationPromptSource, _, err := s.loopPromptTemplate(snapshot, "task-implementation")
+	if err != nil {
 		return LoopDiagnostic{}, err
 	}
 	selection, err := s.loopFrozenSelection(snapshot)
@@ -126,7 +157,7 @@ func (s *Service) loopParallelExecute(ctx context.Context, invocation LoopInvoca
 	diagnostic := loopDiagnosticBase(snapshot, ownership)
 	diagnostic.LastIteration = nil
 	batch := ParallelBatch{Plan: plan, Workers: make([]ParallelWorker, len(plan.Frontier)),
-		Integration: ParallelIntegration{BaseHead: plan.BaseHead, AcceptedTasks: []string{}},
+		Integration: ParallelIntegration{BaseHead: plan.BaseHead, AcceptedTasks: []string{}, Children: []ParallelIntegrationChild{}},
 		Delivery:    ParallelDelivery{Mode: plan.Delivery, Adapter: plan.ReviewAdapter, TargetRef: plan.BaseRef, HeadBefore: plan.BaseHead, PublishedTasks: []string{}, PendingTasks: []string{}, Remote: "not_checked"}}
 	diagnostic.Parallel = &batch
 	if len(plan.Frontier) == 0 {
@@ -169,19 +200,19 @@ func (s *Service) loopParallelExecute(ctx context.Context, invocation LoopInvoca
 		wait.Add(1)
 		go func(i int) {
 			defer wait.Done()
-			batch.Workers[i] = s.runParallelWorker(ctx, invocation, plan, batch.Workers[i], stdout, stderr)
+			batch.Workers[i] = s.runParallelWorker(ctx, invocation, plan, implementationPromptSource, batch.Workers[i], stdout, stderr)
 		}(i)
 	}
 	wait.Wait()
 
 	if invocation.Delivery == "review" {
-		diagnostic.MutationViolations = append(diagnostic.MutationViolations, s.deliverParallelReviews(ctx, invocation, plan, root, &batch, stdout, stderr)...)
+		diagnostic.MutationViolations = append(diagnostic.MutationViolations, s.deliverParallelReviews(ctx, invocation, snapshot, plan, root, &batch, stdout, stderr)...)
 	} else {
 		integrationRoot := filepath.Join(root, "integration")
 		if hasParallelCandidate(batch.Workers) {
 			value := integrationRoot
 			batch.Integration.Workspace = &value
-			diagnostic.MutationViolations = append(diagnostic.MutationViolations, s.integrateParallelWorkers(ctx, invocation, plan, integrationRoot, &batch, stdout, stderr)...)
+			diagnostic.MutationViolations = append(diagnostic.MutationViolations, s.integrateParallelWorkers(ctx, invocation, snapshot, plan, integrationRoot, &batch, stdout, stderr)...)
 		}
 		s.finishParallelDelivery(snapshot, &diagnostic, &batch)
 	}
@@ -220,7 +251,7 @@ func canonicalParallelRoot(root string) (string, error) {
 	return canonical, nil
 }
 
-func (s *Service) runParallelWorker(ctx context.Context, invocation LoopInvocation, plan ParallelPlan, worker ParallelWorker, stdout, stderr io.Writer) ParallelWorker {
+func (s *Service) runParallelWorker(ctx context.Context, invocation LoopInvocation, plan ParallelPlan, implementationPromptSource string, worker ParallelWorker, stdout, stderr io.Writer) ParallelWorker {
 	if worker.Workspace == nil {
 		worker.Violations = append(worker.Violations, parallelViolation("workspace_missing", "worker workspace is missing"))
 		return worker
@@ -243,6 +274,9 @@ func (s *Service) runParallelWorker(ctx context.Context, invocation LoopInvocati
 	cloneInvocation.WorkspaceRootSet, cloneInvocation.CloneDepthSet, cloneInvocation.KeepWorkspacesSet = false, false, false
 	cloneInvocation.DeliverySet, cloneInvocation.ReviewAdapterSet = false, false
 	cloneInvocation.Delivery, cloneInvocation.ReviewAdapter = "local", ""
+	if implementationPromptSource == "builtin" {
+		cloneInvocation.AllowPromptOverrideSHA256 = ""
+	}
 	snapshot, err := service.LoopPreflight(cloneInvocation)
 	if err != nil {
 		worker.Violations = append(worker.Violations, parallelViolation("worker_preflight_failed", err.Error()))
@@ -283,7 +317,7 @@ func hasParallelCandidate(workers []ParallelWorker) bool {
 	return false
 }
 
-func (s *Service) integrateParallelWorkers(ctx context.Context, invocation LoopInvocation, plan ParallelPlan, root string, batch *ParallelBatch, stdout, stderr io.Writer) []MachineViolation {
+func (s *Service) integrateParallelWorkers(ctx context.Context, invocation LoopInvocation, snapshot LoopPreflightSnapshot, plan ParallelPlan, root string, batch *ParallelBatch, stdout, stderr io.Writer) []MachineViolation {
 	violations := []MachineViolation{}
 	depth := 0
 	if plan.Workspace.CloneDepth != nil {
@@ -298,9 +332,9 @@ func (s *Service) integrateParallelWorkers(ctx context.Context, invocation LoopI
 		if worker.Outcome != "completed_pass" || worker.CandidateCommit == nil || worker.Workspace == nil {
 			continue
 		}
-		child, err := integrateParallelCandidate(ctx, invocation, root, *worker.Workspace, *worker.CandidateCommit, stdout, stderr)
+		child, err := s.integrateParallelCandidate(ctx, invocation, snapshot, root, worker, stdout, stderr)
 		if child != nil {
-			batch.Integration.Child = child
+			batch.Integration.Children = append(batch.Integration.Children, *child)
 		}
 		if err != nil {
 			if errors.Is(err, errLoopGitConfigChanged) {
@@ -327,7 +361,7 @@ func (s *Service) integrateParallelWorkers(ctx context.Context, invocation LoopI
 		batch.Integration.AggregatePass = false
 		return violations
 	}
-	aggregatePass, aggregateViolations := runParallelAggregateChild(ctx, invocation, root, batch, stdout, stderr)
+	aggregatePass, aggregateViolations := s.runParallelAggregateChild(ctx, invocation, snapshot, root, batch, stdout, stderr)
 	batch.Integration.AggregatePass = aggregatePass
 	violations = append(violations, aggregateViolations...)
 	if batch.Integration.AggregatePass {
@@ -339,8 +373,12 @@ func (s *Service) integrateParallelWorkers(ctx context.Context, invocation LoopI
 	return violations
 }
 
-func integrateParallelCandidate(ctx context.Context, invocation LoopInvocation, root, worker, commit string, stdout, stderr io.Writer) (*LoopIterationChild, error) {
-	if output, err := exec.Command("git", "-C", root, "fetch", "--no-tags", parallelFileURL(worker), commit).CombinedOutput(); err != nil {
+func (s *Service) integrateParallelCandidate(ctx context.Context, invocation LoopInvocation, snapshot LoopPreflightSnapshot, root string, worker *ParallelWorker, stdout, stderr io.Writer) (*ParallelIntegrationChild, error) {
+	if worker.Workspace == nil || worker.CandidateCommit == nil {
+		return nil, fmt.Errorf("parallel candidate binding is incomplete")
+	}
+	commit := *worker.CandidateCommit
+	if output, err := exec.Command("git", "-C", root, "fetch", "--no-tags", parallelFileURL(*worker.Workspace), commit).CombinedOutput(); err != nil {
 		return nil, fmt.Errorf("fetch candidate: %w: %s", err, strings.TrimSpace(string(output)))
 	}
 	fetched, err := gitCommand(root, "rev-parse", "FETCH_HEAD")
@@ -353,12 +391,16 @@ func integrateParallelCandidate(ctx context.Context, invocation LoopInvocation, 
 				_ = exec.Command("git", "-C", root, "cherry-pick", "--abort").Run()
 				return nil, fmt.Errorf("prepare semantic replay conflict: %w", prepareErr)
 			}
-			child, childErr := runParallelIntegrationChild(ctx, invocation, root, commit, stdout, stderr)
+			binding, bindingErr := parallelConflictBinding(root, worker)
+			if bindingErr != nil {
+				return nil, bindingErr
+			}
+			child, childErr := s.runParallelIntegrationChild(ctx, invocation, snapshot, root, worker, binding, stdout, stderr)
 			if childErr != nil {
 				_ = exec.Command("git", "-C", root, "cherry-pick", "--abort").Run()
 				return &child, childErr
 			}
-			if child.ExitCode == nil || *child.ExitCode != 0 || child.Signal != nil || child.TimedOut || parallelUnmerged(root) {
+			if child.Outcome != "pass" || parallelUnmerged(root) {
 				_ = exec.Command("git", "-C", root, "cherry-pick", "--abort").Run()
 				return &child, fmt.Errorf("replay candidate %s: %w: %s", commit, err, strings.TrimSpace(string(output)))
 			}
@@ -410,32 +452,55 @@ func parallelCommitEnvironment(root, revision string) ([]string, error) {
 
 var errLoopGitConfigChanged = errors.New("Git configuration changed")
 
-func runParallelIntegrationChild(ctx context.Context, invocation LoopInvocation, root, commit string, stdout, stderr io.Writer) (LoopIterationChild, error) {
+func (s *Service) runParallelIntegrationChild(ctx context.Context, invocation LoopInvocation, snapshot LoopPreflightSnapshot, root string, worker *ParallelWorker, binding parallelIntegrationBinding, stdout, stderr io.Writer) (ParallelIntegrationChild, error) {
+	prompt, err := s.loopIntegrationPrompt(snapshot, binding)
+	child := ParallelIntegrationChild{Role: binding.role, TaskID: binding.taskID, BoundHead: binding.boundHead,
+		CandidateHead: binding.candidateHead, WorkerEvidenceSHA256: binding.workerEvidenceSHA256,
+		Prompt: loopIterationPrompt(prompt), Outcome: "fail", AffectedChecks: append([]string{}, binding.affectedChecks...)}
+	if err != nil {
+		child.Child.Signal = stringPtr(err.Error())
+		return child, err
+	}
+	if err := validateParallelIntegrationBinding(root, worker, binding); err != nil {
+		child.Child.Signal = stringPtr(err.Error())
+		return child, err
+	}
 	service, err := NewService(root)
 	if err != nil {
-		return LoopIterationChild{Signal: stringPtr(err.Error())}, err
+		child.Child.Signal = stringPtr(err.Error())
+		return child, err
 	}
 	configs, err := loopGitConfigSnapshot(service.paths.GitDir, service.paths.GitCommonDir)
 	if err != nil {
-		return LoopIterationChild{Signal: stringPtr(err.Error())}, err
+		child.Child.Signal = stringPtr(err.Error())
+		return child, err
 	}
-	prompt := []byte("Resolve exactly one parallel integration conflict for candidate " + commit + ". Preserve task acceptance and detecting tests. Do not edit generated state or task policy, do not integrate another candidate, and leave the resolution staged without committing.\n")
-	execution, err := launchLoopChild(loopChildLaunch{Command: invocation.Child, Context: ctx, Timeout: invocation.Timeout, Prompt: prompt, RepositoryRoot: root, Stdout: stdout, Stderr: stderr})
+	execution, err := launchLoopChild(loopChildLaunch{Command: invocation.Child, Context: ctx, Timeout: invocation.Timeout, Prompt: []byte(prompt.Content), RepositoryRoot: root, Stdout: stdout, Stderr: stderr})
 	if err != nil {
-		return LoopIterationChild{Signal: stringPtr(err.Error())}, nil
+		child.Child = LoopIterationChild{Signal: stringPtr(err.Error())}
+		return child, nil
 	}
-	child := loopIterationChild(execution)
+	child.Child = loopIterationChild(execution)
 	postConfigs, configErr := loopGitConfigSnapshot(service.paths.GitDir, service.paths.GitCommonDir)
 	if configErr != nil || !reflect.DeepEqual(configs, postConfigs) {
 		return child, errLoopGitConfigChanged
 	}
+	if !parallelChildPassed(execution) {
+		return child, nil
+	}
+	child.Outcome = "pass"
 	return child, nil
 }
 
-func runParallelAggregateChild(ctx context.Context, invocation LoopInvocation, root string, batch *ParallelBatch, stdout, stderr io.Writer) (bool, []MachineViolation) {
+func (s *Service) runParallelAggregateChild(ctx context.Context, invocation LoopInvocation, snapshot LoopPreflightSnapshot, root string, batch *ParallelBatch, stdout, stderr io.Writer) (bool, []MachineViolation) {
 	if testHookBeforeParallelAggregate != nil {
 		testHookBeforeParallelAggregate()
 	}
+	head, headErr := gitCommand(root, "rev-parse", "HEAD")
+	if headErr != nil {
+		return false, nil
+	}
+	binding := parallelIntegrationBinding{role: "aggregate_gate", boundHead: strings.TrimSpace(head), affectedChecks: []string{"aggregate_validation"}}
 	validation, err := NewService(root)
 	if err != nil {
 		return false, nil
@@ -452,19 +517,164 @@ func runParallelAggregateChild(ctx context.Context, invocation LoopInvocation, r
 	if err != nil {
 		return false, nil
 	}
-	prompt := []byte("Run the repository's full aggregate validation on this completed parallel integration head. Do not modify files or Git state.\n")
-	execution, err := launchLoopChild(loopChildLaunch{Command: invocation.Child, Context: ctx, Timeout: invocation.Timeout, Prompt: prompt, RepositoryRoot: root, Stdout: stdout, Stderr: stderr})
-	if err != nil {
+	child, childErr := s.runParallelIntegrationChild(ctx, invocation, snapshot, root, nil, binding, stdout, stderr)
+	batch.Integration.Children = append(batch.Integration.Children, child)
+	if childErr != nil {
+		if errors.Is(childErr, errLoopGitConfigChanged) {
+			return false, []MachineViolation{parallelViolation("git_config_changed", "parallel aggregate child changed Git configuration")}
+		}
 		return false, nil
 	}
-	child := loopIterationChild(execution)
-	batch.Integration.Child = &child
 	after, err := loopGitSnapshot(root, validation.paths.GitDir)
 	postConfigs, configErr := loopGitConfigSnapshot(validation.paths.GitDir, validation.paths.GitCommonDir)
 	if configErr != nil || !reflect.DeepEqual(configs, postConfigs) {
 		return false, []MachineViolation{parallelViolation("git_config_changed", "parallel aggregate child changed Git configuration")}
 	}
-	return err == nil && reflect.DeepEqual(before, after) && child.ExitCode != nil && *child.ExitCode == 0 && child.Signal == nil && !child.TimedOut && !execution.Failed(), nil
+	return err == nil && reflect.DeepEqual(before, after) && child.Outcome == "pass", nil
+}
+
+func (s *Service) loopIntegrationPrompt(snapshot LoopPreflightSnapshot, binding parallelIntegrationBinding) (LoopPromptExecution, error) {
+	template, source, replacementPath, err := s.loopPromptTemplate(snapshot, "loop-integration")
+	if err != nil {
+		return LoopPromptExecution{}, err
+	}
+	values, err := s.loopIntegrationValues(snapshot, binding)
+	if err != nil {
+		return LoopPromptExecution{}, err
+	}
+	declared := loopIntegrationPromptTokens(binding.role)
+	values = loopIntegrationPromptValues(values, declared)
+	rendered, err := RenderPrompt(PromptRenderInput{Template: template, DeclaredTokens: declared, Values: values})
+	if err != nil {
+		return LoopPromptExecution{}, WithMachineErrorCode(MachineCodePromptInvalid, err)
+	}
+	return LoopPromptExecution{ID: "loop-integration", Source: source, Path: replacementPath,
+		TemplateSHA256: rendered.TemplateSHA256, RenderedSHA256: rendered.SHA256, OverrideAuthorized: true, Content: rendered.Content}, nil
+}
+
+func loopIntegrationPromptTokens(role string) []string {
+	if role == "aggregate_gate" {
+		return []string{"INTEGRATION_ROLE", "BASE_HEAD", "CURRENT_HEAD", "STORAGE_MODE"}
+	}
+	return promptTokenDeclarations["loop-integration"]
+}
+
+func loopIntegrationPromptValues(values map[string]string, declared []string) map[string]string {
+	filtered := make(map[string]string, len(declared))
+	for _, name := range declared {
+		filtered[name] = values[name]
+	}
+	return filtered
+}
+
+func (s *Service) loopIntegrationValues(snapshot LoopPreflightSnapshot, binding parallelIntegrationBinding) (map[string]string, error) {
+	values := map[string]string{
+		"INTEGRATION_ROLE": binding.role, "TASK_ID": valueOrEmpty(binding.taskID), "TASK_PATH": "", "SPEC_VERSION": "", "SPEC_PATH": "",
+		"BASE_HEAD": snapshot.Git().Head, "CURRENT_HEAD": binding.boundHead, "CANDIDATE_HEAD": valueOrEmpty(binding.candidateHead),
+		"CONFLICT_PATHS": binding.conflictPaths, "WORKER_EVIDENCE_PATH": "", "STORAGE_MODE": snapshot.Storage().Mode,
+	}
+	if binding.taskID == nil {
+		return values, nil
+	}
+	taskPath := path.Join(s.paths.LogicalPlanningDir, "tasks", *binding.taskID+".md")
+	inputPath := filepath.ToSlash(relPath(s.paths.RepoRoot, filepath.Join(s.paths.TasksDir, *binding.taskID+".md")))
+	data, ok := snapshot.Inputs()[inputPath]
+	if !ok {
+		return nil, WithMachineErrorCode(MachineCodePromptInvalid, fmt.Errorf("frozen integration task %s is unavailable", taskPath))
+	}
+	frontmatter, _, err := parseFrontmatter[TaskFrontmatter](data)
+	if err != nil || frontmatter.ID != *binding.taskID {
+		return nil, WithMachineErrorCode(MachineCodePromptInvalid, fmt.Errorf("frozen integration task %s is invalid", taskPath))
+	}
+	specPath, _, err := parseSpecRef(frontmatter.SpecRef)
+	if err != nil {
+		return nil, WithMachineErrorCode(MachineCodePromptInvalid, fmt.Errorf("frozen integration task spec_ref is invalid: %w", err))
+	}
+	specLogical := filepath.ToSlash(specPath)
+	specInput := filepath.ToSlash(relPath(s.paths.RepoRoot, filepath.Join(s.paths.RepoRoot, specPath)))
+	if _, ok := snapshot.Inputs()[specInput]; !ok {
+		return nil, WithMachineErrorCode(MachineCodePromptInvalid, fmt.Errorf("frozen integration spec %s is unavailable", specLogical))
+	}
+	values["TASK_PATH"] = taskPath
+	values["SPEC_PATH"] = specLogical
+	values["SPEC_VERSION"] = strings.TrimSuffix(path.Base(specLogical), path.Ext(specLogical))
+	values["WORKER_EVIDENCE_PATH"] = path.Join(s.paths.LogicalPlanningDir, "artifacts", "verify", *binding.taskID)
+	return values, nil
+}
+
+func parallelConflictBinding(root string, worker *ParallelWorker) (parallelIntegrationBinding, error) {
+	if worker == nil || worker.CandidateHead == nil {
+		return parallelIntegrationBinding{}, fmt.Errorf("parallel conflict is missing candidate evidence")
+	}
+	head, err := gitCommand(root, "rev-parse", "HEAD")
+	if err != nil {
+		return parallelIntegrationBinding{}, err
+	}
+	binding, err := parallelConflictBindingAtHead(strings.TrimSpace(head), "HEAD", worker)
+	if err != nil {
+		return parallelIntegrationBinding{}, err
+	}
+	binding.conflictPaths = parallelUnmergedPaths(root)
+	return binding, nil
+}
+
+func parallelUnmergedPaths(root string) string {
+	output, err := exec.Command("git", "-C", root, "diff", "--name-only", "--diff-filter=U").Output()
+	if err != nil {
+		return ""
+	}
+	return strings.Join(strings.Fields(string(output)), ",")
+}
+
+func parallelConflictBindingAtHead(head, ref string, worker *ParallelWorker) (parallelIntegrationBinding, error) {
+	if worker == nil || worker.CandidateHead == nil {
+		return parallelIntegrationBinding{}, fmt.Errorf("parallel conflict is missing candidate evidence")
+	}
+	evidence, err := parallelWorkerEvidence(*worker)
+	if err != nil {
+		return parallelIntegrationBinding{}, err
+	}
+	taskID := worker.Task.TaskID
+	return parallelIntegrationBinding{role: "conflict_resolution", taskID: &taskID, boundHead: head, boundRef: ref,
+		candidateHead: stringPtr(*worker.CandidateHead), workerEvidenceSHA256: &evidence, affectedChecks: []string{"candidate_replay"}}, nil
+}
+
+func parallelWorkerEvidence(worker ParallelWorker) (string, error) {
+	encoded, err := json.Marshal(worker)
+	if err != nil {
+		return "", fmt.Errorf("encode worker evidence: %w", err)
+	}
+	return promptDigest(encoded), nil
+}
+
+func validateParallelIntegrationBinding(root string, worker *ParallelWorker, binding parallelIntegrationBinding) error {
+	ref := binding.boundRef
+	if ref == "" {
+		ref = "HEAD"
+	}
+	head, err := gitCommand(root, "rev-parse", ref)
+	if err != nil || strings.TrimSpace(head) != binding.boundHead {
+		return fmt.Errorf("parallel integration head no longer matches its binding")
+	}
+	if binding.role == "aggregate_gate" {
+		if binding.taskID != nil || binding.candidateHead != nil || binding.workerEvidenceSHA256 != nil {
+			return fmt.Errorf("aggregate integration binding includes worker evidence")
+		}
+		return nil
+	}
+	if binding.role != "conflict_resolution" || worker == nil || binding.taskID == nil || binding.candidateHead == nil || binding.workerEvidenceSHA256 == nil ||
+		worker.Task.TaskID != *binding.taskID || worker.CandidateHead == nil || *worker.CandidateHead != *binding.candidateHead {
+		return fmt.Errorf("parallel conflict binding no longer matches worker evidence")
+	}
+	evidence, err := parallelWorkerEvidence(*worker)
+	if err != nil || evidence != *binding.workerEvidenceSHA256 {
+		return fmt.Errorf("parallel worker evidence no longer matches its binding")
+	}
+	return nil
+}
+
+func parallelChildPassed(execution loopChildExecution) bool {
+	return !execution.Failed() && execution.ExitCode != nil && *execution.ExitCode == 0 && execution.Signal == "" && !execution.TimedOut
 }
 
 func parallelUnmerged(root string) bool {

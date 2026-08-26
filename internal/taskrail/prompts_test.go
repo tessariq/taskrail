@@ -532,7 +532,7 @@ func TestPromptListAndShowResolveCommittedReplacement(t *testing.T) {
 	wantIDs := []string{
 		"task-implementation", "task-authoring", "task-review", "spec-consistency",
 		"spec-gaps", "spec-additions", "spec-adversarial", "task-decomposition",
-		"task-decomposition-adversarial", "workflow-adversarial",
+		"task-decomposition-adversarial", "workflow-adversarial", "loop-integration",
 	}
 	if !reflect.DeepEqual(gotIDs, wantIDs) {
 		t.Fatalf("prompt order = %v, want %v", gotIDs, wantIDs)
@@ -571,6 +571,55 @@ func TestPromptListAndShowResolveCommittedReplacement(t *testing.T) {
 	}
 	if forced != builtin {
 		t.Fatalf("forced builtin = %+v, want %+v", forced, builtin)
+	}
+}
+
+func TestPromptRenderRejectsCoordinatorOnlyLoopIntegrationPrompt(t *testing.T) {
+	repo := seedFixtureRepo(t)
+	svc := newTestService(t, repo, time.Date(2026, 8, 22, 12, 0, 0, 0, time.UTC))
+	before := snapshotTree(t, repo)
+
+	shown, err := svc.PromptShow(PromptShowInput{ID: "loop-integration"})
+	if err != nil || shown.Source != "builtin" || shown.Content == "" {
+		t.Fatalf("show loop-integration = %+v, %v", shown, err)
+	}
+	if _, err := svc.PromptRender(PromptRenderCommandInput{ID: "loop-integration"}); MachineFailureFor(err).Code != MachineCodeInvalidArguments {
+		t.Fatalf("render loop-integration error = %v, want invalid_arguments", err)
+	}
+	if after := snapshotTree(t, repo); !reflect.DeepEqual(after, before) {
+		t.Fatal("coordinator-only prompt render changed repository bytes")
+	}
+}
+
+func TestParallelLoopPromptAuthorizationBindsIntegrationReplacement(t *testing.T) {
+	repo, svc := loopFixture(t)
+	builtin, err := builtinPrompts.ReadFile("prompts/v1/loop-integration.md")
+	if err != nil {
+		t.Fatalf("read loop integration prompt: %v", err)
+	}
+	path := filepath.Join(repo, ".taskrail", "prompts", "v1", "loop-integration.md")
+	writeFile(t, path, string(builtin))
+	runGit(t, repo, "add", ".")
+	runGit(t, repo, "commit", "-m", "replace integration prompt")
+
+	snapshot, err := svc.LoopPreflight(LoopInvocation{MaxIterations: 1, Parallel: 2, Child: []string{"child"}})
+	if err != nil {
+		t.Fatalf("preflight: %v", err)
+	}
+	if err := svc.authorizeLoopExecutionPrompts(snapshot, "task-implementation", "loop-integration"); err == nil {
+		t.Fatal("parallel prompt authorization accepted an unsigned replacement")
+	}
+	dryRun, err := svc.LoopDryRun(LoopInvocation{DryRun: true, MaxIterations: 1, Parallel: 2})
+	if err != nil || dryRun.Action != "invalid" {
+		t.Fatalf("parallel dry-run = %+v, %v; want unauthorized replacement refusal", dryRun, err)
+	}
+	snapshot.invocation.AllowPromptOverrideSHA256 = promptDigest(builtin)
+	if err := svc.authorizeLoopExecutionPrompts(snapshot, "task-implementation", "loop-integration"); err != nil {
+		t.Fatalf("parallel prompt authorization: %v", err)
+	}
+	dryRun, err = svc.LoopDryRun(LoopInvocation{DryRun: true, MaxIterations: 1, Parallel: 2, AllowPromptOverrideSHA256: promptDigest(builtin)})
+	if err != nil || dryRun.Action == "invalid" {
+		t.Fatalf("authorized parallel dry-run = %+v, %v", dryRun, err)
 	}
 }
 

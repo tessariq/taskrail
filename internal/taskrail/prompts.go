@@ -38,6 +38,7 @@ var promptRegistry = []promptDefinition{
 	{"task-decomposition", "v1", "prompts/v1/task-decomposition.md"},
 	{"task-decomposition-adversarial", "v1", "prompts/v1/task-decomposition-adversarial.md"},
 	{"workflow-adversarial", "v1", "prompts/v1/workflow-adversarial.md"},
+	{"loop-integration", "v1", "prompts/v1/loop-integration.md"},
 }
 
 type PromptListEntry struct {
@@ -99,6 +100,7 @@ var promptTokenDeclarations = map[string][]string{
 	"task-decomposition":             {"SPEC_VERSION", "SPEC_PATH", "SPEC_REVIEW_PATH", PromptContextTracePath, PromptContextDraftPath},
 	"task-decomposition-adversarial": {"SPEC_VERSION", "SPEC_PATH", "SPEC_REVIEW_PATH", PromptContextTracePath, PromptContextDraftPath, PromptContextReviewPath},
 	"workflow-adversarial":           {"SPEC_VERSION", "SPEC_PATH", "MEMORY_PATH", PromptContextReviewPath},
+	"loop-integration":               {"INTEGRATION_ROLE", "TASK_ID", "TASK_PATH", "SPEC_VERSION", "SPEC_PATH", "BASE_HEAD", "CURRENT_HEAD", "CANDIDATE_HEAD", "CONFLICT_PATHS", "WORKER_EVIDENCE_PATH", "STORAGE_MODE"},
 }
 
 var promptTransientRequirementsByID = map[string][]promptTransientRequirement{
@@ -278,6 +280,9 @@ func (s *Service) PromptRender(input PromptRenderCommandInput) (PromptContentRes
 	definition, err := promptDefinitionFor(input.ID, input.Contract)
 	if err != nil {
 		return PromptContentResult{}, err
+	}
+	if definition.id == "loop-integration" {
+		return PromptContentResult{}, invalidArgumentsf("prompt %q is coordinator-only", definition.id)
 	}
 	managed := PromptManagedContextInput{
 		ID: definition.id, Task: input.Task, Spec: input.Spec,

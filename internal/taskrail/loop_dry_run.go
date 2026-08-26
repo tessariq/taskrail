@@ -128,20 +128,33 @@ func (s *Service) LoopDryRun(invocation LoopInvocation) (LoopDryRunResult, error
 			report.Reason = "no eligible allowed task"
 		}
 	}
-	template, source, _, err := s.loopDryRunTemplate(snapshot)
+	_, source, _, err := s.loopDryRunTemplate(snapshot)
 	if err != nil {
 		return LoopDryRunResult{}, err
 	}
-	if source == "builtin" && invocation.AllowPromptOverrideSHA256 != "" {
+	ids := []string{"task-implementation"}
+	if invocation.Parallel > 1 {
+		ids = append(ids, "loop-integration")
+	}
+	replacements, err := s.loopPromptReplacementDigests(snapshot, ids...)
+	if err != nil {
+		return LoopDryRunResult{}, err
+	}
+	if len(replacements) == 0 && invocation.AllowPromptOverrideSHA256 != "" {
 		return LoopDryRunResult{}, invalidArgumentsf("--allow-prompt-override-sha256 requires a replacement prompt")
 	}
-	if source == "replacement" {
+	if len(replacements) != 0 {
 		if invocation.AllowPromptOverrideSHA256 == "" {
 			report.Action = "invalid"
 			report.Reason = "replacement prompt requires --allow-prompt-override-sha256"
 			return report, nil
 		}
-		if invocation.AllowPromptOverrideSHA256 != promptDigest(template) {
+		if len(replacements) != 1 {
+			report.Action = "invalid"
+			report.Reason = "parallel replacement prompts require one shared authorized template SHA-256"
+			return report, nil
+		}
+		if _, ok := replacements[invocation.AllowPromptOverrideSHA256]; !ok {
 			report.Action = "invalid"
 			report.Reason = "replacement prompt authorization does not match its template SHA-256"
 			return report, nil
@@ -381,6 +394,16 @@ func (s *Service) loopDryRunPrompt(snapshot LoopPreflightSnapshot, task TaskLoop
 }
 
 func (s *Service) loopDryRunTemplate(snapshot LoopPreflightSnapshot) ([]byte, string, *string, error) {
+	return s.loopPromptTemplate(snapshot, "task-implementation")
+}
+
+// loopPromptTemplate reads only the preflight input snapshot so a parallel child
+// cannot combine a later replacement with the invocation it was authorized for.
+func (s *Service) loopPromptTemplate(snapshot LoopPreflightSnapshot, id string) ([]byte, string, *string, error) {
+	definition, err := promptDefinitionFor(id, "v1")
+	if err != nil {
+		return nil, "", nil, err
+	}
 	inputs := snapshot.Inputs()
 	promptRoot := filepath.ToSlash(relPath(s.paths.RepoRoot, s.paths.PromptsDir))
 	for inputPath, data := range inputs {
@@ -398,19 +421,18 @@ func (s *Service) loopDryRunTemplate(snapshot LoopPreflightSnapshot) ([]byte, st
 			return nil, "", nil, WithMachineErrorCode(MachineCodePromptInvalid, fmt.Errorf("invalid prompt replacement %s: %w", inputPath, err))
 		}
 	}
-	templatePath := path.Join(promptRoot, "v1", "task-implementation.md")
+	templatePath := path.Join(promptRoot, definition.contract, definition.id+".md")
 	template, replacement := inputs[templatePath]
 	source := "replacement"
 	var replacementPath *string
 	if !replacement {
-		var err error
-		template, err = builtinPrompts.ReadFile("prompts/v1/task-implementation.md")
+		template, err = builtinPrompts.ReadFile(definition.asset)
 		if err != nil {
-			return nil, "", nil, fmt.Errorf("read embedded task implementation prompt: %w", err)
+			return nil, "", nil, fmt.Errorf("read embedded %s prompt: %w", definition.id, err)
 		}
 		source = "builtin"
 	} else {
-		replacementPath = stringPtr(path.Join(s.paths.LogicalPromptsDir, "v1", "task-implementation.md"))
+		replacementPath = stringPtr(path.Join(s.paths.LogicalPromptsDir, definition.contract, definition.id+".md"))
 	}
 	return template, source, replacementPath, nil
 }

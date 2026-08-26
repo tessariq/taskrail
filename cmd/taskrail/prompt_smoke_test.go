@@ -34,7 +34,7 @@ func TestPromptListAndShowPublishExactReadOnlyResults(t *testing.T) {
 	if err := json.Unmarshal(envelope.Result, &list); err != nil {
 		t.Fatalf("decode list: %v", err)
 	}
-	if len(list.Prompts) != 10 || list.Prompts[2].ID != "task-review" || list.Prompts[0].ReplacementPath != nil {
+	if len(list.Prompts) != 11 || list.Prompts[2].ID != "task-review" || list.Prompts[10].ID != "loop-integration" || list.Prompts[0].ReplacementPath != nil {
 		t.Fatalf("list = %+v, want ordered v1 catalog", list)
 	}
 
@@ -91,6 +91,14 @@ func TestPromptRenderPublishesExactReadOnlyContent(t *testing.T) {
 	invalid := decodeEnvelope(t, stdout)
 	if invalid.Error == nil || invalid.Error.Code != "prompt_invalid" {
 		t.Fatalf("invalid render envelope = %+v, stderr = %q", invalid, stderr)
+	}
+	stdout, stderr, err = runRootSplit(t, "prompt", "render", "loop-integration", "--json")
+	if err == nil {
+		t.Fatal("expected loop-integration public render to be rejected")
+	}
+	invalid = decodeEnvelope(t, stdout)
+	if invalid.Error == nil || invalid.Error.Code != "invalid_arguments" {
+		t.Fatalf("coordinator-only render envelope = %+v, stderr = %q", invalid, stderr)
 	}
 
 	stdout, stderr, err = runRootSplit(t, "prompt", "render", "task-implementation", "--task", "T-100", "--json")

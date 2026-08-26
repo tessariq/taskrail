@@ -91,6 +91,14 @@ func TestLoopExecuteDeliversParallelReviewBatchThroughAdapter(t *testing.T) {
 		encoded, _ := json.MarshalIndent(report, "", "  ")
 		t.Fatalf("review delivery report = %s", encoded)
 	}
+	children := report.Parallel.Integration.Children
+	if len(children) != 2 || children[0].Role != "conflict_resolution" || children[0].Outcome != "pass" ||
+		children[0].TaskID == nil || children[0].CandidateHead == nil || children[0].WorkerEvidenceSHA256 == nil ||
+		children[0].Prompt.ID != "loop-integration" || children[1].Role != "aggregate_gate" || children[1].Outcome != "pass" ||
+		children[1].BoundHead != *report.Parallel.Integration.Head || children[1].Prompt.ID != "loop-integration" {
+		encoded, _ := json.MarshalIndent(report.Parallel.Integration, "", "  ")
+		t.Fatalf("review integration evidence = %s", encoded)
+	}
 	for _, taskID := range []string{"T-001-ready", "T-002-ready"} {
 		tasks, err := svc.loadTasks()
 		task, found := taskByIDFromSlice(tasks, taskID)

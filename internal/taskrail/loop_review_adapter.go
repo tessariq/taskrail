@@ -174,7 +174,7 @@ type reviewChange struct {
 	ready     bool
 }
 
-func (s *Service) deliverParallelReviews(ctx context.Context, invocation LoopInvocation, plan ParallelPlan, root string, batch *ParallelBatch, stdout, stderr io.Writer) (violations []MachineViolation) {
+func (s *Service) deliverParallelReviews(ctx context.Context, invocation LoopInvocation, snapshot LoopPreflightSnapshot, plan ParallelPlan, root string, batch *ParallelBatch, stdout, stderr io.Writer) (violations []MachineViolation) {
 	changes := make([]reviewChange, len(batch.Workers))
 	var wait sync.WaitGroup
 	for i := range batch.Workers {
@@ -247,12 +247,12 @@ func (s *Service) deliverParallelReviews(ctx context.Context, invocation LoopInv
 		worker.Integrated = true
 		worker.IntegratedCommit = &targetHead
 		batch.Integration.AcceptedTasks = append(batch.Integration.AcceptedTasks, worker.Task.TaskID)
-		if err := s.refreshOpenReviewChanges(ctx, invocation, plan, integrationRoot, targetHead, batch, changes, i, stdout, stderr); err != nil {
+		if err := s.refreshOpenReviewChanges(ctx, invocation, snapshot, plan, integrationRoot, targetHead, batch, changes, i, stdout, stderr); err != nil {
 			batch.Integration.AggregatePass = false
 			return
 		}
 	}
-	aggregatePass, violations := runParallelAggregateChild(ctx, invocation, integrationRoot, batch, stdout, stderr)
+	aggregatePass, violations := s.runParallelAggregateChild(ctx, invocation, snapshot, integrationRoot, batch, stdout, stderr)
 	batch.Integration.AggregatePass = aggregatePass
 	if batch.Integration.AggregatePass {
 		batch.Integration.Head = batch.Delivery.HeadAfter
@@ -375,14 +375,14 @@ func resetReviewTarget(root string) error {
 	return nil
 }
 
-func (s *Service) refreshOpenReviewChanges(ctx context.Context, invocation LoopInvocation, plan ParallelPlan, integrationRoot, targetHead string, batch *ParallelBatch, changes []reviewChange, mergedIndex int, stdout, stderr io.Writer) error {
+func (s *Service) refreshOpenReviewChanges(ctx context.Context, invocation LoopInvocation, snapshot LoopPreflightSnapshot, plan ParallelPlan, integrationRoot, targetHead string, batch *ParallelBatch, changes []reviewChange, mergedIndex int, stdout, stderr io.Writer) error {
 	for i := range batch.Workers {
 		worker := &batch.Workers[i]
 		change := &changes[i]
 		if i == mergedIndex || !change.ready || worker.Integrated || worker.Outcome != "completed_pass" || worker.Workspace == nil || worker.CandidateHead == nil {
 			continue
 		}
-		if err := refreshReviewCandidate(ctx, invocation, integrationRoot, *worker.Workspace, stdout, stderr); err != nil {
+		if err := s.refreshReviewCandidate(ctx, invocation, snapshot, integrationRoot, worker, batch, stdout, stderr); err != nil {
 			reviewAdapterFailure(worker, err, "refresh change against merged target")
 			continue
 		}
@@ -401,25 +401,34 @@ func (s *Service) refreshOpenReviewChanges(ctx context.Context, invocation LoopI
 	return nil
 }
 
-func refreshReviewCandidate(ctx context.Context, invocation LoopInvocation, integrationRoot, worker string, stdout, stderr io.Writer) error {
+func (s *Service) refreshReviewCandidate(ctx context.Context, invocation LoopInvocation, snapshot LoopPreflightSnapshot, integrationRoot string, worker *ParallelWorker, batch *ParallelBatch, stdout, stderr io.Writer) error {
+	if worker == nil || worker.Workspace == nil {
+		return fmt.Errorf("review refresh worker is unavailable")
+	}
 	head, err := gitCommand(integrationRoot, "rev-parse", "HEAD")
 	if err != nil {
 		return fmt.Errorf("read integration head: %w", err)
 	}
-	if output, err := exec.Command("git", "-C", worker, "fetch", "--no-tags", parallelFileURL(integrationRoot), strings.TrimSpace(head)).CombinedOutput(); err != nil {
+	if output, err := exec.Command("git", "-C", *worker.Workspace, "fetch", "--no-tags", parallelFileURL(integrationRoot), strings.TrimSpace(head)).CombinedOutput(); err != nil {
 		return fmt.Errorf("fetch merged target: %w: %s", err, strings.TrimSpace(string(output)))
 	}
 	childResolved := false
-	if output, err := exec.Command("git", "-C", worker, "rebase", "FETCH_HEAD").CombinedOutput(); err != nil {
-		if repairErr := repairReviewRebaseStateConflict(worker); repairErr != nil {
-			if childErr := runReviewRefreshChild(ctx, invocation, worker, stdout, stderr, "Resolve this one semantic review refresh conflict, preserve acceptance and detecting tests, run affected checks, and leave the resolution staged without changing task policy.\n"); childErr != nil {
+	if output, err := exec.Command("git", "-C", *worker.Workspace, "rebase", "FETCH_HEAD").CombinedOutput(); err != nil {
+		if repairErr := repairReviewRebaseStateConflict(*worker.Workspace); repairErr != nil {
+			binding, bindingErr := parallelConflictBindingAtHead(strings.TrimSpace(head), "FETCH_HEAD", worker)
+			if bindingErr != nil {
+				return bindingErr
+			}
+			child, childErr := s.runParallelIntegrationChild(ctx, invocation, snapshot, *worker.Workspace, worker, binding, stdout, stderr)
+			batch.Integration.Children = append(batch.Integration.Children, child)
+			if childErr != nil || child.Outcome != "pass" {
 				return fmt.Errorf("rebase refreshed change: %w: %s", err, strings.TrimSpace(string(output)))
 			}
-			env, envErr := parallelCommitEnvironment(worker, "ORIG_HEAD")
+			env, envErr := parallelCommitEnvironment(*worker.Workspace, "ORIG_HEAD")
 			if envErr != nil {
 				return envErr
 			}
-			continueRebase := exec.Command("git", "-C", worker, "-c", "core.editor=true", "rebase", "--continue")
+			continueRebase := exec.Command("git", "-C", *worker.Workspace, "-c", "core.editor=true", "rebase", "--continue")
 			continueRebase.Env = append(os.Environ(), env...)
 			if continueOutput, continueErr := continueRebase.CombinedOutput(); continueErr != nil {
 				return fmt.Errorf("continue semantic review rebase: %w: %s", continueErr, strings.TrimSpace(string(continueOutput)))
@@ -427,29 +436,43 @@ func refreshReviewCandidate(ctx context.Context, invocation LoopInvocation, inte
 			childResolved = true
 		}
 	}
-	service, err := NewService(worker)
+	service, err := NewService(*worker.Workspace)
 	if err != nil {
 		return fmt.Errorf("open refreshed change: %w", err)
 	}
 	if _, err := service.Repair(RepairInput{Apply: true}); err != nil {
 		return fmt.Errorf("reproject refreshed state: %w", err)
 	}
-	if output, err := exec.Command("git", "-C", worker, "add", "--", service.reportedStatePath()).CombinedOutput(); err != nil {
+	if output, err := exec.Command("git", "-C", *worker.Workspace, "add", "--", service.reportedStatePath()).CombinedOutput(); err != nil {
 		return fmt.Errorf("stage refreshed state: %w: %s", err, strings.TrimSpace(string(output)))
 	}
-	env, err := parallelCommitEnvironment(worker, "HEAD")
+	env, err := parallelCommitEnvironment(*worker.Workspace, "HEAD")
 	if err != nil {
 		return err
 	}
-	command := exec.Command("git", "-C", worker, "commit", "--amend", "--no-edit")
+	command := exec.Command("git", "-C", *worker.Workspace, "commit", "--amend", "--no-edit")
 	command.Env = append(os.Environ(), env...)
 	if output, err := command.CombinedOutput(); err != nil {
 		return fmt.Errorf("commit refreshed state: %w: %s", err, strings.TrimSpace(string(output)))
 	}
 	if childResolved {
-		return verifyReviewWorkspaceClean(worker)
+		return verifyReviewWorkspaceClean(*worker.Workspace)
 	}
-	return runReviewRefreshChild(ctx, invocation, worker, stdout, stderr, "Refresh this one open review change against its merged target, run affected checks, and leave the repository clean without changing task policy.\n")
+	refreshed, err := gitCommand(*worker.Workspace, "rev-parse", "HEAD")
+	if err != nil {
+		return fmt.Errorf("read refreshed change head: %w", err)
+	}
+	worker.CandidateHead = stringPtr(strings.TrimSpace(refreshed))
+	binding, err := parallelConflictBindingAtHead(strings.TrimSpace(head), "FETCH_HEAD", worker)
+	if err != nil {
+		return err
+	}
+	child, childErr := s.runParallelIntegrationChild(ctx, invocation, snapshot, *worker.Workspace, worker, binding, stdout, stderr)
+	batch.Integration.Children = append(batch.Integration.Children, child)
+	if childErr != nil || child.Outcome != "pass" {
+		return fmt.Errorf("refreshed change checks failed")
+	}
+	return verifyReviewWorkspaceClean(*worker.Workspace)
 }
 
 func runReviewRefreshChild(ctx context.Context, invocation LoopInvocation, worker string, stdout, stderr io.Writer, prompt string) error {
