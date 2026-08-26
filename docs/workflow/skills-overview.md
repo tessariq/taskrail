@@ -48,9 +48,13 @@ Tracked-work and spec skills (each bullet notes how it creates tasks, if at all)
   and propose tasks a human promotes via `task new` / `import --apply` (shipped in
   T-101). This is a deliberate split: the binary's `coverage --gaps` stays
   **mechanical** — count, graph, and state signals only, **never semantic** "this
-  needs a test" inference — and the skill supplies the semantic half. Structural
-  signals are candidates to promote, not violations; see the "Coverage vs gap
-  analysis" section in `README.md` for the full boundary.
+   needs a test" inference — and the skill supplies the semantic half. Structural
+   signals are candidates to promote, not violations; see the "Coverage vs gap
+   analysis" section in `README.md` for the full boundary.
+- `taskrail-task-review` — inspect one existing task against its referenced spec,
+  related tasks, and dependencies; stage one strict digest-bound advisory review
+  and publish it through `review publish --type task` without directly changing
+  task state (shipped in T-216).
 
 Onboarding skills (create tasks with `${TASKRAIL:-taskrail} import --apply`):
 
@@ -77,7 +81,7 @@ correct by building the working-tree binary onto the mise PATH — run
 
 ## Active v0.5 Additions
 
-The active v0.5 roadmap adds `taskrail-task-review`,
+The active v0.5 roadmap adds `taskrail-spec-review`, `taskrail-task-review`,
 `taskrail-workflow-adversarial`, and `taskrail-sdd-handoff`. Existing packaged
 skills consume structured command facts through the common machine-result
 envelope. `spec show` bodies and `--emit-prompt` output intentionally remain exact

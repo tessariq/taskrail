@@ -360,6 +360,28 @@ func TestPromptRenderComposesEveryDeclaredContextWithoutWrites(t *testing.T) {
 	}
 }
 
+func TestTaskReviewPromptDefinesDigestBoundAdvisoryReview(t *testing.T) {
+	prompt := string(builtinPromptTemplate(t, "task-review"))
+	for _, want := range []string{
+		"exactly one\nstrict JSON proposal",
+		"taskrail task show {{TASK_ID}} --json",
+		"taskrail spec show {{SPEC_VERSION}} --json",
+		"taskrail task show <full-task-id> --json",
+		"outcome focus and spec alignment",
+		"split and do-not-split tests",
+		"exact top-level fields, in this\norder",
+		"prompt_template_sha256",
+		"task author",
+		"task dependency add",
+		"Never change task\nstatus, task-local loop policy, specifications, dependencies, or task bodies\ndirectly",
+		"explicitly invoked consuming\nworkflow or the human",
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Errorf("task-review prompt missing %q", want)
+		}
+	}
+}
+
 func TestPromptRenderRejectsUndeclaredContextAndSnapshotChanges(t *testing.T) {
 	repo := seedFixtureRepo(t)
 	writeTask(t, repo, "T-001-render", "Render", "todo", "high", "specs/v0.1.0.md#summary", nil)

@@ -30,6 +30,7 @@ var shippableSkills = []string{
 	"taskrail-spec-review",
 	"taskrail-decompose",
 	"taskrail-gap",
+	"taskrail-task-review",
 }
 
 // taskAuthoringSkills create tracked tasks via `taskrail task new`. taskrail-import
@@ -134,6 +135,7 @@ func TestShippableSkillsConsumeStructuredResultsAsJSON(t *testing.T) {
 		"taskrail-spec-review":   {"} spec show <version> --json", "} prompt render spec-consistency --spec <version> --review <proposal-dir>/consistency.json --json", "} review publish --type spec --proposal <proposal-dir> --destination <planning-dir>/reviews/spec/<version>/<session-id> --spec <version> --expect-spec-sha256 <digest> --json"},
 		"taskrail-decompose":     {"} coverage --json", "} spec show <version> --anchors --json", "} import --apply draft.json --json", "} validate --json"},
 		"taskrail-gap":           {"} coverage --gaps --json", "} coverage --gaps --area <anchor> --json", "} task new --title \"...\" --area <anchor> --json", "} import --apply <draft.json> --json", "} validate --json"},
+		"taskrail-task-review":   {"} task show <task-id> --json", "} spec show <version> --json", "} coverage --area <spec-anchor> --json", "} prompt render task-review --task <task-id> --review <proposal>/review.json --json", "} review publish --type task --proposal <proposal> --destination <destination> --task <task-id> --expect-task-sha256 <digest> --expect-spec-sha256 <digest> --dry-run --json", "} review publish --type task --proposal <proposal> --destination <destination> --task <task-id> --expect-task-sha256 <digest> --expect-spec-sha256 <digest> --json"},
 	}
 	for _, name := range shippableSkills {
 		body := strings.Join(strings.Fields(readShippableSkill(t, name)), " ")
@@ -329,6 +331,27 @@ func TestGapSkillComposesStructuralAndSemantic(t *testing.T) {
 		"} import --apply",
 		"structural",
 		"semantic",
+	)
+}
+
+func TestTaskReviewSkillPreservesAdvisoryDigestBoundBoundary(t *testing.T) {
+	assertSkillReferences(t, "taskrail-task-review",
+		"exactly one `review.json`",
+		"schema v1",
+		"`prompt_contract_version`, `prompt_template_sha256`, `prompt_source`",
+		"outcome/spec alignment",
+		"do-not-split test",
+		"integrated delivery",
+		"task author <task-id>",
+		"task dependency add <task-id> <dependency-id>",
+		"task dependency remove <task-id> <dependency-id>",
+		"reviewed implicit-hold follow-up",
+		"never changes task status, task-local loop policy",
+		"When the selected task's referenced spec is active",
+		"historical or future spec",
+		"explicitly invoked consuming workflow or the human",
+		"do not start another review session",
+		"remain reviewable but are not authored through this skill",
 	)
 }
 

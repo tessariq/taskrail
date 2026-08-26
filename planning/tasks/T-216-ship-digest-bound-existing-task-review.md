@@ -1,7 +1,7 @@
 ---
 id: T-216-ship-digest-bound-existing-task-review
 title: Ship digest-bound existing-task review
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#existing-task-review
 dependencies:
@@ -10,7 +10,12 @@ dependencies:
     - T-239-edit-exact-id-dependencies-safely
     - T-298-bind-task-review-publication-to-resolved-prompts
     - T-303-align-native-task-producers-with-the-body-contract
-updated_at: "2026-08-05T20:24:22Z"
+updated_at: "2026-08-26T08:00:26Z"
+completion_id: "7b09193bff0f63b8e870b83dfc60c3ee"
+last_verification_id: "3aed76e16ae0e893fb2faeb94e375f4f"
+last_verification_result: pass
+last_verified_at: "2026-08-26T08:00:26Z"
+last_verified_completion_id: "7b09193bff0f63b8e870b83dfc60c3ee"
 ---
 
 # T-216-ship-digest-bound-existing-task-review Ship digest-bound existing-task review
@@ -53,3 +58,6 @@ without duplicating the four post-spec lenses or mutating task state directly.
 - Prove independent advisory output, generic publication, forbidden direct writers, package parity, and a reviewed `task author` handoff.
 
 ## Implementation Notes
+
+- 2026-08-26T08:00:14Z: Shipped the digest-bound task-review prompt and packaged advisory workflow, with strict proposal guidance and sanctioned remediation handoffs.
+- 2026-08-26T08:00:26Z: verification pass id 3aed76e16ae0e893fb2faeb94e375f4f previous none completion 7b09193bff0f63b8e870b83dfc60c3ee

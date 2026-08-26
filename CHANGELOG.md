@@ -19,6 +19,11 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ### Added
 
+- Added the `taskrail-task-review` packaged skill and its v1 prompt. It resolves
+  one tracked task, its referenced specification, dependencies, and related
+  context into one strict digest-bound advisory review proposal, then publishes
+  immutable evidence through `review publish --type task` without directly
+  changing task state.
 - `taskrail task author <task-id> --body <proposal> --expect-sha256 <digest>`
   now applies a reviewed three-section task body only after a digest-bound,
   locked compare-and-swap. It preserves task frontmatter, H1, Implementation
