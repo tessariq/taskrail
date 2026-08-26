@@ -161,3 +161,60 @@ func TestBuildStatsCarriesCoverageAndVerification(t *testing.T) {
 		t.Errorf("last verification = %q, want 'pass: shipped'", report.LastVerificationResult)
 	}
 }
+
+func TestClassifyActiveSpecRefKeepsMalformedActiveSubjects(t *testing.T) {
+	anchors := map[string]struct{}{"summary": {}}
+	tests := []struct {
+		name      string
+		specRef   string
+		subject   bool
+		issueKind string
+	}{
+		{name: "valid active", specRef: "specs/v0.1.0.md#summary", subject: true},
+		{name: "unknown active anchor", specRef: "specs/v0.1.0.md#missing", subject: true, issueKind: "active_path_invalid_anchor"},
+		{name: "missing active anchor", specRef: "specs/v0.1.0.md", subject: true, issueKind: "active_path_invalid_anchor"},
+		{name: "valid old spec", specRef: "specs/v0.2.0.md#summary"},
+		{name: "unclassifiable", specRef: "malformed", issueKind: "unclassifiable"},
+		{name: "noncanonical", specRef: "specs/../specs/v0.1.0.md#summary", issueKind: "unclassifiable"},
+		{name: "case alias", specRef: "specs/V0.1.0.md#summary", issueKind: "unclassifiable"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			subject, issue := classifyActiveSpecRef(fixtureTask("T-1", "todo", tt.specRef), "specs/v0.1.0.md", anchors)
+			if subject != tt.subject {
+				t.Errorf("subject = %v, want %v", subject, tt.subject)
+			}
+			if tt.issueKind == "" && issue != nil {
+				t.Errorf("issue = %+v, want nil", issue)
+			}
+			if tt.issueKind != "" && (issue == nil || issue.Classification != tt.issueKind) {
+				t.Errorf("issue = %+v, want %q", issue, tt.issueKind)
+			}
+		})
+	}
+}
+
+func TestScopedDependencyShapeTraversesContextOnlyFromSubjects(t *testing.T) {
+	root := depTask("T-1", "todo", "T-2")
+	context := depTask("T-2", "todo", "T-3")
+	done := depTask("T-3", "completed")
+	offSpec := depTask("T-4", "todo", "T-5")
+	cancelled := depTask("T-5", "cancelled")
+	scope := activeStatsScope{
+		subjects: []*Task{root},
+		byID: map[string]*Task{
+			"T-1": root,
+			"T-2": context,
+			"T-3": done,
+			"T-4": offSpec,
+			"T-5": cancelled,
+		},
+	}
+	shape := scopedDependencyShape(scope)
+	if shape.UnmetDependencyTaskCount != 1 {
+		t.Errorf("unmet scoped dependencies = %d, want 1", shape.UnmetDependencyTaskCount)
+	}
+	if shape.LongestChain != 3 {
+		t.Errorf("scoped longest chain = %d, want 3", shape.LongestChain)
+	}
+}

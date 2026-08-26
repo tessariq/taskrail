@@ -133,6 +133,59 @@ func TestRenderDependencyGraphRejectsUnknownFormat(t *testing.T) {
 	}
 }
 
+func TestRenderActiveSpecMermaidKeepsMissingReferencesDistinctAndStyled(t *testing.T) {
+	task := depTask("T-1", "todo", "T-missing", "T_missing")
+	context := depTask("T-2", "todo")
+	scope := activeStatsScope{
+		report:    StatsScope{ActiveSpecPath: "specs/v0.1.0.md", SpecRefIssues: []SpecRefIssue{}},
+		graph:     []*Task{task, context},
+		missing:   []string{"T-missing", "T_missing"},
+		byID:      map[string]*Task{"T-1": task, "T-2": context},
+		subjectID: map[string]bool{"T-1": true},
+	}
+	got, err := renderActiveSpecDependencyGraph(scope, "mermaid")
+	if err != nil {
+		t.Fatalf("mermaid: %v", err)
+	}
+	for _, want := range []string{
+		`missing_542d6d697373696e67["missing:T-missing"]`,
+		`missing_545f6d697373696e67["missing:T_missing"]`,
+		"task_542d31 --> missing_542d6d697373696e67",
+		"task_542d31 --> missing_545f6d697373696e67",
+		"classDef missing",
+		"class missing_542d6d697373696e67,missing_545f6d697373696e67 missing",
+		"class task_542d32 offSpec",
+	} {
+		if !contains(got, want) {
+			t.Errorf("scoped mermaid missing %q:\n%s", want, got)
+		}
+	}
+}
+
+func TestRenderActiveSpecMermaidSeparatesTaskAndMissingNamespaces(t *testing.T) {
+	task := depTask("missing_542d6d697373696e67", "todo", "T-missing")
+	scope := activeStatsScope{
+		report:    StatsScope{ActiveSpecPath: "specs/v0.1.0.md", SpecRefIssues: []SpecRefIssue{}},
+		graph:     []*Task{task},
+		missing:   []string{"T-missing"},
+		byID:      map[string]*Task{task.Frontmatter.ID: task},
+		subjectID: map[string]bool{task.Frontmatter.ID: true},
+	}
+	got, err := renderActiveSpecDependencyGraph(scope, "mermaid")
+	if err != nil {
+		t.Fatalf("mermaid: %v", err)
+	}
+	for _, want := range []string{
+		`task_6d697373696e675f353432643664363937333733363936653637["missing_542d6d697373696e67`,
+		`missing_542d6d697373696e67["missing:T-missing"]`,
+		"task_6d697373696e675f353432643664363937333733363936653637 --> missing_542d6d697373696e67",
+	} {
+		if !contains(got, want) {
+			t.Errorf("scoped mermaid missing %q:\n%s", want, got)
+		}
+	}
+}
+
 // small local string helpers to avoid pulling strings into every assertion.
 func contains(haystack, needle string) bool { return indexOf(haystack, needle) >= 0 }
 

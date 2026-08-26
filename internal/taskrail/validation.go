@@ -81,8 +81,8 @@ func (s *Service) validateState(state *State) []string {
 	}
 	if strings.TrimSpace(state.Frontmatter.ActiveSpecPath) == "" {
 		violations = append(violations, "state active_spec_path must not be empty")
-	} else if activeSpec, err := s.paths.physicalSpecPath(state.Frontmatter.ActiveSpecPath); err != nil || !fileExists(activeSpec) {
-		violations = append(violations, fmt.Sprintf("state active_spec_path does not exist: %s", state.Frontmatter.ActiveSpecPath))
+	} else if err := s.validateActiveSpecCoherence(state); err != nil {
+		violations = append(violations, err.Error())
 	}
 	if strings.TrimSpace(state.Frontmatter.StatusSummary) == "" {
 		violations = append(violations, "state status_summary must not be empty")
@@ -108,6 +108,31 @@ func (s *Service) validateState(state *State) []string {
 	}
 	violations = append(violations, stateArtifactRefsForPrefix(state.Frontmatter, s.logicalArtifactPrefix())...)
 	return violations
+}
+
+// validateActiveSpecCoherence rejects aliases and mismatched state fields before
+// a reader can report against a spec other than the version state declares.
+func (s *Service) validateActiveSpecCoherence(state *State) error {
+	version := state.Frontmatter.ActiveSpecVersion
+	if !specVersionPattern.MatchString(version) {
+		return fmt.Errorf("state active_spec_version %q is not a discoverable versioned spec", version)
+	}
+	expected := path.Join(s.paths.LogicalSpecsDir, version+".md")
+	if state.Frontmatter.ActiveSpecPath != expected {
+		return fmt.Errorf("state active_spec_path does not exist or is not canonical: %q must be %q for active_spec_version %s", state.Frontmatter.ActiveSpecPath, expected, version)
+	}
+	physical, err := s.paths.physicalSpecPath(expected)
+	if err != nil {
+		return fmt.Errorf("state active_spec_path does not exist: %s", state.Frontmatter.ActiveSpecPath)
+	}
+	actual, found, err := exactChild(s.paths.SpecsDir, version+".md")
+	if err != nil || !found || actual != physical {
+		return fmt.Errorf("state active_spec_path does not exist: %s", state.Frontmatter.ActiveSpecPath)
+	}
+	if err := validateRegularFile(physical); err != nil {
+		return fmt.Errorf("state active_spec_path is unsafe: %v", err)
+	}
+	return nil
 }
 
 // gitignoredArtifactPrefix is the repo-relative prefix of the gitignored

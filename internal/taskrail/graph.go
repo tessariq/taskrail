@@ -1,6 +1,7 @@
 package taskrail
 
 import (
+	"encoding/hex"
 	"fmt"
 	"sort"
 	"strings"
@@ -19,6 +20,21 @@ func (s *Service) DependencyGraph(format string) (string, error) {
 	return renderDependencyGraph(tasks, format)
 }
 
+// ActiveSpecDependencyGraph exports the active-spec cohort plus the dependency
+// context required to make its edges meaningful. It refuses an incoherent active
+// state before rendering any partial graph.
+func (s *Service) ActiveSpecDependencyGraph(format string) (string, error) {
+	state, tasks, err := s.loadStateAndTasks()
+	if err != nil {
+		return "", err
+	}
+	scope, err := s.activeStatsScope(state, tasks)
+	if err != nil {
+		return "", err
+	}
+	return renderActiveSpecDependencyGraph(scope, format)
+}
+
 // renderDependencyGraph is the IO-free core: it turns an already-loaded task set
 // into graph text. Node order follows the caller's task order (loadTasks sorts by
 // id) and each task's edges are sorted by dependency id, so the output is stable
@@ -32,6 +48,109 @@ func renderDependencyGraph(tasks []*Task, format string) (string, error) {
 	default:
 		return "", fmt.Errorf("unknown graph format %q: want dot or mermaid", format)
 	}
+}
+
+func renderActiveSpecDependencyGraph(scope activeStatsScope, format string) (string, error) {
+	switch format {
+	case "dot":
+		return renderActiveSpecDOT(scope), nil
+	case "mermaid":
+		return renderActiveSpecMermaid(scope), nil
+	default:
+		return "", fmt.Errorf("unknown graph format %q: want dot or mermaid", format)
+	}
+}
+
+func renderActiveSpecDOT(scope activeStatsScope) string {
+	var b strings.Builder
+	b.WriteString("digraph taskrail {\n")
+	b.WriteString("  rankdir=LR;\n")
+	writeDOTScopeComments(&b, scope.report)
+	for _, task := range scope.graph {
+		label := dotLabel(task)
+		if !scope.subjectID[task.Frontmatter.ID] {
+			label += `\n[off-spec context]`
+			fmt.Fprintf(&b, "  %q [label=\"%s\", style=\"dashed\", color=\"gray\"];\n", task.Frontmatter.ID, label)
+			continue
+		}
+		fmt.Fprintf(&b, "  %q [label=\"%s\"];\n", task.Frontmatter.ID, label)
+	}
+	for _, ref := range scope.missing {
+		id := "missing:" + ref
+		fmt.Fprintf(&b, "  %q [label=\"%s\", style=\"dashed\", color=\"red\"];\n", id, dotEscape(id))
+	}
+	for _, task := range scope.graph {
+		for _, dep := range sortedDeps(task) {
+			if _, ok := scope.byID[dep]; !ok {
+				dep = "missing:" + dep
+			}
+			fmt.Fprintf(&b, "  %q -> %q;\n", task.Frontmatter.ID, dep)
+		}
+	}
+	b.WriteString("}\n")
+	return b.String()
+}
+
+func writeDOTScopeComments(b *strings.Builder, scope StatsScope) {
+	fmt.Fprintf(b, "  // active-spec scope: %s; subjects %d; excluded %d; dependency context %d; malformed subjects %d; malformed ledger %d\n",
+		scope.ActiveSpecPath, scope.SubjectTaskCount, scope.ExcludedTaskCount, scope.DependencyContextTaskCount, scope.MalformedSubjectCount, scope.MalformedLedgerCount)
+	for _, issue := range scope.SpecRefIssues {
+		fmt.Fprintf(b, "  // spec-ref issue: %s | %s | %s\n", dotEscape(issue.TaskID), dotEscape(issue.SpecRef), dotEscape(issue.Classification))
+	}
+}
+
+func renderActiveSpecMermaid(scope activeStatsScope) string {
+	var b strings.Builder
+	contextIDs := make([]string, 0)
+	missingIDs := make([]string, 0, len(scope.missing))
+	b.WriteString("graph LR\n")
+	fmt.Fprintf(&b, "  %%%% active-spec scope: %s; subjects %d; excluded %d; dependency context %d; malformed subjects %d; malformed ledger %d\n",
+		scope.report.ActiveSpecPath, scope.report.SubjectTaskCount, scope.report.ExcludedTaskCount, scope.report.DependencyContextTaskCount, scope.report.MalformedSubjectCount, scope.report.MalformedLedgerCount)
+	for _, issue := range scope.report.SpecRefIssues {
+		fmt.Fprintf(&b, "  %%%% spec-ref issue: %s | %s | %s\n", mermaidText(issue.TaskID), mermaidText(issue.SpecRef), mermaidText(issue.Classification))
+	}
+	for _, task := range scope.graph {
+		label := mermaidLabel(task)
+		if !scope.subjectID[task.Frontmatter.ID] {
+			label += "<br/>[off-spec context]"
+			contextIDs = append(contextIDs, scopedMermaidTaskID(task.Frontmatter.ID))
+		}
+		fmt.Fprintf(&b, "  %s[\"%s\"]\n", scopedMermaidTaskID(task.Frontmatter.ID), label)
+	}
+	for _, ref := range scope.missing {
+		id := "missing:" + ref
+		missingID := missingMermaidID(ref)
+		missingIDs = append(missingIDs, missingID)
+		fmt.Fprintf(&b, "  %s[\"%s\"]\n", missingID, mermaidText(id))
+	}
+	if len(contextIDs) > 0 {
+		b.WriteString("  classDef offSpec fill:#f3f3f3,stroke:#888,stroke-dasharray: 5 5;\n")
+		fmt.Fprintf(&b, "  class %s offSpec\n", strings.Join(contextIDs, ","))
+	}
+	if len(missingIDs) > 0 {
+		b.WriteString("  classDef missing fill:#fee,stroke:#c00,stroke-width:2px,stroke-dasharray: 5 5;\n")
+		fmt.Fprintf(&b, "  class %s missing\n", strings.Join(missingIDs, ","))
+	}
+	for _, task := range scope.graph {
+		for _, dep := range sortedDeps(task) {
+			if _, ok := scope.byID[dep]; !ok {
+				fmt.Fprintf(&b, "  %s --> %s\n", scopedMermaidTaskID(task.Frontmatter.ID), missingMermaidID(dep))
+				continue
+			}
+			fmt.Fprintf(&b, "  %s --> %s\n", scopedMermaidTaskID(task.Frontmatter.ID), scopedMermaidTaskID(dep))
+		}
+	}
+	return b.String()
+}
+
+func scopedMermaidTaskID(id string) string {
+	return "task_" + hex.EncodeToString([]byte(id))
+}
+
+// missingMermaidID encodes the entire missing reference to avoid collapsing two
+// distinct dependency strings through Mermaid's lossy identifier normalization.
+func missingMermaidID(ref string) string {
+	return "missing_" + hex.EncodeToString([]byte(ref))
 }
 
 func renderDOT(tasks []*Task) string {

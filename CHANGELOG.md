@@ -24,6 +24,10 @@ All notable user-visible changes to Taskrail will be documented in this file.
   context into one strict digest-bound advisory review proposal, then publishes
   immutable evidence through `review publish --type task` without directly
   changing task state.
+- `taskrail stats --active-spec` now reports active-spec task metrics and graphs
+  with explicit scoped JSON metadata, malformed-reference diagnostics, off-spec
+  dependency context, and synthetic missing dependency nodes. Validation now
+  rejects noncanonical, mismatched, or symlinked active spec paths.
 - `taskrail task author <task-id> --body <proposal> --expect-sha256 <digest>`
   now applies a reviewed three-section task body only after a digest-bound,
   locked compare-and-swap. It preserves task frontmatter, H1, Implementation

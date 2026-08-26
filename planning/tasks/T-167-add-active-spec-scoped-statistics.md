@@ -1,12 +1,17 @@
 ---
 id: T-167-add-active-spec-scoped-statistics
 title: Add active-spec scoped statistics
-status: todo
+status: completed
 priority: medium
 spec_ref: specs/v0.5.0.md#active-spec-scoped-statistics
 dependencies:
     - T-223-run-every-v0-5-command-against-local-storage
-updated_at: "2026-08-04T21:32:13Z"
+updated_at: "2026-08-26T08:06:08Z"
+completion_id: "fbe52e202700c818aeba5bafe4344591"
+last_verification_id: "e94a107fccb7f0546de72e970bb91566"
+last_verification_result: pass
+last_verified_at: "2026-08-26T08:06:08Z"
+last_verified_completion_id: "fbe52e202700c818aeba5bafe4344591"
 ---
 
 # T-167-add-active-spec-scoped-statistics Add active-spec scoped statistics
@@ -42,3 +47,6 @@ retaining full-ledger dependency context.
   and after.
 
 ## Implementation Notes
+
+- 2026-08-26T08:05:45Z: Added active-spec scoped statistics with canonical active-spec validation, deterministic graph context, and regression coverage.
+- 2026-08-26T08:06:08Z: verification pass id e94a107fccb7f0546de72e970bb91566 previous none completion fbe52e202700c818aeba5bafe4344591

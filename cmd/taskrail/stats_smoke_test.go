@@ -209,3 +209,130 @@ func TestStatsHintsDegenerateAreaHeadings(t *testing.T) {
 		t.Errorf("expected area_anchor_issue_count: 2 in stats json: %q", jsonOut)
 	}
 }
+
+func TestStatsActiveSpecScopesMetricsAndReportsIssues(t *testing.T) {
+	root := setupRepo(t)
+	if err := os.WriteFile(filepath.Join(root, "specs", "v0.2.0.md"), []byte("# Other\n\n## Summary\n"), 0o644); err != nil {
+		t.Fatalf("write old spec: %v", err)
+	}
+	writeStatsTask(t, root, "T-1", "todo", "specs/v0.1.0.md#summary", "T-2")
+	writeStatsTask(t, root, "T-2", "completed", "specs/v0.2.0.md#summary")
+	writeStatsTask(t, root, "T-3", "todo", "specs/v0.2.0.md#summary")
+	writeStatsTask(t, root, "T-4", "cancelled", "specs/v0.1.0.md#missing")
+	writeStatsTask(t, root, "T-5", "todo", "malformed")
+	writeStatsTask(t, root, "T-6", "todo", "specs/V0.1.0.md#summary")
+
+	out, err := runRoot(t, "stats", "--active-spec", "--json")
+	if err != nil {
+		t.Fatalf("stats --active-spec --json: %v (output %q)", err, out)
+	}
+	var report struct {
+		statsJSON
+		Scope struct {
+			Kind                       string `json:"kind"`
+			ActiveSpecPath             string `json:"active_spec_path"`
+			SubjectTaskCount           int    `json:"subject_task_count"`
+			ExcludedTaskCount          int    `json:"excluded_task_count"`
+			DependencyContextTaskCount int    `json:"dependency_context_task_count"`
+			MalformedSubjectCount      int    `json:"malformed_subject_spec_ref_count"`
+			MalformedLedgerCount       int    `json:"malformed_ledger_spec_ref_count"`
+			SpecRefIssues              []struct {
+				TaskID         string `json:"task_id"`
+				SpecRef        string `json:"spec_ref"`
+				Classification string `json:"classification"`
+			} `json:"spec_ref_issues"`
+		} `json:"scope"`
+	}
+	decodeMachineResult(t, out, &report)
+	if report.TotalTasks != 2 {
+		t.Errorf("scoped total = %d, want 2", report.TotalTasks)
+	}
+	if todo, _ := statusCountPercent(t, report.statsJSON, "todo"); todo != 1 {
+		t.Errorf("scoped todo = %d, want 1", todo)
+	}
+	if report.Dependencies.LongestChain != 2 {
+		t.Errorf("scoped longest chain = %d, want 2", report.Dependencies.LongestChain)
+	}
+	if report.Scope.Kind != "active_spec" || report.Scope.ActiveSpecPath != "specs/v0.1.0.md" {
+		t.Errorf("scope = %+v, want active v0.1.0", report.Scope)
+	}
+	if report.Scope.SubjectTaskCount != 2 || report.Scope.ExcludedTaskCount != 4 || report.Scope.DependencyContextTaskCount != 1 {
+		t.Errorf("scope counts = %+v, want subjects/excluded/context 2/4/1", report.Scope)
+	}
+	if report.Scope.MalformedSubjectCount != 1 || report.Scope.MalformedLedgerCount != 3 {
+		t.Errorf("malformed counts = %+v, want 1/3", report.Scope)
+	}
+	if len(report.Scope.SpecRefIssues) != 3 || report.Scope.SpecRefIssues[0].TaskID != "T-4" || report.Scope.SpecRefIssues[0].SpecRef != "specs/v0.1.0.md#missing" || report.Scope.SpecRefIssues[0].Classification != "active_path_invalid_anchor" || report.Scope.SpecRefIssues[1].TaskID != "T-5" || report.Scope.SpecRefIssues[1].SpecRef != "malformed" || report.Scope.SpecRefIssues[1].Classification != "unclassifiable" || report.Scope.SpecRefIssues[2].TaskID != "T-6" || report.Scope.SpecRefIssues[2].SpecRef != "specs/V0.1.0.md#summary" || report.Scope.SpecRefIssues[2].Classification != "unclassifiable" {
+		t.Errorf("scope issues = %+v, want ordered active-path and unclassifiable issues", report.Scope.SpecRefIssues)
+	}
+}
+
+func TestStatsDefaultJSONRemainsUnscoped(t *testing.T) {
+	root := setupRepo(t)
+	writeStatsTask(t, root, "T-1", "todo", "specs/v0.1.0.md#summary")
+
+	out, err := runRoot(t, "stats", "--json")
+	if err != nil {
+		t.Fatalf("stats --json: %v (output %q)", err, out)
+	}
+	if strings.Contains(out, `"scope"`) {
+		t.Errorf("default stats payload gained scoped output: %q", out)
+	}
+}
+
+func TestStatsActiveSpecGraphIncludesContextAndMissingNodes(t *testing.T) {
+	root := setupRepo(t)
+	if err := os.WriteFile(filepath.Join(root, "specs", "v0.2.0.md"), []byte("# Other\n\n## Summary\n"), 0o644); err != nil {
+		t.Fatalf("write old spec: %v", err)
+	}
+	writeStatsTask(t, root, "T-1", "todo", "specs/v0.1.0.md#summary", "T-2", "T-missing")
+	writeStatsTask(t, root, "T-2", "completed", "specs/v0.2.0.md#summary")
+
+	out, err := runRoot(t, "stats", "--active-spec", "--format", "dot")
+	if err != nil {
+		t.Fatalf("stats --active-spec --format dot: %v (output %q)", err, out)
+	}
+	for _, want := range []string{`"T-2" [label="T-2\nTask T-2\n(completed)\n[off-spec context]"`, `"missing:T-missing"`, `"T-1" -> "missing:T-missing"`} {
+		if !strings.Contains(out, want) {
+			t.Errorf("scoped graph missing %q:\n%s", want, out)
+		}
+	}
+}
+
+func TestValidateRejectsNonCanonicalOrIncoherentActiveSpec(t *testing.T) {
+	root := setupRepo(t)
+	statePath := filepath.Join(root, "planning", "STATE.md")
+	original, err := os.ReadFile(statePath)
+	if err != nil {
+		t.Fatalf("read state: %v", err)
+	}
+	for _, replacement := range []string{
+		"specs/../specs/v0.1.0.md",
+		"specs/V0.1.0.md",
+		"specs/v0.2.0.md",
+	} {
+		updated := strings.Replace(string(original), "specs/v0.1.0.md", replacement, 1)
+		if err := os.WriteFile(statePath, []byte(updated), 0o644); err != nil {
+			t.Fatalf("write state: %v", err)
+		}
+		if out, err := runRoot(t, "validate"); err == nil {
+			t.Errorf("validate accepted active path %q: %q", replacement, out)
+		}
+	}
+}
+
+func TestValidateRejectsSymlinkedActiveSpec(t *testing.T) {
+	root := setupRepo(t)
+	specPath := filepath.Join(root, "specs", "v0.1.0.md")
+	targetPath := filepath.Join(root, "specs", "actual-v0.1.0.md")
+	if err := os.Rename(specPath, targetPath); err != nil {
+		t.Fatalf("move active spec: %v", err)
+	}
+	if err := os.Symlink(filepath.Base(targetPath), specPath); err != nil {
+		t.Skipf("create active-spec symlink: %v", err)
+	}
+
+	if out, err := runRoot(t, "validate"); err == nil {
+		t.Errorf("validate accepted symlinked active spec: %q", out)
+	}
+}

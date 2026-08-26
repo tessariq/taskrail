@@ -10,6 +10,7 @@ import (
 
 func newStatsCmd() *cobra.Command {
 	var format string
+	var activeSpec bool
 	cmd := &cobra.Command{
 		Use:   "stats",
 		Short: "Report aggregate tracked-work statistics (read-only)",
@@ -33,7 +34,12 @@ func newStatsCmd() *cobra.Command {
 				if err != nil {
 					return err
 				}
-				graph, err := svc.DependencyGraph(format)
+				var graph string
+				if activeSpec {
+					graph, err = svc.ActiveSpecDependencyGraph(format)
+				} else {
+					graph, err = svc.DependencyGraph(format)
+				}
 				if err != nil {
 					return err
 				}
@@ -44,7 +50,13 @@ func newStatsCmd() *cobra.Command {
 				return err
 			}
 			return runCommand(cmd, func(svc *taskrail.Service) (commandResult, error) {
-				stats, err := svc.Stats()
+				var stats taskrail.StatsReport
+				var err error
+				if activeSpec {
+					stats, err = svc.StatsForActiveSpec()
+				} else {
+					stats, err = svc.Stats()
+				}
 				if err != nil {
 					return commandResult{}, err
 				}
@@ -54,6 +66,7 @@ func newStatsCmd() *cobra.Command {
 	}
 	addMachineJSONFlag(cmd)
 	cmd.Flags().StringVar(&format, "format", "", "export the dependency DAG instead of stats: dot or mermaid")
+	cmd.Flags().BoolVar(&activeSpec, "active-spec", false, "report only tasks assigned to the active spec, retaining dependency context")
 	return cmd
 }
 
@@ -76,6 +89,17 @@ func renderStatsText(r taskrail.StatsReport) string {
 		last = "none"
 	}
 	fmt.Fprintf(&b, "last verification: %s", last)
+	if r.Scope != nil {
+		b.WriteString("\n")
+		fmt.Fprintf(&b, "scope: active_spec - %s; %d subject task(s), %d excluded, %d dependency-context task(s)\n",
+			r.Scope.ActiveSpecPath, r.Scope.SubjectTaskCount, r.Scope.ExcludedTaskCount, r.Scope.DependencyContextTaskCount)
+		fmt.Fprintf(&b, "spec_ref issues: %d malformed subject, %d malformed ledger\n",
+			r.Scope.MalformedSubjectCount, r.Scope.MalformedLedgerCount)
+		for _, issue := range r.Scope.SpecRefIssues {
+			fmt.Fprintf(&b, "  %s | %s | %s\n", issue.TaskID, issue.SpecRef, issue.Classification)
+		}
+		return strings.TrimRight(b.String(), "\n")
+	}
 	return b.String()
 }
 
