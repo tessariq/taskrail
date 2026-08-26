@@ -11,9 +11,12 @@ import (
 
 func newImportCmd() *cobra.Command {
 	var (
-		to         string
-		emitPrompt bool
-		apply      string
+		to                 string
+		emitPrompt         bool
+		apply              string
+		expectSHA256       string
+		reviewManifest     string
+		expectReviewSHA256 string
 	)
 
 	cmd := &cobra.Command{
@@ -35,7 +38,7 @@ func newImportCmd() *cobra.Command {
 			}
 			return runCommand(cmd, func(svc *taskrail.Service) (commandResult, error) {
 				if applyPath := strings.TrimSpace(apply); applyPath != "" {
-					return applyDraftResult(cmd, svc, applyPath)
+					return applyDraftResult(cmd, svc, taskrail.ApplyDraftInput{DraftPath: applyPath, ExpectSHA256: expectSHA256, ReviewManifestPath: reviewManifest, ExpectReviewSHA256: expectReviewSHA256})
 				}
 				if emitPrompt {
 					return emitPromptResult(svc, args[0], to)
@@ -58,6 +61,9 @@ func newImportCmd() *cobra.Command {
 	cmd.Flags().StringVar(&to, "to", "", "import target: tasks, spec, or planning (preview and --emit-prompt)")
 	cmd.Flags().BoolVar(&emitPrompt, "emit-prompt", false, "print an agent prompt instead of a structural draft")
 	cmd.Flags().StringVar(&apply, "apply", "", "write real spec/task files from an agent-produced draft JSON file")
+	cmd.Flags().StringVar(&expectSHA256, "expect-sha256", "", "expected SHA-256 for a published ImportDraft v2")
+	cmd.Flags().StringVar(&reviewManifest, "review-manifest", "", "published decomposition manifest for an ImportDraft v2")
+	cmd.Flags().StringVar(&expectReviewSHA256, "expect-review-sha256", "", "expected SHA-256 for a published decomposition manifest")
 	addMachineJSONFlag(cmd)
 	return cmd
 }
@@ -82,8 +88,8 @@ func validateImportArgs(args []string, to string, emitPrompt bool, apply string)
 
 // applyDraftResult writes a complete import transaction and reports only its
 // committed spec and task files.
-func applyDraftResult(cmd *cobra.Command, svc *taskrail.Service, path string) (commandResult, error) {
-	result, err := svc.ApplyImportDraft(taskrail.ApplyDraftInput{DraftPath: path})
+func applyDraftResult(cmd *cobra.Command, svc *taskrail.Service, input taskrail.ApplyDraftInput) (commandResult, error) {
+	result, err := svc.ApplyImportDraft(input)
 	if err != nil {
 		return commandResult{warnings: result.Warnings}, err
 	}

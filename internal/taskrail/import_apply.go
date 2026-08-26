@@ -1,16 +1,22 @@
 package taskrail
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"slices"
 	"strings"
 
+	"github.com/tessariq/taskrail/internal/durabletx"
+	"github.com/tessariq/taskrail/internal/repolock"
 	"github.com/tessariq/taskrail/internal/repotx"
+	"gopkg.in/yaml.v3"
 )
 
 // Agent-driven apply (T-034): `taskrail import --apply <draft.json>` ingests an
@@ -22,7 +28,232 @@ import (
 
 // ApplyDraftInput names the draft file to ingest (repo-relative or absolute).
 type ApplyDraftInput struct {
-	DraftPath string
+	DraftPath          string
+	ExpectSHA256       string
+	ReviewManifestPath string
+	ExpectReviewSHA256 string
+}
+
+// applyReviewedImportDraft admits only an immutable decomposition publication.
+// The bundle decoder proves its review bindings before this writer stages exact
+// reviewed bodies into ordinary task candidates.
+func (s *Service) applyReviewedImportDraft(input ApplyDraftInput) (result ApplyDraftResult, err error) {
+	transactionID, err := newMigrationTransactionID()
+	if err != nil {
+		return ApplyDraftResult{}, err
+	}
+	lock, err := repolock.Acquire(context.Background(), repolock.Request{
+		Repository: s.paths.LockRepository(), Command: "import", TransactionID: transactionID,
+		Capability: repolock.Capability{Commands: []string{"import"}},
+	})
+	if err != nil {
+		return ApplyDraftResult{}, writerLockError(err)
+	}
+	defer func() {
+		if releaseErr := lock.Release(); releaseErr != nil && err == nil {
+			err = WithMachineErrorCode(MachineCodeRepositoryInvalid, releaseErr)
+		}
+	}()
+	marker, present, err := readMarker(s.paths.RepoRoot)
+	if err != nil {
+		return ApplyDraftResult{}, err
+	}
+	if !present || marker.LayoutVersion != layout2Version {
+		return ApplyDraftResult{}, WithMachineErrorCode(MachineCodeUnsupported, errors.New("reviewed import requires layout_version 2"))
+	}
+	data, draftPath, err := s.readImportDraftBytes(input.DraftPath)
+	if err != nil {
+		return ApplyDraftResult{}, err
+	}
+	return s.applyReviewedImportDraftLocked(lock, input, data, draftPath)
+}
+
+func (s *Service) applyReviewedImportDraftLocked(own durabletx.Ownership, input ApplyDraftInput, draftBytes []byte, draftPath string) (ApplyDraftResult, error) {
+	files, manifestPath, err := s.readPublishedDecompositionFiles(input, draftBytes, draftPath)
+	if err != nil {
+		return ApplyDraftResult{}, err
+	}
+	state, tasks, err := s.loadStateAndTasks()
+	if err != nil {
+		return ApplyDraftResult{}, err
+	}
+	if path.Base(path.Dir(path.Dir(input.ReviewManifestPath))) != state.Frontmatter.ActiveSpecVersion {
+		return ApplyDraftResult{}, WithMachineErrorCode(MachineCodeInvalidProposal, errors.New("published decomposition directory does not match selected spec version"))
+	}
+	manifest, err := decodeDecompositionManifest(files["manifest.json"])
+	if err != nil {
+		return ApplyDraftResult{}, WithMachineErrorCode(MachineCodeInvalidProposal, fmt.Errorf("manifest.json: %w", err))
+	}
+	if manifest.SpecPath != state.Frontmatter.ActiveSpecPath {
+		return ApplyDraftResult{}, WithMachineErrorCode(MachineCodeInvalidProposal, errors.New("reviewed import must target the selected active spec"))
+	}
+	specPath, err := s.paths.physicalSpecPath(manifest.SpecPath)
+	if err != nil {
+		return ApplyDraftResult{}, err
+	}
+	spec, err := os.ReadFile(specPath)
+	if err != nil {
+		return ApplyDraftResult{}, reviewInputError("read selected spec", err)
+	}
+	specReviewFiles, err := s.readDecompositionSpecReview(manifest.SpecReviewManifestPath, state.Frontmatter.ActiveSpecVersion)
+	if err != nil {
+		return ApplyDraftResult{}, err
+	}
+	taskIDs := make(map[string]struct{}, len(tasks))
+	for _, task := range tasks {
+		taskIDs[task.Frontmatter.ID] = struct{}{}
+	}
+	bundle, err := DecodeDecompositionBundle(files, DecompositionSubjects{
+		SpecPath: manifest.SpecPath, Spec: spec, SpecReviewManifestPath: manifest.SpecReviewManifestPath,
+		SpecReviewFiles: specReviewFiles, TaskIDs: taskIDs,
+	})
+	if err != nil {
+		return ApplyDraftResult{}, WithMachineErrorCode(MachineCodeInvalidProposal, err)
+	}
+	if path.Base(path.Dir(input.ReviewManifestPath)) != bundle.Manifest.SessionID {
+		return ApplyDraftResult{}, WithMachineErrorCode(MachineCodeInvalidProposal, errors.New("published decomposition directory does not match manifest session identity"))
+	}
+	draft := ImportDraft{SchemaVersion: 2, Target: "tasks", Tasks: bundle.Draft.Tasks}
+	baseline := s.validateInMemory(state, tasks)
+	if !baseline.Valid {
+		return ApplyDraftResult{}, WithMachineErrorCode(MachineCodeValidationFailed,
+			fmt.Errorf("reviewed import requires a valid repository baseline: %s", strings.Join(baseline.Violations, "; ")))
+	}
+	if err := s.preflightImportDraft(tasks, draft); err != nil {
+		return ApplyDraftResult{}, WithMachineErrorCode(MachineCodeInvalidProposal, err)
+	}
+	result, published, preview, err := s.buildImportCandidate(draft, state, tasks, true)
+	if err != nil {
+		return ApplyDraftResult{}, err
+	}
+	stateBytes, err := marshalFrontmatter(state.Frontmatter, state.Body)
+	if err != nil {
+		return ApplyDraftResult{}, err
+	}
+	published = append([]repotx.Candidate{managedCandidate(s.reportedStatePath(), s.paths.StateFile, stateBytes)}, published...)
+	consumed, err := writerConsumedPaths(s.paths, preview, preview[len(tasks):]...)
+	if err != nil {
+		return ApplyDraftResult{}, err
+	}
+	publishedPaths := make(map[string]struct{}, len(published))
+	for _, candidate := range published {
+		publishedPaths[candidate.Reported] = struct{}{}
+	}
+	filtered := consumed[:0]
+	for _, candidate := range consumed {
+		if _, published := publishedPaths[candidate.Reported]; !published {
+			filtered = append(filtered, candidate)
+		}
+	}
+	consumed = filtered
+	for name := range files {
+		consumed = append(consumed, repotx.Path{Kind: repotx.Managed, Reported: path.Join(path.Dir(relPath(s.paths.RepoRoot, manifestPath)), name), Physical: filepath.Join(filepath.Dir(manifestPath), name)})
+	}
+	for name := range specReviewFiles {
+		logical := path.Join(path.Dir(manifest.SpecReviewManifestPath), name)
+		physical, err := s.paths.physicalManagedPath(logical)
+		if err != nil {
+			return ApplyDraftResult{}, err
+		}
+		consumed = append(consumed, repotx.Path{Kind: repotx.Managed, Reported: logical, Physical: physical})
+	}
+	inputs, err := snapshotImportInputs(candidatePaths(consumed, published))
+	if err != nil {
+		return ApplyDraftResult{}, err
+	}
+	request := durabletx.Request{
+		Command: "import", Consumed: durableImportPaths(consumed), Members: durableImportMembers(published),
+		Validate: func(evidence []durabletx.Evidence) error {
+			if durableBeforeCandidate(evidence) && !sameImportInputs(inputs) {
+				return errImportInputChanged
+			}
+			if candidateIntroducesViolations(ValidationResult{Violations: s.validateState(state)}, baseline) {
+				return errors.New("import candidate failed validation")
+			}
+			return nil
+		},
+	}
+	if _, err := durabletx.Run(context.Background(), own, s.paths.LockRepository(), request); err != nil {
+		return ApplyDraftResult{}, writerTransactionError(err)
+	}
+	return result, nil
+}
+
+func (s *Service) readPublishedDecompositionFiles(input ApplyDraftInput, draftBytes []byte, draftPath string) (map[string][]byte, string, error) {
+	if !reviewDigest.MatchString(input.ExpectSHA256) || !reviewDigest.MatchString(input.ExpectReviewSHA256) {
+		return nil, "", WithMachineErrorCode(MachineCodeInvalidDigest, errors.New("reviewed import requires lower-case expected draft and manifest SHA-256 digests"))
+	}
+	if digestRaw(draftBytes) != input.ExpectSHA256 {
+		return nil, "", WithMachineErrorCode(MachineCodeSourceChanged, errors.New("reviewed draft digest does not match --expect-sha256"))
+	}
+	draftLogical := filepath.ToSlash(relPath(s.paths.RepoRoot, draftPath))
+	manifestLogical := strings.TrimSpace(input.ReviewManifestPath)
+	if filepath.IsAbs(manifestLogical) || filepath.ToSlash(manifestLogical) != manifestLogical || path.Clean(manifestLogical) != manifestLogical || path.Base(draftLogical) != "draft.json" || path.Base(manifestLogical) != "manifest.json" || path.Dir(draftLogical) != path.Dir(manifestLogical) {
+		return nil, "", invalidArgumentsf("reviewed import requires published draft.json and manifest.json from one canonical directory")
+	}
+	parts := strings.Split(path.Dir(draftLogical), "/")
+	if len(parts) != 5 || parts[0] != s.paths.LogicalPlanningDir || parts[1] != "reviews" || parts[2] != "decomposition" || !isPortableReviewKey(parts[4]) {
+		return nil, "", WithMachineErrorCode(MachineCodeInvalidProposal, errors.New("reviewed draft is not a published decomposition bundle"))
+	}
+	manifestPath, err := s.paths.physicalManagedPath(manifestLogical)
+	if err != nil {
+		return nil, "", err
+	}
+	entries, err := os.ReadDir(filepath.Dir(manifestPath))
+	if err != nil {
+		return nil, "", reviewInputError("inspect published decomposition bundle", err)
+	}
+	files := make(map[string][]byte, len(entries))
+	for _, entry := range entries {
+		if entry.IsDir() {
+			return nil, "", WithMachineErrorCode(MachineCodeInvalidProposal, errors.New("published decomposition bundle contains a directory"))
+		}
+		data, err := os.ReadFile(filepath.Join(filepath.Dir(manifestPath), entry.Name()))
+		if err != nil {
+			return nil, "", reviewInputError("read published decomposition bundle", err)
+		}
+		files[entry.Name()] = data
+	}
+	if !slices.Equal(files["draft.json"], draftBytes) || digestRaw(files["manifest.json"]) != input.ExpectReviewSHA256 {
+		return nil, "", WithMachineErrorCode(MachineCodeSourceChanged, errors.New("published decomposition inputs changed or manifest digest does not match"))
+	}
+	return files, manifestPath, nil
+}
+
+func durableImportPaths(paths []repotx.Path) []durabletx.Path {
+	result := make([]durabletx.Path, len(paths))
+	for i, input := range paths {
+		result[i] = durabletx.Path{Kind: durabletx.PathKind(input.Kind), Reported: input.Reported, Path: input.Reported}
+	}
+	return result
+}
+
+func durableImportMembers(candidates []repotx.Candidate) []durabletx.Member {
+	result := make([]durabletx.Member, len(candidates))
+	for i, candidate := range candidates {
+		result[i] = durabletx.Member{Kind: durabletx.PathKind(candidate.Kind), Reported: candidate.Reported, Path: candidate.Reported, Content: candidate.Content}
+	}
+	return result
+}
+
+func candidatePaths(consumed []repotx.Path, published []repotx.Candidate) []string {
+	paths := make([]string, 0, len(consumed)+len(published))
+	for _, input := range consumed {
+		paths = append(paths, input.Physical)
+	}
+	for _, candidate := range published {
+		paths = append(paths, candidate.Physical)
+	}
+	return paths
+}
+
+func durableBeforeCandidate(evidence []durabletx.Evidence) bool {
+	for _, entry := range evidence {
+		if entry.CurrentSHA256 != entry.OriginalSHA256 {
+			return false
+		}
+	}
+	return true
 }
 
 // CreatedTaskRef records one task the apply scaffolded, pairing the draft-local
@@ -46,6 +277,14 @@ type ApplyDraftResult struct {
 // transaction. The source draft, existing corpus, config, and every destination
 // are snapshotted under the mutation lock before any candidate reaches disk.
 func (s *Service) ApplyImportDraft(input ApplyDraftInput) (result ApplyDraftResult, err error) {
+	if data, _, readErr := s.readImportDraftBytes(input.DraftPath); readErr == nil {
+		var version struct {
+			SchemaVersion int `json:"schema_version"`
+		}
+		if json.Unmarshal(data, &version) == nil && version.SchemaVersion == 2 {
+			return s.applyReviewedImportDraft(input)
+		}
+	}
 	own, release, err := s.acquireWriterLock("import", nil)
 	if err != nil {
 		return ApplyDraftResult{}, err
@@ -56,9 +295,25 @@ func (s *Service) ApplyImportDraft(input ApplyDraftInput) (result ApplyDraftResu
 		}
 	}()
 
-	draft, data, draftPath, err := s.readImportDraftSnapshot(input.DraftPath)
+	data, draftPath, err := s.readImportDraftBytes(input.DraftPath)
 	if err != nil {
 		return ApplyDraftResult{}, err
+	}
+	var version struct {
+		SchemaVersion int `json:"schema_version"`
+	}
+	if err := json.Unmarshal(data, &version); err != nil {
+		return ApplyDraftResult{}, WithMachineErrorCode(MachineCodeInvalidProposal, fmt.Errorf("parse import draft: %w", err))
+	}
+	if version.SchemaVersion == 2 {
+		return ApplyDraftResult{}, WithMachineErrorCode(MachineCodeSourceChanged, errors.New("import draft changed while acquiring the writer lock"))
+	}
+	draft, err := ParseImportDraft(data)
+	if err != nil {
+		return ApplyDraftResult{}, WithMachineErrorCode(MachineCodeInvalidProposal, err)
+	}
+	if input.ExpectSHA256 != "" || input.ReviewManifestPath != "" || input.ExpectReviewSHA256 != "" {
+		return ApplyDraftResult{}, invalidArgumentsf("reviewed import flags require an ImportDraft v2")
 	}
 	if violations := ValidateImportDraft(draft); len(violations) > 0 {
 		return ApplyDraftResult{}, WithMachineErrorCode(MachineCodeInvalidProposal,
@@ -79,7 +334,7 @@ func (s *Service) ApplyImportDraft(input ApplyDraftInput) (result ApplyDraftResu
 		return ApplyDraftResult{}, WithMachineErrorCode(MachineCodeInvalidProposal, err)
 	}
 
-	result, published, preview, err := s.buildImportCandidate(draft, state, tasks)
+	result, published, preview, err := s.buildImportCandidate(draft, state, tasks, false)
 	if err != nil {
 		return ApplyDraftResult{}, err
 	}
@@ -313,7 +568,7 @@ func (s *Service) preflightImportDraft(tasks []*Task, draft ImportDraft) error {
 
 // buildImportCandidate preserves v1's task scaffolding and allocation semantics
 // while keeping every proposed byte in memory until the transaction commits.
-func (s *Service) buildImportCandidate(draft ImportDraft, state *State, tasks []*Task) (ApplyDraftResult, []repotx.Candidate, []*Task, error) {
+func (s *Service) buildImportCandidate(draft ImportDraft, state *State, tasks []*Task, reviewed bool) (ApplyDraftResult, []repotx.Candidate, []*Task, error) {
 	result := ApplyDraftResult{Target: draft.Target}
 	published := make([]repotx.Candidate, 0, len(draft.Tasks)+1)
 	if len(draft.SpecSections) > 0 {
@@ -342,8 +597,15 @@ func (s *Service) buildImportCandidate(draft ImportDraft, state *State, tasks []
 		}
 		id, warnings := nextTaskIDWithSlug(preview, draftTask.Title, false, true)
 		now := timestamp(s.now())
-		candidate := &Task{Frontmatter: TaskFrontmatter{ID: id, Title: strings.TrimSpace(draftTask.Title), Status: "todo", Priority: priority, SpecRef: specRef, Dependencies: translateDeps(draftTask.Dependencies, keyToID), UpdatedAt: now}, Body: renderNewTaskBody(id, strings.TrimSpace(draftTask.Title), ""), Path: s.paths.logicalManagedPath(filepath.Join(s.paths.TasksDir, id+".md")), Filename: filepath.Join(s.paths.TasksDir, id+".md")}
+		body := renderNewTaskBody(id, strings.TrimSpace(draftTask.Title), "")
+		if reviewed {
+			body = fmt.Sprintf("# %s %s\n\n%s", id, strings.TrimSpace(draftTask.Title), draftTask.Body)
+		}
+		candidate := &Task{Frontmatter: TaskFrontmatter{ID: id, Title: strings.TrimSpace(draftTask.Title), Status: "todo", Priority: priority, SpecRef: specRef, Dependencies: translateDeps(draftTask.Dependencies, keyToID), UpdatedAt: now}, Body: body, Path: s.paths.logicalManagedPath(filepath.Join(s.paths.TasksDir, id+".md")), Filename: filepath.Join(s.paths.TasksDir, id+".md")}
 		bytes, err := marshalFrontmatter(candidate.Frontmatter, candidate.Body)
+		if reviewed {
+			bytes, err = marshalReviewedTask(candidate.Frontmatter, candidate.Body)
+		}
 		if err != nil {
 			return ApplyDraftResult{}, nil, nil, err
 		}
@@ -358,6 +620,19 @@ func (s *Service) buildImportCandidate(draft ImportDraft, state *State, tasks []
 	state.Frontmatter.UpdatedAt = timestamp(s.now())
 	state.Body = renderStateBody(state.Frontmatter, preview)
 	return result, published, preview, nil
+}
+
+func marshalReviewedTask(frontmatter TaskFrontmatter, body string) ([]byte, error) {
+	data, err := yaml.Marshal(frontmatter)
+	if err != nil {
+		return nil, fmt.Errorf("marshal reviewed task frontmatter: %w", err)
+	}
+	var out bytes.Buffer
+	out.WriteString("---\n")
+	out.Write(data)
+	out.WriteString("---\n\n")
+	out.WriteString(body)
+	return out.Bytes(), nil
 }
 
 // validateSpecRefWithPending is the live spec_ref check CreateTask performs,
@@ -391,21 +666,29 @@ func (s *Service) readImportDraft(path string) (ImportDraft, error) {
 }
 
 func (s *Service) readImportDraftSnapshot(path string) (ImportDraft, []byte, string, error) {
-	p := strings.TrimSpace(path)
-	if p == "" {
-		return ImportDraft{}, nil, "", WithMachineErrorCode(MachineCodeInvalidArguments,
-			errors.New("import draft path must not be empty"))
-	}
-	resolved := s.resolveRepoPath(p)
-	data, err := os.ReadFile(resolved)
+	data, resolved, err := s.readImportDraftBytes(path)
 	if err != nil {
-		return ImportDraft{}, nil, "", invalidArgumentsf("read import draft %s: %w", relPath(s.paths.RepoRoot, resolved), fsCause(err))
+		return ImportDraft{}, nil, "", err
 	}
 	draft, err := ParseImportDraft(data)
 	if err != nil {
 		return ImportDraft{}, nil, "", WithMachineErrorCode(MachineCodeInvalidProposal, err)
 	}
 	return draft, data, resolved, nil
+}
+
+func (s *Service) readImportDraftBytes(path string) ([]byte, string, error) {
+	p := strings.TrimSpace(path)
+	if p == "" {
+		return nil, "", WithMachineErrorCode(MachineCodeInvalidArguments,
+			errors.New("import draft path must not be empty"))
+	}
+	resolved := s.resolveRepoPath(p)
+	data, err := os.ReadFile(resolved)
+	if err != nil {
+		return nil, "", invalidArgumentsf("read import draft %s: %w", relPath(s.paths.RepoRoot, resolved), fsCause(err))
+	}
+	return data, resolved, nil
 }
 
 func pathWithinRepository(root, target string) bool {

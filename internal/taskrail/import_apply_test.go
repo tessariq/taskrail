@@ -687,3 +687,58 @@ func TestApplyImportDraftRoundTripsThroughFile(t *testing.T) {
 		t.Fatalf("created task file must exist: %v", err)
 	}
 }
+
+func TestApplyImportDraftV2PublishesExactReviewedBodies(t *testing.T) {
+	svc := applyFixture(t)
+	writeFile(t, filepath.Join(svc.paths.RepoRoot, ".taskrail", "config.yml"), layout2Marker("committed", "specs", "planning"))
+	svc = newTestService(t, svc.paths.RepoRoot, time.Date(2026, 7, 5, 12, 0, 0, 0, time.UTC))
+	files, subjects := decompositionGolden()
+	writeTask(t, svc.paths.RepoRoot, "T-240-implement-the-normative-review-schema-decoders", "Existing dependency", "completed", "medium", "specs/v0.1.0.md#summary", nil)
+	writeFile(t, filepath.Join(svc.paths.RepoRoot, "specs", "v0.5.0.md"), string(subjects.Spec))
+	statePath := filepath.Join(svc.paths.RepoRoot, "planning", "STATE.md")
+	state := strings.Replace(readBytes(t, statePath), "active_spec_version: v0.1.0\nactive_spec_path: specs/v0.1.0.md", "active_spec_version: v0.5.0\nactive_spec_path: specs/v0.5.0.md", 1)
+	writeFile(t, statePath, state)
+
+	specReviewDir := filepath.Join(svc.paths.RepoRoot, filepath.FromSlash("planning/reviews/spec/v0.5.0/spec-review-1"))
+	for name, data := range subjects.SpecReviewFiles {
+		writeFile(t, filepath.Join(specReviewDir, name), string(data))
+	}
+	bundleDir := filepath.Join(svc.paths.RepoRoot, filepath.FromSlash("planning/reviews/decomposition/v0.5.0/decomposition-1"))
+	for name, data := range files {
+		writeFile(t, filepath.Join(bundleDir, name), string(data))
+	}
+
+	result, err := svc.ApplyImportDraft(ApplyDraftInput{
+		DraftPath:          "planning/reviews/decomposition/v0.5.0/decomposition-1/draft.json",
+		ExpectSHA256:       digestRaw(files["draft.json"]),
+		ReviewManifestPath: "planning/reviews/decomposition/v0.5.0/decomposition-1/manifest.json",
+		ExpectReviewSHA256: digestRaw(files["manifest.json"]),
+	})
+	if err != nil {
+		t.Fatalf("apply reviewed draft: %v", err)
+	}
+	if len(result.Tasks) != 2 {
+		t.Fatalf("created tasks = %+v", result.Tasks)
+	}
+	for i, created := range result.Tasks {
+		data := readBytes(t, filepath.Join(svc.paths.RepoRoot, created.Path))
+		if !strings.Contains(data, "\n---\n\n# "+created.TaskID+" ") {
+			t.Fatalf("%s is missing generated heading: %q", created.TaskID, data)
+		}
+		if !strings.HasSuffix(data, filesBody(t, files["draft.json"], i)) {
+			t.Fatalf("%s did not preserve reviewed body bytes", created.TaskID)
+		}
+		if strings.Contains(data, "loop_policy:") || strings.Contains(data, "loop_reason:") {
+			t.Fatalf("%s must remain implicitly held: %q", created.TaskID, data)
+		}
+	}
+}
+
+func filesBody(t *testing.T, draft []byte, index int) string {
+	t.Helper()
+	decoded, err := decodeReviewedDraft(draft)
+	if err != nil {
+		t.Fatalf("decode reviewed draft: %v", err)
+	}
+	return decoded.Tasks[index].Body
+}

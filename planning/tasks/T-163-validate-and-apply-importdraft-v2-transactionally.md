@@ -1,12 +1,17 @@
 ---
 id: T-163-validate-and-apply-importdraft-v2-transactionally
 title: Validate and apply ImportDraft v2 transactionally
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#adversarial-spec-to-task-decomposition
 dependencies:
     - T-252-validate-reviewed-decomposition-bundles
-updated_at: "2026-08-04T21:32:13Z"
+updated_at: "2026-08-26T10:43:10Z"
+completion_id: "7ba9d1d2529e6fa1fc146974a3f9429f"
+last_verification_id: "a6aebc01d8b8b5581bec39ef0da52191"
+last_verification_result: pass
+last_verified_at: "2026-08-26T10:43:10Z"
+last_verified_completion_id: "7ba9d1d2529e6fa1fc146974a3f9429f"
 ---
 
 # T-163-validate-and-apply-importdraft-v2-transactionally Validate and apply ImportDraft v2 transactionally
@@ -52,3 +57,6 @@ strict bundle/schema/relation validation.
   concurrent edits.
 
 ## Implementation Notes
+
+- 2026-08-26T10:43:00Z: Added reviewed ImportDraft v2 publication with durable recovery, immutable input binding, and exact body preservation.
+- 2026-08-26T10:43:10Z: verification pass id a6aebc01d8b8b5581bec39ef0da52191 previous none completion 7ba9d1d2529e6fa1fc146974a3f9429f

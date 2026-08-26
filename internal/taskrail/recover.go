@@ -226,10 +226,36 @@ func (s *Service) recoveryValidator(transactionID string) func(string, []durable
 			return s.validateInitRecovery(transactionID, snapshots)
 		case "review publish":
 			return s.validateWorkflowPublicationRecovery(transactionID, snapshots)
+		case "import":
+			if !isRecoveredImport(snapshots, s.reportedStatePath(), s.paths.logicalManagedPath(s.paths.TasksDir)) {
+				return errors.New("retained import transaction does not contain a state and task publication")
+			}
+			validation, err := s.Validate()
+			if err != nil {
+				return err
+			}
+			if !validation.Valid {
+				return fmt.Errorf("recovered import candidate failed validation: %s", strings.Join(validation.Violations, "; "))
+			}
+			return nil
 		default:
 			return fmt.Errorf("no recovery validator is registered for %q", command)
 		}
 	}
+}
+
+func isRecoveredImport(snapshots []durabletx.Evidence, statePath, tasksDir string) bool {
+	hasState, hasTask := false, false
+	prefix := strings.TrimSuffix(tasksDir, "/") + "/"
+	for _, snapshot := range snapshots {
+		if snapshot.Reported == statePath && snapshot.CandidateSHA256 != "" {
+			hasState = true
+		}
+		if strings.HasPrefix(snapshot.Reported, prefix) && snapshot.CandidateSHA256 != "" {
+			hasTask = true
+		}
+	}
+	return hasState && hasTask
 }
 
 func (s *Service) recoveryResult(recovered durabletx.RecoveryResult, takeover string, request *RecoverRequest) (RecoverResult, error) {
