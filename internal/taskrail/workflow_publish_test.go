@@ -54,6 +54,7 @@ func TestReviewPublishWorkflowPreviewAndApplyBindReportAndMemory(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(repo, "planning", "reviews", "workflow-adversarial", "INDEX.json")); !os.IsNotExist(err) {
 		t.Fatalf("preview created memory: %v", err)
 	}
+	requireRecoveryDirectoryDurability(t, repo)
 	if _, err := svc.ReviewPublish(input); err != nil {
 		t.Fatalf("apply: %v", err)
 	}
@@ -192,6 +193,7 @@ func TestRecoverWorkflowPublicationRestoresOrAcceptsTheRetainedPair(t *testing.T
 				{kind: durabletx.Managed, reported: report, path: report, candidate: stagedReport, present: true, onDisk: stagedReport},
 			}, "")
 
+			requireRecoveryDirectoryDurability(t, repo)
 			result, err := newRecoverService(t, svc.paths).RecoverTransaction(context.Background(), recoverFixtureID, true)
 			if err != nil {
 				t.Fatalf("RecoverTransaction: %v", err)

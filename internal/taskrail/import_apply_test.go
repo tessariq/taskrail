@@ -708,6 +708,7 @@ func TestApplyImportDraftV2PublishesExactReviewedBodies(t *testing.T) {
 		writeFile(t, filepath.Join(bundleDir, name), string(data))
 	}
 
+	requireRecoveryDirectoryDurability(t, svc.paths.RepoRoot)
 	result, err := svc.ApplyImportDraft(ApplyDraftInput{
 		DraftPath:          "planning/reviews/decomposition/v0.5.0/decomposition-1/draft.json",
 		ExpectSHA256:       digestRaw(files["draft.json"]),
