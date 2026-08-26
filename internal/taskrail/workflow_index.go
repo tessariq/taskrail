@@ -496,21 +496,34 @@ func deriveWorkflowSurfaces(prior WorkflowIndex, report WorkflowReport, closed m
 			NextAngle:     surface.NextAngle,
 		})
 	}
+	assessments := map[string]WorkflowFreshnessAssessment{}
+	for _, assessment := range report.Scope.FreshnessAssessments {
+		assessments[assessment.SurfaceKey] = assessment
+	}
 	carried := map[string]struct{}{}
 	for _, surface := range prior.Surfaces {
 		carried[surface.SurfaceKey] = struct{}{}
+	}
+	for _, assessment := range report.Scope.FreshnessAssessments {
+		if _, isPrior := carried[assessment.SurfaceKey]; !isPrior {
+			return nil, fmt.Errorf("workflow freshness assessment names unknown surface %q", assessment.SurfaceKey)
+		}
+		if _, isTested := tested[assessment.SurfaceKey]; isTested {
+			return nil, fmt.Errorf("workflow freshness assessment names tested surface %q", assessment.SurfaceKey)
+		}
+	}
+	for _, surface := range prior.Surfaces {
 		if _, ok := tested[surface.SurfaceKey]; ok {
 			continue
+		}
+		if surface.Freshness == "fresh" && (surface.SpecSHA256 != report.SpecSHA256 || surface.ProductSHA256 != report.ProductSHA256) {
+			if _, ok := assessments[surface.SurfaceKey]; !ok {
+				return nil, fmt.Errorf("workflow fresh surface %q changed snapshot but has no freshness assessment", surface.SurfaceKey)
+			}
 		}
 		surface.Freshness = workflowRolledFreshness(surface, report)
 		surface.FindingIDs = workflowOpenFindingIDs(surface.FindingIDs, closed)
 		result = append(result, surface)
-	}
-	for _, assessment := range report.Scope.FreshnessAssessments {
-		_, isPrior := carried[assessment.SurfaceKey]
-		if _, isTested := tested[assessment.SurfaceKey]; !isPrior && !isTested {
-			return nil, fmt.Errorf("workflow freshness assessment names unknown surface %q", assessment.SurfaceKey)
-		}
 	}
 	slices.SortFunc(result, func(a, b WorkflowSurface) int { return strings.Compare(a.SurfaceKey, b.SurfaceKey) })
 	return result, nil

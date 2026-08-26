@@ -1,12 +1,17 @@
 ---
 id: T-165-maintain-bounded-workflow-adversarial-review
 title: Validate workflow-adversarial evidence and memory
-status: todo
+status: completed
 priority: medium
 spec_ref: specs/v0.5.0.md#workflow-adversarial-review-memory
 dependencies:
     - T-275-decode-workflow-adversarial-review-memory-strictly
-updated_at: "2026-08-04T21:32:13Z"
+updated_at: "2026-08-26T08:04:58Z"
+completion_id: "c42e1339f519d76d33a5f234889f1bf0"
+last_verification_id: "451cb65daf90ddc2e801a62d892ee085"
+last_verification_result: pass
+last_verified_at: "2026-08-26T08:04:58Z"
+last_verified_completion_id: "c42e1339f519d76d33a5f234889f1bf0"
 ---
 
 # T-165-maintain-bounded-workflow-adversarial-review Validate workflow-adversarial evidence and memory
@@ -45,3 +50,6 @@ packaged workflow remain separate outcomes.
   finding cannot close without the required executed evidence.
 
 ## Implementation Notes
+
+- 2026-08-26T08:04:39Z: Added bound-HEAD product hashing, clean snapshot capture, and required rollover freshness assessments.
+- 2026-08-26T08:04:58Z: verification pass id 451cb65daf90ddc2e801a62d892ee085 previous none completion c42e1339f519d76d33a5f234889f1bf0

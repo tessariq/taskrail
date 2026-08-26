@@ -193,6 +193,11 @@ func TestDeriveWorkflowIndexRollsFreshnessOnlyWithAssessments(t *testing.T) {
 		probes:        wfProbe("wf-2", "probe-2", "obs-2", "publication/fence", "inconclusive", true),
 		observations:  wfObservation("probe-2", "obs-2", "inconclusive"),
 	}
+	if _, err := deriveWithSubjectsErr(t, prior, parts, subjects); err == nil || !strings.Contains(err.Error(), "has no freshness assessment") {
+		t.Fatalf("error = %v, want changed fresh row to require an assessment", err)
+	}
+	parts.freshness = `{"surface_key":"lifecycle/transitions","decision":"stale","changed_paths":["internal/taskrail/workflow_index.go"],` +
+		`"evidence":"git diff --name-only over the tested commits","rationale":"the surface was not retested"}`
 	staleness := deriveWithSubjects(t, prior, parts, subjects)
 	if got := findWorkflowSurface(t, staleness.Index, "lifecycle/transitions").Freshness; got != "stale" {
 		t.Fatalf("freshness = %q, want stale after a product digest change", got)
@@ -219,6 +224,29 @@ func TestDeriveWorkflowIndexRollsFreshnessOnlyWithAssessments(t *testing.T) {
 		`"evidence":"git diff --name-only over the tested commits","rationale":"no lifecycle path changed"}`
 	if _, err := deriveWithSubjectsErr(t, prior, parts, subjects); err == nil || !strings.Contains(err.Error(), "names unknown surface") {
 		t.Fatalf("dangling assessment error = %v", err)
+	}
+}
+
+func TestDeriveWorkflowIndexRequiresAssessmentsForAffectedFreshRows(t *testing.T) {
+	prior := workflowIndexGolden(t)
+	subjects := workflowSubjects()
+	subjects.ProductSHA256 = reviewDigestB
+	parts := workflowReportParts{
+		reviewID:      "wf-2",
+		productSHA:    reviewDigestB,
+		before:        digestRaw(prior),
+		scopeSurfaces: wfScopeSurface("wf-2", "probe-2", "obs-2", "publication/fence", "inconclusive", ""),
+		probes:        wfProbe("wf-2", "probe-2", "obs-2", "publication/fence", "inconclusive", true),
+		observations:  wfObservation("probe-2", "obs-2", "inconclusive"),
+	}
+	if _, err := deriveWithSubjectsErr(t, prior, parts, subjects); err == nil || !strings.Contains(err.Error(), "has no freshness assessment") {
+		t.Fatalf("error = %v, want missing affected-row assessment refusal", err)
+	}
+
+	parts.freshness = `{"surface_key":"lifecycle/transitions","decision":"stale","changed_paths":["internal/taskrail/workflow_index.go"],` +
+		`"evidence":"the product digest changed","rationale":"the surface was not retested"}`
+	if _, err := deriveWithSubjectsErr(t, prior, parts, subjects); err != nil {
+		t.Fatalf("DeriveWorkflowIndex with stale assessment: %v", err)
 	}
 }
 
