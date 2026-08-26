@@ -133,6 +133,9 @@ func (s *Service) commitVerify(own repotx.Ownership, ledger verifyLedger) error 
 			return nil
 		},
 	}
+	if testHookWriterCandidateBuilt != nil {
+		testHookWriterCandidateBuilt()
+	}
 	if _, err := repotx.Commit(context.Background(), own, request); err != nil {
 		return writerTransactionError(err)
 	}

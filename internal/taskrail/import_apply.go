@@ -161,6 +161,9 @@ func (s *Service) ApplyImportDraft(input ApplyDraftInput) (result ApplyDraftResu
 			return nil
 		},
 	}
+	if testHookWriterCandidateBuilt != nil {
+		testHookWriterCandidateBuilt()
+	}
 	if _, err := repotx.Commit(context.Background(), own, request); err != nil {
 		if errors.Is(err, errImportInputChanged) {
 			return ApplyDraftResult{}, importInputConflict(err)

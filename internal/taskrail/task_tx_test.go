@@ -323,6 +323,31 @@ func TestTaskMutationRefusesCorpusChangeDuringValidation(t *testing.T) {
 	}
 }
 
+func TestTaskMutationRefusesUnmodeledTaskByteChangeBeforeTransactionSnapshot(t *testing.T) {
+	svc, repo := taskMutationFixture(t)
+	stateBefore := readBytes(t, filepath.Join(repo, "planning", "STATE.md"))
+	sentinel := filepath.Join(repo, "planning", "tasks", "T-009-sentinel.md")
+	installWriterCandidateBuiltHook(t, func() {
+		writeFile(t, sentinel, strings.Replace(readBytes(t, sentinel),
+			"sentinel_marker: must-survive-every-task-mutation-write",
+			"sentinel_marker: externally-updated", 1))
+	})
+
+	_, err := svc.CreateTask(CreateTaskInput{Title: "Fresh item", Slug: "Fresh item", SpecRef: "specs/v0.1.0.md#summary"})
+	if err == nil || MachineFailureFor(err).Code != MachineCodeValidationFailed {
+		t.Fatalf("task new with an unmodeled concurrent task edit = %v, want validation_failed", err)
+	}
+	if got := readBytes(t, filepath.Join(repo, "planning", "STATE.md")); got != stateBefore {
+		t.Fatal("task new published a state projection from stale task bytes")
+	}
+	if _, err := os.Stat(filepath.Join(repo, "planning", "tasks", "T-010-fresh-item.md")); !os.IsNotExist(err) {
+		t.Fatalf("task new published its candidate despite the conflict: %v", err)
+	}
+	if got := readBytes(t, sentinel); !strings.Contains(got, "sentinel_marker: externally-updated") {
+		t.Fatalf("task new overwrote the external task bytes:\n%s", got)
+	}
+}
+
 // Rename and repoint patch only their declared frontmatter lines: a field no
 // Taskrail struct models survives the write byte for byte on the selected and
 // inbound tasks alike.

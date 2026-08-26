@@ -72,6 +72,10 @@ func (s *Service) TaskAuthor(input TaskAuthorInput) (result TaskAuthorResult, er
 	if err != nil {
 		return result, err
 	}
+	corpus, err := snapshotTaskCorpus(tasks)
+	if err != nil {
+		return result, err
+	}
 	target, err := exactTaskByID(tasks, input.TaskID)
 	if err != nil {
 		return result, err
@@ -124,17 +128,27 @@ func (s *Service) TaskAuthor(input TaskAuthorInput) (result TaskAuthorResult, er
 		Consumed: consumed, Published: []repotx.Candidate{managedCandidate(target.Path, target.Filename, after)},
 		ExpectedOriginalSHA256: map[string]string{target.Path: result.TaskSHA256Before},
 		Validate: func([]repotx.Snapshot) error {
-			if testHookWriterValidated != nil {
-				testHookWriterValidated()
-			}
 			if err := s.validateWriterStorage(); err != nil {
 				return err
+			}
+			currentTasks, err := s.loadTasks()
+			if err != nil {
+				return err
+			}
+			if !sameTaskCorpus(corpus, currentTasks) {
+				return fmt.Errorf("task author task corpus changed during candidate validation")
+			}
+			if testHookWriterValidated != nil {
+				testHookWriterValidated()
 			}
 			if got := s.validateInMemory(state, preview); !got.Valid {
 				return fmt.Errorf("task author candidate failed validation: %s", strings.Join(got.Violations, "; "))
 			}
 			return nil
 		},
+	}
+	if testHookWriterCandidateBuilt != nil {
+		testHookWriterCandidateBuilt()
 	}
 	if _, err := repotx.Commit(context.Background(), own, request); err != nil {
 		return TaskAuthorResult{}, taskAuthorTransactionError(err)

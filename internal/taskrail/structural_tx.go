@@ -90,6 +90,9 @@ func (s *Service) commitStructuralWriter(own repotx.Ownership, w structuralWrite
 			return nil
 		},
 	}
+	if testHookWriterCandidateBuilt != nil {
+		testHookWriterCandidateBuilt()
+	}
 	if _, err := repotx.Commit(context.Background(), own, request); err != nil {
 		return ValidationResult{}, writerTransactionError(err)
 	}

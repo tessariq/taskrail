@@ -61,7 +61,7 @@ func (s *Service) loadTasks() ([]*Task, error) {
 		if err != nil {
 			return nil, fmt.Errorf("parse task %s: %w", entry.Name(), err)
 		}
-		tasks = append(tasks, &Task{Frontmatter: frontmatter, Body: body, Path: s.paths.logicalManagedPath(filename), Filename: filename})
+		tasks = append(tasks, &Task{Frontmatter: frontmatter, Body: body, raw: data, Path: s.paths.logicalManagedPath(filename), Filename: filename})
 	}
 	sort.Slice(tasks, func(i, j int) bool {
 		return tasks[i].Frontmatter.ID < tasks[j].Frontmatter.ID

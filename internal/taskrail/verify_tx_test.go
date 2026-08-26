@@ -343,6 +343,31 @@ func TestVerifyRefusesTaskAddedDuringValidation(t *testing.T) {
 	}
 }
 
+func TestVerifyRefusesUnmodeledTaskByteChangeBeforeTransactionSnapshot(t *testing.T) {
+	svc, repo := verifyFixture(t)
+	stateBefore := readBytes(t, filepath.Join(repo, "planning", "STATE.md"))
+	sentinel := filepath.Join(repo, "planning", "tasks", "T-009-sentinel.md")
+	installWriterCandidateBuiltHook(t, func() {
+		writeFile(t, sentinel, strings.Replace(readBytes(t, sentinel),
+			"sentinel_marker: must-survive-every-verify-write",
+			"sentinel_marker: externally-updated", 1))
+	})
+
+	_, err := runVerify(t, svc, baseVerifyInput())
+	if err == nil || MachineFailureFor(err).Code != MachineCodeValidationFailed {
+		t.Fatalf("verify with an unmodeled concurrent task edit = %v, want validation_failed", err)
+	}
+	if got := readBytes(t, filepath.Join(repo, "planning", "STATE.md")); got != stateBefore {
+		t.Fatal("verify published a state projection from stale task bytes")
+	}
+	if _, err := os.Stat(filepath.Join(repo, "planning", "artifacts", "verify")); !os.IsNotExist(err) {
+		t.Fatalf("verify published artifacts despite the conflict: %v", err)
+	}
+	if got := readBytes(t, sentinel); !strings.Contains(got, "sentinel_marker: externally-updated") {
+		t.Fatalf("verify overwrote the external task bytes:\n%s", got)
+	}
+}
+
 // A publication failure after the first file lands rolls the transaction back
 // to the original bytes and removes transaction-created files.
 func TestVerifyPublicationFailureRollsBack(t *testing.T) {

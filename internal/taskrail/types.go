@@ -287,6 +287,9 @@ type TaskFrontmatter struct {
 type Task struct {
 	Frontmatter TaskFrontmatter
 	Body        string
+	// raw retains the exact bytes loaded from disk so transactional corpus
+	// rechecks also detect changes to frontmatter fields Taskrail does not model.
+	raw []byte
 	// Path is the durable logical identity. Filename remains the resolved physical
 	// location used by command-family writers until their dedicated routing tasks.
 	Path     string

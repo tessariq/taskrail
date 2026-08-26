@@ -103,6 +103,12 @@ func installLifecycleHook(t *testing.T, hook func()) {
 	t.Cleanup(func() { testHookWriterValidated = nil })
 }
 
+func installWriterCandidateBuiltHook(t *testing.T, hook func()) {
+	t.Helper()
+	testHookWriterCandidateBuilt = hook
+	t.Cleanup(func() { testHookWriterCandidateBuilt = nil })
+}
+
 // observeLockDuring runs one lifecycle command with the validation-phase test
 // hook inspecting the lock. The hook runs after the snapshot and before
 // publication, which is exactly the window in which the writer must hold it.
@@ -315,6 +321,28 @@ func TestLifecycleRefusesTaskEditedBeforeTransactionSnapshot(t *testing.T) {
 	}
 	if got := readBytes(t, filepath.Join(repo, "planning", "STATE.md")); got != stateBefore {
 		t.Fatal("next published a state projection from stale task content")
+	}
+}
+
+func TestLifecycleRefusesUnmodeledTaskByteChangeBeforeTransactionSnapshot(t *testing.T) {
+	svc, repo := lifecycleFixture(t)
+	stateBefore := readBytes(t, filepath.Join(repo, "planning", "STATE.md"))
+	sentinel := lifecycleSentinelPath(svc)
+	installWriterCandidateBuiltHook(t, func() {
+		writeFile(t, sentinel, strings.Replace(readBytes(t, sentinel),
+			"sentinel_marker: must-survive-every-lifecycle-write",
+			"sentinel_marker: externally-updated", 1))
+	})
+
+	_, err := svc.Next()
+	if err == nil || MachineFailureFor(err).Code != MachineCodeValidationFailed {
+		t.Fatalf("next with an unmodeled concurrent task edit = %v, want validation_failed", err)
+	}
+	if got := readBytes(t, filepath.Join(repo, "planning", "STATE.md")); got != stateBefore {
+		t.Fatal("next published a state projection from stale task bytes")
+	}
+	if got := readBytes(t, sentinel); !strings.Contains(got, "sentinel_marker: externally-updated") {
+		t.Fatalf("next overwrote the external task bytes:\n%s", got)
 	}
 }
 

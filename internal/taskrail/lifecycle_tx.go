@@ -2,7 +2,6 @@ package taskrail
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -30,6 +29,11 @@ import (
 // reachable from this package — and to observe the lock a writer must hold. It
 // is nil outside tests.
 var testHookWriterValidated func()
+
+// testHookWriterCandidateBuilt runs after a transactional writer captures its
+// candidate corpus and before repotx takes its transaction snapshot. Tests use
+// it to exercise edits that parsed task fields alone cannot observe.
+var testHookWriterCandidateBuilt func()
 
 // writerCommand names one tracked-work writer and the task fields it writes.
 // The fields double as the capability bound a delegated child is held to, so
@@ -263,6 +267,9 @@ func (s *Service) commitLifecycle(own repotx.Ownership, w writerCommand, ledger 
 			return nil
 		},
 	}
+	if testHookWriterCandidateBuilt != nil {
+		testHookWriterCandidateBuilt()
+	}
 	if _, err := repotx.Commit(context.Background(), own, request); err != nil {
 		return ValidationResult{}, writerTransactionError(err)
 	}
@@ -366,11 +373,7 @@ func rewriteOptionalTaskField(frontmatter, newline, taskID, field string, value 
 func snapshotTaskCorpus(tasks []*Task) ([]string, error) {
 	result := make([]string, len(tasks))
 	for i, task := range tasks {
-		frontmatter, err := json.Marshal(task.Frontmatter)
-		if err != nil {
-			return nil, err
-		}
-		result[i] = task.Path + "\x00" + task.Filename + "\x00" + string(frontmatter) + "\x00" + task.Body
+		result[i] = task.Path + "\x00" + string(task.raw)
 	}
 	return result, nil
 }

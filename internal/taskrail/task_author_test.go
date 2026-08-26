@@ -148,6 +148,53 @@ func TestTaskAuthorRejectsNonTodoArtifactProposalAndLateTaskChange(t *testing.T)
 	}
 }
 
+func TestTaskAuthorRefusesUnmodeledCorpusChangeBeforeTransactionSnapshot(t *testing.T) {
+	repo := realGitRepo(t)
+	seedFixtureTree(t, repo)
+	writeFile(t, filepath.Join(repo, ".taskrail", "config.yml"), layout2Marker("committed", "specs", "planning"))
+	writeAuthorableTask(t, repo)
+	writeFile(t, filepath.Join(repo, "planning", "tasks", "T-999-sentinel.md"), `---
+id: T-999-sentinel
+title: Sentinel
+status: todo
+priority: low
+spec_ref: specs/v0.1.0.md#summary
+dependencies: []
+updated_at: "2026-08-17T09:00:00Z"
+sentinel_marker: original
+---
+
+# T-999-sentinel Sentinel
+`)
+	taskPath := filepath.Join(repo, "planning", "tasks", "T-215-author.md")
+	taskBefore := mustReadFile(t, taskPath)
+	statePath := filepath.Join(repo, "planning", "STATE.md")
+	stateBefore := mustReadFile(t, statePath)
+	sentinel := filepath.Join(repo, "planning", "tasks", "T-999-sentinel.md")
+	writeFile(t, filepath.Join(repo, "proposal.md"), "## Description\n\nUpdated body.\n\n## Acceptance\n\n- Works.\n\n## Verification Notes\n\n- Test.\n")
+	svc, err := NewService(repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	installWriterCandidateBuiltHook(t, func() {
+		writeFile(t, sentinel, strings.Replace(string(mustReadFile(t, sentinel)), "sentinel_marker: original", "sentinel_marker: externally-updated", 1))
+	})
+
+	_, err = svc.TaskAuthor(TaskAuthorInput{TaskID: "T-215-author", BodyPath: "proposal.md", ExpectSHA256: digestRaw(taskBefore)})
+	if err == nil || MachineFailureFor(err).Code != MachineCodeInvalidProposal {
+		t.Fatalf("TaskAuthor with an unmodeled concurrent task edit = %v, want invalid_proposal", err)
+	}
+	if got := mustReadFile(t, taskPath); string(got) != string(taskBefore) {
+		t.Fatalf("TaskAuthor published its candidate despite the conflict:\n%s", got)
+	}
+	if got := mustReadFile(t, statePath); string(got) != string(stateBefore) {
+		t.Fatal("TaskAuthor changed state despite the conflict")
+	}
+	if got := string(mustReadFile(t, sentinel)); !strings.Contains(got, "sentinel_marker: externally-updated") {
+		t.Fatalf("TaskAuthor overwrote the external task bytes:\n%s", got)
+	}
+}
+
 func TestTaskAuthorIgnoresScaffoldHeadingsInsideFencedTargetContent(t *testing.T) {
 	repo := realGitRepo(t)
 	seedFixtureTree(t, repo)
