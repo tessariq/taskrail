@@ -150,6 +150,39 @@ func TestTaskImplementationPromptDefinesLifecycleCompleteWorkflow(t *testing.T) 
 	}
 }
 
+func TestSpecReviewPromptsDefineIndependentSchemaV1Observations(t *testing.T) {
+	for _, test := range []struct {
+		id    string
+		lens  string
+		focus string
+	}{
+		{"spec-consistency", "consistency", "contradictions"},
+		{"spec-gaps", "gaps", "missing actors"},
+		{"spec-additions", "additions", "adjacent behavior"},
+		{"spec-adversarial", "adversarial", "unsafe defaults"},
+	} {
+		t.Run(test.id, func(t *testing.T) {
+			content := string(builtinPromptTemplate(t, test.id))
+			for _, want := range []string{
+				"one schema-v1 JSON object",
+				"prompt_id",
+				"prompt_contract_version",
+				"prompt_template_sha256",
+				"prompt_source",
+				`"lens":"` + test.lens + `"`,
+				"finding_id",
+				"target_version",
+				"Do not mutate",
+				test.focus,
+			} {
+				if !strings.Contains(content, want) {
+					t.Errorf("%s prompt missing %q", test.id, want)
+				}
+			}
+		})
+	}
+}
+
 func TestRenderPromptIsOnePass(t *testing.T) {
 	result, err := RenderPrompt(PromptRenderInput{
 		Template:       []byte("{{FIRST}} {{SECOND}}"),

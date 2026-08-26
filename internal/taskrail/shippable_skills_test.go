@@ -27,6 +27,7 @@ var shippableSkills = []string{
 	"taskrail-retrofit",
 	"taskrail-repair",
 	"taskrail-spec",
+	"taskrail-spec-review",
 	"taskrail-decompose",
 	"taskrail-gap",
 }
@@ -67,8 +68,9 @@ func readShippableSkill(t *testing.T, name string) string {
 // substrings, keeping per-skill command-flow assertions to one call site.
 func assertSkillReferences(t *testing.T, name string, wants ...string) {
 	t.Helper()
-	body := readShippableSkill(t, name)
+	body := strings.Join(strings.Fields(readShippableSkill(t, name)), " ")
 	for _, want := range wants {
+		want = strings.Join(strings.Fields(want), " ")
 		if !strings.Contains(body, want) {
 			t.Errorf("%s skill must reference %q", name, want)
 		}
@@ -129,6 +131,7 @@ func TestShippableSkillsConsumeStructuredResultsAsJSON(t *testing.T) {
 		"taskrail-retrofit":      {"} retrofit <notes.md> --json", "} retrofit --json", "} retrofit <notes.md> --apply --json", "} import --apply draft.json --json", "} validate --json"},
 		"taskrail-repair":        {"} validate --json", "} repair --json", "} repair --apply --json"},
 		"taskrail-spec":          {"} spec list --json", "} spec show <version> --anchors --json", "} spec diff <current-version> <target-version> --json", "} spec activate <version> --json", "} task new --title \"...\" --area", "<anchor> --json", "} task repoint <id> --area <anchor> --dry-run --json", "} task repoint <id> --area <anchor> --json", "} spec add <version> --json", "} validate --json"},
+		"taskrail-spec-review":   {"} spec show <version> --json", "} prompt render spec-consistency --spec <version> --review <proposal-dir>/consistency.json --json", "} review publish --type spec --proposal <proposal-dir> --destination <planning-dir>/reviews/spec/<version>/<session-id> --spec <version> --expect-spec-sha256 <digest> --json"},
 		"taskrail-decompose":     {"} coverage --json", "} spec show <version> --anchors --json", "} import --apply draft.json --json", "} validate --json"},
 		"taskrail-gap":           {"} coverage --gaps --json", "} coverage --gaps --area <anchor> --json", "} task new --title \"...\" --area <anchor> --json", "} import --apply <draft.json> --json", "} validate --json"},
 	}
@@ -407,6 +410,31 @@ func TestSpecSkillCoversSpecCommands(t *testing.T) {
 		"} task new",
 		"} task repoint",
 		"--area",
+	)
+}
+
+func TestSpecReviewSkillStagesIndependentDigestBoundLenses(t *testing.T) {
+	assertSkillReferences(t, "taskrail-spec-review",
+		"four independent",
+		"when supported, use separate contexts",
+		"without earlier conclusions as facts",
+		"one schema-v1 JSON object",
+		"manifest.json",
+		"exactly one disposition",
+		"finding_id`, `lens`, `severity`, `disposition`, `rationale`",
+		"must equal the referenced finding",
+		"`resulting_spec_ref` is required for accepted",
+		"`target_version` is required for deferred",
+		"required for accepted",
+		"required for deferred",
+		"High and medium findings may be accepted, rejected, or deferred",
+		"all four lens observations",
+		"prompt-template drift",
+		"Additions never silently expand scope",
+		"never edit or activate specs",
+		"never create tasks",
+		"<artifacts-dir>/review-proposals/spec/<session-id>",
+		"review publish --type spec",
 	)
 }
 

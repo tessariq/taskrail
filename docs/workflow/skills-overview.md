@@ -37,6 +37,9 @@ Tracked-work and spec skills (each bullet notes how it creates tasks, if at all)
 - `taskrail-repair`
 - `taskrail-spec` — inspect and author specs, anchoring tracked work to real
   `spec_ref` headings via the `spec` command family (shipped in T-064).
+- `taskrail-spec-review` — stage four independent advisory post-spec lenses and
+  publish their human-dispositioned digest-bound bundle before decomposition
+  (shipped in T-162).
 - `taskrail-decompose` — draft spec-anchored tasks for uncovered active-spec areas
   by composing `coverage --json`, `spec show --anchors`, and `import --apply`
   (shipped in T-098).
@@ -74,7 +77,7 @@ correct by building the working-tree binary onto the mise PATH — run
 
 ## Active v0.5 Additions
 
-The active v0.5 roadmap adds `taskrail-spec-review`, `taskrail-task-review`,
+The active v0.5 roadmap adds `taskrail-task-review`,
 `taskrail-workflow-adversarial`, and `taskrail-sdd-handoff`. Existing packaged
 skills consume structured command facts through the common machine-result
 envelope. `spec show` bodies and `--emit-prompt` output intentionally remain exact

@@ -1,13 +1,18 @@
 ---
 id: T-162-productize-digest-bound-post-spec-review-lenses
 title: Productize digest-bound post-spec review lenses
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#post-spec-review-lenses
 dependencies:
     - T-201-make-packaged-skills-agent-skills-compliant
     - T-299-bind-spec-review-publication-to-resolved-prompts
-updated_at: "2026-08-04T21:32:13Z"
+updated_at: "2026-08-26T08:01:52Z"
+completion_id: "3e3ca7039309dc5a2ff402733b8c71e4"
+last_verification_id: "1cc87e7dc6ffdd36473b74bf67cc8a54"
+last_verification_result: pass
+last_verified_at: "2026-08-26T08:01:52Z"
+last_verified_completion_id: "3e3ca7039309dc5a2ff402733b8c71e4"
 ---
 
 # T-162-productize-digest-bound-post-spec-review-lenses Productize digest-bound post-spec review lenses
@@ -64,3 +69,6 @@ disposition manifest.
   committed review skill trees.
 
 ## Implementation Notes
+
+- 2026-08-26T08:01:52Z: Productized independent digest-bound post-spec review prompts and packaged skill guidance.
+- 2026-08-26T08:01:52Z: verification pass id 1cc87e7dc6ffdd36473b74bf67cc8a54 previous none completion 3e3ca7039309dc5a2ff402733b8c71e4

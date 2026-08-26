@@ -551,9 +551,6 @@ func validateSpecManifest(manifest SpecReviewManifest, lenses []SpecReviewLens, 
 		if binding.Lens != disposition.Lens {
 			return fmt.Errorf("disposition %q lens conflicts with finding", disposition.FindingID)
 		}
-		if disposition.Disposition == "deferred" && (binding.Finding.Severity == "high" || binding.Finding.Severity == "medium") {
-			return fmt.Errorf("high or medium finding cannot be deferred: %q", disposition.FindingID)
-		}
 		delete(findings, disposition.FindingID)
 	}
 	for id := range findings {

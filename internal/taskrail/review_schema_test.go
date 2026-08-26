@@ -154,9 +154,6 @@ func TestDecodeSpecReviewBundleRejectsBindingAndDispositionMutations(t *testing.
 		{"unknown disposition", func(f map[string][]byte) {
 			f["manifest.json"] = []byte(strings.Replace(string(f["manifest.json"]), `"finding_id":"gaps-1"`, `"finding_id":"unknown-1"`, 1))
 		}, "unknown finding_id"},
-		{"unresolved required", func(f map[string][]byte) {
-			f["manifest.json"] = []byte(strings.Replace(string(f["manifest.json"]), `"disposition":"accepted","rationale":"fixed","resulting_spec_ref":"specs/v0.5.0.md#safe-review-artifact-publication"`, `"disposition":"deferred","rationale":"later","target_version":"v0.6.0"`, 1))
-		}, "high or medium finding cannot be deferred"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -167,6 +164,16 @@ func TestDecodeSpecReviewBundleRejectsBindingAndDispositionMutations(t *testing.
 				t.Fatalf("error = %v, want containing %q", err, tc.want)
 			}
 		})
+	}
+}
+
+func TestDecodeSpecReviewBundleAllowsDeferredHighOrMediumFinding(t *testing.T) {
+	files := specReviewGolden()
+	files["manifest.json"] = []byte(strings.Replace(string(files["manifest.json"]),
+		`"disposition":"accepted","rationale":"fixed","resulting_spec_ref":"specs/v0.5.0.md#safe-review-artifact-publication"`,
+		`"disposition":"deferred","rationale":"later","target_version":"v0.6.0"`, 1))
+	if _, err := DecodeSpecReviewBundle(files); err != nil {
+		t.Fatalf("deferred high finding: %v", err)
 	}
 }
 

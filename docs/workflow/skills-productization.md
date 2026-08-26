@@ -123,6 +123,7 @@ committed `.agents/skills/` and `.claude/skills/` copies:
 | `taskrail-loop` | Shippable | Interactively configures and supervises one bounded provider-neutral `loop` invocation. It confirms a structured dry-run, reads the terminal result file, and reports coordinator or caller-owned adapter evidence without gaining selection, lifecycle, Git, integration, delivery, or recovery-write authority (T-337). |
 | `taskrail-repair` | Shippable | Drives the conservative `taskrail repair` loop (dry-run -> apply -> re-validate) to reconcile mechanical `STATE.md` drift; repo-agnostic and never hand-edits authoritative state (T-050). |
 | `taskrail-spec` | Shippable | Inspects and authors specs through the `taskrail spec` command family and anchors tracked work to real `spec_ref` headings; repo-agnostic (T-064). |
+| `taskrail-spec-review` | Shippable | Stages four independent advisory post-spec lens observations and publishes one human-dispositioned digest-bound bundle before decomposition; it performs no semantic writes (T-162). |
 | `taskrail-decompose` | Shippable | Composes shipped primitives (`coverage --json`, `spec show --anchors`, `import --apply`) to draft spec-anchored tasks for uncovered active-spec areas; spec-driven and repo-agnostic, adds no binary surface (T-098). |
 | `taskrail-gap` | Shippable | Composes `coverage --gaps --json` (structural candidates) with agent semantic gap review over covered active-spec areas, proposing tasks a human promotes via `task new` / `import --apply`; advisory-only, adds no binary surface (T-101). |
 
