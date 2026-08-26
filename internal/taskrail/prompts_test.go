@@ -134,6 +134,30 @@ func TestDecompositionPromptsDefineReviewedOutcomeContract(t *testing.T) {
 	}
 }
 
+func TestDecompositionPromptsDefineCompleteReviewedSession(t *testing.T) {
+	author := strings.Join(strings.Fields(string(builtinPromptTemplate(t, "task-decomposition"))), " ")
+	for _, want := range []string{
+		"final post-spec `manifest.json`",
+		"active spec, use `coverage --json`",
+		"inactive spec, enumerate live anchors",
+		"Every normative requirement needs one exact quote or valid line range",
+	} {
+		if !strings.Contains(author, want) {
+			t.Errorf("task-decomposition missing %q:\n%s", want, author)
+		}
+	}
+
+	reviewer := strings.Join(strings.Fields(string(builtinPromptTemplate(t, "task-decomposition-adversarial"))), " ")
+	for _, want := range []string{
+		"fresh review process or fresh agent context",
+		"If prompt resolution changes before publication, abandon the session",
+	} {
+		if !strings.Contains(reviewer, want) {
+			t.Errorf("task-decomposition-adversarial missing %q:\n%s", want, reviewer)
+		}
+	}
+}
+
 func TestTaskImplementationPromptDefinesLifecycleCompleteWorkflow(t *testing.T) {
 	repo := seedFixtureRepo(t)
 	writeTask(t, repo, "T-001-implement", "Implement", "todo", "high", "specs/v0.1.0.md#summary", nil)

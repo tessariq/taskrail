@@ -1,14 +1,19 @@
 ---
 id: T-164-orchestrate-adversarial-spec-to-task-decomposition
 title: Orchestrate adversarial spec-to-task decomposition
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#adversarial-spec-to-task-decomposition
 dependencies:
     - T-163-validate-and-apply-importdraft-v2-transactionally
     - T-300-bind-decomposition-publication-to-resolved-prompts
     - T-304-align-imported-and-decomposed-task-bodies
-updated_at: "2026-08-04T21:32:13Z"
+updated_at: "2026-08-26T12:54:09Z"
+completion_id: "f06d576da401f1998befc4846a85c311"
+last_verification_id: "faad48f3b5798b6f26d909a4dd8da1f7"
+last_verification_result: pass
+last_verified_at: "2026-08-26T12:54:09Z"
+last_verified_completion_id: "f06d576da401f1998befc4846a85c311"
 ---
 
 # T-164-orchestrate-adversarial-spec-to-task-decomposition Orchestrate adversarial spec-to-task decomposition
@@ -56,3 +61,6 @@ two-pass bound, and hand an approved manifest to the v2 writer.
   decomposition end to end.
 
 ## Implementation Notes
+
+- 2026-08-26T12:53:56Z: Strengthened digest-bound decomposition authoring and adversarial review guidance, including inactive-spec handoff safety.
+- 2026-08-26T12:54:09Z: verification pass id faad48f3b5798b6f26d909a4dd8da1f7 previous none completion f06d576da401f1998befc4846a85c311

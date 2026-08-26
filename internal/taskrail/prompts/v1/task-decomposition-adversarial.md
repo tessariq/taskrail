@@ -1,8 +1,9 @@
 Adversarially review the unpublished decomposition for {{SPEC_VERSION}} at
 {{SPEC_PATH}} using the approved post-spec review {{SPEC_REVIEW_PATH}}, exact
 draft {{DRAFT_PATH}}, and exact trace {{TRACE_PATH}}. Write only the strict review
-JSON to {{REVIEW_PATH}}. Use fresh context; do not rely on the author's reasoning
-or a prior pass, and do not mutate any reviewed input.
+JSON to {{REVIEW_PATH}}. Use fresh context in a fresh review process or fresh
+agent context; do not rely on the author's reasoning or a prior pass, and do not
+mutate any reviewed input.
 
 Re-read the selected spec, approved review, existing tasks, real anchors, exact
 draft, and exact trace. Verify every lower-case exact SHA-256 against raw bytes.
@@ -51,8 +52,11 @@ snapshot passed; it does not certify later bytes.
 Do not repair draft or trace bytes during review. A human may disposition findings
 and author one revised candidate; any changed spec, draft, or trace invalidates
 the prior binding and requires at most one second fresh-context pass. Never run
-more than two passes in one session. A manifest may bind only one or two
-consecutive fresh-context reviews and the final exact spec, draft, and trace
-digests; every finding needs a disposition, and high or medium findings cannot be
-deferred. Do not mutate the spec, approved review, draft, trace, tracked tasks,
-planning state, lifecycle, loop policy, manifest, or durable review directories.
+more than two passes in one session. Any change after pass 2 invalidates the
+session; stop rather than publish unreviewed bytes. If prompt resolution changes
+before publication, abandon the session rather than edit review metadata. A
+manifest may bind only one or two consecutive fresh-context reviews and the final
+exact spec, draft, and trace digests; every finding needs a disposition, and high
+or medium findings cannot be deferred. Do not mutate the spec, approved review,
+draft, trace, tracked tasks, planning state, lifecycle, loop policy, manifest, or
+durable review directories.

@@ -5,11 +5,16 @@ Write the strict ImportDraft v2 to {{DRAFT_PATH}} and its requirement trace to
 
 Author in fresh context and bind every conclusion to the exact input snapshot.
 
-Inspect the selected spec exact bytes, its approved post-spec review, existing
-tasks, and real heading anchors before authoring. Refuse when the approved review
-is absent or stale, a requirement is ambiguous, an operator decision is missing,
-or required evidence cannot establish the claimed behavior. Do not invent
-anchors, dependencies, scope, or approval.
+Before authoring, validate the final post-spec `manifest.json`: it must bind the
+selected exact spec, include its final lenses and dispositions, and leave no
+unresolved high or medium finding. Inspect the selected spec exact bytes, its
+approved post-spec review, existing tasks, and real heading anchors. For an
+active spec, use `coverage --json` to identify uncovered areas. For an inactive
+spec, enumerate live anchors and inspect existing tasks for duplicate or
+overlapping work. Refuse when the approved review is absent or stale, a
+requirement is ambiguous, an operator decision is missing, or required evidence
+cannot establish the claimed behavior. Do not invent anchors, dependencies,
+scope, or approval.
 
 Each task must establish one independently meaningful user, operator, or system
 outcome and one bounded observable result. Apply this shared rubric:
@@ -24,8 +29,8 @@ outcome and one bounded observable result. Apply this shared rubric:
   must connect to that integrated owner through real dependencies.
 - Anchor every `spec_ref` and trace entry to a real specification heading in
   {{SPEC_PATH}}. Use only real dependencies: another draft key or an existing
-  exact task ID. Record requirement quotes that occur exactly once or valid line
-  ranges; do not fabricate coverage.
+  exact task ID. Every normative requirement needs one exact quote or valid line
+  range and a task or no-task disposition; do not fabricate coverage.
 
 For every acceptance criterion identify the actor, precondition, state, action,
 success result, and materially different failure and boundary observations. Map
