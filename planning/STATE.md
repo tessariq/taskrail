@@ -1,6 +1,6 @@
 ---
 schema_version: 1
-updated_at: "2026-08-26T14:22:57Z"
+updated_at: "2026-08-26T15:12:43Z"
 active_spec_version: v0.5.0
 active_spec_path: specs/v0.5.0.md
 current_task: ""
@@ -8,9 +8,9 @@ current_task_title: ""
 status_summary: idle
 blockers: []
 next_action: Select the next eligible task
-last_verification_result: pass for T-306-ship-the-sandboxed-workflow-adversarial-review at 2026-08-26T14:22:57Z id 7b0aff4767bf6807d01a1632b6b7c89b
-last_verification_id: 7b0aff4767bf6807d01a1632b6b7c89b
-last_verified_completion_id: a75c83839033b06006c76c4c8db24380
+last_verification_result: pass for T-372-ignore-git-housekeeping-in-parallel-dry-run at 2026-08-26T15:12:43Z id 07d3d3530f3557f60c704712541f279e
+last_verification_id: 07d3d3530f3557f60c704712541f279e
+last_verified_completion_id: 88e9f076520a76f417c3dd156eecfdeb
 relevant_artifacts: []
 continuation_notes:
     - This repository is temporarily dogfooding bootstrap workflow tooling until Taskrail v0.1.0 exists.
@@ -36,7 +36,7 @@ continuation_notes:
 
 ## Last Verification
 
-- pass for T-306-ship-the-sandboxed-workflow-adversarial-review at 2026-08-26T14:22:57Z id 7b0aff4767bf6807d01a1632b6b7c89b
+- pass for T-372-ignore-git-housekeeping-in-parallel-dry-run at 2026-08-26T15:12:43Z id 07d3d3530f3557f60c704712541f279e
 
 ## Next Action
 
@@ -54,6 +54,6 @@ continuation_notes:
 
 - todo: 66
 - in_progress: 0
-- completed: 304
+- completed: 305
 - blocked: 0
 - cancelled: 0

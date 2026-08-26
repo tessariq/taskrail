@@ -383,7 +383,19 @@ func TestLoopDryRunBuildsParallelFrontierWithoutMutation(t *testing.T) {
 	runGit(t, repo, "add", ".")
 	runGit(t, repo, "commit", "-m", "parallel loop tasks")
 
-	before := snapshotTree(t, repo)
+	before := snapshotTreeWithoutGitHousekeeping(t, repo)
+	beforeGit, err := loopGitSnapshot(repo, svc.paths.GitDir)
+	if err != nil {
+		t.Fatalf("snapshot Git before dry run: %v", err)
+	}
+	beforeRootRefs, err := loopRootRefCandidates(svc.paths.GitDir, svc.paths.GitCommonDir)
+	if err != nil {
+		t.Fatalf("snapshot Git root refs before dry run: %v", err)
+	}
+	beforeConfigs, err := loopGitConfigSnapshot(svc.paths.GitDir, svc.paths.GitCommonDir)
+	if err != nil {
+		t.Fatalf("snapshot Git config before dry run: %v", err)
+	}
 	report, err := svc.LoopDryRun(LoopInvocation{DryRun: true, MaxIterations: 3, Parallel: 2})
 	if err != nil {
 		t.Fatalf("LoopDryRun: %v", err)
@@ -397,9 +409,44 @@ func TestLoopDryRunBuildsParallelFrontierWithoutMutation(t *testing.T) {
 	if report.Parallel.Frontier[0].Task.TaskID != "T-001-ready" || report.Parallel.Frontier[1].Task.TaskID != "T-002-ready" {
 		t.Fatalf("frontier = %+v", report.Parallel.Frontier)
 	}
-	if after := snapshotTree(t, repo); !reflect.DeepEqual(after, before) {
+	if after := snapshotTreeWithoutGitHousekeeping(t, repo); !reflect.DeepEqual(after, before) {
 		t.Fatalf("parallel dry run changed repository bytes: %v", changedPaths(t, before, after))
 	}
+	afterGit, err := loopGitSnapshot(repo, svc.paths.GitDir)
+	if err != nil {
+		t.Fatalf("snapshot Git after dry run: %v", err)
+	}
+	if !reflect.DeepEqual(afterGit, beforeGit) {
+		t.Fatalf("parallel dry run changed semantic Git state: before=%+v after=%+v", beforeGit, afterGit)
+	}
+	afterRootRefs, err := loopRootRefCandidates(svc.paths.GitDir, svc.paths.GitCommonDir)
+	if err != nil {
+		t.Fatalf("snapshot Git root refs after dry run: %v", err)
+	}
+	if !reflect.DeepEqual(afterRootRefs, beforeRootRefs) {
+		t.Fatalf("parallel dry run changed Git root refs: before=%+v after=%+v", beforeRootRefs, afterRootRefs)
+	}
+	afterConfigs, err := loopGitConfigSnapshot(svc.paths.GitDir, svc.paths.GitCommonDir)
+	if err != nil {
+		t.Fatalf("snapshot Git config after dry run: %v", err)
+	}
+	if !reflect.DeepEqual(afterConfigs, beforeConfigs) {
+		t.Fatalf("parallel dry run changed Git configuration: before=%+v after=%+v", beforeConfigs, afterConfigs)
+	}
+	runGit(t, repo, "fsck", "--no-dangling")
+}
+
+func snapshotTreeWithoutGitHousekeeping(t *testing.T, repo string) map[string]string {
+	t.Helper()
+	tree := snapshotTree(t, repo)
+	objects := filepath.Join(".git", "objects") + string(filepath.Separator)
+	infoRefs := filepath.Join(".git", "info", "refs")
+	for name := range tree {
+		if strings.HasPrefix(name, objects) || name == infoRefs {
+			delete(tree, name)
+		}
+	}
+	return tree
 }
 
 func TestLoopDryRunRejectsWorkspaceInsideRepository(t *testing.T) {
