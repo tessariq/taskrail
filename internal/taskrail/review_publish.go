@@ -28,17 +28,25 @@ type ReviewPublishInput struct {
 	ExpectSpecSHA256       string
 	SpecReview             string
 	ExpectSpecReviewSHA256 string
+	Review                 string
+	Memory                 string
+	ExpectMemorySHA256     string
+	ExpectMemoryAbsent     bool
+	ExpectHead             string
+	ExpectProductSHA256    string
 	DryRun                 bool
 
 	// These retain Cobra's selected-type flag boundary when an explicitly empty
 	// flag would otherwise be indistinguishable from an omitted one.
 	SpecFlagSet                   bool
+	ProposalFlagSet               bool
 	TaskFlagSet                   bool
 	ExpectTaskSHA256FlagSet       bool
 	SpecReviewFlagSet             bool
 	ExpectSpecReviewSHA256FlagSet bool
 	TaskFlagsProvided             bool
 	DecompositionFlagsProvided    bool
+	WorkflowFlagsProvided         bool
 }
 
 type ReviewPublishFile struct {
@@ -115,6 +123,14 @@ type decompositionReviewPublication struct {
 	prompts                                         []reviewPromptSnapshot
 }
 
+type workflowReviewPublication struct {
+	review, memory, destination string
+	report, index               []byte
+	subjects                    WorkflowSubjects
+	reviewID                    string
+	prompt                      reviewPromptSnapshot
+}
+
 // ReviewPublish validates a proposal without writing in preview mode. Apply
 // repeats the complete observation after taking the writer lock, then delegates
 // the single no-clobber directory commit to reviewdir.
@@ -132,6 +148,8 @@ func (s *Service) ReviewPublish(input ReviewPublishInput) (ReviewPublishResult, 
 		return s.reviewPublishSpec(input)
 	case reviewdir.TypeDecomposition:
 		return s.publishDecompositionReview(input)
+	case reviewdir.Type("workflow"):
+		return s.publishWorkflowReview(input)
 	default:
 		return ReviewPublishResult{}, invalidArgumentsf("unsupported review type %q", input.Type)
 	}
@@ -276,16 +294,20 @@ func (s *Service) reviewPublishSpec(input ReviewPublishInput) (ReviewPublishResu
 func validateReviewPublishInput(input ReviewPublishInput) error {
 	switch input.Type {
 	case string(reviewdir.TypeTask):
-		if input.DecompositionFlagsProvided || input.Spec != "" || input.SpecReview != "" || input.ExpectSpecReviewSHA256 != "" {
+		if input.WorkflowFlagsProvided || input.DecompositionFlagsProvided || input.Spec != "" || input.SpecReview != "" || input.ExpectSpecReviewSHA256 != "" {
 			return invalidArgumentsf("task review publication does not accept decomposition flags")
 		}
 	case string(reviewdir.TypeSpec):
-		if input.TaskFlagsProvided || input.TaskID != "" || input.ExpectTaskSHA256 != "" || input.SpecReviewFlagSet || input.ExpectSpecReviewSHA256FlagSet || input.SpecReview != "" || input.ExpectSpecReviewSHA256 != "" {
+		if input.WorkflowFlagsProvided || input.TaskFlagsProvided || input.TaskID != "" || input.ExpectTaskSHA256 != "" || input.SpecReviewFlagSet || input.ExpectSpecReviewSHA256FlagSet || input.SpecReview != "" || input.ExpectSpecReviewSHA256 != "" {
 			return invalidArgumentsf("spec review publication does not accept task or decomposition-only flags")
 		}
 	case string(reviewdir.TypeDecomposition):
-		if input.TaskFlagsProvided || input.TaskID != "" || input.ExpectTaskSHA256 != "" {
+		if input.WorkflowFlagsProvided || input.TaskFlagsProvided || input.TaskID != "" || input.ExpectTaskSHA256 != "" {
 			return invalidArgumentsf("decomposition review publication does not accept task flags")
+		}
+	case "workflow":
+		if input.TaskFlagsProvided || input.ProposalFlagSet || input.SpecReviewFlagSet || input.ExpectSpecReviewSHA256FlagSet {
+			return invalidArgumentsf("workflow review publication does not accept task, proposal, or decomposition flags")
 		}
 	default:
 		return invalidArgumentsf("unsupported review type %q", input.Type)

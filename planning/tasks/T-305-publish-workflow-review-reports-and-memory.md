@@ -1,7 +1,7 @@
 ---
 id: T-305-publish-workflow-review-reports-and-memory
 title: Publish workflow review reports and memory atomically
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#workflow-adversarial-review-memory
 dependencies:
@@ -9,7 +9,12 @@ dependencies:
     - T-215-add-the-generic-review-artifact-publisher
     - T-232-recover-v0-5-transactions-through-one-command
     - T-255-bind-review-artifacts-to-resolved-prompt-templates
-updated_at: "2026-08-08T14:23:09Z"
+updated_at: "2026-08-26T10:48:21Z"
+completion_id: "7262576551125f8bd64a5d0d4e122d0e"
+last_verification_id: "619b5a4f91bcad6499c883698bc623a0"
+last_verification_result: pass
+last_verified_at: "2026-08-26T10:48:21Z"
+last_verified_completion_id: "7262576551125f8bd64a5d0d4e122d0e"
 ---
 
 # T-305-publish-workflow-review-reports-and-memory Publish workflow review reports and memory atomically
@@ -46,3 +51,6 @@ memory as one durable, compare-and-swap protected logical outcome.
 - A5: repository sentinels and allowed-diff assertions prove the narrow write set.
 
 ## Implementation Notes
+
+- 2026-08-26T10:48:09Z: Published workflow review report/index pairs through durable fenced recovery, with snapshot and recovery tests.
+- 2026-08-26T10:48:21Z: verification pass id 619b5a4f91bcad6499c883698bc623a0 previous none completion 7262576551125f8bd64a5d0d4e122d0e

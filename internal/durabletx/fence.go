@@ -193,3 +193,38 @@ func RetainedCandidate(repo repolock.Repository, transactionID string, kind Path
 	}
 	return nil, fmt.Errorf("transaction %s retains no fenced final for %s %s", transactionID, kind, reported)
 }
+
+// RetainedOriginal returns the exact original bytes recorded for one member. A
+// false present value means the transaction recorded absence rather than bytes.
+func RetainedOriginal(repo repolock.Repository, transactionID string, kind PathKind, reported string) ([]byte, bool, error) {
+	if !transactionIDPattern.MatchString(transactionID) {
+		return nil, false, fmt.Errorf("transaction id %q is not a lower-case 32-hex id", transactionID)
+	}
+	base, relative := transactionsPath(repo)
+	data, _, err := durablefs.ReadFile(base, relative+"/"+transactionID+"/"+manifestName, maximumJournalBytes)
+	if err != nil {
+		return nil, false, err
+	}
+	var saved manifest
+	if err := decodeDocument(data, &saved); err != nil {
+		return nil, false, err
+	}
+	for i, member := range saved.Members {
+		if member.Reported != reported || member.Kind != kind {
+			continue
+		}
+		if member.Original == nil {
+			return nil, false, nil
+		}
+		original, _, err := durablefs.ReadFile(base,
+			fmt.Sprintf("%s/%s/%08d", relative+"/"+transactionID, originalsDirName, i), maximumJournalBytes)
+		if err != nil {
+			return nil, false, err
+		}
+		if digest(original) != member.Original.SHA256 {
+			return nil, false, fmt.Errorf("retained original for %s disagrees with the manifest", reported)
+		}
+		return original, true, nil
+	}
+	return nil, false, fmt.Errorf("transaction %s retains no original for %s %s", transactionID, kind, reported)
+}

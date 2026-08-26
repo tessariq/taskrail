@@ -19,6 +19,11 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ### Added
 
+- `review publish --type workflow` now validates a clean Git-bound staged
+  workflow report, exact spec/HEAD/product and prior-memory snapshots, and
+  Taskrail-derived index bytes before durably publishing the immutable run and
+  `INDEX.json` as one recoverable pair. It rejects stale memory, duplicate review
+  IDs, and unexpected workflow paths without touching lifecycle state.
 - Added the `taskrail-task-review` packaged skill and its v1 prompt. It resolves
   one tracked task, its referenced specification, dependencies, and related
   context into one strict digest-bound advisory review proposal, then publishes

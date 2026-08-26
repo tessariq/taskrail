@@ -20,12 +20,14 @@ func newReviewPublishCmd() *cobra.Command {
 		Args:  machineArgs(cobra.NoArgs),
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			input.SpecFlagSet = cmd.Flags().Changed("spec")
+			input.ProposalFlagSet = cmd.Flags().Changed("proposal")
 			input.TaskFlagSet = cmd.Flags().Changed("task")
 			input.ExpectTaskSHA256FlagSet = cmd.Flags().Changed("expect-task-sha256")
 			input.SpecReviewFlagSet = cmd.Flags().Changed("spec-review")
 			input.ExpectSpecReviewSHA256FlagSet = cmd.Flags().Changed("expect-spec-review-sha256")
 			input.TaskFlagsProvided = input.TaskFlagSet || input.ExpectTaskSHA256FlagSet
 			input.DecompositionFlagsProvided = input.SpecFlagSet || input.SpecReviewFlagSet || input.ExpectSpecReviewSHA256FlagSet
+			input.WorkflowFlagsProvided = cmd.Flags().Changed("review") || cmd.Flags().Changed("memory") || cmd.Flags().Changed("expect-memory-sha256") || cmd.Flags().Changed("expect-memory-absent") || cmd.Flags().Changed("expect-head") || cmd.Flags().Changed("expect-product-sha256")
 			return runCommand(cmd, func(svc *taskrail.Service) (commandResult, error) {
 				result, err := svc.ReviewPublish(input)
 				if err != nil {
@@ -35,8 +37,14 @@ func newReviewPublishCmd() *cobra.Command {
 			})
 		},
 	}
-	cmd.Flags().StringVar(&input.Type, "type", "", "review type (task, spec, or decomposition)")
+	cmd.Flags().StringVar(&input.Type, "type", "", "review type (task, spec, decomposition, or workflow)")
 	cmd.Flags().StringVar(&input.Proposal, "proposal", "", "transient proposal directory")
+	cmd.Flags().StringVar(&input.Review, "review", "", "staged workflow report")
+	cmd.Flags().StringVar(&input.Memory, "memory", "", "workflow review memory index")
+	cmd.Flags().StringVar(&input.ExpectMemorySHA256, "expect-memory-sha256", "", "expected exact workflow memory digest")
+	cmd.Flags().BoolVar(&input.ExpectMemoryAbsent, "expect-memory-absent", false, "require absent workflow memory")
+	cmd.Flags().StringVar(&input.ExpectHead, "expect-head", "", "expected full workflow HEAD")
+	cmd.Flags().StringVar(&input.ExpectProductSHA256, "expect-product-sha256", "", "expected workflow product digest")
 	cmd.Flags().StringVar(&input.Destination, "destination", "", "absent durable review directory")
 	cmd.Flags().StringVar(&input.TaskID, "task", "", "reviewed task ID")
 	cmd.Flags().StringVar(&input.ExpectTaskSHA256, "expect-task-sha256", "", "expected exact task digest")
@@ -46,7 +54,6 @@ func newReviewPublishCmd() *cobra.Command {
 	cmd.Flags().StringVar(&input.ExpectSpecReviewSHA256, "expect-spec-review-sha256", "", "expected exact post-spec review manifest digest")
 	cmd.Flags().BoolVar(&input.DryRun, "dry-run", false, "validate without publishing")
 	_ = cmd.MarkFlagRequired("type")
-	_ = cmd.MarkFlagRequired("proposal")
 	_ = cmd.MarkFlagRequired("destination")
 	addMachineJSONFlag(cmd)
 	return cmd

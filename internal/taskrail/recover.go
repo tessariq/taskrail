@@ -99,20 +99,10 @@ func (s *Service) RecoverTransaction(ctx context.Context, transactionID string, 
 		}
 	}()
 
-	// Each durable writer that has wired publication registers its recovery
-	// validator here; the engine refuses accept_candidate for any other owning
-	// command rather than letting this boundary choose semantic content on a
-	// writer's behalf. Today the layout-2 migration through init is the one
-	// durable writer.
 	recovered, err = durabletx.Recover(ctx, lock, s.paths.LockRepository(), durabletx.RecoveryRequest{
 		TransactionID: transactionID,
 		Apply:         apply,
-		Validate: func(command string, snapshots []durabletx.Evidence) error {
-			if command != initMigrationCommand {
-				return fmt.Errorf("no recovery validator is registered for %q", command)
-			}
-			return s.validateInitRecovery(transactionID, snapshots)
-		},
+		Validate:      s.recoveryValidator(transactionID),
 	})
 	if err != nil {
 		return RecoverResult{}, s.mapRecoveryError(transactionID, err)
@@ -225,13 +215,21 @@ func (s *Service) runRecoveryExpected(ctx context.Context, ownership durabletx.O
 		TransactionID:  transactionID,
 		Apply:          apply,
 		ExpectedAction: expectedAction,
-		Validate: func(command string, snapshots []durabletx.Evidence) error {
-			if command != initMigrationCommand {
-				return fmt.Errorf("no recovery validator is registered for %q", command)
-			}
-			return s.validateInitRecovery(transactionID, snapshots)
-		},
+		Validate:       s.recoveryValidator(transactionID),
 	})
+}
+
+func (s *Service) recoveryValidator(transactionID string) func(string, []durabletx.Evidence) error {
+	return func(command string, snapshots []durabletx.Evidence) error {
+		switch command {
+		case initMigrationCommand:
+			return s.validateInitRecovery(transactionID, snapshots)
+		case "review publish":
+			return s.validateWorkflowPublicationRecovery(transactionID, snapshots)
+		default:
+			return fmt.Errorf("no recovery validator is registered for %q", command)
+		}
+	}
 }
 
 func (s *Service) recoveryResult(recovered durabletx.RecoveryResult, takeover string, request *RecoverRequest) (RecoverResult, error) {
