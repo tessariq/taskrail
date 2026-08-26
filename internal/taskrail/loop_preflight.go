@@ -3,6 +3,7 @@ package taskrail
 import (
 	"errors"
 	"fmt"
+	"io/fs"
 	"math"
 	"os"
 	"path"
@@ -49,6 +50,7 @@ type LoopPreflightSnapshot struct {
 	review     LoopReviewSnapshot
 	lock       LoopLockSnapshot
 	rootRefs   map[string][]byte
+	gitConfig  map[string]loopGitConfigFile
 }
 
 type LoopGitSnapshot struct {
@@ -80,6 +82,14 @@ type LoopLockSnapshot struct {
 	Owner     string
 }
 
+// loopGitConfigFile retains presence as well as no-follow file evidence so an
+// absent configuration file cannot be created between preflight and delivery.
+type loopGitConfigFile struct {
+	Present  bool
+	Bytes    []byte
+	Snapshot durablefs.Snapshot
+}
+
 func (s LoopPreflightSnapshot) Invocation() LoopInvocation { return cloneLoopInvocation(s.invocation) }
 
 func (s LoopPreflightSnapshot) Inputs() map[string][]byte { return cloneLoopBytes(s.inputs) }
@@ -98,6 +108,10 @@ func (s LoopPreflightSnapshot) Review() LoopReviewSnapshot { return s.review }
 func (s LoopPreflightSnapshot) Lock() LoopLockSnapshot { return s.lock }
 
 func (s LoopPreflightSnapshot) RootRefs() map[string][]byte { return cloneLoopBytes(s.rootRefs) }
+
+func (s LoopPreflightSnapshot) GitConfig() map[string]loopGitConfigFile {
+	return cloneLoopGitConfig(s.gitConfig)
+}
 
 var loopRootRefName = regexp.MustCompile(`^[A-Z][A-Z0-9_]*$`)
 
@@ -290,6 +304,10 @@ func (s *Service) LoopPreflight(invocation LoopInvocation) (LoopPreflightSnapsho
 	if err != nil {
 		return LoopPreflightSnapshot{}, err
 	}
+	gitConfig, err := loopGitConfigSnapshot(s.paths.GitDir, s.paths.GitCommonDir)
+	if err != nil {
+		return LoopPreflightSnapshot{}, err
+	}
 	configured, err := loopConfiguredReviewRounds(inputs[filepath.ToSlash(relPath(s.paths.RepoRoot, s.paths.ConfigFile))])
 	if err != nil {
 		return LoopPreflightSnapshot{}, err
@@ -301,7 +319,7 @@ func (s *Service) LoopPreflight(invocation LoopInvocation) (LoopPreflightSnapsho
 	}
 	return LoopPreflightSnapshot{invocation: cloneLoopInvocation(invocation), inputs: cloneLoopBytes(inputs), git: cloneLoopGit(git),
 		storage: LoopStorageSnapshot{Mode: string(s.paths.Storage.Mode), Root: s.paths.Storage.Root},
-		review:  review, lock: LoopLockSnapshot{Available: true}, rootRefs: cloneLoopBytes(rootRefs)}, nil
+		review:  review, lock: LoopLockSnapshot{Available: true}, rootRefs: cloneLoopBytes(rootRefs), gitConfig: cloneLoopGitConfig(gitConfig)}, nil
 }
 
 func normalizeLoopInvocation(invocation LoopInvocation) LoopInvocation {
@@ -397,6 +415,17 @@ func cloneLoopBytes(in map[string][]byte) map[string][]byte {
 	out := make(map[string][]byte, len(in))
 	for key, value := range in {
 		out[key] = append([]byte{}, value...)
+	}
+	return out
+}
+
+func cloneLoopGitConfig(in map[string]loopGitConfigFile) map[string]loopGitConfigFile {
+	out := make(map[string]loopGitConfigFile, len(in))
+	for path, config := range in {
+		if config.Bytes != nil {
+			config.Bytes = append([]byte{}, config.Bytes...)
+		}
+		out[path] = config
 	}
 	return out
 }
@@ -542,6 +571,36 @@ func loopRootRefCandidates(gitDirs ...string) (map[string][]byte, error) {
 		}
 	}
 	return candidates, nil
+}
+
+func loopGitConfigSnapshot(gitDirs ...string) (map[string]loopGitConfigFile, error) {
+	configs := make(map[string]loopGitConfigFile)
+	seen := make(map[string]bool)
+	for _, dir := range gitDirs {
+		if seen[dir] {
+			continue
+		}
+		seen[dir] = true
+		for _, name := range []string{"config", "config.worktree"} {
+			config, err := loopGitConfigFileSnapshot(dir, name)
+			if err != nil {
+				return nil, WithMachineErrorCode(MachineCodeGitState, fmt.Errorf("read Git configuration %s: %w", filepath.Join(dir, name), fsCause(err)))
+			}
+			configs[filepath.Join(dir, name)] = config
+		}
+	}
+	return configs, nil
+}
+
+func loopGitConfigFileSnapshot(dir, name string) (loopGitConfigFile, error) {
+	data, snapshot, err := durablefs.ReadFile(dir, name, math.MaxInt64-1)
+	if errors.Is(err, fs.ErrNotExist) {
+		return loopGitConfigFile{}, nil
+	}
+	if err != nil {
+		return loopGitConfigFile{}, err
+	}
+	return loopGitConfigFile{Present: true, Bytes: append([]byte{}, data...), Snapshot: snapshot}, nil
 }
 
 func loopReadFile(root, file string) ([]byte, error) {

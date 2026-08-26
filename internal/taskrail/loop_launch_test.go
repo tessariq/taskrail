@@ -387,6 +387,17 @@ func TestLoopLaunchChildHelper(t *testing.T) {
 		fmt.Fprint(os.Stdout, "stdout\n")
 		fmt.Fprint(os.Stderr, "stderr\n")
 		os.Exit(0)
+	case "mutate-git-config":
+		cwd, err := os.Getwd()
+		if err != nil {
+			os.Exit(97)
+		}
+		config := filepath.Join(cwd, ".git", "config")
+		data, err := os.ReadFile(config)
+		if err != nil || os.WriteFile(config, append(data, []byte("\n[loop-test]\nmutated = true\n")...), 0o600) != nil {
+			os.Exit(95)
+		}
+		os.Exit(0)
 	default:
 		os.Exit(94)
 	}

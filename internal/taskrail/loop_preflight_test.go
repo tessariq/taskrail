@@ -305,11 +305,23 @@ func TestLoopPreflightSnapshotAccessorsDefendFrozenBytes(t *testing.T) {
 		refs[path] = data
 		break
 	}
+	configs := snapshot.GitConfig()
+	for path, config := range configs {
+		if !config.Present {
+			continue
+		}
+		config.Bytes[0] ^= 0xff
+		configs[path] = config
+		break
+	}
 	if got := snapshot.Inputs()["planning/STATE.md"]; reflect.DeepEqual(got, inputs["planning/STATE.md"]) {
 		t.Fatal("inputs accessor exposed frozen bytes")
 	}
 	if got := snapshot.Git(); reflect.DeepEqual(got.Index, git.Index) || got.Refs[got.Ref] == "changed" {
 		t.Fatal("Git accessor exposed frozen bytes")
+	}
+	if reflect.DeepEqual(snapshot.GitConfig(), configs) {
+		t.Fatal("Git configuration accessor exposed frozen bytes")
 	}
 }
 

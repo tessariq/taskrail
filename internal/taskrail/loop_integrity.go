@@ -21,6 +21,7 @@ type loopIntegrityEvidence struct {
 	Inputs             map[string][]byte
 	Git                LoopGitSnapshot
 	RootRefs           map[string][]byte
+	GitConfig          map[string]loopGitConfigFile
 	Storage            *LoopStorageSnapshot
 	Review             *LoopReviewSnapshot
 	Prompt             *LoopPromptExecution
@@ -165,6 +166,21 @@ func checkLoopIntegrity(evidence loopIntegrityEvidence) []MachineViolation {
 	for inputPath := range evidence.RootRefs {
 		if _, present := evidence.Preflight.RootRefs()[inputPath]; !present {
 			violations = append(violations, loopIntegrityViolation("root_ref_created", "new Git root candidate was created", &inputPath))
+		}
+	}
+	if evidence.GitConfig == nil {
+		violations = append(violations, loopIntegrityViolation("postflight_evidence_missing", "Git configuration observation is required", nil))
+	} else {
+		for configPath, before := range evidence.Preflight.GitConfig() {
+			after, present := evidence.GitConfig[configPath]
+			if !present || before.Present != after.Present || before.Snapshot != after.Snapshot || !bytes.Equal(before.Bytes, after.Bytes) {
+				violations = append(violations, loopIntegrityViolation("git_config_changed", "repository-owned Git configuration changed", &configPath))
+			}
+		}
+		for configPath := range evidence.GitConfig {
+			if _, present := evidence.Preflight.GitConfig()[configPath]; !present {
+				violations = append(violations, loopIntegrityViolation("git_config_changed", "repository-owned Git configuration changed", &configPath))
+			}
 		}
 	}
 

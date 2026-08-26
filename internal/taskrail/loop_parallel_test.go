@@ -3,6 +3,7 @@ package taskrail
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -194,6 +195,107 @@ func TestLoopExecuteDeliversParallelCloneBatch(t *testing.T) {
 		if err != nil || !found || task.Frontmatter.Status != "completed" {
 			t.Fatalf("task %s after parallel delivery = %+v, %v", taskID, task, err)
 		}
+	}
+}
+
+func TestParallelAggregateRejectsGitConfigurationMutation(t *testing.T) {
+	clearLoopChildEnvironment(t)
+	t.Setenv("GO_WANT_LOOP_CHILD", "1")
+	repo, _ := loopFixture(t)
+	helper, err := os.Executable()
+	if err != nil {
+		t.Fatalf("resolve test helper: %v", err)
+	}
+	accepted, violations := runParallelAggregateChild(context.Background(), LoopInvocation{Child: []string{helper, "-test.run=^TestLoopLaunchChildHelper$", "--", "mutate-git-config", filepath.Join(t.TempDir(), "record")}}, repo, &ParallelBatch{}, nil, nil)
+	if accepted || !hasLoopIntegrityCode(violations, "git_config_changed") {
+		t.Fatalf("parallel aggregate = accepted:%t violations:%+v, want Git configuration rejection", accepted, violations)
+	}
+}
+
+func TestParallelIntegrationChildRejectsGitConfigurationMutation(t *testing.T) {
+	clearLoopChildEnvironment(t)
+	t.Setenv("GO_WANT_LOOP_CHILD", "1")
+	repo, _ := loopFixture(t)
+	helper, err := os.Executable()
+	if err != nil {
+		t.Fatalf("resolve test helper: %v", err)
+	}
+	_, err = runParallelIntegrationChild(context.Background(), LoopInvocation{Child: []string{helper, "-test.run=^TestLoopLaunchChildHelper$", "--", "mutate-git-config", filepath.Join(t.TempDir(), "record")}}, repo, "candidate", nil, nil)
+	if !errors.Is(err, errLoopGitConfigChanged) {
+		t.Fatalf("integration child error = %v, want Git configuration rejection", err)
+	}
+}
+
+func TestParallelIntegrationStopsAfterGitConfigurationMutation(t *testing.T) {
+	clearLoopChildEnvironment(t)
+	t.Setenv("GO_WANT_LOOP_CHILD", "1")
+	repo, svc := loopFixture(t)
+	writeFile(t, filepath.Join(repo, "conflict.txt"), "base\n")
+	runGit(t, repo, "add", "conflict.txt")
+	runGit(t, repo, "commit", "-m", "base conflict")
+	ref, err := gitCommand(repo, "symbolic-ref", "HEAD")
+	if err != nil {
+		t.Fatalf("read source ref: %v", err)
+	}
+	base, err := gitCommand(repo, "rev-parse", "HEAD")
+	if err != nil {
+		t.Fatalf("read source head: %v", err)
+	}
+	workerRoot := filepath.Join(t.TempDir(), "worker")
+	firstWorkerRoot := filepath.Join(t.TempDir(), "first-worker")
+	if err := parallelClone(repo, firstWorkerRoot, strings.TrimSpace(ref), strings.TrimSpace(base), 0); err != nil {
+		t.Fatalf("clone first worker: %v", err)
+	}
+	runGit(t, firstWorkerRoot, "config", "user.email", "test@example.com")
+	runGit(t, firstWorkerRoot, "config", "user.name", "Test")
+	writeFile(t, filepath.Join(firstWorkerRoot, "first.txt"), "first\n")
+	runGit(t, firstWorkerRoot, "add", "first.txt")
+	runGit(t, firstWorkerRoot, "commit", "-m", "first worker")
+	firstCandidate, err := gitCommand(firstWorkerRoot, "rev-parse", "HEAD")
+	if err != nil {
+		t.Fatalf("read first worker head: %v", err)
+	}
+	if err := parallelClone(repo, workerRoot, strings.TrimSpace(ref), strings.TrimSpace(base), 0); err != nil {
+		t.Fatalf("clone worker: %v", err)
+	}
+	runGit(t, workerRoot, "config", "user.email", "test@example.com")
+	runGit(t, workerRoot, "config", "user.name", "Test")
+	writeFile(t, filepath.Join(workerRoot, "conflict.txt"), "worker\n")
+	runGit(t, workerRoot, "add", "conflict.txt")
+	runGit(t, workerRoot, "commit", "-m", "worker conflict")
+	candidate, err := gitCommand(workerRoot, "rev-parse", "HEAD")
+	if err != nil {
+		t.Fatalf("read worker head: %v", err)
+	}
+	writeFile(t, filepath.Join(repo, "conflict.txt"), "source\n")
+	runGit(t, repo, "add", "conflict.txt")
+	runGit(t, repo, "commit", "-m", "source conflict")
+	head, err := gitCommand(repo, "rev-parse", "HEAD")
+	if err != nil {
+		t.Fatalf("read source head after conflict: %v", err)
+	}
+	helper, err := os.Executable()
+	if err != nil {
+		t.Fatalf("resolve test helper: %v", err)
+	}
+	record := filepath.Join(t.TempDir(), "record")
+	batch := ParallelBatch{Workers: []ParallelWorker{
+		{Outcome: "completed_pass", CandidateCommit: stringPtr(strings.TrimSpace(firstCandidate)), Workspace: &firstWorkerRoot},
+		{Outcome: "completed_pass", CandidateCommit: stringPtr(strings.TrimSpace(candidate)), Workspace: &workerRoot},
+	}}
+	plan := ParallelPlan{BaseRef: strings.TrimSpace(ref), BaseHead: strings.TrimSpace(head), Workspace: ParallelWorkspace{Root: t.TempDir()}}
+	aggregateLaunched := false
+	testHookBeforeParallelAggregate = func() { aggregateLaunched = true }
+	t.Cleanup(func() { testHookBeforeParallelAggregate = nil })
+	violations := svc.integrateParallelWorkers(context.Background(), LoopInvocation{Child: []string{helper, "-test.run=^TestLoopLaunchChildHelper$", "--", "mutate-git-config", record}}, plan, filepath.Join(t.TempDir(), "integration"), &batch, nil, nil)
+	if !hasLoopIntegrityCode(violations, "git_config_changed") || batch.Integration.AggregatePass {
+		t.Fatalf("integration = %+v, violations = %+v, want stopped configuration rejection", batch.Integration, violations)
+	}
+	if aggregateLaunched {
+		t.Fatal("integration launched aggregate validation after configuration mutation")
+	}
+	if launches := string(readBytes(t, record+".launches")); launches != "1" {
+		t.Fatalf("child launches = %q, want conflict child only", launches)
 	}
 }
 

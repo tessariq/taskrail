@@ -108,3 +108,25 @@ func TestLoopExecuteStopsAfterFailedChild(t *testing.T) {
 		t.Fatalf("report recovery shape = %+v", report)
 	}
 }
+
+func TestLoopExecuteRejectsGitConfigurationMutation(t *testing.T) {
+	clearLoopChildEnvironment(t)
+	t.Setenv("GO_WANT_LOOP_CHILD", "1")
+	repo, svc := loopFixture(t)
+	writeTask(t, repo, "T-001-ready", "Ready", "todo", "high", "specs/v0.1.0.md#summary", nil)
+	taskPath := filepath.Join(repo, "planning", "tasks", "T-001-ready.md")
+	writeFile(t, taskPath, strings.Replace(string(readBytes(t, taskPath)), "updated_at:", "loop_policy: allow\nloop_reason: test execution\nupdated_at:", 1))
+	if _, err := svc.Repair(RepairInput{Apply: true}); err != nil {
+		t.Fatalf("repair loop fixture: %v", err)
+	}
+	runGit(t, repo, "add", ".")
+	runGit(t, repo, "commit", "-m", "allow task")
+
+	report, err := svc.LoopExecute(context.Background(), LoopInvocation{MaxIterations: 1, Child: []string{os.Args[0], "-test.run=^TestLoopLaunchChildHelper$", "--", "mutate-git-config", filepath.Join(t.TempDir(), "record")}})
+	if err != nil {
+		t.Fatalf("LoopExecute: %v", err)
+	}
+	if report.Outcome != "invalid_postflight" || !hasLoopIntegrityCode(report.MutationViolations, "git_config_changed") {
+		t.Fatalf("report = %+v, want invalid Git configuration postflight", report)
+	}
+}

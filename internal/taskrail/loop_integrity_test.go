@@ -195,7 +195,7 @@ func TestLoopIntegrityOrdersNullPathEvidenceMessages(t *testing.T) {
 			got = append(got, violation.Message)
 		}
 	}
-	want := []string{"prompt observation is required", "review policy observation is required", "staged executable observation is required", "storage observation is required"}
+	want := []string{"Git configuration observation is required", "prompt observation is required", "review policy observation is required", "staged executable observation is required", "storage observation is required"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("missing evidence messages = %v, want %v", got, want)
 	}
@@ -209,7 +209,8 @@ func loopIntegrityEvidenceFor(preflight LoopPreflightSnapshot, selected string, 
 	return loopIntegrityEvidence{
 		Preflight: preflight, SelectedTask: selected, Inputs: inputs, Git: preflight.Git(),
 		RootRefs: map[string][]byte{".git/EVIL_REV": []byte("one\n")}, Storage: &storage,
-		Review: &review, ExpectedPrompt: &prompt, Prompt: &prompt,
+		GitConfig: preflight.GitConfig(),
+		Review:    &review, ExpectedPrompt: &prompt, Prompt: &prompt,
 		ExpectedExecutable: &executable, Executable: &executable,
 	}
 }
@@ -232,11 +233,12 @@ func loopIntegrityState(note string) []byte {
 
 func loopIntegrityPreflight(inputs map[string][]byte) LoopPreflightSnapshot {
 	return LoopPreflightSnapshot{
-		inputs:   cloneLoopBytes(inputs),
-		git:      LoopGitSnapshot{Ref: "refs/heads/main", Refs: map[string]string{"refs/heads/main": "before", "refs/tags/v1": "tag"}},
-		storage:  LoopStorageSnapshot{Mode: "committed", Root: "."},
-		review:   LoopReviewSnapshot{ConfiguredMaxRounds: 1, EffectiveMaxRounds: 1, Source: "config", MaxReviewersPerRound: 3, FinalDiffReviewRequiredOnChange: true},
-		rootRefs: map[string][]byte{".git/EVIL_REV": []byte("one\n")},
+		inputs:    cloneLoopBytes(inputs),
+		git:       LoopGitSnapshot{Ref: "refs/heads/main", Refs: map[string]string{"refs/heads/main": "before", "refs/tags/v1": "tag"}},
+		storage:   LoopStorageSnapshot{Mode: "committed", Root: "."},
+		review:    LoopReviewSnapshot{ConfiguredMaxRounds: 1, EffectiveMaxRounds: 1, Source: "config", MaxReviewersPerRound: 3, FinalDiffReviewRequiredOnChange: true},
+		rootRefs:  map[string][]byte{".git/EVIL_REV": []byte("one\n")},
+		gitConfig: map[string]loopGitConfigFile{},
 	}
 }
 

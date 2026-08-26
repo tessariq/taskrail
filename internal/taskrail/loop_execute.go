@@ -174,13 +174,15 @@ func (s *Service) runLoopIterationTo(ctx context.Context, snapshot LoopPreflight
 	postInputs, inputErr := loopInputBytes(s.paths)
 	postGit, gitErr := loopGitSnapshot(s.paths.WorktreeRoot, s.paths.GitDir)
 	rootRefs, refErr := loopRootRefCandidates(s.paths.GitDir, s.paths.GitCommonDir)
+	gitConfig, configErr := loopGitConfigSnapshot(s.paths.GitDir, s.paths.GitCommonDir)
 	mutation := []MachineViolation{}
-	if inputErr != nil || gitErr != nil || refErr != nil {
-		mutation = append(mutation, MachineViolation{Code: "postflight_evidence_missing", Message: fmt.Sprintf("could not collect postflight repository evidence: inputs=%v git=%v root_refs=%v", inputErr, gitErr, refErr)})
+	if inputErr != nil || gitErr != nil || refErr != nil || configErr != nil {
+		mutation = append(mutation, MachineViolation{Code: "postflight_evidence_missing", Message: fmt.Sprintf("could not collect postflight repository evidence: inputs=%v git=%v root_refs=%v git_config=%v", inputErr, gitErr, refErr, configErr)})
 	} else {
 		mutation = checkLoopIntegrity(loopIntegrityEvidence{Preflight: snapshot, SelectedTask: selected.TaskID, PlanningDir: s.paths.LogicalPlanningDir,
 			VerifyDir: filepath.ToSlash(filepath.Join(s.paths.LogicalPlanningDir, "artifacts", "verify")), Inputs: postInputs, Git: postGit, RootRefs: rootRefs,
-			Storage: loopStoragePointer(s.paths), Review: loopReviewPointer(snapshot), Prompt: &prompt, ExpectedPrompt: &prompt, Executable: &identity, ExpectedExecutable: &identity})
+			GitConfig: gitConfig,
+			Storage:   loopStoragePointer(s.paths), Review: loopReviewPointer(snapshot), Prompt: &prompt, ExpectedPrompt: &prompt, Executable: &identity, ExpectedExecutable: &identity})
 		_, deliveryViolations := validateLoopDelivery(loopDeliveryEvidence{Root: s.paths.WorktreeRoot, Preflight: snapshot, Postflight: postGit,
 			PostflightInputs: postInputs, PlanningDir: s.paths.LogicalPlanningDir, VerifyDir: filepath.ToSlash(filepath.Join(s.paths.LogicalPlanningDir, "artifacts", "verify")),
 			SelectedTask: selected.TaskID, LifecycleCandidate: valueOrEmpty(iteration.LifecycleCandidate), IntegrityViolations: mutation, ChildFailed: iteration.Outcome == "child_failed"})
@@ -255,8 +257,12 @@ func (s *Service) nextLoopIterationSnapshot(previous LoopPreflightSnapshot) (Loo
 	if err != nil {
 		return LoopPreflightSnapshot{}, err
 	}
+	gitConfig, err := loopGitConfigSnapshot(s.paths.GitDir, s.paths.GitCommonDir)
+	if err != nil {
+		return LoopPreflightSnapshot{}, err
+	}
 	return LoopPreflightSnapshot{invocation: previous.Invocation(), inputs: inputs, git: git,
-		storage: previous.Storage(), review: previous.Review(), lock: previous.Lock(), rootRefs: rootRefs}, nil
+		storage: previous.Storage(), review: previous.Review(), lock: previous.Lock(), rootRefs: rootRefs, gitConfig: gitConfig}, nil
 }
 
 func (s *Service) authorizeLoopExecutionPrompt(snapshot LoopPreflightSnapshot) error {

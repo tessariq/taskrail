@@ -52,8 +52,8 @@ continuation_notes:
 
 ## Task Counts
 
-- todo: 74
+- todo: 73
 - in_progress: 0
-- completed: 294
+- completed: 295
 - blocked: 0
 - cancelled: 0

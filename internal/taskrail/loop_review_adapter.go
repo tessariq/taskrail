@@ -174,7 +174,7 @@ type reviewChange struct {
 	ready     bool
 }
 
-func (s *Service) deliverParallelReviews(ctx context.Context, invocation LoopInvocation, plan ParallelPlan, root string, batch *ParallelBatch, stdout, stderr io.Writer) {
+func (s *Service) deliverParallelReviews(ctx context.Context, invocation LoopInvocation, plan ParallelPlan, root string, batch *ParallelBatch, stdout, stderr io.Writer) (violations []MachineViolation) {
 	changes := make([]reviewChange, len(batch.Workers))
 	var wait sync.WaitGroup
 	for i := range batch.Workers {
@@ -252,12 +252,14 @@ func (s *Service) deliverParallelReviews(ctx context.Context, invocation LoopInv
 			return
 		}
 	}
-	batch.Integration.AggregatePass = runParallelAggregateChild(ctx, invocation, integrationRoot, batch, stdout, stderr)
+	aggregatePass, violations := runParallelAggregateChild(ctx, invocation, integrationRoot, batch, stdout, stderr)
+	batch.Integration.AggregatePass = aggregatePass
 	if batch.Integration.AggregatePass {
 		batch.Integration.Head = batch.Delivery.HeadAfter
 		batch.Delivery.Remote = "adapter_reported"
 	}
 	appendReviewPending(batch)
+	return violations
 }
 
 func appendReviewPending(batch *ParallelBatch) {

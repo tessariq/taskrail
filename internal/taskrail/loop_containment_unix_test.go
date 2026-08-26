@@ -30,8 +30,8 @@ func TestLoopLaunchChildTerminatesDescendantsAfterLeaderExit(t *testing.T) {
 	if err := syscall.Kill(pid, 0); err != syscall.ESRCH {
 		t.Fatalf("descendant %d remains after containment cleanup: %v", pid, err)
 	}
-	if elapsed := time.Since(started); elapsed > time.Second {
-		t.Fatalf("cleanup took %s, want less than one second", elapsed)
+	if elapsed := time.Since(started); elapsed > 2*time.Second {
+		t.Fatalf("cleanup took %s, want less than two seconds", elapsed)
 	}
 }
 

@@ -1,12 +1,17 @@
 ---
 id: T-365-protect-loop-owned-git-configuration-through
 title: Protect loop-owned Git configuration through postflight
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#cross-platform-autonomous-loop
 dependencies:
     - T-312-enforce-frozen-input-and-ledger-mutation-integrity
-updated_at: "2026-08-26T09:03:45Z"
+updated_at: "2026-08-26T10:01:51Z"
+completion_id: "182d2ea408487be6983098ea76725d20"
+last_verification_id: "62720cccec44c0e3de94811d3c7ee6df"
+last_verification_result: pass
+last_verified_at: "2026-08-26T10:01:51Z"
+last_verified_completion_id: "182d2ea408487be6983098ea76725d20"
 ---
 
 # T-365-protect-loop-owned-git-configuration-through Protect loop-owned Git configuration through postflight
@@ -35,3 +40,6 @@ claiming control over user-global or system configuration.
   CI.
 
 ## Implementation Notes
+
+- 2026-08-26T10:01:36Z: Protect no-follow Git configuration snapshots through sequential and parallel loop postflight.
+- 2026-08-26T10:01:51Z: verification pass id 62720cccec44c0e3de94811d3c7ee6df previous none completion 182d2ea408487be6983098ea76725d20
