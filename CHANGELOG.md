@@ -199,6 +199,11 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ### Changed
 
+- Retired the hand-produced v0.5 bootstrap spec-review directory after publishing
+  the current digest-bound schema-v1 review at
+  `planning/reviews/spec/v0.5.0/20260826-v05-final-review-r3/`. The superseded
+  bootstrap reports remain preserved in Git history and are not represented as
+  Taskrail review artifacts.
 - `complete` now atomically creates and returns a fresh random lower-case 32-hex
   `completion_id`, persists it on the selected completed task, and clears that
   task's prior verification tuple and completion binding. Lifecycle metadata is

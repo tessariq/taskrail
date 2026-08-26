@@ -132,6 +132,11 @@ T-361-make-parallel-local-delivery-portable-in-clean-environments	run	-
 T-335-deliver-parallel-batches-through-review-adapters	run	-
 T-336-run-bounded-parallel-batches-in-the-temporary-loop	hold-operator	Operator-owned temporary-loop parallel batch backport
 T-337-ship-the-interactive-loop-operator-skill	run	-
+T-365-protect-loop-owned-git-configuration-through	run	-
+T-366-bind-parallel-integration-prompts-and-result	run	-
+T-367-partition-parallel-follow-up-identities-by-worker	run	-
+T-368-expose-selected-spec-digests-in-machine-results	run	-
+T-369-refuse-delegated-author-and-review-writers	run	-
 T-173-check-cross-surface-workflow-contract-integrity	run	-
 T-248-run-cross-platform-workflow-contract-tests-in-ci	run	-
 T-340-accept-verification-identity-reports-in-temporary	hold-operator	Operator-owned temporary-loop report compatibility repair

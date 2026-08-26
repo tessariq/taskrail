@@ -10,7 +10,6 @@ Guidance for coding agents working in the Taskrail repository.
 - Planning and tracked work live under `./planning/`.
 - Keep changes small, explicit, and easy to inspect.
 - Taskrail is released software (v0.1.0 through v0.4.0 are tagged). This repository dogfoods its own shipped CLI, `planning/`, `docs/workflow/`, and the packaged skill set exactly like any adopter — not an "adapted" pre-release workflow.
-- The one place that is not yet self-hosting is the *active* spec: a version under development defines surfaces the binary does not implement yet, so their evidence is produced by hand under a quarantined path (`planning/bootstrap-reviews/`) until the owning task ships. That gap is narrow, named, and never a licence to hand-edit CLI-managed state.
 
 ## Source-Of-Truth Files
 
@@ -19,7 +18,6 @@ Guidance for coding agents working in the Taskrail repository.
 - Spec reading order and versioning: `specs/README.md`
 - Active planning state: `planning/STATE.md`
 - Tracked tasks: `planning/tasks/`
-- Bootstrap planning reviews: `planning/bootstrap-reviews/` (human-owned, hand-produced spec-review evidence for active-spec surfaces the binary cannot yet publish; see Notes On Repository Behavior)
 - Workflow contract: `docs/workflow/`
 - Release checklist: `docs/workflow/releasing.md`
 - Build and convenience commands: `Taskfile.yml`
@@ -221,7 +219,6 @@ those:
 
 Intentional, non-obvious decisions — do not "fix" these:
 
-- `planning/bootstrap-reviews/` holds hand-produced v0.5 spec-review evidence: one immutable `<version>[-rN].md` report plus a sibling `<version>[-rN]-task-manifest.sha256` in plain `sha256sum -c` format. The report records the manifest's own digest, so one digest transitively binds the exact bytes of every task file that revision reviewed. No command, skill, or script generates these — the v0.5 publisher (T-215) and review lenses (T-162) do not exist yet, which is the whole reason they are hand-made. Do not add a `Taskfile.yml`/CI check for them: superseded revisions verify *partially* on purpose (each is frozen to its own snapshot, and later task edits are expected to break it), so a green/red gate would be meaningless. They are committed because they are evidence, not build output — unreproducible once task files move on, and worthless outside the git history they annotate. A stale revision needs a successor only when current bootstrap evidence is explicitly requested at a new review boundary; ordinary spec or task edits do not trigger one. Never gitignore them, never edit a published revision's digests, and never place them under the real durable review roots (`<planning-dir>/reviews/...`, per `specs/v0.5.0.md`) — the separate directory name is deliberate quarantine so hand-made evidence cannot be mistaken for a schema-v1 artifact. T-256 retires the directory once real publication ships.
 - `planning/STATE.md` still carries a stale `continuation_notes` entry naming Taskrail v0.1.0. It is byte-preserved on purpose: T-200 stopped *seeding* such notes but requires existing ones to survive until the state schema-v2 migration (T-157) exposes and explicitly drops them. No migration silently discards authored text, so do not hand-clear it.
 - Read-only commands (`validate`, `status`, `stats`, `coverage`, `spec list/show/diff`) never write `planning/STATE.md` or task files, so they need no post-run `git status`/staging follow-up, and their signals never make `validate` fail. `coverage` reports advisory spec-coverage/orphan/drift signals; `status` computes the next eligible task without persisting `next_action`/`updated_at` (unlike `next`, it leaves the working tree clean); `spec diff` is a reporting aid, not a migrator — it never creates tasks, re-points `spec_ref`, or advances status, and its rename candidates are labeled best-effort, never asserted. See the [command effects table](README.md#command-effects) in the README.
 - `coverage --gaps` is read-only and advisory by default (side-effect-free like `coverage`): it emits mechanical structural-gap candidates (`missing-verification`, `dependency-anomaly`, `under-decomposed-area`) over covered active-spec areas and never writes `planning/STATE.md` or task files. `--fail-on <category>` opts into a repository-selected exit code policy without changing the report, and gap findings never make `validate` fail. Every signal is a candidate to promote into a real task, never auto-created state; it composes with `--area`, while coverage-only `--min` is rejected with `--gaps`. It stays mechanical — counts and graph edges only, no semantic inference.
@@ -244,7 +241,6 @@ Intentional, non-obvious decisions — do not "fix" these:
 - Commit the CLI-regenerated `planning/STATE.md` (and rewritten task files) with the change that produced it.
 - Keep each change focused on one logical outcome.
 - Reference concrete evidence paths in verification notes.
-- Preserve the distinction between shipped Taskrail product behavior and hand-produced evidence for active-spec surfaces that do not exist yet (`planning/bootstrap-reviews/`). Hand-produced evidence must disclaim itself and must never be presented as a real Taskrail artifact.
 
 **Ask first:**
 

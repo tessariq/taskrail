@@ -1,0 +1,117 @@
+{
+  "schema_version": 1,
+  "session_id": "20260826-v05-final-review-r3",
+  "spec_path": "specs/v0.5.0.md",
+  "spec_sha256": "3894902601b0c46bd235a2b0c63e4990d4cbcb2c1f47540341e139a5a60b1c22",
+  "generated_at": "2026-08-26T08:59:47Z",
+  "approved_at": "2026-08-26T08:59:47Z",
+  "lenses": [
+    {
+      "lens": "consistency",
+      "path": "consistency.json",
+      "sha256": "a36e148d2c3ffd48dcc707d50366cdb1df3882cf57dc83f0d5a042f197b10e2d",
+      "spec_sha256": "3894902601b0c46bd235a2b0c63e4990d4cbcb2c1f47540341e139a5a60b1c22"
+    },
+    {
+      "lens": "gaps",
+      "path": "gaps.json",
+      "sha256": "310b88e7a7904b334ed4826a30abeac1905210fc8e00c9b805593d075738b320",
+      "spec_sha256": "3894902601b0c46bd235a2b0c63e4990d4cbcb2c1f47540341e139a5a60b1c22"
+    },
+    {
+      "lens": "additions",
+      "path": "additions.json",
+      "sha256": "cb8f4a993ad998d92db5bd251a739636b2d0348aeb82ed4fb7e707e4129be9d5",
+      "spec_sha256": "3894902601b0c46bd235a2b0c63e4990d4cbcb2c1f47540341e139a5a60b1c22"
+    },
+    {
+      "lens": "adversarial",
+      "path": "adversarial.json",
+      "sha256": "532a03f1293eda44218e35f8ff2564b0e5dd3f20232c9a5c3022d1c04834fd0f",
+      "spec_sha256": "3894902601b0c46bd235a2b0c63e4990d4cbcb2c1f47540341e139a5a60b1c22"
+    }
+  ],
+  "dispositions": [
+    {
+      "finding_id": "CONS-001",
+      "lens": "consistency",
+      "severity": "medium",
+      "disposition": "rejected",
+      "rationale": "Sequential execution owns the authoritative source lock through postflight; parallel workers own clone-local locks and the coordinator acquires the distinct source lock only for final compare-and-swap publication."
+    },
+    {
+      "finding_id": "CONS-002",
+      "lens": "consistency",
+      "severity": "medium",
+      "disposition": "accepted",
+      "rationale": "Delegated-ineligible writers must represent their capability refusal through the closed common error registry.",
+      "resulting_spec_ref": "specs/v0.5.0.md#uniform-agent-machine-results"
+    },
+    {
+      "finding_id": "CONS-003",
+      "lens": "consistency",
+      "severity": "medium",
+      "disposition": "rejected",
+      "rationale": "This is implementation-documentation drift scheduled for the cross-surface contract task, not a contradiction in the reviewed specification prose."
+    },
+    {
+      "finding_id": "GAPS-20260826-R3-001",
+      "lens": "gaps",
+      "severity": "medium",
+      "disposition": "rejected",
+      "rationale": "The T-174 release matrix is intentionally a maintainer-owned release checklist and evidence map rather than a new binary-managed artifact schema."
+    },
+    {
+      "finding_id": "GAPS-20260826-R3-002",
+      "lens": "gaps",
+      "severity": "medium",
+      "disposition": "accepted",
+      "rationale": "The strict parallel result must carry the head and worker-evidence bindings that the feature contract requires it to validate.",
+      "resulting_spec_ref": "specs/v0.5.0.md#cross-platform-autonomous-loop"
+    },
+    {
+      "finding_id": "ADD-20260826-R3-001",
+      "lens": "additions",
+      "severity": "medium",
+      "disposition": "accepted",
+      "rationale": "Storage-neutral digest-bound review needs the selected spec raw-byte digest directly in the strict machine result.",
+      "resulting_spec_ref": "specs/v0.5.0.md#uniform-agent-machine-results"
+    },
+    {
+      "finding_id": "ADD-20260826-R3-002",
+      "lens": "additions",
+      "severity": "low",
+      "disposition": "deferred",
+      "rationale": "Known producer workflows already carry exact review paths; a discovery command is a separately designed future reporting surface.",
+      "target_version": "v0.6.0"
+    },
+    {
+      "finding_id": "ADD-20260826-R3-003",
+      "lens": "additions",
+      "severity": "low",
+      "disposition": "rejected",
+      "rationale": "Persistent autonomous-run history conflicts with the explicit foreground result-file and no-run-database boundaries."
+    },
+    {
+      "finding_id": "ADV-001",
+      "lens": "adversarial",
+      "severity": "high",
+      "disposition": "rejected",
+      "rationale": "The specification explicitly excludes control over privileged or undetectable process escape and treats the caller-supplied process as trusted beyond detectable containment."
+    },
+    {
+      "finding_id": "ADV-002",
+      "lens": "adversarial",
+      "severity": "medium",
+      "disposition": "rejected",
+      "rationale": "Portable verification history is intentionally lifecycle metadata; fresh attestation requires producer-local reports and is not claimed after those transient reports disappear."
+    },
+    {
+      "finding_id": "ADV-003",
+      "lens": "adversarial",
+      "severity": "medium",
+      "disposition": "rejected",
+      "rationale": "Product-scope relevance is an external semantic prompt and review judgment; Taskrail mechanically enforces only declared lifecycle, planning, Git, and mutation invariants."
+    }
+  ]
+}

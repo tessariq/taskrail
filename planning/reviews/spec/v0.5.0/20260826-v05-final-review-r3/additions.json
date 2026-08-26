@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "prompt_id": "spec-additions",
+  "prompt_contract_version": "v1",
+  "prompt_template_sha256": "292c9a8672a1b056d071c7b6297a59a9598bc18de7d1bb26a8f6a65bcb398688",
+  "prompt_source": "builtin",
+  "session_id": "20260826-v05-final-review-r3",
+  "lens": "additions",
+  "spec_path": "specs/v0.5.0.md",
+  "spec_sha256": "3894902601b0c46bd235a2b0c63e4990d4cbcb2c1f47540341e139a5a60b1c22",
+  "context_mode": "fresh",
+  "generated_at": "2026-08-26T08:48:10Z",
+  "findings": [
+    {
+      "finding_id": "ADD-20260826-R3-001",
+      "severity": "medium",
+      "evidence": "Storage-neutral skills must read selected specs through `spec show` (specs/v0.5.0.md:265-269, 401), while every post-spec lens and its manifest must bind the selected spec's exact SHA-256 (specs/v0.5.0.md:675-681). The declared `SpecShowResult` has version, path, active, content, and anchors but no digest (specs/contracts/v0.5.0-machine-api.md:484-490).",
+      "impact": "A reviewer must independently reconstruct the selected raw-byte identity from content instead of consuming the CLI's machine result, weakening the storage-neutral review workflow and making its required publication digest harder to obtain consistently.",
+      "recommendation": "Add a lower-case raw-byte `sha256` field to `SpecShowResult`, require it to identify the exact selected spec bytes in both storage modes, and golden-test it with the post-spec review prompt flow.",
+      "scope": "current",
+      "disposition": "open",
+      "rationale": "This closes an existing digest-bound review contract rather than adding a new planning capability; it mirrors the digest already exposed by `task show`."
+    },
+    {
+      "finding_id": "ADD-20260826-R3-002",
+      "severity": "low",
+      "evidence": "v0.5 defines several durable review roots and requires managed review bytes to be read through `review show` (specs/v0.5.0.md:264-269, 408, 649), but the public review surface only provides direct-path `review show` plus publication (specs/v0.5.0.md:625-635).",
+      "impact": "An agent or operator that needs to discover published review evidence must already know its logical path or reconstruct the directory convention, which is awkward in local storage and encourages path-derived workflow code.",
+      "recommendation": "Consider a read-only, bounded `review list` command in v0.6 that reports durable review identities, logical paths, and digests with explicit type and subject filters, without selecting findings or changing review state.",
+      "scope": "future",
+      "disposition": "open",
+      "rationale": "Known producer workflows already carry exact review paths, so discovery is not required for v0.5 closure; a new public reporting surface should be separately designed and versioned.",
+      "target_version": "v0.6.0"
+    },
+    {
+      "finding_id": "ADD-20260826-R3-003",
+      "severity": "low",
+      "evidence": "Loop execution deliberately streams child output and offers only an operator-selected external result file for a final envelope (specs/v0.5.0.md:1168-1179). The explicit exclusions prohibit Taskrail-owned autonomous-run databases, committed conversation logs, and required persistent execution receipts (specs/v0.5.0.md:1842-1884).",
+      "impact": "A persistent loop-history feature could appear to improve auditability but would add a second durable execution-state surface with retention, privacy, cleanup, and recovery obligations outside the bounded loop contract.",
+      "recommendation": "Do not add persistent autonomous-run history in v0.5; retain the explicit result-file boundary and durable review artifacts for the evidence they are designed to carry.",
+      "scope": "reject",
+      "disposition": "open",
+      "rationale": "The idea conflicts directly with stated non-goals and would silently broaden the foreground loop into an execution-record system."
+    }
+  ]
+}

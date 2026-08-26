@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "prompt_id": "spec-consistency",
+  "prompt_contract_version": "v1",
+  "prompt_template_sha256": "503e8644e5adcac0dff4f0e6d4674825fd86933d75697e7f62cc6f8eb83b63af",
+  "prompt_source": "builtin",
+  "session_id": "20260826-v05-final-review-r3",
+  "lens": "consistency",
+  "spec_path": "specs/v0.5.0.md",
+  "spec_sha256": "3894902601b0c46bd235a2b0c63e4990d4cbcb2c1f47540341e139a5a60b1c22",
+  "context_mode": "fresh",
+  "generated_at": "2026-08-26T08:48:40Z",
+  "findings": [
+    {
+      "finding_id": "CONS-001",
+      "severity": "medium",
+      "evidence": "The loop contract says the coordinator owns the Git-common mutation lock through postflight and lets delegated child writers join it (specs/v0.5.0.md:1188-1198). The parallel local-delivery contract instead says final publication reacquires the source repository lock (specs/v0.5.0.md:1443-1448), without defining a release, handoff, or revalidation boundary between those statements.",
+      "impact": "Implementations can either retain the lock and make the required reacquisition impossible, or release it before publication and leave an unspecified interval in which another writer can invalidate the frozen source snapshot.",
+      "recommendation": "Specify one lock lifetime for parallel execution and the exact release, reacquisition, and snapshot recheck sequence if the source lock is intentionally handed off before final fast-forward.",
+      "scope": "current",
+      "disposition": "open",
+      "rationale": "The contradiction affects the atomicity and concurrency guarantees of a user-visible v0.5 loop mode."
+    },
+    {
+      "finding_id": "CONS-002",
+      "severity": "medium",
+      "evidence": "Loop delegation permits only the selected task's bounded lifecycle and verification writes (specs/v0.5.0.md:1188-1198 and 1251-1252), so a child attempting task authoring or review publication must be refused as delegated. However, the co-normative machine API defines TaskAuthorErrors without delegated_write_refused (specs/contracts/v0.5.0-machine-api.md:1072-1075) and ReviewErrors without it (specs/contracts/v0.5.0-machine-api.md:1081-1084), while the feature spec requires the command/error assignment to be exact (specs/v0.5.0.md:321-322).",
+      "impact": "A strict implementation cannot both enforce delegated write bounds and emit the mandated error code for these unauthorized writer attempts, making an authority-boundary failure either unrepresentable or misclassified.",
+      "recommendation": "Add delegated_write_refused to every delegated-ineligible writer's exact error set, or explicitly define a different authorized refusal code and align the feature and machine contracts.",
+      "scope": "current",
+      "disposition": "open",
+      "rationale": "The omission conflicts with the v0.5 delegated-writer safety model and the closed machine-error registry."
+    },
+    {
+      "finding_id": "CONS-003",
+      "severity": "medium",
+      "evidence": "The v0.5 spec requires ImportDraft v1 and v2 applies to stage complete candidates and roll back handled failures, replacing legacy partial results (specs/v0.5.0.md:769 and specs/contracts/v0.5.0-machine-api.md:606-609). README.md still says an import apply failure can leave empty or truncated files and that reapplying the draft can create duplicate tasks (README.md:428-432).",
+      "impact": "Operator documentation directs users to expect and recover from a failure mode that v0.5 explicitly removes, which can prompt unnecessary manual intervention or unsafe retry decisions after a transactional refusal.",
+      "recommendation": "Update the import failure guidance to describe the v0.5 transaction and error-envelope behavior, retaining only any interruption or rollback-failure recovery path that the current contract actually permits.",
+      "scope": "current",
+      "disposition": "open",
+      "rationale": "The repository's user-facing documentation conflicts with the current normative import lifecycle and recovery contract."
+    }
+  ]
+}

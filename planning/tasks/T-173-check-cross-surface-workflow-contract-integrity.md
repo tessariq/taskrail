@@ -13,6 +13,11 @@ dependencies:
     - T-256-retire-bootstrap-planning-reviews
     - T-258-retire-the-temporary-source-checkout-autonomous
     - T-337-ship-the-interactive-loop-operator-skill
+    - T-365-protect-loop-owned-git-configuration-through
+    - T-366-bind-parallel-integration-prompts-and-result
+    - T-367-partition-parallel-follow-up-identities-by-worker
+    - T-368-expose-selected-spec-digests-in-machine-results
+    - T-369-refuse-delegated-author-and-review-writers
 updated_at: "2026-08-08T08:40:49Z"
 ---
 

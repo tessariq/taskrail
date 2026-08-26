@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "prompt_id": "spec-adversarial",
+  "prompt_contract_version": "v1",
+  "prompt_template_sha256": "2d7decc8a71662d05903583b151b889370fde0b738e57acbf7023bff3582c93f",
+  "prompt_source": "builtin",
+  "session_id": "20260826-v05-final-review-r3",
+  "lens": "adversarial",
+  "spec_path": "specs/v0.5.0.md",
+  "spec_sha256": "3894902601b0c46bd235a2b0c63e4990d4cbcb2c1f47540341e139a5a60b1c22",
+  "context_mode": "fresh",
+  "generated_at": "2026-08-26T08:47:50Z",
+  "findings": [
+    {
+      "finding_id": "ADV-001",
+      "severity": "high",
+      "evidence": "The sequential loop launches the caller-supplied process in the source worktree (lines 1168-1174) and uses a process group/job for containment, but explicitly cannot control a deliberate undetectable setsid or Windows breakaway escape (line 1183). A delivered outcome is nevertheless allowed when no contained process remains (lines 1231-1250).",
+      "impact": "A child can deliberately detach a descendant that retains the caller environment and repository access, let the parent observe a clean postflight and direct-child commit, then alter the worktree or invoke delegated writers after the loop has reported success. This can corrupt delivered history or planning state outside the claimed postflight boundary.",
+      "recommendation": "Make the sequential execution trust boundary explicit and stop presenting successful postflight as containment against a hostile child, or add an enforceable isolation mechanism that prevents detached descendants from retaining repository write authority. Define the resulting refusal or degraded-outcome behavior so callers cannot mistake a best-effort process-group check for an integrity guarantee.",
+      "scope": "current",
+      "disposition": "open",
+      "rationale": "The feature's central safety promise is bounded autonomous execution in the authoritative worktree; an acknowledged but unmitigated escape path permits plausible repository and lifecycle integrity loss."
+    },
+    {
+      "finding_id": "ADV-002",
+      "severity": "medium",
+      "evidence": "A verification chain is said to require its exact prior report (lines 197-203), while persisted task and state validation deliberately does not require producer-local gitignored reports to survive cleanup or cloning (lines 198-203). The loop accepts a completed pass from task/state/report agreement only in its current artifact workspace (lines 1226-1229 and 1255).",
+      "impact": "After artifacts are cleaned or the repository is cloned, an implementation can retain metadata that describes a bound passing chain without retaining any inspectable evidence for that chain. Later automation or humans cannot distinguish an authentic prior report from metadata assembled to satisfy the portable closed-field combinations, undermining the stated reviewable verification history.",
+      "recommendation": "Define a durable, portable verification-evidence commitment sufficient to validate each claimed bound pass after artifact cleanup, or explicitly narrow the persisted pass claim to non-attested historical metadata and prohibit consumers from treating it as evidence. Specify which bytes or digest commitments survive and which command verifies them.",
+      "scope": "current",
+      "disposition": "open",
+      "rationale": "The current text simultaneously makes reports necessary to a valid chain and permits their absence for normal persisted validation, leaving a material acceptance boundary that can be satisfied without durable reviewable evidence."
+    },
+    {
+      "finding_id": "ADV-003",
+      "severity": "medium",
+      "evidence": "Sequential postflight requires the direct-child commit to contain the complete implementation and no unrelated mutation (lines 1242-1249), but selected-task snapshots only freeze Taskrail task fields and repository inputs (lines 1210-1217), and no task field declares the product paths or externally observable change set owned by that task. The spec also states that Taskrail does not inspect child conversations or tool calls (lines 1261-1272).",
+      "impact": "An implementation can mechanically accept any clean one-commit diff that preserves the listed Taskrail metadata, including unrelated product changes, because it has no objective ownership oracle. Conversely, an implementation could reject legitimate cross-cutting changes based on an undocumented heuristic. Either behavior can technically meet the prose while missing the promised bounded delivery scope.",
+      "recommendation": "Replace the unenforceable no-unrelated-mutation claim with an explicitly prompt-and-human-reviewed expectation, or define a bounded machine-checkable delivery-scope declaration and its lifecycle for each loop task. State the exact postflight rule and failure behavior so acceptance does not depend on hidden implementation heuristics.",
+      "scope": "current",
+      "disposition": "open",
+      "rationale": "The loop's delivery integrity contract relies on a semantic distinction that the specified data model and mechanical postflight cannot determine, creating a material gap between claimed and enforceable behavior."
+    }
+  ]
+}

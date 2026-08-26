@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "prompt_id": "spec-gaps",
+  "prompt_contract_version": "v1",
+  "prompt_template_sha256": "1d247890fceebc3432fadadcf5d03ade671572500eb28e356f869ceec71fb028",
+  "prompt_source": "builtin",
+  "session_id": "20260826-v05-final-review-r3",
+  "lens": "gaps",
+  "spec_path": "specs/v0.5.0.md",
+  "spec_sha256": "3894902601b0c46bd235a2b0c63e4990d4cbcb2c1f47540341e139a5a60b1c22",
+  "context_mode": "fresh",
+  "generated_at": "2026-08-26T08:48:14Z",
+  "findings": [
+    {
+      "finding_id": "GAPS-20260826-R3-001",
+      "severity": "medium",
+      "evidence": "The release gate makes a maintainer-owned T-174 release matrix authoritative and says it binds every required evidence item, but leaves the evidence location to a maintainer-selected checklist and defines neither a matrix inventory nor a durable record format (specs/v0.5.0.md:1759-1767).",
+      "impact": "Release acceptance cannot be independently and repeatably determined from the specification: different maintainers can omit, reinterpret, or fail to bind required manual, platform, migration, containment, lifecycle, and review evidence while each claims to have used the authoritative matrix.",
+      "recommendation": "Define the durable release-matrix location and minimum record contract, including the complete required evidence inventory, accepted evidence bindings to the release candidate, allowed dispositions, approver responsibility, and the pre-tag check that rejects absent, stale, or failed entries.",
+      "scope": "current",
+      "disposition": "open",
+      "rationale": "The release gate is a current v0.5 requirement, but its authoritative operator evidence cannot be audited or consistently applied without a defined acceptance record."
+    },
+    {
+      "finding_id": "GAPS-20260826-R3-002",
+      "severity": "medium",
+      "evidence": "Parallel integration requires each conflict-resolution child to bind worker evidence and candidate/evolving-head identities, and each aggregate child to bind the final integration head (specs/v0.5.0.md:1438-1442). The co-normative strict ParallelIntegrationChild schema has only role, task_id, prompt, child, outcome, and affected_checks (specs/contracts/v0.5.0-machine-api.md:959-973).",
+      "impact": "A valid result document has no machine-readable fields that can carry or validate the required conflict and aggregate bindings, so operators cannot audit whether an integration result belongs to the worker candidate and integration head it claims to assess.",
+      "recommendation": "Extend the strict parallel integration result contract with portable, exact fields for the required worker evidence and candidate/evolving/final head bindings, and define their validation and ordering before implementation.",
+      "scope": "current",
+      "disposition": "open",
+      "rationale": "The feature specification makes these bindings a fail-closed integrity condition, yet the co-normative machine API cannot encode them."
+    }
+  ]
+}

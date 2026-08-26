@@ -1,12 +1,17 @@
 ---
 id: T-256-retire-bootstrap-planning-reviews
 title: Retire the hand-produced bootstrap planning reviews
-status: todo
+status: completed
 priority: medium
 spec_ref: specs/v0.5.0.md#safe-review-artifact-publication
 dependencies:
     - T-162-productize-digest-bound-post-spec-review-lenses
-updated_at: "2026-08-08T08:40:49Z"
+updated_at: "2026-08-26T09:10:40Z"
+completion_id: "fd46f301a9bfa828721462c7197e6370"
+last_verification_id: "0346ede78cfd28ede38987fb85ad8051"
+last_verification_result: pass
+last_verified_at: "2026-08-26T09:10:40Z"
+last_verified_completion_id: "fd46f301a9bfa828721462c7197e6370"
 ---
 
 # T-256-retire-bootstrap-planning-reviews Retire the hand-produced bootstrap planning reviews
@@ -64,5 +69,17 @@ schema-v1 artifacts and must not be back-filled to look like they were.
 - Prove T-173 and the downstream release chain depend on this completed outcome,
   then run validation, coverage/gap reporting, task-body hygiene, and state
   projection checks after the directory/documentation change.
+- Current schema-v1 evidence is
+  `planning/reviews/spec/v0.5.0/20260826-v05-final-review-r3/`; its publisher
+  validated the prompt, spec, session, finding, and manifest bindings before the
+  bootstrap reports were removed.
 
 ## Implementation Notes
+
+- Removed the superseded hand-produced directory and all live repository
+  guidance for it. Git history remains the immutable record of those reports;
+  the Unreleased changelog names the durable schema-v1 successor.
+- Converted accepted review remediations into T-365 through T-369 and made the
+  cross-surface T-173 gate depend on them, so publication does not mistake
+  accepted contract findings for already shipped behavior.
+- 2026-08-26T09:10:40Z: verification pass id 0346ede78cfd28ede38987fb85ad8051 previous none completion fd46f301a9bfa828721462c7197e6370
