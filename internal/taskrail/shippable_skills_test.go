@@ -29,6 +29,7 @@ var shippableSkills = []string{
 	"taskrail-spec",
 	"taskrail-spec-review",
 	"taskrail-decompose",
+	"taskrail-sdd-handoff",
 	"taskrail-gap",
 	"taskrail-task-review",
 	"taskrail-workflow-adversarial",
@@ -307,6 +308,66 @@ func TestDecomposeSkillDefinesReviewedV2Flow(t *testing.T) {
 		"Preview publication",
 		"Never apply proposal bytes",
 	)
+}
+
+func TestSDDHandoffSkillPreservesConservativeBoundary(t *testing.T) {
+	const name = "taskrail-sdd-handoff"
+	embedded := embeddedSkillFiles(t)
+	prefix := name + "/references/"
+	references := map[string]bool{}
+	for path := range embedded {
+		if strings.HasPrefix(path, prefix) {
+			references[strings.TrimPrefix(path, prefix)] = true
+		}
+	}
+	if len(references) != 2 || !references["openspec.md"] || !references["spec-kit.md"] {
+		t.Errorf("%s references = %v, want exactly openspec.md and spec-kit.md", name, references)
+	}
+
+	assertSkillReferences(t, name,
+		"operator-selected local artifact set",
+		"content rather than directory names",
+		"assumptions",
+		"unresolved decisions",
+		"stop for operator review",
+		"taskrail-spec",
+		"taskrail-import",
+		"taskrail-decompose",
+		"spec show <version> --anchors --json",
+		"omit `loop_policy` and `loop_reason`",
+		"implicitly held",
+		"no automatic apply",
+		"does not prove provenance, approval, completeness, synchronization, change detection, round-trip fidelity, or continuing ownership",
+	)
+
+	assertSkillReferences(t, name,
+		"does not add a binary adapter, provider API, synchronization service, provenance store, or format conversion",
+	)
+}
+
+func TestSDDHandoffSkillRefusesAmbiguousEvidence(t *testing.T) {
+	const name = "taskrail-sdd-handoff"
+	assertSkillReferences(t, name,
+		"filename that suggests approval",
+		"Stop for operator review when approval, ownership, conflicting requirements or requirement meaning, semantic sizing under the T-251 rubric (including whether to split or merge), integration ownership, dependencies, or target anchors are ambiguous, or when incomplete task evidence prevents a decision. Do not guess task boundaries",
+		"Do not create specs or tasks, invoke `import --apply`, change lifecycle state, or publish review evidence",
+	)
+
+	embedded := embeddedSkillFiles(t)
+	for _, path := range []string{
+		name + "/references/openspec.md",
+		name + "/references/spec-kit.md",
+	} {
+		content, ok := embedded[path]
+		if !ok {
+			t.Errorf("missing %s", path)
+			continue
+		}
+		content = strings.Join(strings.Fields(content), " ")
+		if !strings.Contains(content, "does not prove provenance, approval, completeness, synchronization, change detection, round-trip fidelity, or continuing ownership of source artifacts") {
+			t.Errorf("%s must state the full source-artifact limitation", path)
+		}
+	}
 }
 
 func TestImportSkillDocumentsV1CompatibilityAndImplicitHold(t *testing.T) {

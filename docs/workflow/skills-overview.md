@@ -43,6 +43,10 @@ Tracked-work and spec skills (each bullet notes how it creates tasks, if at all)
 - `taskrail-decompose` — author strict spec-anchored ImportDraft v2 bodies, run at
   most two fresh-context adversarial passes, publish an immutable manifest-bound
   bundle, and apply its exact digests (shipped in T-098; reviewed flow in T-304).
+- `taskrail-sdd-handoff` — turn an operator-selected, already reviewed OpenSpec or
+  Spec Kit artifact set into an advisory, content-based handoff to existing
+  Taskrail spec, import, and decomposition flows. It stops on ambiguity and never
+  applies or synchronizes source artifacts (shipped in T-202).
 - `taskrail-gap` — review covered active-spec areas for missing work: run
   `coverage --gaps --json` for structural candidates, add agent semantic judgement,
   and propose tasks a human promotes via `task new` / `import --apply` (shipped in
@@ -90,8 +94,6 @@ The active v0.5 roadmap adds `taskrail-spec-review`, `taskrail-task-review`,
 skills consume structured command facts through the common machine-result
 envelope. `spec show` bodies and `--emit-prompt` output intentionally remain exact
 text because those bytes are workflow input rather than a report to interpret.
-The SDD handoff and remaining safe review workflows stay planned until their
-tracked tasks complete.
 
 Behavioral eval definitions for the packaged set are maintainer-only test assets.
 They are deliberately outside `internal/taskrail/skills/`, so neither

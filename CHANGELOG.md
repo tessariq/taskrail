@@ -23,6 +23,11 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ### Added
 
+- Added the provider-neutral `taskrail-sdd-handoff` packaged skill. It inspects an
+  operator-selected, already reviewed OpenSpec or Spec Kit artifact set by content,
+  stops on ambiguous evidence, and routes only advisory proposals into existing
+  spec, import, and decomposition workflows without applying or synchronizing
+  source artifacts.
 - Added the `taskrail-workflow-adversarial` packaged skill for one bounded,
   sandboxed post-implementation review. First-run prompt rendering now accepts
   only the absent canonical workflow memory path; publication remains the sole

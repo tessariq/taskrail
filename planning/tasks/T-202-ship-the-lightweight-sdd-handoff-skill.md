@@ -1,12 +1,17 @@
 ---
 id: T-202-ship-the-lightweight-sdd-handoff-skill
 title: Ship the lightweight SDD handoff skill
-status: todo
+status: completed
 priority: medium
 spec_ref: specs/v0.5.0.md#lightweight-sdd-handoff-skill
 dependencies:
     - T-164-orchestrate-adversarial-spec-to-task-decomposition
-updated_at: "2026-08-05T19:17:42Z"
+updated_at: "2026-08-26T19:09:10Z"
+completion_id: "675d4145bac68f6c6a1f970b16d5eebe"
+last_verification_id: "15fcf835fff4dea22e26c50e5f4fec81"
+last_verification_result: pass
+last_verified_at: "2026-08-26T19:09:10Z"
+last_verified_completion_id: "675d4145bac68f6c6a1f970b16d5eebe"
 ---
 
 # T-202-ship-the-lightweight-sdd-handoff-skill Ship the lightweight SDD handoff skill
@@ -43,3 +48,6 @@ Ship one provider-neutral `taskrail-sdd-handoff` skill that turns an operator-se
 - A8: Run skill regeneration/parity and package validation, then task-body hygiene; retain the command outputs as evidence.
 
 ## Implementation Notes
+
+- 2026-08-26T19:08:51Z: Shipped conservative OpenSpec and Spec Kit handoff guidance with packaged mirrors and contract coverage.
+- 2026-08-26T19:09:10Z: verification pass id 15fcf835fff4dea22e26c50e5f4fec81 previous none completion 675d4145bac68f6c6a1f970b16d5eebe
