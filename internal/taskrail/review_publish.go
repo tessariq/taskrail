@@ -699,12 +699,20 @@ func (s *Service) decompositionReviewPublication(input ReviewPublishInput) (deco
 	if err != nil {
 		return out, reviewInputError("read selected spec", err)
 	}
-	specReview, err := s.readDecompositionSpecReview(input.SpecReview, version)
+	specReviewFiles, err := s.readDecompositionSpecReview(input.SpecReview, version)
 	if err != nil {
 		return out, err
 	}
+	tasks, err := s.loadTasks()
+	if err != nil {
+		return out, err
+	}
+	taskIDs := make(map[string]struct{}, len(tasks))
+	for _, task := range tasks {
+		taskIDs[task.Frontmatter.ID] = struct{}{}
+	}
 	bundle, err := DecodeDecompositionBundle(files, DecompositionSubjects{
-		SpecPath: specPath, Spec: spec, SpecReviewManifestPath: input.SpecReview, SpecReviewManifest: specReview,
+		SpecPath: specPath, Spec: spec, SpecReviewManifestPath: input.SpecReview, SpecReviewFiles: specReviewFiles, TaskIDs: taskIDs,
 	})
 	if err != nil {
 		return out, WithMachineErrorCode(MachineCodeInvalidProposal, err)
@@ -741,7 +749,7 @@ func (s *Service) decompositionReviewPublication(input ReviewPublishInput) (deco
 	}
 	out = decompositionReviewPublication{
 		proposal: proposal, destination: destination, specPath: specPath, specReviewPath: input.SpecReview,
-		config: config, spec: spec, specReview: specReview, specSHA256: digestRaw(spec), specReviewSHA256: digestRaw(specReview), bundle: bundle, prompts: prompts,
+		config: config, spec: spec, specReview: specReviewFiles["manifest.json"], specSHA256: digestRaw(spec), specReviewSHA256: digestRaw(specReviewFiles["manifest.json"]), bundle: bundle, prompts: prompts,
 	}
 	if out.specSHA256 != input.ExpectSpecSHA256 || out.specReviewSHA256 != input.ExpectSpecReviewSHA256 {
 		return decompositionReviewPublication{}, WithMachineErrorCode(MachineCodeSourceChanged, fmt.Errorf("decomposition review bindings do not match current spec and spec-review snapshots"))
@@ -749,7 +757,7 @@ func (s *Service) decompositionReviewPublication(input ReviewPublishInput) (deco
 	return out, nil
 }
 
-func (s *Service) readDecompositionSpecReview(specReview, version string) ([]byte, error) {
+func (s *Service) readDecompositionSpecReview(specReview, version string) (map[string][]byte, error) {
 	if filepath.IsAbs(specReview) || filepath.ToSlash(specReview) != specReview || path.Clean(specReview) != specReview {
 		return nil, invalidArgumentsf("spec-review must be a canonical repository-relative path")
 	}
@@ -766,11 +774,22 @@ func (s *Service) readDecompositionSpecReview(specReview, version string) ([]byt
 	if err != nil {
 		return nil, err
 	}
-	data, _, err := durablefs.ReadFile(s.paths.StorageRoot, storageRel, reviewFileLimit)
-	if err != nil {
-		return nil, reviewInputError("read post-spec review manifest", err)
+	tree, err := durablefs.ObserveTree(s.paths.StorageRoot, path.Dir(storageRel))
+	if err != nil || !tree.Present {
+		return nil, reviewInputError("inspect post-spec review bundle", err)
 	}
-	return data, nil
+	files := make(map[string][]byte, len(tree.Entries))
+	for _, entry := range tree.Entries {
+		if entry.Directory {
+			return nil, reviewInputError("inspect post-spec review bundle", nil)
+		}
+		data, _, err := durablefs.ReadFile(s.paths.StorageRoot, path.Join(path.Dir(storageRel), entry.Path), reviewFileLimit)
+		if err != nil {
+			return nil, reviewInputError("read post-spec review bundle", err)
+		}
+		files[entry.Path] = data
+	}
+	return files, nil
 }
 
 func (p decompositionReviewPublication) files() []reviewdir.File {

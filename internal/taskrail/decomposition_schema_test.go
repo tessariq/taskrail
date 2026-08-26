@@ -65,7 +65,12 @@ func TestDecodeDecompositionBundleRejectsStrictMutations(t *testing.T) {
 			s.Spec = append(s.Spec, []byte("\nUnique requirement text.\n")...)
 			newDigest := digestRaw(s.Spec)
 			replaceDecomposition(f, "trace.json", oldDigest, newDigest)
-			s.SpecReviewManifest = []byte(strings.ReplaceAll(string(s.SpecReviewManifest), oldDigest, newDigest))
+			for name, raw := range s.SpecReviewFiles {
+				s.SpecReviewFiles[name] = []byte(strings.ReplaceAll(string(raw), oldDigest, newDigest))
+			}
+			for _, lens := range specReviewLensOrder {
+				refreshManifestDigest(s.SpecReviewFiles, lens+".json")
+			}
 		}, "occur exactly once"},
 		{"line range", func(f map[string][]byte, _ *DecompositionSubjects) {
 			replaceDecomposition(f, "trace.json", `"start":7,"end":9`, `"start":7,"end":99`)
@@ -91,7 +96,7 @@ func TestDecodeDecompositionBundleRejectsStrictMutations(t *testing.T) {
 			replaceManifestDigest(f, "draft_sha256", digestRaw(f["draft.json"]), 1)
 		}, "last review does not bind final"},
 		{"post-spec review digest", func(_ map[string][]byte, s *DecompositionSubjects) {
-			s.SpecReviewManifest = append(s.SpecReviewManifest, ' ')
+			s.SpecReviewFiles["manifest.json"] = append(s.SpecReviewFiles["manifest.json"], ' ')
 		}, "post-spec review binding"},
 		{"manifest review digest", func(f map[string][]byte, _ *DecompositionSubjects) {
 			replaceDecomposition(f, "manifest.json", digestRaw(f["review-1.json"]), reviewDigestA)
@@ -227,8 +232,13 @@ func decompositionGolden() (map[string][]byte, DecompositionSubjects) {
 	spec := []byte("# Spec\n\n### First Area\n\nUnique requirement text.\n\n### Second Area\n\nAnother requirement.\n")
 	specSum := digestRaw(spec)
 	specReviewFiles := specReviewGolden()
-	specReview := []byte(strings.ReplaceAll(string(specReviewFiles["manifest.json"]), reviewDigestA, specSum))
-	specReviewSum := digestRaw(specReview)
+	for name, raw := range specReviewFiles {
+		specReviewFiles[name] = []byte(strings.ReplaceAll(string(raw), reviewDigestA, specSum))
+	}
+	for _, lens := range specReviewLensOrder {
+		refreshManifestDigest(specReviewFiles, lens+".json")
+	}
+	specReviewSum := digestRaw(specReviewFiles["manifest.json"])
 	body := "## Description\\n\\nDeliver one outcome.\\n\\n## Acceptance\\n\\n- Works.\\n\\n## Verification Notes\\n\\n- Test it."
 	draft := []byte(`{"schema_version":2,"review_session_id":"decomposition-1","target":"tasks","tasks":[{"key":"first","title":"First task","dependencies":[],"body":"` + body + `","spec_ref":"specs/v0.5.0.md#first-area","priority":"high"},{"key":"second","title":"Second task","dependencies":["first","T-240-implement-the-normative-review-schema-decoders"],"body":"` + body + `","spec_ref":"specs/v0.5.0.md#second-area"}],"spec_sections":[]}`)
 	trace := []byte(`{"schema_version":1,"session_id":"decomposition-1","spec_path":"specs/v0.5.0.md","spec_sha256":"` + specSum + `","requirements":[{"requirement_id":"requirement-1","spec_ref":"specs/v0.5.0.md#first-area","source":{"kind":"quote","text":"Unique requirement text."},"task_keys":["first"],"disposition":"task","rationale":"implemented"},{"requirement_id":"requirement-2","spec_ref":"specs/v0.5.0.md#second-area","source":{"kind":"lines","start":7,"end":9},"task_keys":["second"],"disposition":"task","rationale":"implemented"}]}`)
@@ -237,7 +247,8 @@ func decompositionGolden() (map[string][]byte, DecompositionSubjects) {
 		specReviewSum, specSum, digestRaw(draft), digestRaw(trace), digestRaw(review), specSum, digestRaw(draft), digestRaw(trace)))
 	return map[string][]byte{"draft.json": draft, "trace.json": trace, "review-1.json": review, "manifest.json": manifest}, DecompositionSubjects{
 		SpecPath: "specs/v0.5.0.md", Spec: spec,
-		SpecReviewManifestPath: "planning/reviews/spec/v0.5.0/spec-review-1/manifest.json", SpecReviewManifest: specReview,
+		SpecReviewManifestPath: "planning/reviews/spec/v0.5.0/spec-review-1/manifest.json", SpecReviewFiles: specReviewFiles,
+		TaskIDs: map[string]struct{}{"T-240-implement-the-normative-review-schema-decoders": {}},
 	}
 }
 

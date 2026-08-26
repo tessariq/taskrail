@@ -124,6 +124,63 @@ func TestReviewPublishDecompositionPreviewAndApplyBindExactBytes(t *testing.T) {
 	}
 }
 
+func TestReviewPublishDecompositionRequiresCompleteSpecReviewBundle(t *testing.T) {
+	repo, svc, input, _ := decompositionReviewPublishFixture(t)
+	if err := os.Remove(filepath.Join(repo, "planning", "reviews", "spec", "v0.5.0", "spec-review-1", "gaps.json")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.ReviewPublish(input); err == nil {
+		t.Fatal("ReviewPublish accepted an incomplete post-spec review bundle")
+	}
+	assertDecompositionReviewDestinationAbsent(t, repo)
+}
+
+func TestReviewPublishDecompositionRejectsUnknownExternalDependency(t *testing.T) {
+	repo, svc, input, files := decompositionReviewPublishFixture(t)
+	replaceDecomposition(files, "draft.json", "T-240-implement-the-normative-review-schema-decoders", "T-999-missing")
+	refreshDecompositionFinalDigests(files)
+	writeDecompositionProposalFiles(t, repo, input.Proposal, files, "draft.json", "review-1.json", "manifest.json")
+
+	if _, err := svc.ReviewPublish(input); err == nil {
+		t.Fatal("ReviewPublish accepted an unknown external dependency")
+	}
+	assertDecompositionReviewDestinationAbsent(t, repo)
+}
+
+func TestReviewPublishDecompositionRequiresFreshReviewContext(t *testing.T) {
+	repo, svc, input, files := decompositionReviewPublishFixture(t)
+	files["review-1.json"] = []byte(strings.Replace(string(files["review-1.json"]), `"context_mode":"fresh"`, `"context_mode":"same-context"`, 1))
+	replaceManifestDigest(files, "sha256", digestRaw(files["review-1.json"]), 1)
+	files["manifest.json"] = []byte(strings.Replace(string(files["manifest.json"]), `"context_mode":"fresh"`, `"context_mode":"same-context"`, 1))
+	writeDecompositionProposalFiles(t, repo, input.Proposal, files, "review-1.json", "manifest.json")
+
+	if _, err := svc.ReviewPublish(input); err == nil {
+		t.Fatal("ReviewPublish accepted a non-fresh decomposition review")
+	}
+	assertDecompositionReviewDestinationAbsent(t, repo)
+}
+
+func TestReviewPublishDecompositionRejectsDeferredHighSpecReviewFinding(t *testing.T) {
+	repo, svc, input, files := decompositionReviewPublishFixture(t)
+	manifestPath := filepath.Join(repo, filepath.FromSlash(input.SpecReview))
+	data, err := os.ReadFile(manifestPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	deferred := strings.Replace(string(data),
+		`"disposition":"accepted","rationale":"fixed","resulting_spec_ref":"specs/v0.5.0.md#safe-review-artifact-publication"`,
+		`"disposition":"deferred","rationale":"later","target_version":"v0.6.0"`, 1)
+	writeFile(t, manifestPath, deferred)
+	input.ExpectSpecReviewSHA256 = digestRaw([]byte(deferred))
+	replaceDecomposition(files, "manifest.json", digestRaw(data), input.ExpectSpecReviewSHA256)
+	writeDecompositionProposalFiles(t, repo, input.Proposal, files, "manifest.json")
+
+	if _, err := svc.ReviewPublish(input); err == nil {
+		t.Fatal("ReviewPublish accepted a deferred high post-spec review finding")
+	}
+	assertDecompositionReviewDestinationAbsent(t, repo)
+}
+
 func TestReviewPublishSpecRefusesInvalidInputsWithoutPublication(t *testing.T) {
 	for _, test := range []struct {
 		name   string
@@ -316,11 +373,7 @@ func TestReviewPublishDecompositionAcceptsTwoConsecutivePasses(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	specReview, err := os.ReadFile(filepath.Join(repo, filepath.FromSlash(input.SpecReview)))
-	if err != nil {
-		t.Fatal(err)
-	}
-	addSecondDecompositionPass(files, DecompositionSubjects{SpecPath: "specs/v0.5.0.md", Spec: spec, SpecReviewManifestPath: input.SpecReview, SpecReviewManifest: specReview})
+	addSecondDecompositionPass(files, DecompositionSubjects{Spec: spec})
 	for _, name := range []string{"review-2.json", "manifest.json"} {
 		writeFile(t, filepath.Join(repo, filepath.FromSlash(input.Proposal), name), string(files[name]))
 	}
@@ -859,7 +912,10 @@ func decompositionReviewPublishFixture(t *testing.T) (string, *Service, ReviewPu
 	files["review-1.json"] = replacePromptBindingDigest(t, files["review-1.json"], "task-decomposition-adversarial")
 	replaceManifestDigest(files, "sha256", digestRaw(files["review-1.json"]), 1)
 	writeFile(t, filepath.Join(repo, "specs", "v0.5.0.md"), string(subjects.Spec))
-	writeFile(t, filepath.Join(repo, filepath.FromSlash(subjects.SpecReviewManifestPath)), string(subjects.SpecReviewManifest))
+	for name, content := range subjects.SpecReviewFiles {
+		writeFile(t, filepath.Join(repo, filepath.Dir(filepath.FromSlash(subjects.SpecReviewManifestPath)), filepath.FromSlash(name)), string(content))
+	}
+	writeTask(t, repo, "T-240-implement-the-normative-review-schema-decoders", "Review schema decoders", "completed", "high", "specs/v0.5.0.md#first-area", nil)
 	proposal := "planning/artifacts/review-proposals/decomposition/decomposition-1"
 	for name, content := range files {
 		writeFile(t, filepath.Join(repo, filepath.FromSlash(proposal), name), string(content))
@@ -875,7 +931,7 @@ func decompositionReviewPublishFixture(t *testing.T) (string, *Service, ReviewPu
 		Spec:                   "v0.5.0",
 		ExpectSpecSHA256:       digestRaw(subjects.Spec),
 		SpecReview:             subjects.SpecReviewManifestPath,
-		ExpectSpecReviewSHA256: digestRaw(subjects.SpecReviewManifest),
+		ExpectSpecReviewSHA256: digestRaw(subjects.SpecReviewFiles["manifest.json"]),
 	}
 	return repo, svc, input, files
 }
@@ -886,11 +942,7 @@ func addSecondDecompositionPublishPass(t *testing.T, repo string, input ReviewPu
 	if err != nil {
 		t.Fatal(err)
 	}
-	specReview, err := os.ReadFile(filepath.Join(repo, filepath.FromSlash(input.SpecReview)))
-	if err != nil {
-		t.Fatal(err)
-	}
-	addSecondDecompositionPass(files, DecompositionSubjects{SpecPath: "specs/v0.5.0.md", Spec: spec, SpecReviewManifestPath: input.SpecReview, SpecReviewManifest: specReview})
+	addSecondDecompositionPass(files, DecompositionSubjects{Spec: spec})
 	writeDecompositionProposalFiles(t, repo, input.Proposal, files, "review-2.json", "manifest.json")
 }
 

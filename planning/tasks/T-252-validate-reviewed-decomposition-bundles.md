@@ -1,14 +1,19 @@
 ---
 id: T-252-validate-reviewed-decomposition-bundles
 title: Validate reviewed decomposition bundles
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#adversarial-spec-to-task-decomposition
 dependencies:
     - T-162-productize-digest-bound-post-spec-review-lenses
     - T-251-ship-the-outcome-focused-task-authoring-prompt
     - T-274-decode-reviewed-decomposition-bundles-strictly
-updated_at: "2026-08-06T13:46:30Z"
+updated_at: "2026-08-26T09:44:36Z"
+completion_id: "dea4633b52ec7274a6a3b7c9bf5e7cd6"
+last_verification_id: "760b619fa5b8a545fbe0d05e2327f653"
+last_verification_result: pass
+last_verified_at: "2026-08-26T09:44:36Z"
+last_verified_completion_id: "dea4633b52ec7274a6a3b7c9bf5e7cd6"
 ---
 
 # T-252-validate-reviewed-decomposition-bundles Validate reviewed decomposition bundles
@@ -43,3 +48,6 @@ ImportDraft v2 writer performs any repository mutation.
   validation without emitting any semantic-size certification.
 
 ## Implementation Notes
+
+- 2026-08-26T09:44:16Z: Validate reviewed decomposition bundles against complete post-spec evidence, live dependencies, fresh review context, and deferred-finding readiness gates.
+- 2026-08-26T09:44:36Z: verification pass id 760b619fa5b8a545fbe0d05e2327f653 previous none completion dea4633b52ec7274a6a3b7c9bf5e7cd6

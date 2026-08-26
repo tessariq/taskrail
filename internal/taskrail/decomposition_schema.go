@@ -13,7 +13,9 @@ import (
 
 type DecompositionSubjects struct {
 	SpecPath, SpecReviewManifestPath string
-	Spec, SpecReviewManifest         []byte
+	Spec                             []byte
+	SpecReviewFiles                  map[string][]byte
+	TaskIDs                          map[string]struct{}
 }
 
 type DecompositionBundle struct {
@@ -85,15 +87,20 @@ func DecodeDecompositionBundle(files map[string][]byte, subjects DecompositionSu
 			return bundle, fmt.Errorf("decomposition bundle has unknown file %q", name)
 		}
 	}
-	if subjects.SpecPath == "" || subjects.SpecReviewManifestPath == "" || !utf8.Valid(subjects.Spec) {
+	if subjects.SpecPath == "" || subjects.SpecReviewManifestPath == "" || !utf8.Valid(subjects.Spec) || len(subjects.SpecReviewFiles) == 0 {
 		return bundle, fmt.Errorf("decomposition subjects are incomplete or selected spec is not UTF-8")
 	}
-	specReview, err := decodeSpecReviewManifest(subjects.SpecReviewManifest)
+	specReview, err := DecodeSpecReviewBundle(subjects.SpecReviewFiles)
 	if err != nil {
-		return bundle, fmt.Errorf("post-spec review manifest: %w", err)
+		return bundle, fmt.Errorf("post-spec review bundle: %w", err)
 	}
-	if specReview.SpecPath != subjects.SpecPath || specReview.SpecSHA256 != digestRaw(subjects.Spec) {
+	if specReview.Manifest.SpecPath != subjects.SpecPath || specReview.Manifest.SpecSHA256 != digestRaw(subjects.Spec) {
 		return bundle, fmt.Errorf("post-spec review manifest does not bind selected spec exact bytes")
+	}
+	for _, disposition := range specReview.Manifest.Dispositions {
+		if disposition.Disposition == "deferred" && (disposition.Severity == "high" || disposition.Severity == "medium") {
+			return bundle, fmt.Errorf("post-spec review manifest defers high or medium finding %q", disposition.FindingID)
+		}
 	}
 
 	if bundle.Draft, err = decodeReviewedDraft(files["draft.json"]); err != nil {
@@ -402,6 +409,16 @@ func validateDraftTrace(draft ReviewedImportDraft, trace DecompositionTrace, sub
 			return fmt.Errorf("task %q spec_ref anchor does not exist", task.Key)
 		}
 	}
+	for _, task := range draft.Tasks {
+		for _, dep := range task.Dependencies {
+			if _, inDraft := keys[dep]; inDraft {
+				continue
+			}
+			if _, exists := subjects.TaskIDs[dep]; !exists {
+				return fmt.Errorf("task %q has unknown external dependency %q", task.Key, dep)
+			}
+		}
+	}
 	for _, req := range trace.Requirements {
 		for _, key := range req.TaskKeys {
 			if _, ok := keys[key]; !ok {
@@ -464,7 +481,7 @@ func decodeDecompositionReview(data []byte, pass int) (DecompositionReview, erro
 	if out.TraceSHA256, err = reviewDigestMember(obj, "decomposition review", "trace_sha256"); err != nil {
 		return out, err
 	}
-	if out.ContextMode, err = enumMember(obj, "decomposition review", "context_mode", []string{"fresh", "same-context"}); err != nil {
+	if out.ContextMode, err = enumMember(obj, "decomposition review", "context_mode", []string{"fresh"}); err != nil {
 		return out, err
 	}
 	if _, err = reviewTimeMember(obj, "decomposition review", "generated_at"); err != nil {
@@ -584,7 +601,7 @@ func decodeDecompositionManifest(data []byte) (DecompositionManifest, error) {
 		if r.SHA256, err = reviewDigestMember(o, what, "sha256"); err != nil {
 			return out, err
 		}
-		if r.ContextMode, err = enumMember(o, what, "context_mode", []string{"fresh", "same-context"}); err != nil {
+		if r.ContextMode, err = enumMember(o, what, "context_mode", []string{"fresh"}); err != nil {
 			return out, err
 		}
 		if r.SpecSHA256, err = reviewDigestMember(o, what, "spec_sha256"); err != nil {
@@ -646,7 +663,7 @@ func validateDecompositionManifest(bundle DecompositionBundle, subjects Decompos
 	if m.SpecPath != subjects.SpecPath || m.SpecSHA256 != digestRaw(subjects.Spec) {
 		return fmt.Errorf("manifest spec binding does not match selected spec exact bytes")
 	}
-	if m.SpecReviewManifestPath != subjects.SpecReviewManifestPath || m.SpecReviewManifestSHA256 != digestRaw(subjects.SpecReviewManifest) {
+	if m.SpecReviewManifestPath != subjects.SpecReviewManifestPath || m.SpecReviewManifestSHA256 != digestRaw(subjects.SpecReviewFiles["manifest.json"]) {
 		return fmt.Errorf("manifest post-spec review binding does not match exact subject")
 	}
 	if m.DraftSHA256 != digestRaw(bundle.Draft.Raw) || m.TraceSHA256 != digestRaw(bundle.Trace.Raw) {
