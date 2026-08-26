@@ -250,6 +250,36 @@ func TestDeriveWorkflowIndexRequiresAssessmentsForAffectedFreshRows(t *testing.T
 	}
 }
 
+func TestDeriveWorkflowIndexRequiresAssessmentWhenSpecPathRollsOver(t *testing.T) {
+	prior := workflowIndexGolden(t)
+	parts := workflowReportParts{
+		reviewID: "wf-2", productSHA: reviewDigestA, before: digestRaw(prior),
+		scopeSurfaces: wfScopeSurface("wf-2", "probe-2", "obs-2", "publication/fence", "inconclusive", ""),
+		probes:        wfProbe("wf-2", "probe-2", "obs-2", "publication/fence", "inconclusive", true),
+		observations:  wfObservation("probe-2", "obs-2", "inconclusive"),
+	}
+	raw, candidate := resolveParts(t, prior, parts)
+	subjects := workflowSubjects()
+	subjects.SpecPath = "specs/v0.6.0.md"
+	raw = []byte(strings.Replace(string(raw), `"spec_path":"specs/v0.5.0.md"`, `"spec_path":"specs/v0.6.0.md"`, 1))
+	report, err := DecodeWorkflowReport(raw, subjects)
+	if err != nil {
+		t.Fatalf("DecodeWorkflowReport: %v", err)
+	}
+	// Bind the candidate that a path-blind rollover would derive. The corrected
+	// implementation must refuse before its after-digest is accepted.
+	for i := range candidate.Index.Surfaces {
+		if candidate.Index.Surfaces[i].SurfaceKey == "publication/fence" {
+			candidate.Index.Surfaces[i].SpecPath = subjects.SpecPath
+		}
+	}
+	candidateRaw := mustEncodeIndex(t, candidate.Index)
+	report.IndexSHA256After = digestRaw(candidateRaw)
+	if _, err := DeriveWorkflowIndex(prior, report); err == nil || !strings.Contains(err.Error(), "has no freshness assessment") {
+		t.Fatalf("error = %v, want a required assessment for a spec-path rollover", err)
+	}
+}
+
 func TestDeriveWorkflowIndexClosesOnlyEvidencedFindings(t *testing.T) {
 	prior := workflowIndexGolden(t)
 	parts := workflowReportParts{

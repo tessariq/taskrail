@@ -516,7 +516,7 @@ func deriveWorkflowSurfaces(prior WorkflowIndex, report WorkflowReport, closed m
 		if _, ok := tested[surface.SurfaceKey]; ok {
 			continue
 		}
-		if surface.Freshness == "fresh" && (surface.SpecSHA256 != report.SpecSHA256 || surface.ProductSHA256 != report.ProductSHA256) {
+		if surface.Freshness == "fresh" && (surface.SpecPath != report.SpecPath || surface.SpecSHA256 != report.SpecSHA256 || surface.ProductSHA256 != report.ProductSHA256) {
 			if _, ok := assessments[surface.SurfaceKey]; !ok {
 				return nil, fmt.Errorf("workflow fresh surface %q changed snapshot but has no freshness assessment", surface.SurfaceKey)
 			}
@@ -535,7 +535,7 @@ func workflowRolledFreshness(surface WorkflowSurface, report WorkflowReport) str
 	if surface.Freshness != "fresh" {
 		return surface.Freshness
 	}
-	if surface.SpecSHA256 == report.SpecSHA256 && surface.ProductSHA256 == report.ProductSHA256 {
+	if surface.SpecPath == report.SpecPath && surface.SpecSHA256 == report.SpecSHA256 && surface.ProductSHA256 == report.ProductSHA256 {
 		return "fresh"
 	}
 	for _, assessment := range report.Scope.FreshnessAssessments {
