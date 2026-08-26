@@ -1,6 +1,6 @@
 ---
 schema_version: 1
-updated_at: "2026-08-26T12:59:03Z"
+updated_at: "2026-08-26T13:40:05Z"
 active_spec_version: v0.5.0
 active_spec_path: specs/v0.5.0.md
 current_task: ""
@@ -8,9 +8,9 @@ current_task_title: ""
 status_summary: idle
 blockers: []
 next_action: Select the next eligible task
-last_verification_result: pass for T-304-align-imported-and-decomposed-task-bodies at 2026-08-26T12:19:51Z id 6bc0649b72aa2dfdba4aa3a04d9d56a8
-last_verification_id: 6bc0649b72aa2dfdba4aa3a04d9d56a8
-last_verified_completion_id: c52e15085fadf8ea7cf5d228c029c72e
+last_verification_result: pass for T-371-gate-implicit-local-bootstrap-tests-by-durability at 2026-08-26T13:40:05Z id 1e92ded682cc91b8ed18e506b357559a
+last_verification_id: 1e92ded682cc91b8ed18e506b357559a
+last_verified_completion_id: 0287f337aeb984a740add85d1f4c4070
 relevant_artifacts: []
 continuation_notes:
     - This repository is temporarily dogfooding bootstrap workflow tooling until Taskrail v0.1.0 exists.
@@ -36,7 +36,7 @@ continuation_notes:
 
 ## Last Verification
 
-- pass for T-304-align-imported-and-decomposed-task-bodies at 2026-08-26T12:19:51Z id 6bc0649b72aa2dfdba4aa3a04d9d56a8
+- pass for T-371-gate-implicit-local-bootstrap-tests-by-durability at 2026-08-26T13:40:05Z id 1e92ded682cc91b8ed18e506b357559a
 
 ## Next Action
 
@@ -54,6 +54,6 @@ continuation_notes:
 
 - todo: 67
 - in_progress: 0
-- completed: 302
+- completed: 303
 - blocked: 0
 - cancelled: 0

@@ -14,6 +14,7 @@ func TestImplicitLocalBootstrapForNext(t *testing.T) {
 		t.Fatalf("git init: %v (%s)", err, output)
 	}
 	t.Chdir(repo)
+	requireRecoveryDirectoryDurability(t, repo)
 
 	stdout, _, err := runRootSplit(t, "next", "--json")
 	if err != nil {
@@ -57,6 +58,7 @@ func TestImplicitLocalBootstrapCommandMatrix(t *testing.T) {
 	for _, writer := range writers {
 		t.Run(writer.name, func(t *testing.T) {
 			repo := setupUninitializedGitRepo(t)
+			requireRecoveryDirectoryDurability(t, repo)
 			stdout, _, err := runRootSplit(t, writer.args...)
 			assertLocalBootstrap(t, repo, stdout, writer.wantError)
 			if writer.wantError && err == nil {
@@ -67,6 +69,7 @@ func TestImplicitLocalBootstrapCommandMatrix(t *testing.T) {
 
 	t.Run("loop execution", func(t *testing.T) {
 		repo := setupUninitializedGitRepo(t)
+		requireRecoveryDirectoryDurability(t, repo)
 		resultPath := filepath.Join(t.TempDir(), "loop-result.json")
 		_, _, _ = runRootSplit(t, "loop", "--result-file", resultPath, "--", "true")
 		data, err := os.ReadFile(resultPath)
