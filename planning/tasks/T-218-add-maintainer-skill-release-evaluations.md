@@ -1,12 +1,17 @@
 ---
 id: T-218-add-maintainer-skill-release-evaluations
 title: Register deterministic skill evaluations
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#maintainer-skill-release-evaluations
 dependencies:
     - T-254-make-every-packaged-skill-storage-neutral
-updated_at: "2026-08-08T08:40:49Z"
+updated_at: "2026-08-27T10:42:28Z"
+completion_id: "13085732e88cea4c0ad77f9fdc59389a"
+last_verification_id: "da981a807553147fac00c56f59af6237"
+last_verification_result: pass
+last_verified_at: "2026-08-27T10:42:28Z"
+last_verified_completion_id: "13085732e88cea4c0ad77f9fdc59389a"
 ---
 
 # T-218-add-maintainer-skill-release-evaluations Register deterministic skill evaluations
@@ -45,3 +50,8 @@ construction remain T-307.
   packaged.
 
 ## Implementation Notes
+
+- 2026-08-27T10:26:13Z: Required narrow final-diff review was unavailable because the delegated reviewer backend was overloaded; an operator must obtain a fresh review of the storage-coverage and fixture-alias fixes before release.
+- 2026-08-27T10:26:31Z: verification fail id fb62003da52112b314d28565f95648f6 previous none completion none
+- 2026-08-27T10:42:27Z: Registered strict deterministic skill evaluations and closed review findings.
+- 2026-08-27T10:42:28Z: verification pass id da981a807553147fac00c56f59af6237 previous none completion 13085732e88cea4c0ad77f9fdc59389a

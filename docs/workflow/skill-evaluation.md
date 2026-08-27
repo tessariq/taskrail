@@ -1,7 +1,6 @@
 # Skill Evaluation
 
-Maintainer contract for evaluating Taskrail's packaged Agent Skills. This is an
-active v0.5 roadmap surface until T-218 ships.
+Maintainer contract for evaluating Taskrail's packaged Agent Skills.
 
 ## Boundaries
 
@@ -20,6 +19,21 @@ Every packaged skill is checked mechanically for valid Agent Skills frontmatter,
 resolvable references, real commands and flags, common-JSON use when consuming
 results, canonical lifecycle order, provider independence, nested-resource
 packaging, and byte parity across embedded and committed copies.
+
+## Evaluation Registry
+
+The checked registry lives at `internal/taskrail/testdata/skill-evals/v1/cases/`,
+one strict `case.json` per case. Every shipped skill has committed and local
+cases; local cases include exact stale logical-state decoy bytes and a Git
+provenance sentinel. The registry validator rejects missing skill/mode coverage,
+duplicate case IDs, path/name disagreement, malformed strict JSON, incorrect
+v0.4.0 baseline classification, and incomplete local fixtures.
+
+Case and registry fixture digests use the domain-separated tree framing in
+`specs/v0.5.0.md#maintainer-skill-release-evaluations`. These assets define the
+complete deterministic input set. They contain no provider runner, credentials,
+transcripts, raw evidence, or installed skill content. T-307 owns caller-adapter
+execution and report construction.
 
 ## Manual Behavioral Run
 
