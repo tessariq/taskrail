@@ -1,12 +1,17 @@
 ---
 id: T-307-run-paired-maintainer-skill-evaluations
 title: Run paired maintainer skill evaluations
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#maintainer-skill-release-evaluations
 dependencies:
     - T-218-add-maintainer-skill-release-evaluations
-updated_at: "2026-08-08T14:23:09Z"
+updated_at: "2026-08-27T12:41:08Z"
+completion_id: "cd0c753ddfc9e23c4b1d104f81a9d0df"
+last_verification_id: "0e691558e67021a97a0fcb3487915870"
+last_verification_result: pass
+last_verified_at: "2026-08-27T12:41:08Z"
+last_verified_completion_id: "cd0c753ddfc9e23c4b1d104f81a9d0df"
 ---
 
 # T-307-run-paired-maintainer-skill-evaluations Run paired maintainer skill evaluations
@@ -45,3 +50,6 @@ for paired candidate-versus-v0.4.0 execution of the complete T-218 registry.
   uncommitted path-safe report candidate without changing protected repository bytes.
 
 ## Implementation Notes
+
+- 2026-08-27T12:40:47Z: Added a strict provider-neutral paired evaluation runner and safe report renderer with raw-evidence containment.
+- 2026-08-27T12:41:08Z: verification pass id 0e691558e67021a97a0fcb3487915870 previous none completion cd0c753ddfc9e23c4b1d104f81a9d0df

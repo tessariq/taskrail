@@ -52,6 +52,14 @@ execution and report construction.
 An absent credential, timeout, incomplete pair, or missing grade is explicit
 incomplete evidence, never a passing evaluation.
 
+The maintainer harness is `SkillEvalRunner` in `internal/taskrail`. A caller
+supplies its provider adapter, the status-reported artifacts root, fixed
+candidate and baseline evidence bindings, and the human comparisons. The runner
+invokes every required arm once, accepts an adapter error as a missing arm,
+rejects unsafe or empty raw evidence, and returns an unpersisted schema-v1 safe
+summary. `RenderSkillEvalReport` produces canonical JSON for human review; it
+never writes a durable review, alters skills or fixtures, or applies a proposal.
+
 ## Research Basis
 
 The paired baseline, assertion, human-review, and proposal-only iteration method

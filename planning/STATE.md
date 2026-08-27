@@ -1,6 +1,6 @@
 ---
 schema_version: 1
-updated_at: "2026-08-27T10:42:28Z"
+updated_at: "2026-08-27T12:41:08Z"
 active_spec_version: v0.5.0
 active_spec_path: specs/v0.5.0.md
 current_task: ""
@@ -8,9 +8,9 @@ current_task_title: ""
 status_summary: idle
 blockers: []
 next_action: Select the next eligible task
-last_verification_result: pass for T-218-add-maintainer-skill-release-evaluations at 2026-08-27T10:42:28Z id da981a807553147fac00c56f59af6237
-last_verification_id: da981a807553147fac00c56f59af6237
-last_verified_completion_id: 13085732e88cea4c0ad77f9fdc59389a
+last_verification_result: pass for T-307-run-paired-maintainer-skill-evaluations at 2026-08-27T12:41:08Z id 0e691558e67021a97a0fcb3487915870
+last_verification_id: 0e691558e67021a97a0fcb3487915870
+last_verified_completion_id: cd0c753ddfc9e23c4b1d104f81a9d0df
 relevant_artifacts: []
 continuation_notes:
     - This repository is temporarily dogfooding bootstrap workflow tooling until Taskrail v0.1.0 exists.
@@ -36,7 +36,7 @@ continuation_notes:
 
 ## Last Verification
 
-- pass for T-218-add-maintainer-skill-release-evaluations at 2026-08-27T10:42:28Z id da981a807553147fac00c56f59af6237
+- pass for T-307-run-paired-maintainer-skill-evaluations at 2026-08-27T12:41:08Z id 0e691558e67021a97a0fcb3487915870
 
 ## Next Action
 
@@ -52,8 +52,8 @@ continuation_notes:
 
 ## Task Counts
 
-- todo: 62
+- todo: 61
 - in_progress: 0
-- completed: 309
+- completed: 310
 - blocked: 0
 - cancelled: 0
