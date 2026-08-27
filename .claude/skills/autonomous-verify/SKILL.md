@@ -22,13 +22,18 @@ do not contain the source helper and skip this source-only guard.
 ## Required Flow
 
 1. Run `${TASKRAIL:-taskrail} validate --json`.
-2. Choose the task to verify.
-3. Run `${TASKRAIL:-taskrail} verify <task-id> --result pass --summary "..." --json`, or use
-   `${TASKRAIL:-taskrail} verify <task-id> --result fail --summary "..." --json` when findings remain.
-4. Confirm plan and report artifacts were written under
-   `planning/artifacts/verify/`.
-5. Review unresolved findings.
-6. Create a follow-up task with `${TASKRAIL:-taskrail} task new --follow-up <task-id> --title "..." --json`
+2. Choose the task to verify and read its acceptance criteria with
+   `${TASKRAIL:-taskrail} task show <task-id> --json`. Consume the returned
+   content; do not open the logical task path directly.
+3. Run `${TASKRAIL:-taskrail} status --json` and
+   consume `storage.artifacts_dir`.
+4. Immediately before verification, apply the source-checkout guard when it
+   applies. Run `${TASKRAIL:-taskrail} verify <task-id> --result pass --summary "..." --json`, or
+   use `${TASKRAIL:-taskrail} verify <task-id> --result fail --summary "..." --json` when findings remain.
+5. Confirm returned `artifact_dir`, `plan_path`, and `report_path` are beneath
+   the exact transient root reported by `status`.
+6. Review unresolved findings.
+7. Create a follow-up task with `${TASKRAIL:-taskrail} task new --follow-up <task-id> --title "..." --json`
    (or `${TASKRAIL:-taskrail} verify <task-id> --result fail --summary "..." --create-followup --json`)
    when unresolved work should enter the backlog.
 

@@ -122,6 +122,70 @@ func TestShippableSkillsUseConfigurableEntryPoint(t *testing.T) {
 	}
 }
 
+func TestShippableSkillsHaveStorageNeutralInventory(t *testing.T) {
+	// Each entry names the observed command or instruction that proves either
+	// storage-independent behavior or an explicitly mode-specific boundary.
+	inventory := map[string]struct {
+		storageIndependent []string
+		modeSpecific       []string
+	}{
+		"autonomous-backlog":            {[]string{"task show <task-id> --json", "spec show <version> --json"}, []string{"status --json", "committed mode", "local mode"}},
+		"autonomous-task":               {[]string{"task show <task-id> --json", "spec show <version> --json"}, []string{"status --json", "committed mode", "local mode"}},
+		"autonomous-verify":             {[]string{"task show <task-id> --json"}, []string{"status --json", "storage.artifacts_dir"}},
+		"autonomous-recovery":           {[]string{"repair --apply --json"}, nil},
+		"autonomous-manual-test":        {[]string{"task show <task-id> --json"}, []string{"status --json", "storage.artifacts_dir"}},
+		"taskrail-loop":                 {[]string{"loop --dry-run --json"}, nil},
+		"taskrail-import":               {[]string{"import --apply draft.json --json"}, nil},
+		"taskrail-retrofit":             {[]string{"retrofit <notes.md> --apply --json"}, nil},
+		"taskrail-repair":               {[]string{"repair --apply --json"}, nil},
+		"taskrail-spec":                 {[]string{"spec show <version> --anchors --json"}, nil},
+		"taskrail-spec-review":          {[]string{"spec show <version> --json"}, []string{"status --json", "storage.artifacts_dir"}},
+		"taskrail-decompose":            {[]string{"review show <post-spec-manifest> --json", "spec show <version> --json"}, []string{"status --json", "storage.artifacts_dir"}},
+		"taskrail-sdd-handoff":          {[]string{"spec show <version> --anchors --json"}, nil},
+		"taskrail-gap":                  {[]string{"spec show <version> --json", "task show <task-id> --json"}, nil},
+		"taskrail-task-review":          {[]string{"task show <task-id> --json", "spec show <version> --json"}, []string{"status --json", "artifacts root"}},
+		"taskrail-workflow-adversarial": {[]string{"review show <memory> --json", "task show <task-id> --json", "--expect-product-sha256 <digest> --json"}, []string{"status --json", "artifacts_dir", "both committed and local storage modes"}},
+	}
+
+	if len(inventory) != len(shippableSkills) {
+		t.Fatalf("storage-neutral inventory has %d skills, want %d", len(inventory), len(shippableSkills))
+	}
+	for _, name := range shippableSkills {
+		entry, ok := inventory[name]
+		if !ok {
+			t.Errorf("storage-neutral inventory is missing %q", name)
+			continue
+		}
+		body := readShippableSkill(t, name)
+		if strings.Contains(body, ".taskrail/local") || strings.Contains(body, ".taskrail/config.yml") {
+			t.Errorf("%s derives a local storage path or reads storage configuration", name)
+		}
+		normalized := strings.Join(strings.Fields(body), " ")
+		for _, observable := range append(entry.storageIndependent, entry.modeSpecific...) {
+			if !strings.Contains(normalized, strings.Join(strings.Fields(observable), " ")) {
+				t.Errorf("%s storage inventory observable missing %q", name, observable)
+			}
+		}
+		if strings.Contains(body, "planning/artifacts/") {
+			t.Errorf("%s uses a fixed logical artifact root instead of status.storage.artifacts_dir", name)
+		}
+	}
+
+	verify := readShippableSkill(t, "autonomous-verify")
+	if strings.Index(verify, "status --json") > strings.Index(verify, "verify <task-id> --result pass") {
+		t.Error("autonomous-verify must resolve status.storage.artifacts_dir before verification")
+	}
+	if strings.Index(verify, "verify <task-id> --result pass") > strings.Index(verify, "Confirm returned `artifact_dir`, `plan_path`, and `report_path`") {
+		t.Error("autonomous-verify must confirm writer-created artifact paths after verification")
+	}
+	for _, name := range []string{"taskrail-spec-review", "taskrail-workflow-adversarial"} {
+		body := strings.Join(strings.Fields(readShippableSkill(t, name)), " ")
+		if !strings.Contains(strings.ToLower(body), "immediately before the non-dry-run publisher, apply the source-checkout guard.") {
+			t.Errorf("%s must require the source-checkout guard immediately before publishing", name)
+		}
+	}
+}
+
 func TestShippableSkillsConsumeStructuredResultsAsJSON(t *testing.T) {
 	required := map[string][]string{
 		"autonomous-backlog":            {"} validate --json", "} next --json", "} start <task-id> --json", "} verify <task-id> --result pass --summary \"...\" --json", "} verify <task-id> --result fail --summary \"...\" --json", "} task new --follow-up <task-id> --title \"...\" --json", "} complete <task-id> --note \"...\" --json", "} block <task-id> --reason \"...\" --json"},

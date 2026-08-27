@@ -39,10 +39,11 @@ Installed adopter repositories skip this source-only guard.
    An inactive session is draft/review-only: stop before publication or import.
    A human must activate the spec and explicitly start a new session before the
    active-spec publication, apply, validation, and coverage steps.
-2. **Create an ignored proposal directory.** Choose one portable session ID and
-   an effectively ignored directory under
-   `planning/artifacts/review-proposals/decomposition/<session>/`. Never stage or
-   publish from a non-ignored proposal.
+2. **Create an ignored proposal directory.** Run `${TASKRAIL:-taskrail} status
+   --json` and consume its exact `storage.artifacts_dir`. Choose one portable
+   session ID and an effectively ignored directory under the reported transient
+   root at `<artifacts-dir>/review-proposals/decomposition/<session>/`. Never stage
+   or publish from a non-ignored proposal.
 3. **Render the author prompt.** Run
    `${TASKRAIL:-taskrail} prompt render task-decomposition --spec <version> --spec-review <post-spec-manifest> --draft <proposal>/draft.json --trace <proposal>/trace.json --json`.
    Preserve its reported template source and exact template SHA-256.

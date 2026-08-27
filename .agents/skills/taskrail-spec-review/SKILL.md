@@ -13,13 +13,24 @@ activates specs, never creates tasks, and never invokes semantic writers.
 Requires the installed `taskrail` binary on `PATH`. Run it from the managed
 repository root.
 
+## Source Checkout Guard
+
+Before every command that can write tracked state, check whether the repository
+is the Taskrail source checkout (it contains both `Taskfile.yml` and
+`internal/toolchain/cmd/freshcheck`). If so, run `task taskrail:check`
+immediately before the writer. This checks the exact `${TASKRAIL:-taskrail}`
+binary the workflow will invoke. If it fails, stop, apply the remedy it names,
+and rerun the guard; do not run the writer first. Installed adopter repositories
+do not contain the source helper and skip this source-only guard.
+
 ## Flow
 
 1. **Select an exact subject.** Run `${TASKRAIL:-taskrail} spec show <version> --json`
-   and record its path and exact SHA-256. Choose one portable lowercase
-   `<session-id>` and one absent proposal directory `<proposal-dir>` beneath
-   `<artifacts-dir>/review-proposals/spec/<session-id>` for the active storage
-   mode. Do not start this
+   and record its path and exact SHA-256. Run `${TASKRAIL:-taskrail} status --json`
+   and consume its exact `storage.artifacts_dir`. Choose one portable lowercase
+   `<session-id>` and one absent proposal directory `<proposal-dir>` beneath that
+   reported transient directory at
+   `<artifacts-dir>/review-proposals/spec/<session-id>`. Do not start this
    flow while the specification is still incoherent or while an operator has not
    selected the version and session.
 2. **Render and hand off four isolated lenses.** For each lens, render its own
@@ -60,8 +71,9 @@ repository root.
    spec SHA-256. The manifest does not repeat prompt bindings: lens file digests
    bind those transitively. Reject unknown, null, duplicate, missing, or malformed
    data rather than repairing it.
-6. **Publish the complete bundle.** After rechecking the final spec digest, use
-   the only publication boundary:
+6. **Publish the complete bundle.** After rechecking the final spec digest,
+   immediately before the non-dry-run publisher, apply the source-checkout guard.
+   Then use the only publication boundary:
    `${TASKRAIL:-taskrail} review publish --type spec --proposal <proposal-dir> --destination <planning-dir>/reviews/spec/<version>/<session-id> --spec <version> --expect-spec-sha256 <digest> --json`
    It atomically publishes only the five fixed files to an absent destination.
    A publication refusal for a stale subject, prompt, digest, alias, or existing

@@ -15,6 +15,16 @@ Requires the installed `taskrail` binary on `PATH`. Run from an explicitly
 initialized managed repository root. Review publication never performs implicit
 local bootstrap.
 
+## Source Checkout Guard
+
+Before every command that can write tracked state, check whether the repository
+is the Taskrail source checkout (it contains both `Taskfile.yml` and
+`internal/toolchain/cmd/freshcheck`). If so, run `task taskrail:check`
+immediately before the writer. This checks the exact `${TASKRAIL:-taskrail}`
+binary the workflow will invoke. If it fails, stop, apply the remedy it names,
+and rerun the guard; do not run the writer first. Installed adopter repositories
+do not contain the source helper and skip this source-only guard.
+
 ## Flow
 
 1. **Resolve storage and freeze the subject.** Run
@@ -98,8 +108,9 @@ local bootstrap.
    Consume the complete JSON result and resolve deterministic report errors only
    by correcting the unpublished report from the frozen evidence. Subject,
    prompt, memory, product, or destination drift abandons this review ID.
-10. **Publish unchanged evidence.** After a successful preview, run the identical
-    `${TASKRAIL:-taskrail} review publish --type workflow --review <proposal>/report.json --memory <memory> --destination <destination> --spec <version> --expect-spec-sha256 <digest> --expect-head <head> --expect-product-sha256 <digest>`
+10. **Publish unchanged evidence.** After a successful preview, immediately before
+    the non-dry-run publisher, apply the source-checkout guard. Run the identical
+    `${TASKRAIL:-taskrail} review publish --type workflow --review <proposal>/report.json --memory <memory> --destination <destination> --spec <version> --expect-spec-sha256 <digest> --expect-head <head> --expect-product-sha256 <digest> --json`
     command with the same memory expectation and `--json`, but without
     `--dry-run`. Consume the returned report and index paths and digests. Re-read
     both with `review show` and verify the exact published bytes. Remove the

@@ -61,11 +61,13 @@ do not contain the source helper and skip this source-only guard.
    Use `--fail-on <category>` only when the repository explicitly wants matching
    structural candidates to produce a non-zero exit code.
 2. **Review semantically.** For each structural signal, decide whether it is a real
-   gap and why. Then go beyond the mechanical signals: read the active spec area and
-   its linked tasks and name the gaps the binary cannot detect — missing edge-case
-   handling, absent rollout/migration/cleanup work, verification that exists but is
-   too shallow, dependencies that are semantically wrong even when the graph is
-   well-formed. Ground every candidate in the spec text and existing tasks.
+   gap and why. Read the active spec through `${TASKRAIL:-taskrail} spec show
+   <version> --json` and each linked task through `${TASKRAIL:-taskrail} task show
+   <task-id> --json`; consume returned content rather than opening logical paths.
+   Then name gaps the binary cannot detect — missing edge-case handling, absent
+   rollout/migration/cleanup work, verification that exists but is too shallow,
+   dependencies that are semantically wrong even when the graph is well-formed.
+   Ground every candidate in the spec text and existing tasks.
 3. **Propose candidate tasks.** Present the surviving gaps as a concise list — title,
    the `spec_ref` anchor each belongs to, and a one-line rationale. This is a
    recommendation for a human, not state: the skill never creates tasks on its own.

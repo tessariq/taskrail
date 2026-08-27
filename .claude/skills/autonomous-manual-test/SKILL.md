@@ -13,14 +13,17 @@ Requires the installed `taskrail` binary on `PATH`.
 ## Required Flow
 
 1. Run `${TASKRAIL:-taskrail} validate --json`.
-2. Read the target task file and extract its acceptance criteria.
-3. Create a manual test plan at
-   `planning/artifacts/manual-test/<task-id>/<timestamp>/plan.md`.
+2. Read the target task and extract its acceptance criteria with
+   `${TASKRAIL:-taskrail} task show <task-id> --json`; consume its returned
+   content instead of opening the logical task path directly.
+3. Run `${TASKRAIL:-taskrail} status --json` and use its exact
+   `storage.artifacts_dir` as the transient root. Create a manual test plan at
+   `<artifacts-dir>/manual-test/<task-id>/<timestamp>/plan.md`.
 4. Derive numbered test steps from the acceptance criteria.
 5. Execute each test step in order.
 6. If a step fails, decide whether a code fix is needed, apply the smallest fix,
    and re-run only the affected step.
-7. Write `planning/artifacts/manual-test/<task-id>/<timestamp>/report.md` with
+7. Write `<artifacts-dir>/manual-test/<task-id>/<timestamp>/report.md` with
    per-step results and a final verdict.
 8. Clean up any temporary manual test code after the report is written.
 
@@ -53,7 +56,7 @@ Prefer a sandbox for most manual testing.
 
 ## Rules
 
-- manual-test artifacts under `planning/artifacts/manual-test/` are ephemeral,
+- manual-test artifacts beneath `<artifacts-dir>/manual-test/` are ephemeral,
   gitignored evidence; never commit them
 - never substitute ordinary automated tests for manual test evidence when the
   change needs end-to-end judgment

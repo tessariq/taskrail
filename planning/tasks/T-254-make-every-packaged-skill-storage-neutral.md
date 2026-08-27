@@ -1,7 +1,7 @@
 ---
 id: T-254-make-every-packaged-skill-storage-neutral
 title: Make every packaged skill storage-neutral
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#storage-neutral-packaged-skills
 dependencies:
@@ -17,7 +17,12 @@ dependencies:
     - T-302-refresh-local-packaged-skills-safely
     - T-303-align-native-task-producers-with-the-body-contract
     - T-304-align-imported-and-decomposed-task-bodies
-updated_at: "2026-08-08T08:40:49Z"
+updated_at: "2026-08-27T09:47:51Z"
+completion_id: "06b5d3a6764f72808b0b7274f06c8291"
+last_verification_id: "7d240c15b825eaf7ade86e5ba9dddeba"
+last_verification_result: pass
+last_verified_at: "2026-08-27T09:47:51Z"
+last_verified_completion_id: "06b5d3a6764f72808b0b7274f06c8291"
 ---
 
 # T-254-make-every-packaged-skill-storage-neutral Make every packaged skill storage-neutral
@@ -84,3 +89,6 @@ overlay, or applying committed-mode Git delivery rules to ignored local state.
   freshness checks, and the derived registry suite.
 
 ## Implementation Notes
+
+- 2026-08-27T09:47:30Z: Certified storage-neutral packaged skill instructions, inventory coverage, and regenerated mirrors.
+- 2026-08-27T09:47:51Z: verification pass id 7d240c15b825eaf7ade86e5ba9dddeba previous none completion 06b5d3a6764f72808b0b7274f06c8291

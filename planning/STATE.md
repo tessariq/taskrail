@@ -1,6 +1,6 @@
 ---
 schema_version: 1
-updated_at: "2026-08-27T08:54:41Z"
+updated_at: "2026-08-27T09:47:51Z"
 active_spec_version: v0.5.0
 active_spec_path: specs/v0.5.0.md
 current_task: ""
@@ -8,9 +8,9 @@ current_task_title: ""
 status_summary: idle
 blockers: []
 next_action: Select the next eligible task
-last_verification_result: pass for T-291-prove-inherited-command-parity-in-local-storage at 2026-08-27T08:54:41Z id 223e9dcb9e85fb4f617bd80fa2cfa371
-last_verification_id: 223e9dcb9e85fb4f617bd80fa2cfa371
-last_verified_completion_id: 9b80af7bfda60decfc66083881facd13
+last_verification_result: pass for T-254-make-every-packaged-skill-storage-neutral at 2026-08-27T09:47:51Z id 7d240c15b825eaf7ade86e5ba9dddeba
+last_verification_id: 7d240c15b825eaf7ade86e5ba9dddeba
+last_verified_completion_id: 06b5d3a6764f72808b0b7274f06c8291
 relevant_artifacts: []
 continuation_notes:
     - This repository is temporarily dogfooding bootstrap workflow tooling until Taskrail v0.1.0 exists.
@@ -36,7 +36,7 @@ continuation_notes:
 
 ## Last Verification
 
-- pass for T-291-prove-inherited-command-parity-in-local-storage at 2026-08-27T08:54:41Z id 223e9dcb9e85fb4f617bd80fa2cfa371
+- pass for T-254-make-every-packaged-skill-storage-neutral at 2026-08-27T09:47:51Z id 7d240c15b825eaf7ade86e5ba9dddeba
 
 ## Next Action
 
@@ -52,8 +52,8 @@ continuation_notes:
 
 ## Task Counts
 
-- todo: 64
+- todo: 63
 - in_progress: 0
-- completed: 307
+- completed: 308
 - blocked: 0
 - cancelled: 0
