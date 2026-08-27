@@ -1,7 +1,7 @@
 ---
 id: T-291-prove-inherited-command-parity-in-local-storage
 title: Prove inherited command parity in local storage
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#local-planning-mode
 dependencies:
@@ -9,7 +9,12 @@ dependencies:
     - T-288-inspect-local-planning-storage-read-only
     - T-289-route-lifecycle-and-task-writers-through-local
     - T-290-route-structural-planning-writers-through-local
-updated_at: "2026-08-08T14:23:08Z"
+updated_at: "2026-08-27T08:54:41Z"
+completion_id: "9b80af7bfda60decfc66083881facd13"
+last_verification_id: "223e9dcb9e85fb4f617bd80fa2cfa371"
+last_verification_result: pass
+last_verified_at: "2026-08-27T08:54:41Z"
+last_verified_completion_id: "9b80af7bfda60decfc66083881facd13"
 ---
 
 # T-291-prove-inherited-command-parity-in-local-storage Prove inherited command parity in local storage
@@ -47,3 +52,6 @@ evidence and regressions, not new command semantics.
   selection, mutation, completion/verification, repair/spec/import, and inspection.
 
 ## Implementation Notes
+
+- 2026-08-27T08:54:16Z: Added an enforced form-level local parity inventory with bootstrap and evidence-owner guards.
+- 2026-08-27T08:54:41Z: verification pass id 223e9dcb9e85fb4f617bd80fa2cfa371 previous none completion 9b80af7bfda60decfc66083881facd13
