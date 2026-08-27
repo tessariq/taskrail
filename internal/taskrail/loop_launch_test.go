@@ -402,51 +402,33 @@ func TestLoopLaunchChildHelper(t *testing.T) {
 		if len(args) < separator+4 {
 			os.Exit(82)
 		}
-		child := exec.Command(os.Getenv("TASKRAIL"), "-test.run=^TestLoopLaunchChildHelper$", "--", "local-lifecycle", record, args[separator+3])
-		child.Stdin = os.Stdin
-		child.Stdout = os.Stdout
-		child.Stderr = os.Stderr
-		if err := child.Run(); err != nil {
-			os.Exit(90)
-		}
-		os.Exit(0)
-	case "local-lifecycle":
-		if len(args) < separator+4 {
-			os.Exit(82)
-		}
 		cwd, err := os.Getwd()
 		if err != nil {
 			os.Exit(97)
 		}
-		svc, err := NewService(cwd)
-		if err != nil {
-			os.Exit(89)
-		}
 		taskID := args[separator+3]
-		if _, err := svc.Start(taskID); err != nil {
-			os.Exit(88)
-		}
+		runLoopHelperCommand(cwd, os.Getenv("TASKRAIL"), "start", taskID)
 		if err := os.WriteFile(filepath.Join(cwd, "product.txt"), []byte("delivered\n"), 0o644); err != nil {
 			os.Exit(87)
 		}
-		if _, err := svc.Complete(taskID, "deliver local product"); err != nil {
-			os.Exit(86)
-		}
-		if _, err := svc.Verify(VerifyInput{TaskID: taskID, Result: "pass", Summary: "local lifecycle delivered", Details: "delegated local lifecycle test"}); err != nil {
-			os.Exit(85)
-		}
-		commit := exec.Command("git", "add", "product.txt")
-		commit.Dir = cwd
-		if err := commit.Run(); err != nil {
-			os.Exit(84)
-		}
-		commit = exec.Command("git", "commit", "-m", "deliver product")
-		commit.Dir = cwd
-		if err := commit.Run(); err != nil {
-			os.Exit(83)
-		}
+		runLoopHelperCommand(cwd, os.Getenv("TASKRAIL"), "complete", taskID, "--note", "deliver local product")
+		runLoopHelperCommand(cwd, os.Getenv("TASKRAIL"), "verify", taskID, "--result", "pass", "--summary", "local lifecycle delivered", "--details", "delegated local lifecycle test")
+		runLoopHelperCommand(cwd, "git", "add", "product.txt")
+		runLoopHelperCommand(cwd, "git", "commit", "-m", "deliver product")
 		os.Exit(0)
 	default:
 		os.Exit(94)
+	}
+}
+
+func runLoopHelperCommand(dir, name string, args ...string) {
+	command := exec.Command(name, args...)
+	command.Dir = dir
+	command.Stdin = os.Stdin
+	command.Stdout = os.Stdout
+	command.Stderr = os.Stderr
+	if err := command.Run(); err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "%s %v: %v\n", name, args, err)
+		os.Exit(90)
 	}
 }

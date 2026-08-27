@@ -148,3 +148,4 @@ T-344-align-temporary-loop-with-canonical-verification	hold-operator	Operator-ow
 T-358-prevent-read-only-git-probes-from-refreshing-index	hold-operator	Exact-head CI follow-up; restore deterministic read-only Git probes before the next loop invocation
 T-359-make-containment-cleanup-timing-race-aware	run	-
 T-363-align-prompt-snapshot-race-tests-with-windows	hold-operator	Exact-head CI repair for T-255 native Windows durability coverage
+T-373-make-local-loop-delivery-fixture-portable-on-macos	hold-operator	Exact-head CI repair for T-225 macOS delegated executable fixture

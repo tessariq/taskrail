@@ -135,6 +135,10 @@ func TestLoopExecuteRejectsGitConfigurationMutation(t *testing.T) {
 func TestLoopExecuteDeliversLocalLifecycleWithOneProductCommit(t *testing.T) {
 	clearLoopChildEnvironment(t)
 	t.Setenv("GO_WANT_LOOP_CHILD", "1")
+	binary := buildTaskrailExecutable(t)
+	previous := loopExecutablePath
+	loopExecutablePath = func() (string, error) { return binary, nil }
+	t.Cleanup(func() { loopExecutablePath = previous })
 	source := realGitRepo(t)
 	repo := filepath.Join(t.TempDir(), "local-loop")
 	runGit(t, source, "worktree", "add", "-b", "local-loop", repo)

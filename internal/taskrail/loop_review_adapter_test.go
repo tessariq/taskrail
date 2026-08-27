@@ -71,7 +71,7 @@ func TestLoopExecuteDeliversParallelReviewBatchThroughAdapter(t *testing.T) {
 	runGit(t, repo, "add", ".")
 	runGit(t, repo, "commit", "-m", "allow parallel tasks")
 
-	binary := buildParallelTaskrail(t)
+	binary := buildTaskrailExecutable(t)
 	previous := loopExecutablePath
 	loopExecutablePath = func() (string, error) { return binary, nil }
 	t.Cleanup(func() { loopExecutablePath = previous })

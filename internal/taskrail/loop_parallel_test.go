@@ -139,7 +139,7 @@ func TestLoopExecuteDeliversParallelCloneBatch(t *testing.T) {
 	runGit(t, repo, "add", ".")
 	runGit(t, repo, "commit", "-m", "allow parallel tasks")
 
-	binary := buildParallelTaskrail(t)
+	binary := buildTaskrailExecutable(t)
 	previous := loopExecutablePath
 	loopExecutablePath = func() (string, error) { return binary, nil }
 	t.Cleanup(func() { loopExecutablePath = previous })
@@ -423,7 +423,7 @@ func TestCanonicalParallelRootResolvesSymlinkedParent(t *testing.T) {
 	}
 }
 
-func buildParallelTaskrail(t *testing.T) string {
+func buildTaskrailExecutable(t *testing.T) string {
 	t.Helper()
 	root, err := filepath.Abs(filepath.Join("..", ".."))
 	if err != nil {

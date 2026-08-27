@@ -1,6 +1,6 @@
 ---
 schema_version: 1
-updated_at: "2026-08-27T14:05:57Z"
+updated_at: "2026-08-27T14:42:54Z"
 active_spec_version: v0.5.0
 active_spec_path: specs/v0.5.0.md
 current_task: ""
@@ -8,9 +8,9 @@ current_task_title: ""
 status_summary: idle
 blockers: []
 next_action: Select the next eligible task
-last_verification_result: pass for T-225-prove-local-autonomous-delivery-across-git at 2026-08-27T14:05:57Z id fedf1f47f2398b027344ee5667de168b
-last_verification_id: fedf1f47f2398b027344ee5667de168b
-last_verified_completion_id: 24060e73248ed13853f252db599e80ba
+last_verification_result: pass for T-373-make-local-loop-delivery-fixture-portable-on-macos at 2026-08-27T14:42:54Z id 8fb900e6e4ce2ccd9d234248a5c6a3b8
+last_verification_id: 8fb900e6e4ce2ccd9d234248a5c6a3b8
+last_verified_completion_id: 902b1cee3e4253db6ce98fd68b577e70
 relevant_artifacts: []
 continuation_notes:
     - This repository is temporarily dogfooding bootstrap workflow tooling until Taskrail v0.1.0 exists.
@@ -36,7 +36,7 @@ continuation_notes:
 
 ## Last Verification
 
-- pass for T-225-prove-local-autonomous-delivery-across-git at 2026-08-27T14:05:57Z id fedf1f47f2398b027344ee5667de168b
+- pass for T-373-make-local-loop-delivery-fixture-portable-on-macos at 2026-08-27T14:42:54Z id 8fb900e6e4ce2ccd9d234248a5c6a3b8
 
 ## Next Action
 
@@ -54,6 +54,6 @@ continuation_notes:
 
 - todo: 59
 - in_progress: 0
-- completed: 312
+- completed: 313
 - blocked: 0
 - cancelled: 0
