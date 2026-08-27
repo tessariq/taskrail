@@ -164,12 +164,13 @@ func (s *Service) runLoopIterationTo(ctx context.Context, snapshot LoopPreflight
 	if launchErr != nil {
 		return LoopIteration{TaskID: selected.TaskID, Outcome: "child_failed", Child: loopIterationChild(execution), Policy: selected, Prompt: loopIterationPrompt(prompt)}, 0, []MachineViolation{}, []MachineViolation{{Code: "launch_failed", Message: launchErr.Error()}}
 	}
+	planningDir, verifyDir := s.loopManagedInputPaths()
 	finalValidation := s.loopPostflightValidation()
 	finalTask, state, reports, paths := s.loopPostflightLifecycle(selected.TaskID)
 	iteration := deriveLoopLifecycle(loopLifecycleEvidence{TaskID: selected.TaskID, StatusBefore: task.Frontmatter.Status,
 		CompletionIDBefore: task.Frontmatter.CompletionID, VerificationIDBefore: task.Frontmatter.LastVerificationID,
 		VerificationPreviousIDBefore: task.Frontmatter.LastVerificationPreviousID, Task: finalTask, State: state,
-		Reports: reports, PreflightVerificationIDs: loopFrozenVerificationIDsSet(snapshot.Inputs(), s.paths.LogicalPlanningDir, filepath.ToSlash(filepath.Join(s.paths.LogicalPlanningDir, "artifacts", "verify"))),
+		Reports: reports, PreflightVerificationIDs: loopFrozenVerificationIDsSet(snapshot.Inputs(), planningDir, verifyDir),
 		VerificationPaths: loopVerificationPathEvidence{Final: paths}, Validation: finalValidation, Child: execution, Policy: selected, Prompt: prompt})
 	postInputs, inputErr := loopInputBytes(s.paths)
 	postGit, gitErr := loopGitSnapshot(s.paths.WorktreeRoot, s.paths.GitDir)
@@ -179,12 +180,12 @@ func (s *Service) runLoopIterationTo(ctx context.Context, snapshot LoopPreflight
 	if inputErr != nil || gitErr != nil || refErr != nil || configErr != nil {
 		mutation = append(mutation, MachineViolation{Code: "postflight_evidence_missing", Message: fmt.Sprintf("could not collect postflight repository evidence: inputs=%v git=%v root_refs=%v git_config=%v", inputErr, gitErr, refErr, configErr)})
 	} else {
-		mutation = checkLoopIntegrity(loopIntegrityEvidence{Preflight: snapshot, SelectedTask: selected.TaskID, PlanningDir: s.paths.LogicalPlanningDir,
-			VerifyDir: filepath.ToSlash(filepath.Join(s.paths.LogicalPlanningDir, "artifacts", "verify")), Inputs: postInputs, Git: postGit, RootRefs: rootRefs,
+		mutation = checkLoopIntegrity(loopIntegrityEvidence{Preflight: snapshot, SelectedTask: selected.TaskID, PlanningDir: planningDir,
+			VerifyDir: verifyDir, Inputs: postInputs, Git: postGit, RootRefs: rootRefs,
 			GitConfig: gitConfig,
 			Storage:   loopStoragePointer(s.paths), Review: loopReviewPointer(snapshot), Prompt: &prompt, ExpectedPrompt: &prompt, Executable: &identity, ExpectedExecutable: &identity})
 		_, deliveryViolations := validateLoopDelivery(loopDeliveryEvidence{Root: s.paths.WorktreeRoot, Preflight: snapshot, Postflight: postGit,
-			PostflightInputs: postInputs, PlanningDir: s.paths.LogicalPlanningDir, VerifyDir: filepath.ToSlash(filepath.Join(s.paths.LogicalPlanningDir, "artifacts", "verify")),
+			PostflightInputs: postInputs, PlanningDir: planningDir, VerifyDir: verifyDir,
 			SelectedTask: selected.TaskID, LifecycleCandidate: valueOrEmpty(iteration.LifecycleCandidate), IntegrityViolations: mutation, ChildFailed: iteration.Outcome == "child_failed"})
 		mutation = append(mutation, deliveryViolations...)
 	}
@@ -215,7 +216,7 @@ func (s *Service) loopPostflightLifecycle(taskID string) (*Task, *State, map[str
 	tasks, _ := s.loadTasks()
 	task, _ := taskByIDFromSlice(tasks, taskID)
 	inputs, _ := loopInputBytes(s.paths)
-	verifyDir := filepath.ToSlash(filepath.Join(s.paths.LogicalPlanningDir, "artifacts", "verify"))
+	_, verifyDir := s.loopManagedInputPaths()
 	reports := make(map[string]VerificationArtifact)
 	paths := make(map[string]string)
 	for inputPath, report := range loopVerificationReports(inputs, verifyDir) {
@@ -231,10 +232,17 @@ func (s *Service) loopPostflightDelivery(snapshot LoopPreflightSnapshot, iterati
 		return LoopGitDiagnostic{Ref: snapshot.Git().Ref, HeadBefore: snapshot.Git().Head}
 	}
 	inputs, _ := loopInputBytes(s.paths)
+	planningDir, verifyDir := s.loopManagedInputPaths()
 	delivery, _ := validateLoopDelivery(loopDeliveryEvidence{Root: s.paths.WorktreeRoot, Preflight: snapshot, Postflight: postflight,
-		PostflightInputs: inputs, PlanningDir: s.paths.LogicalPlanningDir, VerifyDir: filepath.ToSlash(filepath.Join(s.paths.LogicalPlanningDir, "artifacts", "verify")),
+		PostflightInputs: inputs, PlanningDir: planningDir, VerifyDir: verifyDir,
 		SelectedTask: iteration.TaskID, LifecycleCandidate: valueOrEmpty(iteration.LifecycleCandidate), IntegrityViolations: integrity, ChildFailed: iteration.Outcome == "child_failed"})
 	return loopGitDiagnostic(delivery)
+}
+
+func (s *Service) loopManagedInputPaths() (string, string) {
+	planning := filepath.ToSlash(relPath(s.paths.RepoRoot, s.paths.PlanningDir))
+	verify := filepath.ToSlash(relPath(s.paths.RepoRoot, s.paths.VerifyDir))
+	return planning, verify
 }
 
 func loopGitDiagnostic(delivery LoopDelivery) LoopGitDiagnostic {

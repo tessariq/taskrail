@@ -1,13 +1,18 @@
 ---
 id: T-225-prove-local-autonomous-delivery-across-git
 title: Prove local autonomous delivery across Git worktrees
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#cross-platform-autonomous-loop
 dependencies:
     - T-244-publish-streamed-loop-results-out-of-band
     - T-245-cover-the-complete-implicit-local-bootstrap-matrix
-updated_at: "2026-08-08T08:40:49Z"
+updated_at: "2026-08-27T14:05:57Z"
+completion_id: "24060e73248ed13853f252db599e80ba"
+last_verification_id: "fedf1f47f2398b027344ee5667de168b"
+last_verification_result: pass
+last_verified_at: "2026-08-27T14:05:57Z"
+last_verified_completion_id: "24060e73248ed13853f252db599e80ba"
 ---
 
 # T-225-prove-local-autonomous-delivery-across-git Prove local autonomous delivery across Git worktrees
@@ -64,3 +69,6 @@ evidence required of committed mode.
   result publication.
 
 ## Implementation Notes
+
+- 2026-08-27T14:05:44Z: Proved local autonomous delivery through a linked worktree with product-only Git commits.
+- 2026-08-27T14:05:57Z: verification pass id fedf1f47f2398b027344ee5667de168b previous none completion 24060e73248ed13853f252db599e80ba

@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestLoopExecuteReportsInitialNoWorkWithoutLaunchingChild(t *testing.T) {
@@ -128,5 +129,62 @@ func TestLoopExecuteRejectsGitConfigurationMutation(t *testing.T) {
 	}
 	if report.Outcome != "invalid_postflight" || !hasLoopIntegrityCode(report.MutationViolations, "git_config_changed") {
 		t.Fatalf("report = %+v, want invalid Git configuration postflight", report)
+	}
+}
+
+func TestLoopExecuteDeliversLocalLifecycleWithOneProductCommit(t *testing.T) {
+	clearLoopChildEnvironment(t)
+	t.Setenv("GO_WANT_LOOP_CHILD", "1")
+	source := realGitRepo(t)
+	repo := filepath.Join(t.TempDir(), "local-loop")
+	runGit(t, source, "worktree", "add", "-b", "local-loop", repo)
+	requireRecoveryDirectoryDurability(t, repo)
+	initialHead := strings.TrimSpace(gitOutput(t, repo, "rev-parse", "HEAD"))
+	initial := newTestService(t, repo, time.Now())
+	if _, err := initial.Init(InitInput{Local: true}); err != nil {
+		t.Fatalf("init local: %v", err)
+	}
+	svc, err := NewService(repo)
+	if err != nil {
+		t.Fatalf("discover local service: %v", err)
+	}
+	if _, err := svc.CreateTask(CreateTaskInput{Title: "Deliver local product", SpecRef: "specs/v0.1.0.md#summary"}); err != nil {
+		t.Fatalf("create local task: %v", err)
+	}
+	tasks, err := svc.loadTasks()
+	if err != nil || len(tasks) != 1 {
+		t.Fatalf("load local task: tasks=%+v err=%v", tasks, err)
+	}
+	taskID := tasks[0].Frontmatter.ID
+	if _, err := svc.MutateTaskLoopPolicy(LoopPolicyMutationInput{TaskID: taskID, Operation: LoopPolicyAllow, Reason: "exercise local delivery"}); err != nil {
+		t.Fatalf("allow local task: %v", err)
+	}
+
+	child := []string{os.Args[0], "-test.run=^TestLoopLaunchChildHelper$", "--", "delegate-local-lifecycle", filepath.Join(t.TempDir(), "record"), taskID}
+	report, err := svc.LoopExecute(context.Background(), LoopInvocation{MaxIterations: 1, Child: child})
+	if err != nil {
+		t.Fatalf("LoopExecute: %v", err)
+	}
+	if report.Outcome != "no_work" || report.LastIteration == nil || report.LastIteration.Outcome != "completed_pass" || report.Storage.Mode != string(StorageLocal) {
+		t.Fatalf("local loop report = %+v", report)
+	}
+	if !report.Git.Clean || !report.Git.Descendant || len(report.Git.Commits) != 1 || report.Git.HeadBefore != initialHead || report.Git.HeadAfter == initialHead {
+		t.Fatalf("local delivery evidence = %+v", report.Git)
+	}
+	if paths := strings.Fields(gitOutput(t, repo, "diff-tree", "--no-commit-id", "--name-only", "-r", report.Git.HeadAfter)); len(paths) != 1 || paths[0] != "product.txt" {
+		t.Fatalf("local delivery paths = %v, want product.txt only", paths)
+	}
+	if status := gitOutput(t, repo, "status", "--porcelain=v1", "--untracked-files=all", "--ignore-submodules=none"); status != "" {
+		t.Fatalf("local delivery left visible Git changes: %q", status)
+	}
+	if tracked := gitOutput(t, repo, "ls-files", ".taskrail"); tracked != "" {
+		t.Fatalf("local delivery tracked Taskrail metadata: %q", tracked)
+	}
+	if validation, err := svc.Validate(); err != nil || !validation.Valid {
+		t.Fatalf("validate delivered local lifecycle: %+v, %v", validation, err)
+	}
+	final, err := svc.loadTasks()
+	if err != nil || len(final) != 1 || final[0].Frontmatter.Status != "completed" || final[0].Frontmatter.LastVerificationResult != "pass" {
+		t.Fatalf("local task lifecycle = %+v, %v", final, err)
 	}
 }

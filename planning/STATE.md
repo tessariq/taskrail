@@ -1,6 +1,6 @@
 ---
 schema_version: 1
-updated_at: "2026-08-27T13:26:18Z"
+updated_at: "2026-08-27T14:05:57Z"
 active_spec_version: v0.5.0
 active_spec_path: specs/v0.5.0.md
 current_task: ""
@@ -8,9 +8,9 @@ current_task_title: ""
 status_summary: idle
 blockers: []
 next_action: Select the next eligible task
-last_verification_result: pass for T-249-allow-explicit-skill-evaluation-release-waivers at 2026-08-27T13:26:18Z id b875abebdbde21233a02ed7b70ea6097
-last_verification_id: b875abebdbde21233a02ed7b70ea6097
-last_verified_completion_id: 154ad1c97d9dada9e7afb67f5d223c42
+last_verification_result: pass for T-225-prove-local-autonomous-delivery-across-git at 2026-08-27T14:05:57Z id fedf1f47f2398b027344ee5667de168b
+last_verification_id: fedf1f47f2398b027344ee5667de168b
+last_verified_completion_id: 24060e73248ed13853f252db599e80ba
 relevant_artifacts: []
 continuation_notes:
     - This repository is temporarily dogfooding bootstrap workflow tooling until Taskrail v0.1.0 exists.
@@ -36,7 +36,7 @@ continuation_notes:
 
 ## Last Verification
 
-- pass for T-249-allow-explicit-skill-evaluation-release-waivers at 2026-08-27T13:26:18Z id b875abebdbde21233a02ed7b70ea6097
+- pass for T-225-prove-local-autonomous-delivery-across-git at 2026-08-27T14:05:57Z id fedf1f47f2398b027344ee5667de168b
 
 ## Next Action
 
@@ -52,8 +52,8 @@ continuation_notes:
 
 ## Task Counts
 
-- todo: 60
+- todo: 59
 - in_progress: 0
-- completed: 311
+- completed: 312
 - blocked: 0
 - cancelled: 0
