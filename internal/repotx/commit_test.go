@@ -521,6 +521,29 @@ func TestPublicationRefusesASymlinkedDirectoryEscape(t *testing.T) {
 	}
 }
 
+func TestContainmentAcceptsCanonicalPathUnderAliasedRepositoryRoot(t *testing.T) {
+	canonical, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatalf("resolve canonical repository: %v", err)
+	}
+	alias := filepath.Join(t.TempDir(), "repository-alias")
+	if err := os.Symlink(canonical, alias); err != nil {
+		t.Skipf("this platform does not allow creating symlinks: %v", err)
+	}
+	req := Request{Published: []Candidate{{Path: Path{
+		Kind: Managed, Reported: "planning/STATE.md",
+		Physical: filepath.Join(canonical, "planning", "STATE.md"),
+	}}}}
+
+	root, err := resolveRoot(alias)
+	if err != nil {
+		t.Fatalf("resolve aliased repository: %v", err)
+	}
+	if err := contained(root, req); err != nil {
+		t.Fatalf("contain canonical path beneath aliased repository: %v", err)
+	}
+}
+
 // A3: a path the transaction cannot observe at all is still a typed failure with
 // evidence, not a bare filesystem error that carries no snapshot.
 func TestUnobservablePathIsATypedFailure(t *testing.T) {

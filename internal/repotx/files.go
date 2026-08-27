@@ -125,6 +125,31 @@ func existingAncestor(reported, path string) (string, error) {
 	}
 }
 
+// resolvePath resolves every existing component and preserves any nonexistent
+// suffix, giving authorization and publication the same physical spelling.
+func resolvePath(reported, path string) (string, error) {
+	clean := filepath.Clean(path)
+	for current := clean; ; current = filepath.Dir(current) {
+		resolved, err := filepath.EvalSymlinks(current)
+		if err == nil {
+			suffix, relErr := filepath.Rel(current, clean)
+			if relErr != nil {
+				return "", failure(KindUnreadable, nil,
+					fmt.Errorf("resolve path %s: %w", reported, relErr))
+			}
+			return filepath.Join(resolved, suffix), nil
+		}
+		if !errors.Is(err, os.ErrNotExist) {
+			return "", failure(KindUnreadable, nil,
+				fmt.Errorf("resolve path %s: %w", reported, fsCause(err)))
+		}
+		if filepath.Dir(current) == current {
+			return "", failure(KindUnreadable, nil,
+				fmt.Errorf("resolve path %s: no ancestor of it exists", reported))
+		}
+	}
+}
+
 // withEvidence attaches the per-path observations collected so far to a failure
 // raised mid-scan, so a transaction that stopped on one unusable path still
 // reports what it saw of the others.

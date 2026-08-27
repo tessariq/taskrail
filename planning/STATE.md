@@ -1,6 +1,6 @@
 ---
 schema_version: 1
-updated_at: "2026-08-27T14:42:54Z"
+updated_at: "2026-08-27T15:09:36Z"
 active_spec_version: v0.5.0
 active_spec_path: specs/v0.5.0.md
 current_task: ""
@@ -8,9 +8,9 @@ current_task_title: ""
 status_summary: idle
 blockers: []
 next_action: Select the next eligible task
-last_verification_result: pass for T-373-make-local-loop-delivery-fixture-portable-on-macos at 2026-08-27T14:42:54Z id 8fb900e6e4ce2ccd9d234248a5c6a3b8
-last_verification_id: 8fb900e6e4ce2ccd9d234248a5c6a3b8
-last_verified_completion_id: 902b1cee3e4253db6ce98fd68b577e70
+last_verification_result: pass for T-374-canonicalize-local-transaction-containment-roots at 2026-08-27T15:09:36Z id cb006e106f3026d64eb3a6296b44a143
+last_verification_id: cb006e106f3026d64eb3a6296b44a143
+last_verified_completion_id: 7cb4c415f714933ed3ef2ee4b78cfa3b
 relevant_artifacts: []
 continuation_notes:
     - This repository is temporarily dogfooding bootstrap workflow tooling until Taskrail v0.1.0 exists.
@@ -36,7 +36,7 @@ continuation_notes:
 
 ## Last Verification
 
-- pass for T-373-make-local-loop-delivery-fixture-portable-on-macos at 2026-08-27T14:42:54Z id 8fb900e6e4ce2ccd9d234248a5c6a3b8
+- pass for T-374-canonicalize-local-transaction-containment-roots at 2026-08-27T15:09:36Z id cb006e106f3026d64eb3a6296b44a143
 
 ## Next Action
 
@@ -54,6 +54,6 @@ continuation_notes:
 
 - todo: 59
 - in_progress: 0
-- completed: 313
+- completed: 314
 - blocked: 0
 - cancelled: 0

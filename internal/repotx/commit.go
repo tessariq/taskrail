@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 
@@ -54,11 +55,11 @@ func Commit(ctx context.Context, own Ownership, req Request) (Result, error) {
 	if err := ctx.Err(); err != nil {
 		return Result{}, err
 	}
-	if err := authorize(own, req); err != nil {
-		return Result{}, err
-	}
 	root, err := resolveRoot(own.Owner().RepositoryRoot)
 	if err != nil {
+		return Result{}, err
+	}
+	if err := authorize(own, req, root); err != nil {
 		return Result{}, err
 	}
 
@@ -108,7 +109,7 @@ func checkExpectedOriginals(expected map[string]string, entries []*entry) error 
 // read. A delegate must additionally arrive narrowed: an unbounded delegated
 // capability would let a child pick its own task or its own write set, which is
 // the widening the protocol exists to prevent.
-func authorize(own Ownership, req Request) error {
+func authorize(own Ownership, req Request, root string) error {
 	capability := own.Capability()
 	if own.IsDelegate() {
 		if strings.TrimSpace(capability.SelectedTask) == "" {
@@ -129,21 +130,30 @@ func authorize(own Ownership, req Request) error {
 	if err := capability.AllowsWrites(req.publishedPaths()); err != nil {
 		return failure(KindRefused, nil, err)
 	}
-	return contained(own.Owner(), req)
+	return contained(root, req)
 }
 
 // contained keeps every semantic path inside the repository the lock covers. Git
 // metadata is exempt because its canonical location is legitimately outside a
 // linked worktree, and the lock file itself already lives there.
-func contained(owner repolock.Owner, req Request) error {
+func contained(root string, req Request) error {
 	for _, path := range req.paths() {
 		if path.Kind == Git {
 			continue
 		}
-		if !inside(owner.RepositoryRoot, path.Physical) {
+		resolved, err := resolvePath(path.Reported, path.Physical)
+		if err != nil {
+			// Defer unreadable paths that are lexically contained to snapshotting,
+			// which reports complete transaction evidence for the failure.
+			if inside(root, path.Physical) {
+				continue
+			}
+			return err
+		}
+		if !inside(root, resolved) {
 			return failure(KindOutsideRepository, nil, fmt.Errorf(
 				"%s path %q resolves to %s, outside repository %s",
-				path.Kind, path.Reported, path.Physical, owner.RepositoryRoot))
+				path.Kind, path.Reported, resolved, root))
 		}
 	}
 	return nil
@@ -241,6 +251,9 @@ func publish(ctx context.Context, root string, entries []*entry) error {
 				fmt.Errorf("%s changed between the recheck and its publication", e.path.Reported))
 		}
 		if e.candidate.Remove {
+			if err := proveContained(root, e.path, filepath.Dir(e.path.Physical)); err != nil {
+				return err
+			}
 			// An already-absent path needs no unlink; every other error is a
 			// publication failure the caller's rollback compensates by
 			// restoring the snapshot's original bytes.

@@ -149,3 +149,4 @@ T-358-prevent-read-only-git-probes-from-refreshing-index	hold-operator	Exact-hea
 T-359-make-containment-cleanup-timing-race-aware	run	-
 T-363-align-prompt-snapshot-race-tests-with-windows	hold-operator	Exact-head CI repair for T-255 native Windows durability coverage
 T-373-make-local-loop-delivery-fixture-portable-on-macos	hold-operator	Exact-head CI repair for T-225 macOS delegated executable fixture
+T-374-canonicalize-local-transaction-containment-roots	hold-operator	Exact-head macOS CI repair for canonical repository containment

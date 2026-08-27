@@ -6,12 +6,12 @@ priority: high
 spec_ref: specs/v0.5.0.md#cross-platform-autonomous-loop
 dependencies:
     - T-225-prove-local-autonomous-delivery-across-git
-updated_at: "2026-08-27T14:42:54Z"
+updated_at: "2026-08-27T14:55:57Z"
 completion_id: "902b1cee3e4253db6ce98fd68b577e70"
-last_verification_id: "8fb900e6e4ce2ccd9d234248a5c6a3b8"
-last_verification_result: pass
-last_verified_at: "2026-08-27T14:42:54Z"
-last_verified_completion_id: "902b1cee3e4253db6ce98fd68b577e70"
+last_verification_id: "04b0aa73e1e62e95af827edecaa086fd"
+last_verification_result: fail
+last_verified_at: "2026-08-27T14:55:57Z"
+last_verification_previous_id: "8fb900e6e4ce2ccd9d234248a5c6a3b8"
 ---
 
 # T-373-make-local-loop-delivery-fixture-portable-on-macos Make local loop delivery fixture portable on macOS
@@ -44,3 +44,4 @@ This task owns integrated delivery of the deferred outcome and its invariant aft
 
 - 2026-08-27T14:42:47Z: Pinned a real built Taskrail executable in the local delivery fixture and invoked delegated lifecycle commands directly; focused, loop-subset, full-suite, vet, formatting, validation, and independent portability review passed.
 - 2026-08-27T14:42:54Z: verification pass id 8fb900e6e4ce2ccd9d234248a5c6a3b8 previous none completion 902b1cee3e4253db6ce98fd68b577e70
+- 2026-08-27T14:55:57Z: verification fail id 04b0aa73e1e62e95af827edecaa086fd previous 8fb900e6e4ce2ccd9d234248a5c6a3b8 completion none
