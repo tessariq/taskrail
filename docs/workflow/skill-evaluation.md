@@ -60,6 +60,23 @@ rejects unsafe or empty raw evidence, and returns an unpersisted schema-v1 safe
 summary. `RenderSkillEvalReport` produces canonical JSON for human review; it
 never writes a durable review, alters skills or fixtures, or applies a proposal.
 
+## Waived Evidence
+
+A report normally has a null `waiver`. A named release maintainer may report
+`outcome: "waived"` only when credential-free deterministic checks pass and the
+only incomplete evidence is exactly covered by a non-null waiver. The waiver
+records its approver, reason, unavailable capability, affected skills and cases,
+residual risk, sorted compensating evidence, and follow-up issue or release
+target. It cannot cover failed checks or cases, and it does not establish the
+approver's release authority; repository governance does that outside the report.
+Its deterministic-check evidence must also name each sorted credential-free gate:
+`command`, `cross-platform`, `lifecycle`, `machine-api`, `parity`, and `security`.
+
+`fail` and `incomplete` remain release blockers. A release using `waived` must
+disclose the waiver, residual risk, and follow-up in its release notes. Raw
+provider output remains under ignored `planning/artifacts/skill-evals/` and is
+never included in the committed report or release notes.
+
 ## Research Basis
 
 The paired baseline, assertion, human-review, and proposal-only iteration method

@@ -21,6 +21,8 @@ Release is live — follow every step below.
 
 1. Land the `## v<version>` section in `CHANGELOG.md` (move entries out of `## Unreleased`).
    The workflow refuses to publish if this section is missing or its notes are empty.
+   If a v0.5 skill-evaluation report is `waived`, disclose the waiver, residual
+   risk, and follow-up in these release notes; do not include provider transcripts.
 2. Tag and push:
    ```sh
    git tag v<version>

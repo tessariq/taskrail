@@ -23,6 +23,10 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ### Added
 
+- Skill-evaluation reports now support an explicit, strict `waived` outcome for
+  missing behavioral evidence only when all deterministic checks pass. Waivers
+  bind the exact incomplete skills and cases, disclose residual risk and
+  compensating evidence, and require a release-note follow-up.
 - Added the provider-neutral `taskrail-sdd-handoff` packaged skill. It inspects an
   operator-selected, already reviewed OpenSpec or Spec Kit artifact set by content,
   stops on ambiguous evidence, and routes only advisory proposals into existing

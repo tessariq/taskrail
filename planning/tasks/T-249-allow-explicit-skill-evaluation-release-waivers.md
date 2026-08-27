@@ -1,12 +1,17 @@
 ---
 id: T-249-allow-explicit-skill-evaluation-release-waivers
 title: Allow explicit skill-evaluation release waivers
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#maintainer-skill-release-evaluations
 dependencies:
     - T-307-run-paired-maintainer-skill-evaluations
-updated_at: "2026-08-08T08:40:49Z"
+updated_at: "2026-08-27T13:26:18Z"
+completion_id: "154ad1c97d9dada9e7afb67f5d223c42"
+last_verification_id: "b875abebdbde21233a02ed7b70ea6097"
+last_verification_result: pass
+last_verified_at: "2026-08-27T13:26:18Z"
+last_verified_completion_id: "154ad1c97d9dada9e7afb67f5d223c42"
 ---
 
 # T-249-allow-explicit-skill-evaluation-release-waivers Allow explicit skill-evaluation release waivers
@@ -45,3 +50,6 @@ evidence without misrepresenting provider absence or an incomplete run as pass.
 - A3: release-summary and ignored-raw-output fixtures prove disclosure and privacy.
 
 ## Implementation Notes
+
+- 2026-08-27T13:26:01Z: Implemented strict waived skill-evaluation reports with exact evidence coverage and deterministic gate requirements.
+- 2026-08-27T13:26:18Z: verification pass id b875abebdbde21233a02ed7b70ea6097 previous none completion 154ad1c97d9dada9e7afb67f5d223c42

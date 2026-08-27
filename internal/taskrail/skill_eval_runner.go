@@ -1,6 +1,7 @@
 package taskrail
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -18,6 +19,10 @@ const (
 	skillEvalCandidateArm = "candidate"
 	skillEvalBaselineArm  = "baseline"
 )
+
+var skillEvalRequiredWaiverChecks = []string{
+	"command", "cross-platform", "lifecycle", "machine-api", "parity", "security",
+}
 
 var (
 	skillEvalDigestPattern     = regexp.MustCompile(`^[a-f0-9]{64}$`)
@@ -53,6 +58,19 @@ type SkillEvalIdentity struct {
 type SkillEvalDeterministicChecks struct {
 	Outcome  string   `json:"outcome"`
 	Evidence []string `json:"evidence"`
+}
+
+// SkillEvalWaiver records a maintainer's explicit acceptance of unavailable
+// behavioral evidence. It cannot turn failed deterministic evidence into a pass.
+type SkillEvalWaiver struct {
+	Approver              string   `json:"approver"`
+	Reason                string   `json:"reason"`
+	UnavailableCapability string   `json:"unavailable_capability"`
+	AffectedSkills        []string `json:"affected_skills"`
+	AffectedCases         []string `json:"affected_cases"`
+	ResidualRisk          string   `json:"residual_risk"`
+	CompensatingEvidence  []string `json:"compensating_evidence"`
+	Followup              string   `json:"followup"`
 }
 
 type SkillEvalCaseReview struct {
@@ -126,7 +144,7 @@ type SkillEvalReport struct {
 	Cases                     []SkillEvalCaseReport        `json:"cases"`
 	DeterministicChecks       SkillEvalDeterministicChecks `json:"deterministic_checks"`
 	HumanReview               string                       `json:"human_review"`
-	Waiver                    any                          `json:"waiver"`
+	Waiver                    *SkillEvalWaiver             `json:"waiver"`
 	manifest                  skillEvalReportManifest
 }
 
@@ -346,8 +364,33 @@ func RenderSkillEvalReport(report SkillEvalReport) ([]byte, error) {
 	return append(data, '\n'), nil
 }
 
+// DecodeSkillEvalReport accepts only the canonical schema-v1 representation
+// bound to a runner-created report. Comparing the rendered form preserves strict
+// field ordering and rejects fields that encoding/json would otherwise ignore.
+func DecodeSkillEvalReport(data []byte, expected SkillEvalReport) (SkillEvalReport, error) {
+	if err := checkDocumentFraming(data); err != nil {
+		return SkillEvalReport{}, fmt.Errorf("decode skill evaluation report: %w", err)
+	}
+	if len(expected.manifest.Cases) == 0 {
+		return SkillEvalReport{}, fmt.Errorf("decode skill evaluation report: expected runner manifest is empty")
+	}
+	var report SkillEvalReport
+	if err := json.Unmarshal(data, &report); err != nil {
+		return SkillEvalReport{}, fmt.Errorf("decode skill evaluation report: %w", err)
+	}
+	report.manifest = expected.manifest
+	canonical, err := RenderSkillEvalReport(report)
+	if err != nil {
+		return SkillEvalReport{}, err
+	}
+	if !bytes.Equal(data, canonical) {
+		return SkillEvalReport{}, fmt.Errorf("skill evaluation report is not canonical schema-v1 JSON")
+	}
+	return report, nil
+}
+
 func validateSkillEvalReport(report SkillEvalReport) error {
-	if report.SchemaVersion != 1 || report.Waiver != nil || !validSkillEvalReportOutcome(report.Outcome) {
+	if report.SchemaVersion != 1 || !validSkillEvalReportOutcome(report.Outcome) {
 		return fmt.Errorf("skill evaluation report has an unsupported schema or outcome")
 	}
 	if !skillEvalSessionID.MatchString(report.SessionID) || len(report.SessionID) > 64 {
@@ -381,9 +424,6 @@ func validateSkillEvalReport(report SkillEvalReport) error {
 		return fmt.Errorf("skill evaluation report has no cases")
 	}
 	seen := map[string]bool{}
-	if report.Outcome != skillEvalOutcome(report) {
-		return fmt.Errorf("skill evaluation report outcome does not match its evidence")
-	}
 	for index, item := range report.Cases {
 		expected, found := report.manifest.Cases[item.CaseID]
 		if item.CaseID == "" || len(item.CaseID) > 64 || !skillEvalCaseID.MatchString(item.CaseID) || !skillEvalCaseID.MatchString(item.Skill) || seen[item.CaseID] || !found || item.Skill != expected.Skill || item.StorageMode != expected.StorageMode || item.FixtureSHA256 != expected.FixtureSHA256 || item.BaselineRequired != expected.BaselineRequired || !validSkillEvalStorageMode(item.StorageMode) || !skillEvalDigestPattern.MatchString(item.FixtureSHA256) || !validSkillEvalComparison(item.Comparison) || validateSkillEvalSummary(item.HumanReview, "") != nil {
@@ -414,7 +454,91 @@ func validateSkillEvalReport(report SkillEvalReport) error {
 	if report.Adapter.Observed != observed || report.Model.Observed != observed {
 		return fmt.Errorf("skill evaluation report identity observation is inconsistent")
 	}
+	return validateSkillEvalReportOutcome(report)
+}
+
+func validateSkillEvalReportOutcome(report SkillEvalReport) error {
+	baseOutcome := skillEvalOutcome(report)
+	if report.Waiver == nil {
+		if report.Outcome != baseOutcome {
+			return fmt.Errorf("skill evaluation report outcome does not match its evidence")
+		}
+		return nil
+	}
+	if report.Outcome != "waived" || baseOutcome != "incomplete" {
+		return fmt.Errorf("skill evaluation report waiver is inconsistent with its outcome")
+	}
+	if !hasRequiredSkillEvalWaiverChecks(report.DeterministicChecks) {
+		return fmt.Errorf("skill evaluation waiver requires every credential-free deterministic gate")
+	}
+	return validateSkillEvalWaiver(*report.Waiver, report.Cases)
+}
+
+func validateSkillEvalWaiver(waiver SkillEvalWaiver, cases []SkillEvalCaseReport) error {
+	for _, value := range []string{waiver.Approver, waiver.Reason, waiver.UnavailableCapability, waiver.ResidualRisk, waiver.Followup} {
+		if err := validateSkillEvalSummary(value, ""); err != nil {
+			return fmt.Errorf("skill evaluation waiver has an unsafe required summary: %w", err)
+		}
+	}
+	for _, values := range [][]string{waiver.AffectedSkills, waiver.AffectedCases, waiver.CompensatingEvidence} {
+		if err := validateSkillEvalWaiverStrings(values); err != nil {
+			return err
+		}
+	}
+	for _, value := range waiver.CompensatingEvidence {
+		if err := validateSkillEvalSummary(value, ""); err != nil {
+			return fmt.Errorf("skill evaluation waiver compensating evidence is unsafe: %w", err)
+		}
+	}
+	missingCases, missingSkills := skillEvalIncompleteCoverage(cases)
+	if !slices.Equal(waiver.AffectedCases, missingCases) || !slices.Equal(waiver.AffectedSkills, missingSkills) {
+		return fmt.Errorf("skill evaluation waiver does not exactly cover incomplete cases and skills")
+	}
 	return nil
+}
+
+func hasRequiredSkillEvalWaiverChecks(checks SkillEvalDeterministicChecks) bool {
+	if checks.Outcome != "pass" {
+		return false
+	}
+	for _, required := range skillEvalRequiredWaiverChecks {
+		if !slices.Contains(checks.Evidence, required) {
+			return false
+		}
+	}
+	return true
+}
+
+func validateSkillEvalWaiverStrings(values []string) error {
+	if len(values) == 0 || !slices.IsSorted(values) || slices.Contains(values, "") {
+		return fmt.Errorf("skill evaluation waiver arrays must be non-empty, sorted, and non-empty")
+	}
+	for index, value := range values {
+		if !utf8.ValidString(value) || index > 0 && values[index-1] == value {
+			return fmt.Errorf("skill evaluation waiver arrays must be unique UTF-8 strings")
+		}
+	}
+	return nil
+}
+
+func skillEvalIncompleteCoverage(cases []SkillEvalCaseReport) ([]string, []string) {
+	missingSkills := map[string]struct{}{}
+	var missingCases []string
+	for _, item := range cases {
+		complete := item.Candidate != nil && item.Candidate.Outcome != "incomplete" && (!item.BaselineRequired || item.Baseline != nil && item.Baseline.Outcome != "incomplete")
+		if complete {
+			continue
+		}
+		missingCases = append(missingCases, item.CaseID)
+		missingSkills[item.Skill] = struct{}{}
+	}
+	var skills []string
+	for skill := range missingSkills {
+		skills = append(skills, skill)
+	}
+	slices.Sort(missingCases)
+	slices.Sort(skills)
+	return missingCases, skills
 }
 
 func validSkillEvalReportRun(run SkillEvalRun, executable string) bool {
@@ -486,5 +610,5 @@ func validSkillEvalComparison(value string) bool {
 	return value == "better" || value == "same" || value == "worse" || value == "inconclusive"
 }
 func validSkillEvalReportOutcome(value string) bool {
-	return value == "pass" || value == "fail" || value == "incomplete"
+	return value == "pass" || value == "fail" || value == "incomplete" || value == "waived"
 }

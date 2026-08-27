@@ -81,6 +81,121 @@ func TestSkillEvalRunnerMarksMissingCandidateIncomplete(t *testing.T) {
 	}
 }
 
+func TestRenderSkillEvalReportAcceptsExactIncompleteWaiver(t *testing.T) {
+	report := skillEvalWaivedReport(t)
+	encoded, err := RenderSkillEvalReport(report)
+	if err != nil {
+		t.Fatalf("RenderSkillEvalReport: %v", err)
+	}
+	decoded, err := DecodeSkillEvalReport(encoded, report)
+	if err != nil {
+		t.Fatalf("DecodeSkillEvalReport: %v", err)
+	}
+	if decoded.Outcome != "waived" || decoded.Waiver == nil || decoded.Waiver.Approver != "release-maintainer" {
+		t.Fatalf("decoded waiver = %#v", decoded)
+	}
+}
+
+func TestRenderSkillEvalReportRejectsInvalidWaiver(t *testing.T) {
+	for _, mutate := range []func(*SkillEvalReport){
+		func(report *SkillEvalReport) { report.Outcome = "incomplete" },
+		func(report *SkillEvalReport) { report.DeterministicChecks.Outcome = "fail" },
+		func(report *SkillEvalReport) { report.Waiver.Approver = "" },
+		func(report *SkillEvalReport) { report.Waiver.Reason = "" },
+		func(report *SkillEvalReport) { report.Waiver.UnavailableCapability = "" },
+		func(report *SkillEvalReport) { report.Waiver.ResidualRisk = "" },
+		func(report *SkillEvalReport) { report.Waiver.Followup = "" },
+		func(report *SkillEvalReport) { report.Waiver.Reason = "/tmp/provider-transcript" },
+		func(report *SkillEvalReport) { report.Waiver.AffectedCases = []string{"other"} },
+		func(report *SkillEvalReport) { report.Waiver.AffectedSkills = []string{"other-skill"} },
+		func(report *SkillEvalReport) { report.Waiver.CompensatingEvidence = []string{"z", "a"} },
+	} {
+		report := skillEvalWaivedReport(t)
+		mutate(&report)
+		if _, err := RenderSkillEvalReport(report); err == nil {
+			t.Fatal("RenderSkillEvalReport accepted an invalid waiver")
+		}
+	}
+}
+
+func TestRenderSkillEvalReportRequiresOutcomeWaiverUnion(t *testing.T) {
+	pass, err := (SkillEvalRunner{}).Run(context.Background(), skillEvalTestInput(t, skillEvalTestAdapter{}))
+	if err != nil {
+		t.Fatalf("Run pass report: %v", err)
+	}
+	pass.Waiver = skillEvalWaivedReport(t).Waiver
+	if _, err := RenderSkillEvalReport(pass); err == nil {
+		t.Fatal("RenderSkillEvalReport accepted a waiver on passing evidence")
+	}
+
+	incomplete, err := (SkillEvalRunner{}).Run(context.Background(), skillEvalTestInput(t, skillEvalMissingAdapter{}))
+	if err != nil {
+		t.Fatalf("Run incomplete report: %v", err)
+	}
+	incomplete.Outcome = "waived"
+	if _, err := RenderSkillEvalReport(incomplete); err == nil {
+		t.Fatal("RenderSkillEvalReport accepted waived with a null waiver")
+	}
+
+	failure, err := (SkillEvalRunner{}).Run(context.Background(), skillEvalTestInput(t, skillEvalResultAdapter{candidate: "fail", baseline: "pass"}))
+	if err != nil {
+		t.Fatalf("Run failed report: %v", err)
+	}
+	failure.Outcome = "waived"
+	failure.Waiver = skillEvalWaivedReport(t).Waiver
+	if _, err := RenderSkillEvalReport(failure); err == nil {
+		t.Fatal("RenderSkillEvalReport accepted a waiver on failed evidence")
+	}
+}
+
+func TestDecodeSkillEvalReportRejectsNoncanonicalWaiver(t *testing.T) {
+	report := skillEvalWaivedReport(t)
+	encoded, err := RenderSkillEvalReport(report)
+	if err != nil {
+		t.Fatalf("RenderSkillEvalReport: %v", err)
+	}
+	for _, mutate := range []func(string) string{
+		func(data string) string {
+			return strings.Replace(data, "\"schema_version\": 1,\n  \"session_id\"", "\"session_id\": \"session\",\n  \"schema_version\": 1", 1)
+		},
+		func(data string) string {
+			return strings.Replace(data, "\"followup\": \"v0.5.0 release checklist\"", "\"unknown\": \"field\",\n    \"followup\": \"v0.5.0 release checklist\"", 1)
+		},
+		func(data string) string {
+			return strings.Replace(data, "\"affected_skills\": [\n      \"autonomous-task\"\n    ]", "\"affected_skills\": [\n      \"other-skill\"\n    ]", 1)
+		},
+	} {
+		if _, err := DecodeSkillEvalReport([]byte(mutate(string(encoded))), report); err == nil {
+			t.Fatal("DecodeSkillEvalReport accepted a malformed waiver")
+		}
+	}
+}
+
+func TestDecodeSkillEvalReportBindsRunnerManifest(t *testing.T) {
+	report := skillEvalWaivedReport(t)
+	encoded, err := RenderSkillEvalReport(report)
+	if err != nil {
+		t.Fatalf("RenderSkillEvalReport: %v", err)
+	}
+	expected := report
+	expected.manifest.Cases["registered-but-missing"] = skillEvalExpectedCase{}
+	if _, err := DecodeSkillEvalReport(encoded, expected); err == nil {
+		t.Fatal("DecodeSkillEvalReport accepted a report missing a registered case")
+	}
+}
+
+func TestRenderSkillEvalReportRequiresEveryWaiverGate(t *testing.T) {
+	for _, omitted := range skillEvalRequiredWaiverChecks {
+		report := skillEvalWaivedReport(t)
+		report.DeterministicChecks.Evidence = slices.DeleteFunc(report.DeterministicChecks.Evidence, func(value string) bool {
+			return value == omitted
+		})
+		if _, err := RenderSkillEvalReport(report); err == nil {
+			t.Fatalf("RenderSkillEvalReport accepted a waiver missing %q", omitted)
+		}
+	}
+}
+
 func TestSkillEvalRunnerRefusesUnsafeRawTree(t *testing.T) {
 	in := skillEvalTestInput(t, skillEvalUnsafeRawAdapter{})
 	if _, err := (SkillEvalRunner{}).Run(context.Background(), in); err == nil {
@@ -215,6 +330,27 @@ func skillEvalTestInput(t *testing.T, adapter SkillEvalAdapter) SkillEvalRunInpu
 		HumanReview:               "Maintainer review.",
 		CaseReviews:               map[string]SkillEvalCaseReview{"existing": {Comparison: "same", HumanReview: "Equivalent behavior."}},
 	}
+}
+
+func skillEvalWaivedReport(t *testing.T) SkillEvalReport {
+	t.Helper()
+	report, err := (SkillEvalRunner{}).Run(context.Background(), skillEvalTestInput(t, skillEvalMissingAdapter{}))
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	report.Outcome = "waived"
+	report.DeterministicChecks.Evidence = slices.Clone(skillEvalRequiredWaiverChecks)
+	report.Waiver = &SkillEvalWaiver{
+		Approver:              "release-maintainer",
+		Reason:                "Provider credentials are unavailable for the final run.",
+		UnavailableCapability: "provider execution",
+		AffectedSkills:        []string{"autonomous-task"},
+		AffectedCases:         []string{"existing"},
+		ResidualRisk:          "Behavioral evidence is incomplete.",
+		CompensatingEvidence:  []string{"credential-free checks pass"},
+		Followup:              "v0.5.0 release checklist",
+	}
+	return report
 }
 
 type skillEvalTestAdapter struct{}
