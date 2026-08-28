@@ -23,12 +23,14 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ### Added
 
-- Added `taskrail local promote [--apply] [--json]`. Its default preview reports
+- Added `taskrail local promote [--apply] [--with-skills] [--json]`. Its default preview reports
   the complete local-to-committed semantic candidate without mutation; apply
   uses one recoverable transaction to publish exact specs, planning, prompts,
   and the committed marker while removing only matching local semantic bytes.
-  Local artifacts, runtime data, and installed packaged skills remain private,
-  and promotion intentionally does not create a Git commit.
+  Local artifacts and runtime data remain private. Explicit `--with-skills`
+  makes only validated unchanged managed skill copies visible by removing their
+  exact exclusions, including after semantic promotion; it never rewrites skill
+  bytes or creates a Git commit.
 - Skill-evaluation reports now support an explicit, strict `waived` outcome for
   missing behavioral evidence only when all deterministic checks pass. Waivers
   bind the exact incomplete skills and cases, disclose residual risk and

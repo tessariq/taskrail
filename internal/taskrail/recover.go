@@ -250,11 +250,16 @@ func (s *Service) recoveryValidator(transactionID string) func(string, []durable
 
 func (s *Service) validateLocalPromotionRecovery(transactionID string, snapshots []durabletx.Evidence) error {
 	var files []localPromotionFile
+	hasMarker, hasSkill, skillsVisible := false, false, false
 	for _, snapshot := range snapshots {
+		if snapshot.Kind == durabletx.Git && snapshot.CandidateSHA256 != "" && snapshot.CurrentSHA256 == snapshot.CandidateSHA256 {
+			skillsVisible = true
+		}
 		if snapshot.Kind != durabletx.Worktree {
 			continue
 		}
 		if snapshot.Reported == markerRelPath() {
+			hasMarker = true
 			if snapshot.FenceSHA256 == "" || snapshot.CandidateSHA256 == "" {
 				return fmt.Errorf("local promotion transaction does not fence %s", markerRelPath())
 			}
@@ -274,14 +279,30 @@ func (s *Service) validateLocalPromotionRecovery(transactionID string, snapshots
 			}
 			continue
 		}
+		if isSkillDestination(snapshot.Reported) {
+			hasSkill = true
+		}
 		if strings.HasPrefix(snapshot.Reported, localStorageRoot+"/") && snapshot.CandidateSHA256 == "" {
 			files = append(files, localPromotionFile{Source: snapshot.Reported})
 		}
 	}
+	if !hasMarker {
+		return s.validatePendingSkillPromotionRecovery(snapshots)
+	}
 	if len(files) == 0 {
 		return fmt.Errorf("local promotion transaction records no local semantic removals")
 	}
-	return s.validateLocalPromotionCandidate(localPromotionCandidate{files: files})
+	if err := s.validateLocalPromotionCandidate(localPromotionCandidate{files: files}); err != nil {
+		return err
+	}
+	if hasSkill && skillsVisible {
+		plan, err := s.planPromotionSkills()
+		if err != nil {
+			return err
+		}
+		return s.validatePromotionSkillVisibility(plan)
+	}
+	return nil
 }
 
 func isRecoveredImport(snapshots []durabletx.Evidence, statePath, tasksDir string) bool {

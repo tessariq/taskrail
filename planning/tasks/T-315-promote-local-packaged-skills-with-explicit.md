@@ -1,13 +1,18 @@
 ---
 id: T-315-promote-local-packaged-skills-with-explicit
 title: Promote local packaged skills with explicit consent
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#local-planning-mode
 dependencies:
     - T-224-promote-local-taskrail-state-into-committed
     - T-302-refresh-local-packaged-skills-safely
-updated_at: "2026-08-08T14:23:09Z"
+updated_at: "2026-08-28T10:29:15Z"
+completion_id: "3edb824007019db84daba9e54a6ef1f2"
+last_verification_id: "d7758ae75fa8f64a0e71a9f6d7d722e3"
+last_verification_result: pass
+last_verified_at: "2026-08-28T10:29:15Z"
+last_verified_completion_id: "3edb824007019db84daba9e54a6ef1f2"
 ---
 
 # T-315-promote-local-packaged-skills-with-explicit Promote local packaged skills with explicit consent
@@ -58,3 +63,6 @@ committed pending-skill state.
   both combined and deferred paths.
 
 ## Implementation Notes
+
+- 2026-08-28T10:29:02Z: Added consented combined and deferred packaged-skill visibility promotion with atomic exclusion removal and parity checks.
+- 2026-08-28T10:29:15Z: verification pass id d7758ae75fa8f64a0e71a9f6d7d722e3 previous none completion 3edb824007019db84daba9e54a6ef1f2

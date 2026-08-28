@@ -114,6 +114,190 @@ func TestLocalPromotePreservesInstalledSkillsAndTheirExclusions(t *testing.T) {
 	}
 }
 
+func TestLocalPromoteWithSkillsMakesInstalledSkillsVisible(t *testing.T) {
+	repo := t.TempDir()
+	initLocalGitRepo(t, repo)
+	requireRecoveryDirectoryDurability(t, repo)
+	setup := newTestService(t, repo, time.Now())
+	installed, err := setup.Init(InitInput{Local: true, WithSkills: true, SkillVersion: "v9.9.9"})
+	if err != nil {
+		t.Fatalf("init local with skills: %v", err)
+	}
+	local, err := NewService(repo)
+	if err != nil {
+		t.Fatalf("discover local storage: %v", err)
+	}
+	before := snapshotTree(t, repo)
+	skillBytes := make(map[string]string, len(installed.Skills))
+	for _, skill := range installed.Skills {
+		skillBytes[skill.Path] = readFileString(t, filepath.Join(repo, filepath.FromSlash(skill.Path)))
+	}
+
+	preview, err := local.LocalPromote(LocalPromoteInput{WithSkills: true})
+	if err != nil {
+		t.Fatalf("preview combined promotion: %v", err)
+	}
+	if preview.Applied || preview.SourceMode != string(StorageLocal) || preview.TargetMode != string(StorageCommitted) {
+		t.Fatalf("preview = %+v", preview)
+	}
+	for _, skill := range preview.Skills {
+		if skill.Action != "promote" {
+			t.Fatalf("preview skill = %+v, want promote", skill)
+		}
+	}
+	if got := snapshotTree(t, repo); !reflect.DeepEqual(got, before) {
+		t.Fatal("combined preview changed repository bytes")
+	}
+
+	applied, err := local.LocalPromote(LocalPromoteInput{Apply: true, WithSkills: true})
+	if err != nil {
+		t.Fatalf("apply combined promotion: %v", err)
+	}
+	if !applied.Applied || len(applied.RemovedExclusions) == 0 {
+		t.Fatalf("applied result = %+v", applied)
+	}
+	for _, skill := range installed.Skills {
+		if got := readFileString(t, filepath.Join(repo, filepath.FromSlash(skill.Path))); got != skillBytes[skill.Path] {
+			t.Fatalf("promoted skill %s bytes changed", skill.Path)
+		}
+	}
+	exclude := readFileString(t, filepath.Join(repo, ".git", "info", "exclude"))
+	for _, skill := range installed.Skills {
+		if strings.Contains(exclude, filepath.ToSlash(filepath.Dir(skill.Path))) {
+			t.Fatalf("skill exclusion remains for %s:\n%s", skill.Path, exclude)
+		}
+	}
+}
+
+func TestLocalPromoteWithSkillsCompletesPendingSkillState(t *testing.T) {
+	repo := t.TempDir()
+	initLocalGitRepo(t, repo)
+	requireRecoveryDirectoryDurability(t, repo)
+	setup := newTestService(t, repo, time.Now())
+	installed, err := setup.Init(InitInput{Local: true, WithSkills: true, SkillVersion: "v9.9.9"})
+	if err != nil {
+		t.Fatalf("init local with skills: %v", err)
+	}
+	local, err := NewService(repo)
+	if err != nil {
+		t.Fatalf("discover local storage: %v", err)
+	}
+	if _, err := local.LocalPromote(LocalPromoteInput{Apply: true}); err != nil {
+		t.Fatalf("semantic promotion: %v", err)
+	}
+	committed, err := NewService(repo)
+	if err != nil {
+		t.Fatalf("discover pending committed storage: %v", err)
+	}
+	before := snapshotTree(t, repo)
+	skillBytes := make(map[string]string, len(installed.Skills))
+	for _, skill := range installed.Skills {
+		skillBytes[skill.Path] = readFileString(t, filepath.Join(repo, filepath.FromSlash(skill.Path)))
+	}
+	if _, err := committed.LocalPromote(LocalPromoteInput{}); err == nil {
+		t.Fatal("pending state accepted promotion without explicit skill consent")
+	}
+	preview, err := committed.LocalPromote(LocalPromoteInput{WithSkills: true})
+	if err != nil {
+		t.Fatalf("preview pending skill promotion: %v", err)
+	}
+	if preview.Applied || preview.SourceMode != string(StorageCommitted) || preview.TargetMode != string(StorageCommitted) ||
+		len(preview.Writes) != 0 || len(preview.Preserved) != 0 || len(preview.Excluded) != 0 {
+		t.Fatalf("pending preview = %+v", preview)
+	}
+	for _, skill := range preview.Skills {
+		if skill.Action != "promote" {
+			t.Fatalf("pending preview skill = %+v, want promote", skill)
+		}
+	}
+	if got := snapshotTree(t, repo); !reflect.DeepEqual(got, before) {
+		t.Fatal("pending preview changed repository bytes")
+	}
+
+	applied, err := committed.LocalPromote(LocalPromoteInput{Apply: true, WithSkills: true})
+	if err != nil {
+		t.Fatalf("apply pending skill promotion: %v", err)
+	}
+	if !applied.Applied || len(applied.RemovedExclusions) == 0 {
+		t.Fatalf("pending applied result = %+v", applied)
+	}
+	for _, removed := range applied.RemovedExclusions {
+		if removed == markerRelPath() || removed == localStorageRoot+"/" {
+			t.Fatalf("pending promotion removed non-skill exclusion %q", removed)
+		}
+	}
+	for _, skill := range installed.Skills {
+		if got := readFileString(t, filepath.Join(repo, filepath.FromSlash(skill.Path))); got != skillBytes[skill.Path] {
+			t.Fatalf("pending skill %s bytes changed", skill.Path)
+		}
+	}
+	if _, err := committed.LocalPromote(LocalPromoteInput{WithSkills: true}); err == nil {
+		t.Fatal("completed pending skill promotion remained applicable")
+	}
+}
+
+func TestLocalPromoteWithSkillsReportsAbsentSkills(t *testing.T) {
+	repo := t.TempDir()
+	initLocalGitRepo(t, repo)
+	requireRecoveryDirectoryDurability(t, repo)
+	if _, err := newTestService(t, repo, time.Now()).Init(InitInput{Local: true}); err != nil {
+		t.Fatalf("init local: %v", err)
+	}
+	svc, err := NewService(repo)
+	if err != nil {
+		t.Fatalf("discover local storage: %v", err)
+	}
+	result, err := svc.LocalPromote(LocalPromoteInput{WithSkills: true})
+	if err != nil {
+		t.Fatalf("preview no-installed-skill promotion: %v", err)
+	}
+	for _, skill := range result.Skills {
+		if skill.Action != "absent" {
+			t.Fatalf("absent skill = %+v", skill)
+		}
+	}
+}
+
+func TestLocalPromoteWithSkillsRefusesOverlappingExternalExclusion(t *testing.T) {
+	repo := t.TempDir()
+	initLocalGitRepo(t, repo)
+	requireRecoveryDirectoryDurability(t, repo)
+	if _, err := newTestService(t, repo, time.Now()).Init(InitInput{Local: true, WithSkills: true, SkillVersion: "v9.9.9"}); err != nil {
+		t.Fatalf("init local with skills: %v", err)
+	}
+	writeFile(t, filepath.Join(repo, ".gitignore"), ".agents/\n")
+	svc, err := NewService(repo)
+	if err != nil {
+		t.Fatalf("discover local storage: %v", err)
+	}
+	before := snapshotTree(t, repo)
+	if _, err := svc.LocalPromote(LocalPromoteInput{WithSkills: true}); err == nil {
+		t.Fatal("overlapping external exclusion accepted skill promotion")
+	}
+	if got := snapshotTree(t, repo); !reflect.DeepEqual(got, before) {
+		t.Fatal("refused overlapping exclusion changed repository bytes")
+	}
+}
+
+func TestLocalPromoteWithSkillsRefusesModifiedStampedSkill(t *testing.T) {
+	repo := t.TempDir()
+	initLocalGitRepo(t, repo)
+	requireRecoveryDirectoryDurability(t, repo)
+	installed, err := newTestService(t, repo, time.Now()).Init(InitInput{Local: true, WithSkills: true, SkillVersion: "v9.9.9"})
+	if err != nil {
+		t.Fatalf("init local with skills: %v", err)
+	}
+	path := filepath.Join(repo, filepath.FromSlash(installed.Skills[0].Path))
+	writeFile(t, path, readFileString(t, path)+"\nmodified after installation\n")
+	svc, err := NewService(repo)
+	if err != nil {
+		t.Fatalf("discover local storage: %v", err)
+	}
+	if _, err := svc.LocalPromote(LocalPromoteInput{WithSkills: true}); err == nil {
+		t.Fatal("modified stamped skill accepted promotion")
+	}
+}
+
 func TestLocalPromoteSupportsCustomSemanticPaths(t *testing.T) {
 	repo := t.TempDir()
 	initLocalGitRepo(t, repo)

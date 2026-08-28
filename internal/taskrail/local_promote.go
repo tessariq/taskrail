@@ -64,21 +64,31 @@ type localPromotionCandidate struct {
 	files        []localPromotionFile
 	skills       localSkillPlan
 	result       LocalPromoteResult
+	semantic     bool
+	withSkills   bool
 }
 
-// LocalPromote makes one valid local semantic store visible to Git without
-// creating a commit. Sources are removed only by the same durable transaction
-// that publishes their exact committed bytes and switches the storage marker.
+// LocalPromote publishes local semantic state or, after semantic publication,
+// makes the sole valid pending managed skill installation visible without a
+// Git commit.
 func (s *Service) LocalPromote(in LocalPromoteInput) (LocalPromoteResult, error) {
-	if err := s.requireLocalStorage(); err != nil {
-		return LocalPromoteResult{}, err
+	switch s.paths.Storage.Mode {
+	case StorageLocal:
+		return s.localPromoteSemantic(in)
+	case StorageCommitted:
+		if !in.WithSkills {
+			return LocalPromoteResult{}, WithMachineErrorCode(MachineCodeUnsupported,
+				fmt.Errorf("local promote requires local storage unless --with-skills completes pending skill visibility"))
+		}
+		return s.localPromotePendingSkills(in)
+	default:
+		return LocalPromoteResult{}, WithMachineErrorCode(MachineCodeUnsupported, fmt.Errorf("local promote requires supported storage"))
 	}
-	if in.WithSkills {
-		return LocalPromoteResult{}, WithMachineErrorCode(MachineCodeUnsupported,
-			fmt.Errorf("local promote --with-skills is reserved for the explicit packaged-skill visibility flow"))
-	}
+}
+
+func (s *Service) localPromoteSemantic(in LocalPromoteInput) (LocalPromoteResult, error) {
 	if !in.Apply {
-		candidate, err := s.buildLocalPromotionCandidate("")
+		candidate, err := s.buildLocalPromotionCandidate("", in.WithSkills)
 		if err != nil {
 			return LocalPromoteResult{}, err
 		}
@@ -98,7 +108,7 @@ func (s *Service) LocalPromote(in LocalPromoteInput) (LocalPromoteResult, error)
 	}
 	defer func() { _ = lock.Release() }()
 
-	candidate, err := s.buildLocalPromotionCandidate(transactionID)
+	candidate, err := s.buildLocalPromotionCandidate(transactionID, in.WithSkills)
 	if err != nil {
 		return LocalPromoteResult{}, err
 	}
@@ -124,7 +134,55 @@ func (s *Service) LocalPromote(in LocalPromoteInput) (LocalPromoteResult, error)
 	return candidate.result, nil
 }
 
-func (s *Service) buildLocalPromotionCandidate(transactionID string) (localPromotionCandidate, error) {
+func (s *Service) localPromotePendingSkills(in LocalPromoteInput) (LocalPromoteResult, error) {
+	if !in.Apply {
+		candidate, err := s.buildPendingSkillPromotionCandidate("")
+		if err != nil {
+			return LocalPromoteResult{}, err
+		}
+		return candidate.result, nil
+	}
+
+	transactionID, err := newMigrationTransactionID()
+	if err != nil {
+		return LocalPromoteResult{}, err
+	}
+	lock, err := repolock.Acquire(context.Background(), repolock.Request{
+		Repository: s.paths.LockRepository(), Command: localPromoteCommand, TransactionID: transactionID,
+		Capability: repolock.Capability{Commands: []string{localPromoteCommand}},
+	})
+	if err != nil {
+		return LocalPromoteResult{}, migrationLockError(err)
+	}
+	defer func() { _ = lock.Release() }()
+
+	candidate, err := s.buildPendingSkillPromotionCandidate(transactionID)
+	if err != nil {
+		return LocalPromoteResult{}, err
+	}
+	members, consumed, err := s.localPromotionMembers(candidate)
+	if err != nil {
+		return LocalPromoteResult{}, err
+	}
+	validate := func(evidence []durabletx.Evidence) error {
+		if localPendingSkillPromotionPublished(evidence) {
+			return s.validatePendingSkillPromotionCandidate(candidate)
+		}
+		return s.validatePendingSkillPromotionSource(candidate)
+	}
+	if _, err := durabletx.Run(context.Background(), lock, s.paths.LockRepository(), durabletx.Request{
+		Command: localPromoteCommand, Members: members, Consumed: consumed, Validate: validate,
+	}); err != nil {
+		return LocalPromoteResult{}, s.mapMigrationFailure(transactionID, err)
+	}
+	if err := s.validatePendingSkillPromotionCandidate(candidate); err != nil {
+		return LocalPromoteResult{}, WithMachineFailure(MachineFailure{Code: MachineCodeRepositoryInvalid, Applied: true}, err)
+	}
+	candidate.result.Applied = true
+	return candidate.result, nil
+}
+
+func (s *Service) buildLocalPromotionCandidate(transactionID string, withSkills bool) (localPromotionCandidate, error) {
 	marker, err := os.ReadFile(s.paths.ConfigFile)
 	if err != nil {
 		return localPromotionCandidate{}, fmt.Errorf("read local layout marker: %w", err)
@@ -149,7 +207,7 @@ func (s *Service) buildLocalPromotionCandidate(transactionID string) (localPromo
 	if err != nil {
 		return localPromotionCandidate{}, err
 	}
-	if err := validatePromotionSkills(skills); err != nil {
+	if err := s.validatePromotionSkills(skills, withSkills); err != nil {
 		return localPromotionCandidate{}, WithMachineErrorCode(MachineCodeWriteConflict, err)
 	}
 	excludePath, err := localExcludePath(s.paths)
@@ -161,7 +219,7 @@ func (s *Service) buildLocalPromotionCandidate(transactionID string) (localPromo
 		return localPromotionCandidate{}, fmt.Errorf("read Git exclusion: %w", err)
 	}
 	excluded := s.localPromotionExcluded()
-	excludeFinal, removed := localPromotionExcludeCandidate(exclude, excluded)
+	excludeFinal, removed := localPromotionExcludeCandidate(exclude, excluded, localPromotionSkillExclusions(skills, withSkills), true)
 	files, err := s.localPromotionFiles()
 	if err != nil {
 		return localPromotionCandidate{}, err
@@ -196,8 +254,44 @@ func (s *Service) buildLocalPromotionCandidate(transactionID string) (localPromo
 			return localPromotionCandidate{}, fmt.Errorf("validate local promotion fence: %w", decodeErr)
 		}
 	}
-	result := localPromotionResult(files, skills, excluded, removed)
-	return localPromotionCandidate{marker: finalMarker, fence: fence, exclude: exclude, excludeFinal: excludeFinal, files: files, skills: skills, result: result}, nil
+	result := localPromotionResult(files, skills, excluded, removed, withSkills)
+	return localPromotionCandidate{marker: finalMarker, fence: fence, exclude: exclude, excludeFinal: excludeFinal, files: files, skills: skills, result: result, semantic: true, withSkills: withSkills}, nil
+}
+
+func (s *Service) buildPendingSkillPromotionCandidate(_ string) (localPromotionCandidate, error) {
+	if validation, err := s.Validate(); err != nil || !validation.Valid {
+		return localPromotionCandidate{}, WithMachineErrorCode(MachineCodeValidationFailed, fmt.Errorf("committed pending skill state is not valid: %v %v", validation.Violations, err))
+	}
+	if shared, err := localSkillSharedGitScope(s.paths); err != nil {
+		return localPromotionCandidate{}, err
+	} else if shared {
+		return localPromotionCandidate{}, WithMachineErrorCode(MachineCodeWriteConflict,
+			fmt.Errorf("local promotion refuses a shared Git exclusion scope with linked worktrees"))
+	}
+	skills, err := s.planPromotionSkills()
+	if err != nil {
+		return localPromotionCandidate{}, err
+	}
+	if err := s.validatePendingSkillPromotion(skills); err != nil {
+		return localPromotionCandidate{}, WithMachineErrorCode(MachineCodeUnsupported, err)
+	}
+	excludePath, err := localExcludePath(s.paths)
+	if err != nil {
+		return localPromotionCandidate{}, err
+	}
+	exclude, err := os.ReadFile(excludePath)
+	if err != nil {
+		return localPromotionCandidate{}, fmt.Errorf("read Git exclusion: %w", err)
+	}
+	removed := localPromotionSkillExclusions(skills, true)
+	excludeFinal, removed := localPromotionExcludeCandidate(exclude, nil, removed, false)
+	result := LocalPromoteResult{
+		SourceMode: string(StorageCommitted), TargetMode: string(StorageCommitted),
+		Writes: []LocalPromoteEntry{}, Preserved: []LocalPromoteEntry{}, Excluded: []LocalPromoteEntry{},
+		RemovedExclusions: removed, Skills: localPromotionSkills(skills, true),
+		Validation: ValidationResult{Valid: true, Violations: []string{}},
+	}
+	return localPromotionCandidate{exclude: exclude, excludeFinal: excludeFinal, skills: skills, result: result, withSkills: true}, nil
 }
 
 func (s *Service) localPromotionFiles() ([]localPromotionFile, error) {
@@ -368,7 +462,7 @@ func (s *Service) validatePromotionMarkerDestination() error {
 	return nil
 }
 
-func validatePromotionSkills(plan localSkillPlan) error {
+func (s *Service) validatePromotionSkills(plan localSkillPlan, withSkills bool) error {
 	if len(plan.Unexpected) != 0 {
 		return fmt.Errorf("local skill destination %s contains adopter-owned content", plan.Unexpected[0].Path)
 	}
@@ -382,11 +476,87 @@ func validatePromotionSkills(plan localSkillPlan) error {
 			return fmt.Errorf("local skill exclusion %s is ambiguous", exclusion.Path)
 		}
 	}
+	if !withSkills {
+		return nil
+	}
+	present := 0
+	for _, destination := range plan.Destinations {
+		if !destination.Present {
+			continue
+		}
+		present++
+		if destination.Action != localSkillPreserve && destination.Action != localSkillRefresh {
+			return fmt.Errorf("local skill destination %s cannot be promoted", destination.Path)
+		}
+		if destination.Action == localSkillRefresh {
+			data, err := os.ReadFile(filepath.Join(s.paths.RepoRoot, filepath.FromSlash(destination.Path)))
+			if err != nil {
+				return fmt.Errorf("read local skill destination %s: %w", destination.Path, err)
+			}
+			version, err := skillVersionOf(data)
+			if err != nil {
+				return fmt.Errorf("read local skill version %s: %w", destination.Path, err)
+			}
+			packaged, err := shippableSkillsFS.ReadFile(path.Join(shippableSkillsRoot, destination.PackagePath))
+			if err != nil {
+				return fmt.Errorf("read embedded skill %s: %w", destination.PackagePath, err)
+			}
+			expected, err := stampSkillVersion(packaged, version)
+			if err != nil || !reflect.DeepEqual(data, expected) {
+				return fmt.Errorf("local skill destination %s is not an unchanged packaged skill", destination.Path)
+			}
+		}
+	}
+	if present == 0 {
+		return nil
+	}
+	if present != len(plan.Destinations) {
+		return fmt.Errorf("local skill installation is incomplete")
+	}
+	for _, exclusion := range plan.Exclusions {
+		if exclusion.Ownership != localSkillExclusionManaged || !exclusion.Exact || !exclusion.Effective || exclusion.Shadowed {
+			return fmt.Errorf("local skill exclusion %s is not an effective managed exclusion", exclusion.Path)
+		}
+	}
 	return nil
 }
 
-func localPromotionExcludeCandidate(original []byte, excluded []LocalPromoteEntry) ([]byte, []string) {
+func (s *Service) validatePendingSkillPromotion(plan localSkillPlan) error {
+	if err := s.validatePromotionSkills(plan, true); err != nil {
+		return err
+	}
+	for _, destination := range plan.Destinations {
+		if !destination.Present {
+			return fmt.Errorf("committed storage has no pending managed skill exclusion")
+		}
+	}
+	return nil
+}
+
+func localPromotionSkillExclusions(plan localSkillPlan, withSkills bool) []string {
+	if !withSkills {
+		return nil
+	}
+	removed := make([]string, 0, len(plan.Exclusions))
+	for _, exclusion := range plan.Exclusions {
+		if exclusion.Ownership == localSkillExclusionManaged && exclusion.Exact {
+			removed = append(removed, exclusion.Path)
+		}
+	}
+	slices.Sort(removed)
+	return removed
+}
+
+func localPromotionExcludeCandidate(original []byte, excluded []LocalPromoteEntry, skillExclusions []string, removeLocal bool) ([]byte, []string) {
 	removed := []string{}
+	remove := map[string]bool{}
+	if removeLocal {
+		remove[markerRelPath()] = true
+		remove[localStorageRoot+"/"] = true
+	}
+	for _, exclusion := range skillExclusions {
+		remove[exclusion] = true
+	}
 	var out []string
 	inManagedBlock := false
 	for _, line := range strings.Split(string(original), "\n") {
@@ -394,7 +564,7 @@ func localPromotionExcludeCandidate(original []byte, excluded []LocalPromoteEntr
 		if trimmed == localExcludeBegin {
 			inManagedBlock = true
 		}
-		if inManagedBlock && (trimmed == markerRelPath() || trimmed == localStorageRoot+"/") {
+		if inManagedBlock && remove[trimmed] {
 			removed = append(removed, trimmed)
 			continue
 		}
@@ -416,20 +586,13 @@ func (s *Service) localPromotionExcluded() []LocalPromoteEntry {
 	}
 }
 
-func localPromotionResult(files []localPromotionFile, skills localSkillPlan, excluded []LocalPromoteEntry, removed []string) LocalPromoteResult {
+func localPromotionResult(files []localPromotionFile, skills localSkillPlan, excluded []LocalPromoteEntry, removed []string, withSkills bool) LocalPromoteResult {
 	writes := make([]LocalPromoteEntry, 0, len(files)+1)
 	writes = append(writes, LocalPromoteEntry{Path: markerRelPath(), Kind: writeKindConfig})
 	for _, file := range files {
 		writes = append(writes, LocalPromoteEntry{Path: file.Destination, Kind: file.Kind})
 	}
-	skillsResult := make([]LocalPromoteSkill, 0, len(skills.Destinations))
-	for _, destination := range skills.Destinations {
-		action := "absent"
-		if destination.Present {
-			action = "preserve_local"
-		}
-		skillsResult = append(skillsResult, LocalPromoteSkill{Path: destination.Path, Action: action})
-	}
+	skillsResult := localPromotionSkills(skills, withSkills)
 	slices.SortFunc(writes, func(a, b LocalPromoteEntry) int { return strings.Compare(a.Path, b.Path) })
 	slices.SortFunc(excluded, func(a, b LocalPromoteEntry) int { return strings.Compare(a.Path, b.Path) })
 	slices.SortFunc(skillsResult, func(a, b LocalPromoteSkill) int { return strings.Compare(a.Path, b.Path) })
@@ -439,14 +602,36 @@ func localPromotionResult(files []localPromotionFile, skills localSkillPlan, exc
 		Validation: ValidationResult{Valid: true, Violations: []string{}}}
 }
 
+func localPromotionSkills(skills localSkillPlan, withSkills bool) []LocalPromoteSkill {
+	result := make([]LocalPromoteSkill, 0, len(skills.Destinations))
+	for _, destination := range skills.Destinations {
+		action := "absent"
+		if destination.Present {
+			action = "preserve_local"
+			if withSkills {
+				action = "promote"
+			}
+		}
+		result = append(result, LocalPromoteSkill{Path: destination.Path, Action: action})
+	}
+	slices.SortFunc(result, func(a, b LocalPromoteSkill) int { return strings.Compare(a.Path, b.Path) })
+	return result
+}
+
 func (s *Service) localPromotionMembers(candidate localPromotionCandidate) ([]durabletx.Member, []durabletx.Path, error) {
 	excludePath, err := localExcludePath(s.paths)
 	if err != nil {
 		return nil, nil, err
 	}
-	members := []durabletx.Member{
-		{Kind: durabletx.Git, Reported: filepath.ToSlash(excludePath), Path: gitRelativePath(s.paths.GitCommonDir, excludePath), Content: candidate.excludeFinal, Fence: candidate.exclude},
-		{Kind: durabletx.Worktree, Reported: markerRelPath(), Path: markerRelPath(), Content: candidate.marker, Fence: candidate.fence},
+	members := []durabletx.Member{{
+		Kind: durabletx.Git, Reported: filepath.ToSlash(excludePath),
+		Path: gitRelativePath(s.paths.GitCommonDir, excludePath), Content: candidate.excludeFinal,
+	}}
+	if !candidate.withSkills {
+		members[0].Fence = candidate.exclude
+	}
+	if candidate.semantic {
+		members = append(members, durabletx.Member{Kind: durabletx.Worktree, Reported: markerRelPath(), Path: markerRelPath(), Content: candidate.marker, Fence: candidate.fence})
 	}
 	for _, file := range candidate.files {
 		members = append(members,
@@ -477,7 +662,7 @@ func (s *Service) validateLocalPromotionSource(candidate localPromotionCandidate
 	if err != nil {
 		return err
 	}
-	if err := validatePromotionSkills(plan); err != nil {
+	if err := s.validatePromotionSkills(plan, candidate.withSkills); err != nil {
 		return err
 	}
 	if !reflect.DeepEqual(plan, candidate.skills) {
@@ -492,9 +677,121 @@ func (s *Service) validateLocalPromotionCandidate(candidate localPromotionCandid
 	if err != nil || !validation.Valid {
 		return fmt.Errorf("promoted candidate is not valid: %v %v", validation.Violations, err)
 	}
+	if candidate.withSkills {
+		if err := s.validatePromotionSkillVisibility(candidate.skills); err != nil {
+			return err
+		}
+	}
 	for _, file := range candidate.files {
 		if _, err := os.Lstat(filepath.Join(s.paths.RepoRoot, filepath.FromSlash(file.Source))); !os.IsNotExist(err) {
 			return fmt.Errorf("local semantic source %s remains after promotion", file.Source)
+		}
+	}
+	return nil
+}
+
+func (s *Service) validatePendingSkillPromotionSource(candidate localPromotionCandidate) error {
+	if validation, err := s.Validate(); err != nil || !validation.Valid {
+		return fmt.Errorf("pending skill source changed or became invalid: %v %v", validation.Violations, err)
+	}
+	plan, err := s.planPromotionSkills()
+	if err != nil {
+		return err
+	}
+	if err := s.validatePendingSkillPromotion(plan); err != nil {
+		return err
+	}
+	if !reflect.DeepEqual(plan, candidate.skills) {
+		return fmt.Errorf("pending skill state changed while promotion candidate was built")
+	}
+	return nil
+}
+
+func (s *Service) validatePendingSkillPromotionCandidate(candidate localPromotionCandidate) error {
+	if validation, err := s.Validate(); err != nil || !validation.Valid {
+		return fmt.Errorf("promoted pending skill state is not valid: %v %v", validation.Violations, err)
+	}
+	return s.validatePromotionSkillVisibility(candidate.skills)
+}
+
+func (s *Service) validatePendingSkillPromotionRecovery(snapshots []durabletx.Evidence) error {
+	if s.paths.Storage.Mode != StorageCommitted {
+		return fmt.Errorf("pending skill recovery requires committed storage")
+	}
+	if validation, err := s.Validate(); err != nil || !validation.Valid {
+		return fmt.Errorf("recovered pending skill state is not valid: %v %v", validation.Violations, err)
+	}
+	byPath := make(map[string]durabletx.Evidence, len(snapshots))
+	for _, snapshot := range snapshots {
+		byPath[string(snapshot.Kind)+"\x00"+snapshot.Reported] = snapshot
+	}
+	plan, err := s.planPromotionSkills()
+	if err != nil {
+		return err
+	}
+	excludePath, err := localExcludePath(s.paths)
+	if err != nil {
+		return err
+	}
+	exclude, found := byPath[string(durabletx.Git)+"\x00"+filepath.ToSlash(excludePath)]
+	if !found || exclude.CandidateSHA256 == "" {
+		return fmt.Errorf("pending skill recovery does not publish the Git exclusion store")
+	}
+	if exclude.CurrentSHA256 != exclude.CandidateSHA256 {
+		return s.validatePendingSkillPromotion(plan)
+	}
+	for _, destination := range plan.Destinations {
+		if !destination.Present {
+			return fmt.Errorf("recovered pending skill installation is incomplete")
+		}
+		snapshot, found := byPath[string(durabletx.Worktree)+"\x00"+destination.Path]
+		if !found || snapshot.CandidateSHA256 != "" || snapshot.CurrentSHA256 != destination.Digest {
+			return fmt.Errorf("pending skill recovery does not preserve %s", destination.Path)
+		}
+	}
+	return s.validatePromotionSkillVisibility(plan)
+}
+
+func (s *Service) validatePromotionSkillVisibility(plan localSkillPlan) error {
+	if err := s.validatePromotionSkillBytes(plan); err != nil {
+		return err
+	}
+	for _, destination := range plan.Destinations {
+		if !destination.Present {
+			continue
+		}
+		ignored, err := gitIgnoredExact(s.paths.WorktreeRoot, destination.Path)
+		if err != nil || ignored {
+			return fmt.Errorf("local skill destination %s remains excluded after promotion", destination.Path)
+		}
+	}
+	return nil
+}
+
+func (s *Service) validatePromotionSkillBytes(plan localSkillPlan) error {
+	for _, destination := range plan.Destinations {
+		entryType, alias, err := localSkillEntryType(s.paths.RepoRoot, destination.Path)
+		if err != nil {
+			return err
+		}
+		if !destination.Present {
+			if entryType != "absent" || alias {
+				return fmt.Errorf("local skill destination %s appeared during promotion", destination.Path)
+			}
+			continue
+		}
+		if entryType != "regular" || alias {
+			return fmt.Errorf("local skill destination %s changed during promotion", destination.Path)
+		}
+		data, err := os.ReadFile(filepath.Join(s.paths.RepoRoot, filepath.FromSlash(destination.Path)))
+		if err != nil || digestBytes(data) != destination.Digest {
+			return fmt.Errorf("local skill destination %s changed during promotion", destination.Path)
+		}
+		for _, indexed := range []func(string, string) (bool, error){gitTracks, gitStaged} {
+			present, err := indexed(s.paths.WorktreeRoot, destination.Path)
+			if err != nil || present {
+				return fmt.Errorf("local skill destination %s changed Git visibility during promotion", destination.Path)
+			}
 		}
 	}
 	return nil
@@ -515,6 +812,15 @@ func localPromotionPublished(evidence []durabletx.Evidence) bool {
 			return true
 		}
 		if item.CandidateSHA256 == "" && strings.HasPrefix(item.Reported, localStorageRoot+"/") && item.CurrentSHA256 == "" {
+			return true
+		}
+	}
+	return false
+}
+
+func localPendingSkillPromotionPublished(evidence []durabletx.Evidence) bool {
+	for _, item := range evidence {
+		if item.Kind == durabletx.Git && item.CandidateSHA256 != "" && item.CurrentSHA256 == item.CandidateSHA256 {
 			return true
 		}
 	}

@@ -57,6 +57,7 @@ type localSkillExclusion struct {
 	Ownership      string
 	Exact          bool
 	Effective      bool
+	Shadowed       bool
 	SharedGitScope bool
 }
 
@@ -75,6 +76,13 @@ func (s *Service) planLocalSkills() (localSkillPlan, error) {
 	if err := s.requireLocalStorage(); err != nil {
 		return localSkillPlan{}, err
 	}
+	return s.planPromotionSkills()
+}
+
+// planPromotionSkills classifies installed skill ownership in either storage
+// mode. Deferred promotion needs the same snapshot after semantic state is
+// already committed.
+func (s *Service) planPromotionSkills() (localSkillPlan, error) {
 	excludePath, err := localExcludePath(s.paths)
 	if err != nil {
 		return localSkillPlan{}, err
@@ -153,8 +161,12 @@ func (s *Service) planLocalSkills() (localSkillPlan, error) {
 			if err != nil {
 				return localSkillPlan{}, err
 			}
+			shadowed, err := localSkillExclusionShadowed(s.paths.WorktreeRoot, excludePath, subtree)
+			if err != nil {
+				return localSkillPlan{}, err
+			}
 			exclusion := localSkillExclusion{
-				Path: subtree, Exact: managed[subtree], Effective: effective, SharedGitScope: sharedGitScope,
+				Path: subtree, Exact: managed[subtree], Effective: effective, Shadowed: shadowed || localSkillExcludedBy(external, subtree), SharedGitScope: sharedGitScope,
 			}
 			switch {
 			case exclusion.Exact:
@@ -173,6 +185,23 @@ func (s *Service) planLocalSkills() (localSkillPlan, error) {
 	slices.SortFunc(plan.Exclusions, func(a, b localSkillExclusion) int { return strings.Compare(a.Path, b.Path) })
 	slices.SortFunc(plan.Unexpected, func(a, b localSkillUnexpected) int { return strings.Compare(a.Path, b.Path) })
 	return plan, nil
+}
+
+func localSkillExclusionShadowed(root, excludePath, subtree string) (bool, error) {
+	output, err := gitCommand(root, "check-ignore", "-v", "--no-index", "--", subtree)
+	if gitExitCode(err) == 1 {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("inspect Git exclusion source for %s: %w", subtree, err)
+	}
+	match, _, found := strings.Cut(output, "\t")
+	if !found || match == "" {
+		return false, fmt.Errorf("inspect Git exclusion source for %s: malformed output", subtree)
+	}
+	managedSource := filepath.ToSlash(excludePath)
+	relativeSource := filepath.ToSlash(relPath(root, excludePath))
+	return !strings.HasPrefix(match, managedSource+":") && !strings.HasPrefix(match, relativeSource+":"), nil
 }
 
 func (s *Service) planLocalSkillDestination(destination, packagePath string, packaged []byte, sharedGitScope, unexpected bool) (localSkillDestination, error) {

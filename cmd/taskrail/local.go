@@ -32,7 +32,7 @@ func newLocalPromoteCmd() *cobra.Command {
 	}
 	addMachineJSONFlag(cmd)
 	cmd.Flags().BoolVar(&apply, "apply", false, "publish the previewed semantic state without creating a Git commit")
-	cmd.Flags().BoolVar(&withSkills, "with-skills", false, "request packaged-skill visibility changes (reserved for the explicit skill-promotion flow)")
+	cmd.Flags().BoolVar(&withSkills, "with-skills", false, "make validated managed packaged skills visible without rewriting them")
 	return cmd
 }
 
@@ -104,6 +104,9 @@ func renderLocalPromoteText(r taskrail.LocalPromoteResult) string {
 	}
 	for _, entry := range r.Excluded {
 		fmt.Fprintf(&b, "exclude: %s (%s)\n", entry.Path, entry.Kind)
+	}
+	for _, exclusion := range r.RemovedExclusions {
+		fmt.Fprintf(&b, "remove exclusion: %s\n", exclusion)
 	}
 	for _, skill := range r.Skills {
 		fmt.Fprintf(&b, "skill: %s (%s)\n", skill.Path, skill.Action)
