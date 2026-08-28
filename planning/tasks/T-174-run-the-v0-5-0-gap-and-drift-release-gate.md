@@ -6,6 +6,7 @@ priority: high
 spec_ref: specs/v0.5.0.md#goals
 dependencies:
     - T-248-run-cross-platform-workflow-contract-tests-in-ci
+    - T-375-prevent-git-fixture-cleanup-races
 updated_at: "2026-08-08T08:40:49Z"
 ---
 

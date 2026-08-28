@@ -413,14 +413,43 @@ func layout2Marker(mode, specs, planning string) string {
 	return "layout_version: 2\nspecs_dir: " + specs + "\nplanning_dir: " + planning + "\nstorage_mode: " + mode + "\nimplementation_review_max_rounds: 2\n"
 }
 
+func TestRealGitRepoDisablesBackgroundMaintenance(t *testing.T) {
+	realGitRepoBeforeFirstCommit(t, func(repo string) {
+		if err := exec.Command("git", "-C", repo, "rev-parse", "--verify", "HEAD").Run(); err == nil {
+			t.Fatal("fixture already has a commit before maintenance configuration is observed")
+		}
+		for key, want := range map[string]string{
+			"gc.auto":          "0",
+			"maintenance.auto": "false",
+		} {
+			output, err := exec.Command("git", "-C", repo, "config", "--get", key).Output()
+			if err != nil {
+				t.Fatalf("read %s: %v", key, err)
+			}
+			if got := strings.TrimSpace(string(output)); got != want {
+				t.Fatalf("%s = %q, want %q", key, got, want)
+			}
+		}
+	})
+}
+
 func realGitRepo(t *testing.T) string {
+	return realGitRepoBeforeFirstCommit(t, nil)
+}
+
+func realGitRepoBeforeFirstCommit(t *testing.T, inspect func(string)) string {
 	t.Helper()
 	repo := t.TempDir()
 	runGit(t, repo, "init")
 	runGit(t, repo, "config", "user.email", "test@example.com")
 	runGit(t, repo, "config", "user.name", "Test")
+	runGit(t, repo, "config", "gc.auto", "0")
+	runGit(t, repo, "config", "maintenance.auto", "false")
 	writeFile(t, filepath.Join(repo, "README.md"), "fixture\n")
 	runGit(t, repo, "add", "README.md")
+	if inspect != nil {
+		inspect(repo)
+	}
 	runGit(t, repo, "commit", "-m", "fixture")
 	return repo
 }

@@ -1,6 +1,6 @@
 ---
 schema_version: 1
-updated_at: "2026-08-28T11:11:52Z"
+updated_at: "2026-08-28T11:40:00Z"
 active_spec_version: v0.5.0
 active_spec_path: specs/v0.5.0.md
 current_task: ""
@@ -8,9 +8,9 @@ current_task_title: ""
 status_summary: idle
 blockers: []
 next_action: Select the next eligible task
-last_verification_result: pass for T-224-promote-local-taskrail-state-into-committed at 2026-08-28T09:37:50Z id a4f2263867c0c31691f1a2c2dac42562
-last_verification_id: a4f2263867c0c31691f1a2c2dac42562
-last_verified_completion_id: 1f4f15240ff1ceb36e0c21e1b6e8b0c6
+last_verification_result: pass for T-375-prevent-git-fixture-cleanup-races at 2026-08-28T11:40:00Z id 60149651c5057bb92cf2a24eb1df606e
+last_verification_id: 60149651c5057bb92cf2a24eb1df606e
+last_verified_completion_id: f964ed643a3734d6c46bddbbd5a9b82c
 relevant_artifacts: []
 continuation_notes:
     - This repository is temporarily dogfooding bootstrap workflow tooling until Taskrail v0.1.0 exists.
@@ -36,7 +36,7 @@ continuation_notes:
 
 ## Last Verification
 
-- pass for T-224-promote-local-taskrail-state-into-committed at 2026-08-28T09:37:50Z id a4f2263867c0c31691f1a2c2dac42562
+- pass for T-375-prevent-git-fixture-cleanup-races at 2026-08-28T11:40:00Z id 60149651c5057bb92cf2a24eb1df606e
 
 ## Next Action
 
@@ -54,6 +54,6 @@ continuation_notes:
 
 - todo: 52
 - in_progress: 0
-- completed: 321
+- completed: 322
 - blocked: 0
 - cancelled: 0
