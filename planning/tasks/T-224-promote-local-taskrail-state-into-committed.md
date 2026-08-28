@@ -1,13 +1,18 @@
 ---
 id: T-224-promote-local-taskrail-state-into-committed
 title: Promote local semantic state into committed planning
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#local-planning-mode
 dependencies:
     - T-305-publish-workflow-review-reports-and-memory
     - T-247-install-packaged-skills-safely-in-local-mode
-updated_at: "2026-08-08T08:40:49Z"
+updated_at: "2026-08-28T09:37:50Z"
+completion_id: "1f4f15240ff1ceb36e0c21e1b6e8b0c6"
+last_verification_id: "a4f2263867c0c31691f1a2c2dac42562"
+last_verification_result: pass
+last_verified_at: "2026-08-28T09:37:50Z"
+last_verified_completion_id: "1f4f15240ff1ceb36e0c21e1b6e8b0c6"
 ---
 
 # T-224-promote-local-taskrail-state-into-committed Promote local semantic state into committed planning
@@ -64,3 +69,6 @@ skill visibility changes, including the combined path.
   atomically; consented combined/deferred visibility is tested by T-315.
 
 ## Implementation Notes
+
+- 2026-08-28T09:37:44Z: Implemented recoverable local promotion with durable semantic publication, local artifact/runtime preservation, custom-path support, and staged-config protection; verified by focused and full Go suites plus sandbox evidence.
+- 2026-08-28T09:37:50Z: verification pass id a4f2263867c0c31691f1a2c2dac42562 previous none completion 1f4f15240ff1ceb36e0c21e1b6e8b0c6

@@ -160,3 +160,43 @@ func TestRunCancellationAfterPublicationRollsBackAndClearsFence(t *testing.T) {
 		t.Fatal("canceled transaction retained a fence after successful rollback")
 	}
 }
+
+func TestRunDeletesMembersAndRestoresThemWhenValidationFails(t *testing.T) {
+	t.Run("apply", func(t *testing.T) {
+		repo := newRepository(t)
+		lock := acquire(t, repo, ownerCapability())
+		seed(t, repo, "planning/source.md", "source")
+		if _, err := Run(context.Background(), lock, repo, request("init", Member{
+			Kind: Managed, Reported: "planning/source.md", Path: "planning/source.md", Delete: true,
+		})); err != nil {
+			t.Fatalf("delete member: %v", err)
+		}
+		if _, present := read(t, repo, "planning/source.md"); present {
+			t.Fatal("deleted candidate remains after commit")
+		}
+	})
+
+	t.Run("rollback", func(t *testing.T) {
+		repo := newRepository(t)
+		lock := acquire(t, repo, ownerCapability())
+		seed(t, repo, "planning/source.md", "source")
+		calls := 0
+		req := request("init", Member{Kind: Managed, Reported: "planning/source.md", Path: "planning/source.md", Delete: true})
+		req.Validate = func([]Evidence) error {
+			calls++
+			if calls == 2 {
+				return errors.New("reject deleted candidate")
+			}
+			return nil
+		}
+		if _, err := Run(context.Background(), lock, repo, req); err == nil {
+			t.Fatal("validation failure accepted a deleted candidate")
+		}
+		if got, present := read(t, repo, "planning/source.md"); !present || got != "source" {
+			t.Fatalf("rollback restored %q present=%t, want source", got, present)
+		}
+		if retained(t, repo) != "" {
+			t.Fatal("rollback retained a recovery fence")
+		}
+	})
+}

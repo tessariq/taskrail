@@ -202,14 +202,6 @@ func TestEmitMachineDocumentRefusesBeforeEmission(t *testing.T) {
 			wantErr: `no schema-1 machine contract for "version stdout"`,
 		},
 		{
-			name: "planned command that publishes no machine document yet",
-			outcome: MachineOutcome{
-				Command: "local promote", Surface: MachineSurfaceStdout,
-				Result: &MachineResult{Shape: "LocalPromoteResult", Value: map[string]any{}},
-			},
-			wantErr: `publishes no machine document yet`,
-		},
-		{
 			name: "result shape the command never names",
 			outcome: MachineOutcome{
 				Command: "status", Surface: MachineSurfaceStdout,

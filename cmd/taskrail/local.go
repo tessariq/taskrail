@@ -9,8 +9,30 @@ import (
 )
 
 func newLocalCmd() *cobra.Command {
-	cmd := &cobra.Command{Use: "local", Short: "Inspect local planning storage"}
-	cmd.AddCommand(newLocalStatusCmd(), newLocalPathCmd())
+	cmd := &cobra.Command{Use: "local", Short: "Inspect and promote local planning storage"}
+	cmd.AddCommand(newLocalStatusCmd(), newLocalPathCmd(), newLocalPromoteCmd())
+	return cmd
+}
+
+func newLocalPromoteCmd() *cobra.Command {
+	var apply, withSkills bool
+	cmd := &cobra.Command{
+		Use:   "promote",
+		Short: "Preview or publish local semantic planning into committed files",
+		Args:  machineArgs(cobra.NoArgs),
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			return runCommand(cmd, func(svc *taskrail.Service) (commandResult, error) {
+				result, err := svc.LocalPromote(taskrail.LocalPromoteInput{Apply: apply, WithSkills: withSkills})
+				if err != nil {
+					return commandResult{}, err
+				}
+				return commandResult{shape: "LocalPromoteResult", value: result, text: renderLocalPromoteText(result)}, nil
+			})
+		},
+	}
+	addMachineJSONFlag(cmd)
+	cmd.Flags().BoolVar(&apply, "apply", false, "publish the previewed semantic state without creating a Git commit")
+	cmd.Flags().BoolVar(&withSkills, "with-skills", false, "request packaged-skill visibility changes (reserved for the explicit skill-promotion flow)")
 	return cmd
 }
 
@@ -68,6 +90,26 @@ func renderLocalStatusText(r taskrail.LocalStatusResult) string {
 func renderLocalPathText(r taskrail.LocalPathResult) string {
 	return fmt.Sprintf("mode: %s\nconfig path: %s\nstorage root: %s\nspecs dir: %s\nplanning dir: %s\nprompts dir: %s\nartifacts dir: %s\nruntime dir: %s",
 		r.Mode, r.ConfigPath, r.StorageRoot, r.SpecsDir, r.PlanningDir, r.PromptsDir, r.ArtifactsDir, r.RuntimeDir)
+}
+
+func renderLocalPromoteText(r taskrail.LocalPromoteResult) string {
+	state := "preview"
+	if r.Applied {
+		state = "applied"
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "local promotion %s: %s -> %s\n", state, r.SourceMode, r.TargetMode)
+	for _, entry := range r.Writes {
+		fmt.Fprintf(&b, "write: %s (%s)\n", entry.Path, entry.Kind)
+	}
+	for _, entry := range r.Excluded {
+		fmt.Fprintf(&b, "exclude: %s (%s)\n", entry.Path, entry.Kind)
+	}
+	for _, skill := range r.Skills {
+		fmt.Fprintf(&b, "skill: %s (%s)\n", skill.Path, skill.Action)
+	}
+	fmt.Fprintf(&b, "validation: %s", validationLabel(&r.Validation))
+	return b.String()
 }
 
 func nullableText(value *string) string {

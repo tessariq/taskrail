@@ -43,6 +43,12 @@ func (s *Service) loadTasks() ([]*Task, error) {
 		return nil, err
 	}
 	entries, err := os.ReadDir(s.paths.TasksDir)
+	if errors.Is(err, os.ErrNotExist) {
+		// A promoted empty local ledger has no task bytes to create the directory.
+		// Treat that durable absence as an empty ledger; the first task writer
+		// creates its parent through the transactional publication path.
+		return []*Task{}, nil
+	}
 	if err != nil {
 		return nil, WithMachineErrorCode(missingOrInvalidCode(err, MachineCodeNotInitialized),
 			fmt.Errorf("read tasks dir %s: %w", s.paths.logicalManagedPath(s.paths.TasksDir), fsCause(err)))

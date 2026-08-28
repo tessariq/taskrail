@@ -164,6 +164,31 @@ func TestDiscoverPathsLayout2LocalContextFromDescendant(t *testing.T) {
 	}
 }
 
+func TestDiscoverRecoveryPathsAdmitsFencedLocalPromotionCandidate(t *testing.T) {
+	repo := initGitRepo(t)
+	writeFile(t, filepath.Join(repo, ".taskrail", "config.yml"), "layout_version: 2\nspecs_dir: specs\nplanning_dir: planning\nstorage_mode: committed\nimplementation_review_max_rounds: 1\nmigration_fence:\n  from_layout_version: 2\n  from_storage_mode: local\n  transaction_id: 0123456789abcdef0123456789abcdef\n")
+	for _, dir := range []string{
+		filepath.Join(repo, ".taskrail", "local", "specs"),
+		filepath.Join(repo, ".taskrail", "local", "planning"),
+		filepath.Join(repo, ".taskrail", "local", "prompts"),
+		filepath.Join(repo, ".taskrail", "local", "runtime"),
+		filepath.Join(repo, "specs"),
+		filepath.Join(repo, "planning"),
+		filepath.Join(repo, ".taskrail", "prompts"),
+	} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatalf("make fixture directory: %v", err)
+		}
+	}
+	paths, err := DiscoverRecoveryPaths(repo)
+	if err != nil {
+		t.Fatalf("discover fenced promotion recovery paths: %v", err)
+	}
+	if paths.Storage.Mode != StorageLocal {
+		t.Fatalf("recovery storage mode = %q, want local", paths.Storage.Mode)
+	}
+}
+
 func TestDiscoverPathsLinkedWorktreePreservesGitIdentities(t *testing.T) {
 	repo := realGitRepo(t)
 	linked := filepath.Join(t.TempDir(), "linked")

@@ -94,6 +94,7 @@ type manifestMember struct {
 	Reported  string     `json:"reported"`
 	Path      string     `json:"path"`
 	Published bool       `json:"published"`
+	Delete    bool       `json:"delete,omitempty"`
 	Ancestors []identity `json:"ancestors"`
 	// Original is the exact state observed before publication, or null when the
 	// member was absent. Absence is a recorded state, not missing evidence.
@@ -160,7 +161,7 @@ func (m manifest) validate(transactionID string, repo repolock.Repository) error
 	seen := make(map[string]struct{}, len(m.Members))
 	physical := make(map[string]struct{}, len(m.Members))
 	for i, member := range m.Members {
-		if err := (Member{Kind: member.Kind, Reported: member.Reported, Path: member.Path}).validate(repo); err != nil {
+		if err := (Member{Kind: member.Kind, Reported: member.Reported, Path: member.Path, Delete: member.Delete}).validate(repo); err != nil {
 			return err
 		}
 		key := string(member.Kind) + "\x00" + member.Reported
@@ -179,9 +180,12 @@ func (m manifest) validate(transactionID string, repo repolock.Repository) error
 				return fmt.Errorf("manifest members are not in canonical order")
 			}
 		}
-		if (member.Published && (member.Candidate == nil || member.Candidate.SHA256 == "")) ||
+		if (member.Published && !member.Delete && (member.Candidate == nil || member.Candidate.SHA256 == "")) ||
 			(!member.Published && member.Candidate != nil) || (member.Original != nil && member.Original.SHA256 == "") {
 			return fmt.Errorf("manifest member %q records no digest", member.Reported)
+		}
+		if member.Delete && (!member.Published || member.Candidate != nil || member.Fence != nil) {
+			return fmt.Errorf("manifest deletion member %q records an invalid candidate", member.Reported)
 		}
 		if member.Fence != nil && (!member.Published || member.Candidate == nil) {
 			return fmt.Errorf("manifest fence member %q records no final candidate", member.Reported)
@@ -305,9 +309,31 @@ func validateManifestShape(raw json.RawMessage) error {
 
 func validateMemberShape(raw json.RawMessage, index int) error {
 	what := fmt.Sprintf("manifest.members[%d]", index)
-	object, err := exactRawObject(raw, what, "kind", "reported", "path", "published", "ancestors", "original", "candidate", "fence")
-	if err != nil {
-		return err
+	var object map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &object); err != nil || object == nil {
+		return fmt.Errorf("%s is not an object", what)
+	}
+	required := []string{"kind", "reported", "path", "published", "ancestors", "original", "candidate", "fence"}
+	if len(object) != len(required) && len(object) != len(required)+1 {
+		return fmt.Errorf("%s has missing or unknown members", what)
+	}
+	for _, name := range required {
+		if _, ok := object[name]; !ok {
+			return fmt.Errorf("%s is missing member %q", what, name)
+		}
+	}
+	if _, ok := object["delete"]; ok {
+		var deleted bool
+		if isNull(object["delete"]) || json.Unmarshal(object["delete"], &deleted) != nil || !deleted {
+			return fmt.Errorf("%s.delete is not true", what)
+		}
+	} else if len(object) != len(required) {
+		return fmt.Errorf("%s has missing or unknown members", what)
+	}
+	if len(object) == len(required)+1 {
+		if _, ok := object["delete"]; !ok {
+			return fmt.Errorf("%s has missing or unknown members", what)
+		}
 	}
 	for _, name := range []string{"kind", "reported", "path"} {
 		if err := requireString(object[name], what+"."+name); err != nil {

@@ -126,30 +126,34 @@ func TestRunFenceMemberRestoresLastOnHandledFailure(t *testing.T) {
 	}
 }
 
-func TestRunRejectsAFenceMemberThatDoesNotSortFirst(t *testing.T) {
+func TestRunPublishesFenceFinalAfterEarlierSortedCandidates(t *testing.T) {
 	repo := newRepository(t)
 	lock := acquire(t, repo, ownerCapability())
 	seed(t, repo, ".taskrail/config.yml", "layout 1")
-	_, err := Run(context.Background(), lock, repo, request("init",
+	if _, err := Run(context.Background(), lock, repo, request("init",
 		member(".agents/skills/x/SKILL.md", "skill"),
 		fencedMarker("layout 1", "fenced", "final"),
-	))
-	if err == nil {
-		t.Fatal("a fence member sorting after another published member must refuse")
+	)); err != nil {
+		t.Fatalf("publish fenced candidate: %v", err)
+	}
+	if got, _ := read(t, repo, ".taskrail/config.yml"); got != "final" {
+		t.Fatalf("marker = %q, want final", got)
 	}
 }
 
-func TestRunRejectsTwoFenceMembers(t *testing.T) {
+func TestRunPublishesMultipleFenceMembersAfterValidation(t *testing.T) {
 	repo := newRepository(t)
 	lock := acquire(t, repo, ownerCapability())
 	seed(t, repo, ".taskrail/config.yml", "layout 1")
-	_, err := Run(context.Background(), lock, repo, request("init",
+	if _, err := Run(context.Background(), lock, repo, request("init",
 		fencedMarker("layout 1", "fenced", "final"),
 		Member{Kind: Managed, Reported: ".taskrail/other.yml", Path: ".taskrail/other.yml",
 			Content: []byte("x"), Fence: []byte("y")},
-	))
-	if err == nil {
-		t.Fatal("two fence members must refuse")
+	)); err != nil {
+		t.Fatalf("publish two fences: %v", err)
+	}
+	if got, _ := read(t, repo, ".taskrail/other.yml"); got != "x" {
+		t.Fatalf("second fence = %q, want final", got)
 	}
 }
 

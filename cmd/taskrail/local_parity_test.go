@@ -126,9 +126,9 @@ func TestInheritedLocalCommandInventoryIsComplete(t *testing.T) {
 		if entry.Origin != taskrail.MachineOriginConstructed || entry.Surface != taskrail.MachineSurfaceStdout {
 			continue
 		}
-		// Local inspection is introduced with local storage; it is not an
-		// inherited command required to preserve committed-mode parity.
-		if entry.Command == "local status" || entry.Command == "local path" {
+		// Local storage commands are introduced with local mode; they are not
+		// inherited commands required to preserve committed-mode parity.
+		if entry.Command == "local status" || entry.Command == "local path" || entry.Command == "local promote" {
 			continue
 		}
 		if !covered[entry.Command] {

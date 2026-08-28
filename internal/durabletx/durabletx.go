@@ -57,18 +57,18 @@ type Member struct {
 	Reported string
 	Path     string
 	Content  []byte
+	// Delete removes an existing file as this member's candidate state. It is
+	// distinct from an empty Content value, which publishes an empty file.
+	Delete bool
 	// Mode is the mode a member absent before the transaction is created with.
 	// It is ignored for an existing member, whose recorded original mode is
 	// preserved, so publication never silently changes a file's permissions.
 	Mode fs.FileMode
-	// Fence is the intermediate byte state exactly one published member may be
-	// temporarily published with after the originals are recorded durably and
-	// before any other semantic byte changes. Its final Content publishes as
-	// the transaction's last semantic operation, after post-publication
-	// validation. A fence member must sort before every other published member,
-	// so rollback and recovery restore its original last: while any candidate
-	// byte remains on disk, the fence member still fences the repository
-	// against readers and writers that predate the transaction.
+	// Fence is the intermediate byte state a published member temporarily holds
+	// after originals are recorded durably and before any other semantic byte
+	// changes. Its final Content publishes after post-publication validation.
+	// A transaction may fence multiple independent boundaries when both must
+	// remain unavailable until the complete candidate is valid.
 	Fence []byte
 	// PreSemantic members publish after durable preparation and before ordinary
 	// candidates, so a writer can verify a required environment first.
@@ -216,31 +216,11 @@ func membersOf(members []Member) []manifestMember {
 	return out
 }
 
-// validateFenceOrder enforces the two structural rules of a fenced transaction:
-// at most one fence member, and no published member sorting before it, which is
-// what makes every restore path return the fence member to its original last.
+// validateFenceOrder exists as the shared structural hook for requests and
+// recovered manifests. Fenced members may be in different path kinds: their
+// finals all publish only after candidate validation, and rollback restores in
+// reverse canonical order.
 func validateFenceOrder(members []manifestMember) error {
-	fenced := -1
-	for i, m := range members {
-		if m.Fence == nil {
-			continue
-		}
-		if fenced >= 0 {
-			return fmt.Errorf("durable transaction names fence members %q and %q", members[fenced].Reported, m.Reported)
-		}
-		fenced = i
-	}
-	if fenced < 0 {
-		return nil
-	}
-	for i, m := range members {
-		if i == fenced || !m.Published {
-			continue
-		}
-		if less(members[i], members[fenced]) {
-			return fmt.Errorf("published member %q sorts before fence member %q", m.Reported, members[fenced].Reported)
-		}
-	}
 	return nil
 }
 
@@ -268,6 +248,9 @@ func recordUnique(repo repolock.Repository, reported, physical map[string]struct
 }
 
 func (m Member) validate(repo repolock.Repository) error {
+	if m.Delete && m.Fence != nil {
+		return fmt.Errorf("deleted member %q cannot carry fence bytes", m.Reported)
+	}
 	switch m.Kind {
 	case Managed, Worktree:
 		if !canonicalRelative(m.Reported) {

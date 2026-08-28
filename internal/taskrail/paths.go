@@ -75,7 +75,7 @@ func discoverPaths(start string, admitFence bool) (Paths, error) {
 			fmt.Errorf("local storage mode requires a Git worktree"))
 	}
 	paths := pathsFromDiscovery(root, cfg, storage, git)
-	if err := validateDiscoveredPaths(paths); err != nil {
+	if err := validateDiscoveredPathsForRecovery(paths, admitFence); err != nil {
 		return Paths{}, WithMachineErrorCode(MachineCodeRepositoryInvalid, err)
 	}
 	return paths, nil
@@ -244,10 +244,14 @@ func discoverLayout(root string, markerFound, admitFence bool) (LayoutConfig, St
 				fmt.Errorf("layout migration is in progress (transaction %s); run taskrail recover %s to finish or undo it, or revert the upgrade through Git",
 					transaction, transaction))
 		}
-		// The recovery boundary reads the fenced marker as the layout-2
-		// committed context it pins, because the retained transaction beneath
-		// it is exactly what that boundary acts on.
-		return LayoutConfig{LayoutVersion: cfg.LayoutVersion, SpecsDir: cfg.SpecsDir, PlanningDir: cfg.PlanningDir}, committedStorage(), nil
+		// A local-promotion fence still owns its retained source set beneath the
+		// local overlay. Recovery therefore keeps that storage context until it
+		// either restores the source or accepts the committed candidate.
+		storage := committedStorage()
+		if cfg.MigrationFence.FromStorageMode == StorageLocal {
+			storage = localStorage()
+		}
+		return LayoutConfig{LayoutVersion: cfg.LayoutVersion, SpecsDir: cfg.SpecsDir, PlanningDir: cfg.PlanningDir}, storage, nil
 	}
 	storage := committedStorage()
 	if cfg.LayoutVersion == layout2Version && cfg.StorageMode == StorageLocal {
@@ -419,6 +423,10 @@ func pathsFromDiscovery(root string, cfg LayoutConfig, storage StorageContext, g
 }
 
 func validateDiscoveredPaths(paths Paths) error {
+	return validateDiscoveredPathsForRecovery(paths, false)
+}
+
+func validateDiscoveredPathsForRecovery(paths Paths, admitFencedCandidate bool) error {
 	if paths.LogicalSpecsDir == paths.LogicalPlanningDir || pathContains(paths.LogicalSpecsDir, paths.LogicalPlanningDir) || pathContains(paths.LogicalPlanningDir, paths.LogicalSpecsDir) {
 		return fmt.Errorf("layout specs_dir and planning_dir overlap")
 	}
@@ -447,7 +455,7 @@ func validateDiscoveredPaths(paths Paths) error {
 			if err := validateTargetPath(committed); err != nil {
 				return err
 			}
-			if exists(committed) {
+			if exists(committed) && !admitFencedCandidate {
 				return fmt.Errorf("mixed committed/local Taskrail state at %s", committed)
 			}
 		}
@@ -456,7 +464,7 @@ func validateDiscoveredPaths(paths Paths) error {
 		if err := validateTargetPath(localRoot); err != nil {
 			return err
 		}
-		if exists(localRoot) && !isEmptyLocalInitScaffold(localRoot) {
+		if exists(localRoot) && !isEmptyLocalInitScaffold(localRoot, paths.LogicalSpecsDir, paths.LogicalPlanningDir) && !isLocalPromotionRemnant(localRoot, paths.LogicalSpecsDir, paths.LogicalPlanningDir) {
 			return fmt.Errorf("mixed committed/local Taskrail state at %s", localRoot)
 		}
 		for _, local := range []string{
@@ -467,7 +475,7 @@ func validateDiscoveredPaths(paths Paths) error {
 			if err := validateTargetPath(local); err != nil {
 				return err
 			}
-			if exists(local) && !isEmptyLocalInitScaffold(filepath.Join(paths.ManagedRoot, filepath.FromSlash(localStorageRoot))) {
+			if exists(local) && !isEmptyLocalInitScaffold(filepath.Join(paths.ManagedRoot, filepath.FromSlash(localStorageRoot)), paths.LogicalSpecsDir, paths.LogicalPlanningDir) && !isLocalPromotionRemnant(filepath.Join(paths.ManagedRoot, filepath.FromSlash(localStorageRoot)), paths.LogicalSpecsDir, paths.LogicalPlanningDir) {
 				return fmt.Errorf("mixed committed/local Taskrail state at %s", local)
 			}
 		}
@@ -475,13 +483,13 @@ func validateDiscoveredPaths(paths Paths) error {
 	return nil
 }
 
-func isEmptyLocalInitScaffold(root string) bool {
+func isEmptyLocalInitScaffold(root, specsDir, planningDir string) bool {
 	allowed := map[string]bool{
-		".":              true,
-		"planning":       true,
-		"planning/tasks": true,
-		"specs":          true,
-		"runtime":        true,
+		".":                             true,
+		planningDir:                     true,
+		path.Join(planningDir, "tasks"): true,
+		specsDir:                        true,
+		"runtime":                       true,
 	}
 	return filepath.WalkDir(root, func(physical string, entry fs.DirEntry, err error) error {
 		if err != nil {
@@ -493,6 +501,52 @@ func isEmptyLocalInitScaffold(root string) bool {
 		}
 		if !entry.IsDir() || entry.Type()&os.ModeSymlink != 0 || !allowed[filepath.ToSlash(rel)] {
 			return fmt.Errorf("not an empty local initialization scaffold")
+		}
+		return nil
+	}) == nil
+}
+
+// isLocalPromotionRemnant admits the operational data a successful promotion
+// deliberately leaves private. Semantic files still make committed discovery
+// fail closed, while artifacts and runtime evidence never become planning input.
+func isLocalPromotionRemnant(root, specsDir, planningDir string) bool {
+	artifactDir := path.Join(planningDir, "artifacts")
+	allowedDirs := map[string]bool{
+		".": true, planningDir: true, path.Join(planningDir, "tasks"): true, artifactDir: true,
+		specsDir: true, "prompts": true, "runtime": true,
+	}
+	return filepath.WalkDir(root, func(physical string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(root, physical)
+		if err != nil {
+			return err
+		}
+		rel = filepath.ToSlash(rel)
+		if entry.Type()&os.ModeSymlink != 0 {
+			return fmt.Errorf("local promotion remnant contains symlink %s", rel)
+		}
+		if entry.IsDir() {
+			if allowedDirs[rel] || strings.HasPrefix(artifactDir, rel+"/") || strings.HasPrefix(specsDir, rel+"/") || strings.HasPrefix(planningDir, rel+"/") || strings.HasPrefix(rel, artifactDir+"/") || strings.HasPrefix(rel, specsDir+"/") || strings.HasPrefix(rel, planningDir+"/") || strings.HasPrefix(rel, "prompts/") || strings.HasPrefix(rel, "runtime/") {
+				return nil
+			}
+			return fmt.Errorf("local promotion remnant contains semantic directory %s", rel)
+		}
+		if !entry.Type().IsRegular() || (!strings.HasPrefix(rel, artifactDir+"/") && !strings.HasPrefix(rel, "runtime/")) {
+			return fmt.Errorf("local promotion remnant contains semantic file %s", rel)
+		}
+		if strings.HasPrefix(rel, "runtime/") {
+			if rel != "runtime/origin.json" {
+				return fmt.Errorf("local promotion remnant contains unknown runtime file %s", rel)
+			}
+			data, err := os.ReadFile(physical)
+			if err != nil {
+				return err
+			}
+			if _, err := decodeLocalOrigin(data); err != nil {
+				return fmt.Errorf("local promotion remnant contains invalid origin: %w", err)
+			}
 		}
 		return nil
 	}) == nil

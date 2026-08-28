@@ -78,6 +78,7 @@ func TestCheckMachineEntryPolicyRejectsPerturbedEntries(t *testing.T) {
 			name: "planned command claiming implemented coverage",
 			entry: func() MachineCommandEntry {
 				e := entry("local promote")
+				e.Origin = MachineOriginPlanned
 				e.JSONState = MachineJSONInherited
 				return e
 			}(),
@@ -132,7 +133,7 @@ func TestCheckMachineEntryPolicyRejectsPerturbedEntries(t *testing.T) {
 // last of the inherited writers over. The planned commands publish nothing yet.
 var migratedCommands = []string{
 	"block", "complete", "coverage", "import", "init", "lock clear", "lock status",
-	"local path", "local status", "next", "recover", "repair", "retrofit",
+	"local path", "local promote", "local status", "next", "recover", "repair", "retrofit",
 	"prompt list", "prompt render", "prompt show", "review publish", "review show", "spec activate", "spec add", "spec diff", "spec list", "spec show", "start",
 	"stats", "status", "task new", "task author", "task rename", "task repoint", "task release", "task show", "task loop allow", "task loop hold", "task loop clear", "task loop list", "unblock",
 	"task dependency add", "task dependency remove", "validate", "verify",
@@ -200,13 +201,6 @@ func TestCheckMachineRegistrationsRejectsDrift(t *testing.T) {
 				return append(registrations, MachineRegistration{Command: "version", Surface: MachineSurfaceStdout})
 			},
 			wantErr: `publishes "version stdout" with no v0.5 machine inventory entry`,
-		},
-		{
-			name: "planned command masquerading as implemented",
-			mutate: func(registrations []MachineRegistration) []MachineRegistration {
-				return append(registrations, MachineRegistration{Command: "local promote", Surface: MachineSurfaceStdout})
-			},
-			wantErr: `"local promote stdout" publishes no machine document yet`,
 		},
 	}
 	for _, tc := range cases {
@@ -411,16 +405,6 @@ func TestCheckMachinePublicationRejectsDrift(t *testing.T) {
 				Document: machineDocumentBytes("version", "[]", `"result":{}`),
 			},
 			wantErr: `no schema-1 machine contract for "version stdout"`,
-		},
-		{
-			name: "planned command publishing early",
-			publication: MachinePublication{
-				Command:  "local promote",
-				Surface:  MachineSurfaceStdout,
-				Result:   "LocalPromoteResult",
-				Document: machineDocumentBytes("local promote", "[]", `"result":{}`),
-			},
-			wantErr: `"local promote stdout" publishes no machine document yet`,
 		},
 	}
 	for _, tc := range cases {

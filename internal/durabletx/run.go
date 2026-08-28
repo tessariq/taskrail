@@ -211,7 +211,7 @@ func prepareEntries(store *store, req Request) ([]*transactionEntry, error) {
 		entries = append(entries, &transactionEntry{manifest: manifestMember{Kind: consumed.Kind, Reported: consumed.Reported, Path: consumed.Path}})
 	}
 	for _, member := range req.Members {
-		entry := &transactionEntry{manifest: manifestMember{Kind: member.Kind, Reported: member.Reported, Path: member.Path, Published: true},
+		entry := &transactionEntry{manifest: manifestMember{Kind: member.Kind, Reported: member.Reported, Path: member.Path, Published: true, Delete: member.Delete},
 			candidate: slices.Clone(member.Content), preSemantic: member.PreSemantic, preSemanticPriority: member.PreSemanticPriority}
 		if member.Fence != nil {
 			entry.fence = slices.Clone(member.Fence)
@@ -235,7 +235,7 @@ func prepareEntries(store *store, req Request) ([]*transactionEntry, error) {
 			original := stateOf(observed.snapshot)
 			entry.manifest.Original = &original
 		}
-		if entry.manifest.Published {
+		if entry.manifest.Published && !entry.manifest.Delete {
 			mode := defaultMemberMode
 			if observed.present {
 				mode = observed.snapshot.Mode
@@ -363,7 +363,7 @@ func publishCandidates(ctx context.Context, store *store, entries []*transaction
 		if err != nil || !sameOriginal(entry, current) {
 			return fmt.Errorf("%s changed before publication: %w", entry.manifest.Reported, err)
 		}
-		if err := put(store, entry, current, entry.candidate, entry.manifest.Candidate.mode()); err != nil {
+		if err := publishCandidate(store, entry, current); err != nil {
 			return err
 		}
 		if testHookAfterMember != nil {
@@ -429,6 +429,20 @@ func put(store *store, entry *transactionEntry, current observation, content []b
 		return err
 	}
 	return created.Close()
+}
+
+func publishCandidate(store *store, entry *transactionEntry, current observation) error {
+	if entry.manifest.Delete {
+		if !current.present {
+			return fmt.Errorf("%s is absent before deletion", entry.manifest.Reported)
+		}
+		bound, err := store.rootFor(entry.manifest.Kind).Rebind(entry.manifest.Path, current.snapshot)
+		if err != nil {
+			return err
+		}
+		return bound.Remove()
+	}
+	return put(store, entry, current, entry.candidate, entry.manifest.Candidate.mode())
 }
 
 func recheckOriginals(store *store, entries []*transactionEntry) error {
@@ -531,6 +545,9 @@ func allCandidate(entries []*transactionEntry, current []observation) bool {
 }
 
 func holdsCandidate(entry *transactionEntry, current observation) bool {
+	if entry.manifest.Delete {
+		return entry.manifest.Published && !current.present && identityPrefix(entry.manifest.Ancestors, current.ancestors)
+	}
 	return entry.manifest.Published && current.present && entry.manifest.Candidate.holds(current.snapshot) &&
 		identityPrefix(entry.manifest.Ancestors, current.ancestors)
 }
@@ -627,6 +644,9 @@ func recoverRunFailure(store *store, id string, doc journal, entries []*transact
 // final candidate has not published yet. Anything else is an external edit the
 // rollback must not overwrite.
 func holdsRecordedWrite(entry *transactionEntry, current observation) bool {
+	if entry.manifest.Delete {
+		return !current.present && identityPrefix(entry.manifest.Ancestors, current.ancestors)
+	}
 	if !current.present {
 		return false
 	}

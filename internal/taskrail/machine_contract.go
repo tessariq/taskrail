@@ -303,7 +303,7 @@ var machineInventory = []MachineCommandEntry{
 		warnsNoDrift(), errs(readErrors)),
 	migrated("`local path`", "local path", []string{"LocalPathResult"}, "never",
 		warns(), errs(readErrors)),
-	planned("`local promote`", "local promote", []string{"LocalPromoteResult"}, "never",
+	migrated("`local promote`", "local promote", []string{"LocalPromoteResult"}, "never",
 		warns(), errs(contentWriterErrors)),
 	migrated("`lock status`", "lock status", []string{"LockStatusResult"}, "never",
 		warns(), errs(readErrors)),

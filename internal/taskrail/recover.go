@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"time"
@@ -238,10 +240,48 @@ func (s *Service) recoveryValidator(transactionID string) func(string, []durable
 				return fmt.Errorf("recovered import candidate failed validation: %s", strings.Join(validation.Violations, "; "))
 			}
 			return nil
+		case localPromoteCommand:
+			return s.validateLocalPromotionRecovery(transactionID, snapshots)
 		default:
 			return fmt.Errorf("no recovery validator is registered for %q", command)
 		}
 	}
+}
+
+func (s *Service) validateLocalPromotionRecovery(transactionID string, snapshots []durabletx.Evidence) error {
+	var files []localPromotionFile
+	for _, snapshot := range snapshots {
+		if snapshot.Kind != durabletx.Worktree {
+			continue
+		}
+		if snapshot.Reported == markerRelPath() {
+			if snapshot.FenceSHA256 == "" || snapshot.CandidateSHA256 == "" {
+				return fmt.Errorf("local promotion transaction does not fence %s", markerRelPath())
+			}
+			marker, err := os.ReadFile(filepath.Join(s.paths.RepoRoot, filepath.FromSlash(markerRelPath())))
+			if err != nil {
+				return err
+			}
+			if digestBytes(marker) == snapshot.FenceSHA256 {
+				marker, err = durabletx.RetainedCandidate(s.paths.LockRepository(), transactionID, durabletx.Worktree, markerRelPath())
+				if err != nil {
+					return err
+				}
+			}
+			decoded, err := decodeLayoutMarkerStrict(marker)
+			if err != nil || decoded.StorageMode != StorageCommitted || decoded.MigrationFence != nil || digestBytes(marker) != snapshot.CandidateSHA256 {
+				return fmt.Errorf("retained local promotion marker is invalid")
+			}
+			continue
+		}
+		if strings.HasPrefix(snapshot.Reported, localStorageRoot+"/") && snapshot.CandidateSHA256 == "" {
+			files = append(files, localPromotionFile{Source: snapshot.Reported})
+		}
+	}
+	if len(files) == 0 {
+		return fmt.Errorf("local promotion transaction records no local semantic removals")
+	}
+	return s.validateLocalPromotionCandidate(localPromotionCandidate{files: files})
 }
 
 func isRecoveredImport(snapshots []durabletx.Evidence, statePath, tasksDir string) bool {
@@ -294,6 +334,9 @@ func recoveryTakeoverError(err error) error {
 // validates through the same strict layout-2 readers the migration itself
 // publishes under.
 func (s *Service) recoveredValidation(recovered durabletx.RecoveryResult) (ValidationResult, error) {
+	if recovered.Applied && recovered.Command == localPromoteCommand && recovered.Action == durabletx.AcceptCandidate && s.paths.Storage.Mode == StorageLocal {
+		return s.localPromotionCommittedService().Validate()
+	}
 	if !recovered.Applied || recovered.Command != initMigrationCommand || recovered.Action != durabletx.AcceptCandidate {
 		return s.Validate()
 	}

@@ -20,8 +20,9 @@ import (
 const layout2Version = 2
 
 type Layout2MigrationFence struct {
-	FromLayoutVersion int    `yaml:"from_layout_version" json:"from_layout_version"`
-	TransactionID     string `yaml:"transaction_id" json:"transaction_id"`
+	FromLayoutVersion int         `yaml:"from_layout_version" json:"from_layout_version"`
+	FromStorageMode   StorageMode `yaml:"from_storage_mode,omitempty" json:"from_storage_mode,omitempty"`
+	TransactionID     string      `yaml:"transaction_id" json:"transaction_id"`
 }
 
 type Layout2Config struct {
@@ -141,8 +142,10 @@ func decodeLayoutMarkerStrict(data []byte) (Layout2Config, error) {
 			return Layout2Config{}, fmt.Errorf("migration_fence must be omitted or an exact fence mapping")
 		}
 		if cfg.MigrationFence != nil {
-			if cfg.StorageMode != StorageCommitted || cfg.MigrationFence.FromLayoutVersion != 1 || !lowerHex32.MatchString(cfg.MigrationFence.TransactionID) {
-				return Layout2Config{}, fmt.Errorf("migration_fence must be an exact layout 1 committed migration fence")
+			legacy := cfg.StorageMode == StorageCommitted && cfg.MigrationFence.FromLayoutVersion == 1 && cfg.MigrationFence.FromStorageMode == ""
+			promotion := cfg.StorageMode == StorageCommitted && cfg.MigrationFence.FromLayoutVersion == layout2Version && cfg.MigrationFence.FromStorageMode == StorageLocal
+			if (!legacy && !promotion) || !lowerHex32.MatchString(cfg.MigrationFence.TransactionID) {
+				return Layout2Config{}, fmt.Errorf("migration_fence must be an exact supported migration fence")
 			}
 		}
 		return cfg, nil
