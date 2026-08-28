@@ -1,13 +1,20 @@
 ---
 id: T-174-run-the-v0-5-0-gap-and-drift-release-gate
 title: Run the v0.5.0 gap and drift release gate
-status: todo
+status: blocked
 priority: high
 spec_ref: specs/v0.5.0.md#goals
 dependencies:
     - T-248-run-cross-platform-workflow-contract-tests-in-ci
     - T-375-prevent-git-fixture-cleanup-races
-updated_at: "2026-08-08T08:40:49Z"
+    - T-377-define-collision-free-post-spec-finding-identities
+    - T-378-close-implementation-review-disposition-vocabulary
+    - T-379-require-durable-results-for-review-adapter-delivery
+    - T-380-close-parallel-integration-publication-boundaries
+updated_at: "2026-08-28T16:14:34Z"
+last_verification_id: "bbffe73d3b28bd8eee671d2220af9351"
+last_verification_result: fail
+last_verified_at: "2026-08-28T16:14:34Z"
 ---
 
 # T-174-run-the-v0-5-0-gap-and-drift-release-gate Run the v0.5.0 gap and drift release gate
@@ -84,3 +91,6 @@ and remediation task is complete. Do not tag or claim current until it passes.
   review.
 
 ## Implementation Notes
+
+- 2026-08-28T16:14:33Z: Final fresh spec review found current v0.5 contract blockers tracked as direct dependencies T-377 through T-380; remediate them and restart the gate on fresh bytes.
+- 2026-08-28T16:14:34Z: verification fail id bbffe73d3b28bd8eee671d2220af9351 previous none completion none
