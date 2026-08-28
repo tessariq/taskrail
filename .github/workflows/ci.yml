@@ -103,6 +103,9 @@ jobs:
       - name: Native filesystem portability
         run: task test:filesystem
 
+      - name: Workflow contract
+        run: task test:workflow-contract
+
       - name: Test
         run: task test
 

@@ -15,6 +15,10 @@ Contributor and coding-agent workflow for Taskrail tracked work.
 - Build: `go build ./cmd/taskrail`
 - Tests: `go test ./...`
 - Native filesystem portability: `task test:filesystem`
+- Deterministic workflow contracts: `task test:workflow-contract`. This invokes
+  the repository-local manifest runner, which selects every suite and records
+  explicit stable skips for unsupported native containment guarantees. It does
+  not replace the manual agent evidence required by workflow acceptance.
 - Workflow validation: `go run ./cmd/taskrail validate`
 - CLI smoke: `go run ./cmd/taskrail --help`
 - Skill package parity: `task check:skills`

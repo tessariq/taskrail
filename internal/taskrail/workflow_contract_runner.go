@@ -18,6 +18,8 @@ import (
 type WorkflowContractSuiteResult struct {
 	Name          string   `json:"name"`
 	Package       string   `json:"package"`
+	Outcome       string   `json:"outcome"`
+	SkipReason    string   `json:"skip_reason,omitempty"`
 	ExecutedTests []string `json:"executed_tests"`
 }
 
@@ -34,7 +36,11 @@ func RunWorkflowContractSuites(ctx context.Context, repoRoot string) ([]Workflow
 
 	results := make([]WorkflowContractSuiteResult, 0, len(manifest.Suites))
 	for _, suite := range manifest.Suites {
-		if !workflowSuiteRunsHere(suite.Platform) {
+		if reason := workflowSuiteSkipReason(suite.Platform, runtime.GOOS); reason != "" {
+			results = append(results, WorkflowContractSuiteResult{
+				Name: suite.Name, Package: suite.Package, Outcome: "skipped", SkipReason: reason,
+				ExecutedTests: []string{},
+			})
 			continue
 		}
 		listed, err := listWorkflowSuiteTests(ctx, repoRoot, suite)
@@ -50,23 +56,26 @@ func RunWorkflowContractSuites(ctx context.Context, repoRoot string) ([]Workflow
 			return nil, err
 		}
 		results = append(results, WorkflowContractSuiteResult{
-			Name: suite.Name, Package: suite.Package, ExecutedTests: executed,
+			Name: suite.Name, Package: suite.Package, Outcome: "passed", ExecutedTests: executed,
 		})
 	}
 	return results, nil
 }
 
-func workflowSuiteRunsHere(platform WorkflowSuitePlatform) bool {
+func workflowSuiteSkipReason(platform WorkflowSuitePlatform, goos string) string {
 	switch platform {
 	case WorkflowSuitePortable:
-		return true
+		return ""
 	case WorkflowSuiteUnix:
-		return runtime.GOOS != "windows"
+		if goos == "windows" {
+			return "requires Unix process containment"
+		}
 	case WorkflowSuiteWindows:
-		return runtime.GOOS == "windows"
-	default:
-		return false
+		if goos != "windows" {
+			return "requires native Windows process containment"
+		}
 	}
+	return ""
 }
 
 func listWorkflowSuiteTests(ctx context.Context, repoRoot string, suite WorkflowContractSuite) ([]string, error) {

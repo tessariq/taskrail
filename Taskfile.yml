@@ -78,6 +78,11 @@ tasks:
       - go test -v ./internal/durablefs ./internal/durabletx ./internal/repolock ./internal/repotx
       - go test -v ./internal/taskrail -run '^(TestParseFrontmatterHandlesCRLF|TestAppendTaskNoteTwiceKeepsOneHeading|TestApplyImportDraftResolvesSpecRefAgainstPendingImportedSpec|TestDecodeDecompositionBundlePreservesCompleteValidBundle|TestDiscoverPathsLinkedWorktreePreservesGitIdentities)$'
 
+  test:workflow-contract:
+    desc: Run the manifest-selected deterministic workflow-contract suites
+    cmds:
+      - go run ./internal/taskrail/cmd/workflow-contract
+
   vet:
     desc: Run go vet across all packages
     cmds:

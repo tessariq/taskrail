@@ -83,3 +83,24 @@ func TestLoopLaunchSuiteSelectorsSeparatePortableContainmentAndHelper(t *testing
 		t.Fatalf("manifest omits launch suites: %v", want)
 	}
 }
+
+func TestWorkflowSuiteSkipReasonsAreExplicitAndStable(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		platform WorkflowSuitePlatform
+		goos     string
+		want     string
+	}{
+		{name: "portable", platform: WorkflowSuitePortable, goos: "windows"},
+		{name: "unix on Windows", platform: WorkflowSuiteUnix, goos: "windows", want: "requires Unix process containment"},
+		{name: "Windows on Linux", platform: WorkflowSuiteWindows, goos: "linux", want: "requires native Windows process containment"},
+		{name: "Unix on macOS", platform: WorkflowSuiteUnix, goos: "darwin"},
+		{name: "Windows on Windows", platform: WorkflowSuiteWindows, goos: "windows"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := workflowSuiteSkipReason(tc.platform, tc.goos); got != tc.want {
+				t.Errorf("workflowSuiteSkipReason(%q, %q) = %q, want %q", tc.platform, tc.goos, got, tc.want)
+			}
+		})
+	}
+}
