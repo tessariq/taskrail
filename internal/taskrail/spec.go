@@ -34,15 +34,16 @@ type SpecAnchor struct {
 	Level   int    `json:"level"`
 }
 
-// SpecShowResult is a read-only view of one versioned spec. In plain mode Content
-// holds the spec body and Anchors is empty; in --anchors mode Anchors holds the
-// stable, deduped anchor list and Content is empty.
+// SpecShowResult is a read-only view of one versioned spec. SHA256 identifies the
+// exact raw spec bytes in both modes; plain mode returns Content, while --anchors
+// returns the stable, deduped anchor list.
 type SpecShowResult struct {
 	Version string       `json:"version"`
 	Path    string       `json:"path"`
 	Active  bool         `json:"active"`
 	Content string       `json:"content,omitempty"`
 	Anchors []SpecAnchor `json:"anchors,omitempty"`
+	SHA256  string       `json:"sha256"`
 }
 
 // SpecList enumerates the versioned specs under specs/ (files matching the
@@ -132,6 +133,7 @@ func (s *Service) specShowSnapshot(version string, anchorsOnly bool) (SpecShowRe
 		Version: version,
 		Path:    s.paths.logicalManagedPath(specFile),
 		Active:  version == active,
+		SHA256:  digestBytes(data),
 	}
 	if anchorsOnly {
 		result.Anchors = collectHeadingAnchorList(string(data))

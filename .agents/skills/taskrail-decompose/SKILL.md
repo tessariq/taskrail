@@ -29,13 +29,14 @@ Installed adopter repositories skip this source-only guard.
    the final post-spec manifest: its exact digest, selected-spec digest, final
    four lens entries, every disposition, and no unresolved high/medium finding.
    Then run `${TASKRAIL:-taskrail} spec show <version> --json` and preserve its
-   exact content bytes and exact SHA-256. If the selected spec is active, use
+   exact content bytes and reported `sha256` (the exact SHA-256); do not reopen or re-hash the
+   logical or local-overlay path. If the selected spec is active, use
    `${TASKRAIL:-taskrail} coverage --json` to find uncovered areas. If it is
    inactive, enumerate its live anchors with
    `${TASKRAIL:-taskrail} spec show <version> --anchors --json` and inspect
    existing tasks for duplicate or overlapping work. Anchors-only output does not
-   carry content or a digest. Stop on a mismatch, absent final manifest, or
-   unresolved high/medium review work.
+   carry content but retains the same reported digest. Stop on a mismatch, absent
+   final manifest, or unresolved high/medium review work.
    An inactive session is draft/review-only: stop before publication or import.
    A human must activate the spec and explicitly start a new session before the
    active-spec publication, apply, validation, and coverage steps.

@@ -26,7 +26,8 @@ do not contain the source helper and skip this source-only guard.
 ## Flow
 
 1. **Select an exact subject.** Run `${TASKRAIL:-taskrail} spec show <version> --json`
-   and record its path and exact SHA-256. Run `${TASKRAIL:-taskrail} status --json`
+   and consume its `path`, exact content, and reported `sha256`; do not reopen or
+   re-hash the logical or local-overlay path. Run `${TASKRAIL:-taskrail} status --json`
    and consume its exact `storage.artifacts_dir`. Choose one portable lowercase
    `<session-id>` and one absent proposal directory `<proposal-dir>` beneath that
    reported transient directory at

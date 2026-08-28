@@ -63,6 +63,39 @@ func TestSpecShowReturnsContent(t *testing.T) {
 	}
 }
 
+func TestSpecShowReportsExactRawBytesDigestAcrossStorageAndModes(t *testing.T) {
+	const spec = "# Taskrail v0.5.0\r\n\r\n## Local Planning\r\n\r\nCaf\u00e9.\r\n"
+	for _, tc := range []struct {
+		name    string
+		storage StorageContext
+		decoys  bool
+	}{
+		{name: "committed", storage: committedStorage()},
+		{name: "local", storage: localStorage(), decoys: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			svc, _ := storageNeutralService(t, tc.storage, tc.decoys)
+			writeFile(t, filepath.Join(svc.paths.SpecsDir, "v0.5.0.md"), spec)
+
+			for _, anchorsOnly := range []bool{false, true} {
+				result, err := svc.SpecShow("v0.5.0", anchorsOnly)
+				if err != nil {
+					t.Fatalf("SpecShow(anchors=%t): %v", anchorsOnly, err)
+				}
+				if result.SHA256 != digestBytes([]byte(spec)) {
+					t.Errorf("sha256 = %q, want digest of exact raw spec bytes", result.SHA256)
+				}
+				if anchorsOnly && (result.Content != "" || len(result.Anchors) == 0) {
+					t.Errorf("anchor result = %+v, want anchors without content", result)
+				}
+				if !anchorsOnly && result.Content != spec {
+					t.Errorf("content = %q, want exact CRLF bytes", result.Content)
+				}
+			}
+		})
+	}
+}
+
 // TestSpecShowAnchorsMatchValidation is the core invariant: the anchors SpecShow
 // lists are exactly the set collectHeadingAnchors (spec_ref validation) accepts —
 // same membership, deduped, no re-implementation drift.

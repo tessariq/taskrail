@@ -1,12 +1,17 @@
 ---
 id: T-368-expose-selected-spec-digests-in-machine-results
 title: Expose selected spec digests in machine results
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#uniform-agent-machine-results
 dependencies:
     - T-162-productize-digest-bound-post-spec-review-lenses
-updated_at: "2026-08-26T09:03:47Z"
+updated_at: "2026-08-28T08:09:24Z"
+completion_id: "08fb625f22657c3e7c68a8b0361ea17c"
+last_verification_id: "b02f7e73976e330a9a327e0544064a90"
+last_verification_result: pass
+last_verified_at: "2026-08-28T08:09:24Z"
+last_verified_completion_id: "08fb625f22657c3e7c68a8b0361ea17c"
 ---
 
 # T-368-expose-selected-spec-digests-in-machine-results Expose selected spec digests in machine results
@@ -33,3 +38,6 @@ re-hash ambiguously decoded output.
 - Run focused spec/prompt/review tests, full tests, vet, and cross-platform CI.
 
 ## Implementation Notes
+
+- 2026-08-28T08:09:07Z: Expose exact selected-spec SHA-256 values in spec show machine results and preserve raw plain-text output.
+- 2026-08-28T08:09:24Z: verification pass id b02f7e73976e330a9a327e0544064a90 previous none completion 08fb625f22657c3e7c68a8b0361ea17c

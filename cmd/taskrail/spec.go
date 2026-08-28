@@ -152,6 +152,9 @@ func newSpecShowCmd() *cobra.Command {
 				if err != nil {
 					return commandResult{}, err
 				}
+				if !anchors {
+					return commandResult{shape: "SpecShowResult", value: result, text: result.Content, exactText: true}, nil
+				}
 				return commandResult{shape: "SpecShowResult", value: result, text: renderSpecShowText(result)}, nil
 			})
 		},

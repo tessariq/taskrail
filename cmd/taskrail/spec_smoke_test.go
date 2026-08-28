@@ -1,6 +1,8 @@
 package main
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"os"
 	"path/filepath"
 	"strings"
@@ -299,6 +301,25 @@ func TestSpecShowPrintsContent(t *testing.T) {
 	}
 }
 
+func TestSpecShowPreservesExactTextBytes(t *testing.T) {
+	for _, content := range []string{
+		"# Taskrail v0.1.0\n\n## Summary\n\nNo final newline.",
+		"# Taskrail v0.1.0\n\n## Summary\n\nTwo trailing newlines.\n\n",
+	} {
+		root := setupRepo(t)
+		if err := os.WriteFile(filepath.Join(root, "specs", "v0.1.0.md"), []byte(content), 0o644); err != nil {
+			t.Fatalf("write spec: %v", err)
+		}
+		out, err := runRoot(t, "spec", "show", "v0.1.0")
+		if err != nil {
+			t.Fatalf("spec show: %v (output %q)", err, out)
+		}
+		if out != content {
+			t.Errorf("text output = %q, want exact bytes %q", out, content)
+		}
+	}
+}
+
 // TestSpecShowAnchorsAuthorable is the end-to-end acceptance: an anchor drawn from
 // `spec show --anchors --json` authors a task whose spec_ref passes `validate`,
 // proving the listing reuses the real slug rule and stays read-only.
@@ -336,6 +357,40 @@ func TestSpecShowAnchorsAuthorable(t *testing.T) {
 	writeTaskSpecRef(t, root, "T-900", "specs/v0.1.0.md#"+payload.Anchors[0].Anchor)
 	if out, err := runRoot(t, "validate"); err != nil {
 		t.Fatalf("validate against listed anchor: %v (output %q)", err, out)
+	}
+}
+
+func TestSpecShowJSONReportsExactRawBytesDigestInBothModes(t *testing.T) {
+	root := setupRepo(t)
+	content := "# Taskrail v0.1.0\r\n\r\n## Summary\r\n\r\nCaf\u00e9.\r\n"
+	if err := os.WriteFile(filepath.Join(root, "specs", "v0.1.0.md"), []byte(content), 0o644); err != nil {
+		t.Fatalf("write spec: %v", err)
+	}
+	sum := sha256.Sum256([]byte(content))
+	want := hex.EncodeToString(sum[:])
+
+	for _, args := range [][]string{
+		{"spec", "show", "v0.1.0", "--json"},
+		{"spec", "show", "v0.1.0", "--anchors", "--json"},
+	} {
+		out, err := runRoot(t, args...)
+		if err != nil {
+			t.Fatalf("%v: %v (output %q)", args, err, out)
+		}
+		var payload struct {
+			SHA256 string `json:"sha256"`
+		}
+		decodeMachineResult(t, out, &payload)
+		if payload.SHA256 != want {
+			t.Errorf("%v sha256 = %q, want %q", args, payload.SHA256, want)
+		}
+		priorField := `"content"`
+		if strings.Contains(strings.Join(args, " "), "--anchors") {
+			priorField = `"anchors"`
+		}
+		if strings.Index(out, priorField) > strings.Index(out, `"sha256"`) {
+			t.Errorf("%v changed result field order:\n%s", args, out)
+		}
 	}
 }
 
