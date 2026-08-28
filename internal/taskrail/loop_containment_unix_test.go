@@ -175,15 +175,59 @@ func TestLoopLaunchChildReturnsAfterSurvivorEvidence(t *testing.T) {
 }
 
 func TestLoopLaunchChildForcesProcessGroupTermination(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	originalGrace := unixContainmentGracePeriod
+	unixContainmentGracePeriod = 20 * time.Millisecond
+	t.Cleanup(func() { unixContainmentGracePeriod = originalGrace })
+
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	input := loopChildLaunch{
-		Command:        []string{"/bin/sh", "-c", "trap '' TERM; while :; do :; done"},
-		Context:        ctx,
-		RepositoryRoot: t.TempDir(),
+	input := loopHelperLaunch(t, "ignore-termination", nil)
+	input.Context = ctx
+	record := input.Command[len(input.Command)-1]
+	result := make(chan struct {
+		execution loopChildExecution
+		err       error
+	}, 1)
+	go func() {
+		execution, err := launchLoopChild(input)
+		result <- struct {
+			execution loopChildExecution
+			err       error
+		}{execution, err}
+	}()
+
+	deadline := time.NewTimer(5 * time.Second)
+	defer deadline.Stop()
+	for {
+		if _, err := os.Stat(record + ".ready"); err == nil {
+			break
+		} else if !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("inspect helper readiness: %v", err)
+		}
+		select {
+		case outcome := <-result:
+			t.Fatalf("launchLoopChild returned before helper readiness: %+v, %v", outcome.execution, outcome.err)
+		case <-deadline.C:
+			t.Fatal("termination-resistant helper did not become ready")
+		default:
+			time.Sleep(time.Millisecond)
+		}
 	}
+
 	started := time.Now()
-	execution, err := launchLoopChild(input)
+	cancel()
+	terminationDeadline := time.NewTimer(unixContainmentGracePeriod + 2*time.Second)
+	defer terminationDeadline.Stop()
+	var outcome struct {
+		execution loopChildExecution
+		err       error
+	}
+	select {
+	case outcome = <-result:
+	case <-terminationDeadline.C:
+		t.Fatal("forced process-group termination did not return")
+	}
+	execution, err := outcome.execution, outcome.err
 	if err != nil {
 		t.Fatalf("launchLoopChild: %v", err)
 	}

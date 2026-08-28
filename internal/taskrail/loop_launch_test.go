@@ -8,11 +8,13 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"reflect"
 	"runtime"
 	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -375,6 +377,14 @@ func TestLoopLaunchChildHelper(t *testing.T) {
 		}
 		time.Sleep(5 * time.Second)
 		os.Exit(0)
+	case "ignore-termination":
+		signal.Ignore(syscall.SIGTERM)
+		if err := os.WriteFile(record+".ready", nil, 0o600); err != nil {
+			os.Exit(90)
+		}
+		for {
+			time.Sleep(time.Second)
+		}
 	case "observe":
 		prompt, err := io.ReadAll(os.Stdin)
 		if err != nil {

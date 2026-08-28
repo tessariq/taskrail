@@ -16,12 +16,27 @@ import (
 
 // WorkflowContractSuiteResult records the exact top-level tests a suite ran.
 type WorkflowContractSuiteResult struct {
-	Name          string   `json:"name"`
-	Package       string   `json:"package"`
-	Outcome       string   `json:"outcome"`
-	SkipReason    string   `json:"skip_reason,omitempty"`
-	ExecutedTests []string `json:"executed_tests"`
+	Name          string                     `json:"name"`
+	Package       string                     `json:"package"`
+	Outcome       string                     `json:"outcome"`
+	SkipReason    string                     `json:"skip_reason,omitempty"`
+	ExecutedTests []string                   `json:"executed_tests"`
+	SkippedTests  []WorkflowContractTestSkip `json:"skipped_tests,omitempty"`
 }
+
+// WorkflowContractTestSkip records an intentional capability boundary reported
+// by a selected test rather than treating it as missing execution.
+type WorkflowContractTestSkip struct {
+	Name   string `json:"name"`
+	Reason string `json:"reason"`
+}
+
+type workflowSuiteExecution struct {
+	executed []string
+	skipped  []WorkflowContractTestSkip
+}
+
+var workflowTestLogLine = regexp.MustCompile(`^.*\.go:\d+:\s*(.*)$`)
 
 // RunWorkflowContractSuites runs the current platform's suites from the exact
 // generated manifest. It is repository-local CI plumbing, not a product command.
@@ -51,12 +66,13 @@ func RunWorkflowContractSuites(ctx context.Context, repoRoot string) ([]Workflow
 		if err != nil {
 			return nil, err
 		}
-		executed, err := executeWorkflowSuite(ctx, repoRoot, suite, selected)
+		execution, err := executeWorkflowSuite(ctx, repoRoot, suite, selected)
 		if err != nil {
 			return nil, err
 		}
 		results = append(results, WorkflowContractSuiteResult{
-			Name: suite.Name, Package: suite.Package, Outcome: "passed", ExecutedTests: executed,
+			Name: suite.Name, Package: suite.Package, Outcome: "passed",
+			ExecutedTests: execution.executed, SkippedTests: execution.skipped,
 		})
 	}
 	return results, nil
@@ -110,27 +126,38 @@ func selectWorkflowSuiteTests(suite WorkflowContractSuite, listed []string) ([]s
 	return selected, nil
 }
 
-func executeWorkflowSuite(ctx context.Context, repoRoot string, suite WorkflowContractSuite, expected []string) ([]string, error) {
+func executeWorkflowSuite(ctx context.Context, repoRoot string, suite WorkflowContractSuite, expected []string) (workflowSuiteExecution, error) {
 	output, err := runWorkflowGoTest(ctx, repoRoot, "-count=1", "-json", "-run", suite.TestRun, suite.Package)
 	if err != nil {
-		return nil, fmt.Errorf("run workflow contract suite %q: %w", suite.Name, err)
+		return workflowSuiteExecution{}, fmt.Errorf("run workflow contract suite %q: %w", suite.Name, err)
 	}
-	executed, passed, err := workflowTestEvents(output)
+	executed, passed, skipped, err := workflowTestEvents(output)
 	if err != nil {
-		return nil, fmt.Errorf("read workflow contract suite %q results: %w", suite.Name, err)
+		return workflowSuiteExecution{}, fmt.Errorf("read workflow contract suite %q results: %w", suite.Name, err)
 	}
-	if err := validateWorkflowSuiteExecution(suite, expected, executed, passed); err != nil {
-		return nil, err
+	if err := validateWorkflowSuiteExecution(suite, expected, executed, passed, skipped); err != nil {
+		return workflowSuiteExecution{}, err
 	}
-	return executed, nil
+	return workflowSuiteExecution{executed: executed, skipped: skipped}, nil
 }
 
-func validateWorkflowSuiteExecution(suite WorkflowContractSuite, expected, executed, passed []string) error {
+func validateWorkflowSuiteExecution(suite WorkflowContractSuite, expected, executed, passed []string, skipped []WorkflowContractTestSkip) error {
 	if !slices.Equal(executed, expected) {
 		return fmt.Errorf("workflow contract suite %q executed tests %v, want %v", suite.Name, executed, expected)
 	}
-	if !slices.Equal(passed, expected) {
-		return fmt.Errorf("workflow contract suite %q passed tests %v, want %v", suite.Name, passed, expected)
+	terminal := slices.Clone(passed)
+	for _, skip := range skipped {
+		if skip.Reason == "" {
+			return fmt.Errorf("workflow contract suite %q test %q has an empty reason", suite.Name, skip.Name)
+		}
+		if slices.Contains(passed, skip.Name) {
+			return fmt.Errorf("workflow contract suite %q test %q both passed and skipped", suite.Name, skip.Name)
+		}
+		terminal = append(terminal, skip.Name)
+	}
+	slices.Sort(terminal)
+	if !slices.Equal(terminal, expected) {
+		return fmt.Errorf("workflow contract suite %q terminal results %v, want %v", suite.Name, terminal, expected)
 	}
 	return nil
 }
@@ -147,13 +174,16 @@ func runWorkflowGoTest(ctx context.Context, repoRoot string, args ...string) ([]
 	return output.Bytes(), nil
 }
 
-func workflowTestEvents(output []byte) ([]string, []string, error) {
+func workflowTestEvents(output []byte) ([]string, []string, []WorkflowContractTestSkip, error) {
 	type event struct {
 		Action string
 		Test   string
+		Output string
 	}
 	seenRun := map[string]struct{}{}
 	seenPass := map[string]struct{}{}
+	seenSkip := map[string]struct{}{}
+	lastTestMessage := map[string]string{}
 	scanner := bufio.NewScanner(bytes.NewReader(output))
 	scanner.Buffer(make([]byte, 1024), 1024*1024)
 	for scanner.Scan() {
@@ -169,12 +199,23 @@ func workflowTestEvents(output []byte) ([]string, []string, error) {
 			seenRun[event.Test] = struct{}{}
 		case "pass":
 			seenPass[event.Test] = struct{}{}
+		case "skip":
+			seenSkip[event.Test] = struct{}{}
+		case "output":
+			line := strings.TrimSpace(event.Output)
+			if match := workflowTestLogLine.FindStringSubmatch(line); len(match) == 2 {
+				lastTestMessage[event.Test] = match[1]
+			}
 		}
 	}
 	if err := scanner.Err(); err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
-	return sortedWorkflowTestNames(seenRun), sortedWorkflowTestNames(seenPass), nil
+	skipped := make([]WorkflowContractTestSkip, 0, len(seenSkip))
+	for _, name := range sortedWorkflowTestNames(seenSkip) {
+		skipped = append(skipped, WorkflowContractTestSkip{Name: name, Reason: lastTestMessage[name]})
+	}
+	return sortedWorkflowTestNames(seenRun), sortedWorkflowTestNames(seenPass), skipped, nil
 }
 
 func sortedWorkflowTestNames(names map[string]struct{}) []string {

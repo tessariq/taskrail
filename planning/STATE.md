@@ -1,6 +1,6 @@
 ---
 schema_version: 1
-updated_at: "2026-08-28T14:24:17Z"
+updated_at: "2026-08-28T15:34:00Z"
 active_spec_version: v0.5.0
 active_spec_path: specs/v0.5.0.md
 current_task: ""
@@ -8,9 +8,9 @@ current_task_title: ""
 status_summary: idle
 blockers: []
 next_action: Select the next eligible task
-last_verification_result: pass for T-248-run-cross-platform-workflow-contract-tests-in-ci at 2026-08-28T14:24:17Z id 769577d58b7ba6b4a29d277ce7908d31
-last_verification_id: 769577d58b7ba6b4a29d277ce7908d31
-last_verified_completion_id: 2a68ac9633721ebe710756bea8a55e05
+last_verification_result: pass for T-376-fix-native-workflow-contract-portability at 2026-08-28T15:34:00Z id 1ea36ea468cd72753ae25142ba905b43
+last_verification_id: 1ea36ea468cd72753ae25142ba905b43
+last_verified_completion_id: 5f28971a4e5421404f03f283a3292e7c
 relevant_artifacts: []
 continuation_notes:
     - This repository is temporarily dogfooding bootstrap workflow tooling until Taskrail v0.1.0 exists.
@@ -36,7 +36,7 @@ continuation_notes:
 
 ## Last Verification
 
-- pass for T-248-run-cross-platform-workflow-contract-tests-in-ci at 2026-08-28T14:24:17Z id 769577d58b7ba6b4a29d277ce7908d31
+- pass for T-376-fix-native-workflow-contract-portability at 2026-08-28T15:34:00Z id 1ea36ea468cd72753ae25142ba905b43
 
 ## Next Action
 
@@ -54,6 +54,6 @@ continuation_notes:
 
 - todo: 49
 - in_progress: 0
-- completed: 325
+- completed: 326
 - blocked: 0
 - cancelled: 0

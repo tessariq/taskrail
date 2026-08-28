@@ -17,7 +17,7 @@ func TestSelectWorkflowSuiteTestsRejectsUnmatchedSelector(t *testing.T) {
 
 func TestWorkflowTestEventsRejectsMissingOrUnexpectedTests(t *testing.T) {
 	output := []byte("{\"Action\":\"run\",\"Test\":\"TestPresent\"}\n{\"Action\":\"pass\",\"Test\":\"TestPresent\"}\n")
-	run, passed, err := workflowTestEvents(output)
+	run, passed, skipped, err := workflowTestEvents(output)
 	if err != nil {
 		t.Fatalf("workflowTestEvents: %v", err)
 	}
@@ -27,6 +27,40 @@ func TestWorkflowTestEventsRejectsMissingOrUnexpectedTests(t *testing.T) {
 	if got, want := passed, []string{"TestPresent"}; !slices.Equal(got, want) {
 		t.Errorf("passed = %v, want %v", got, want)
 	}
+	if len(skipped) != 0 {
+		t.Errorf("skipped = %v, want none", skipped)
+	}
+}
+
+func TestWorkflowTestEventsRecordsExplicitSkipReasons(t *testing.T) {
+	output := []byte("{\"Action\":\"run\",\"Test\":\"TestUnsupported\"}\n" +
+		"{\"Action\":\"output\",\"Test\":\"TestUnsupported\",\"Output\":\"=== PAUSE TestUnsupported\\n\"}\n" +
+		"{\"Action\":\"output\",\"Test\":\"TestUnsupported\",\"Output\":\"=== CONT  TestUnsupported\\n\"}\n" +
+		"{\"Action\":\"output\",\"Test\":\"TestUnsupported\",\"Output\":\"    contract_test.go:42: native capability unavailable\\n\"}\n" +
+		"{\"Action\":\"skip\",\"Test\":\"TestUnsupported\"}\n")
+	_, _, skipped, err := workflowTestEvents(output)
+	if err != nil {
+		t.Fatalf("workflowTestEvents: %v", err)
+	}
+	want := []WorkflowContractTestSkip{{Name: "TestUnsupported", Reason: "native capability unavailable"}}
+	if !reflect.DeepEqual(skipped, want) {
+		t.Errorf("skipped = %#v, want %#v", skipped, want)
+	}
+}
+
+func TestWorkflowTestEventsLeavesBareSkipReasonEmpty(t *testing.T) {
+	output := []byte("{\"Action\":\"run\",\"Test\":\"TestUnsupported\"}\n" +
+		"{\"Action\":\"output\",\"Test\":\"TestUnsupported\",\"Output\":\"    contract_test.go:41: setup completed\\n\"}\n" +
+		"{\"Action\":\"output\",\"Test\":\"TestUnsupported\",\"Output\":\"    contract_test.go:42: \\n\"}\n" +
+		"{\"Action\":\"skip\",\"Test\":\"TestUnsupported\"}\n")
+	_, _, skipped, err := workflowTestEvents(output)
+	if err != nil {
+		t.Fatalf("workflowTestEvents: %v", err)
+	}
+	want := []WorkflowContractTestSkip{{Name: "TestUnsupported"}}
+	if !reflect.DeepEqual(skipped, want) {
+		t.Errorf("skipped = %#v, want %#v", skipped, want)
+	}
 }
 
 func TestValidateWorkflowSuiteExecutionRejectsCountDrift(t *testing.T) {
@@ -35,18 +69,28 @@ func TestValidateWorkflowSuiteExecutionRejectsCountDrift(t *testing.T) {
 		name     string
 		executed []string
 		passed   []string
+		skipped  []WorkflowContractTestSkip
 		want     string
 	}{
 		{name: "missing execution", executed: nil, passed: nil, want: "executed tests"},
 		{name: "unexpected execution", executed: []string{"TestExpected", "TestExtra"}, passed: []string{"TestExpected", "TestExtra"}, want: "executed tests"},
-		{name: "missing pass", executed: []string{"TestExpected"}, passed: nil, want: "passed tests"},
+		{name: "missing terminal result", executed: []string{"TestExpected"}, want: "terminal results"},
+		{name: "unreasoned skip", executed: []string{"TestExpected"}, skipped: []WorkflowContractTestSkip{{Name: "TestExpected"}}, want: "empty reason"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			err := validateWorkflowSuiteExecution(suite, []string{"TestExpected"}, tc.executed, tc.passed)
+			err := validateWorkflowSuiteExecution(suite, []string{"TestExpected"}, tc.executed, tc.passed, tc.skipped)
 			if err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Fatalf("validateWorkflowSuiteExecution error = %v, want %q", err, tc.want)
 			}
 		})
+	}
+}
+
+func TestValidateWorkflowSuiteExecutionAcceptsExplicitSkip(t *testing.T) {
+	suite := WorkflowContractSuite{Name: "native-capability"}
+	skipped := []WorkflowContractTestSkip{{Name: "TestExpected", Reason: "native capability unavailable"}}
+	if err := validateWorkflowSuiteExecution(suite, []string{"TestExpected"}, []string{"TestExpected"}, nil, skipped); err != nil {
+		t.Fatalf("validateWorkflowSuiteExecution: %v", err)
 	}
 }
 
