@@ -108,6 +108,9 @@ func finishCommand(cmd *cobra.Command, svc *taskrail.Service, produce func(*task
 }
 
 func bootstrapLocalForCommand(cmd *cobra.Command, svc *taskrail.Service) ([]taskrail.Warning, *taskrail.Service, error) {
+	if taskrail.DelegatedInvocation() {
+		return nil, svc, nil
+	}
 	if !implicitLocalBootstrapCommand(cmd) {
 		return nil, svc, nil
 	}

@@ -121,7 +121,7 @@ var (
 	taskAuthorErrors = []string{
 		"invalid_arguments", "not_initialized", "incompatible_layout",
 		"migration_in_progress", "task_not_found", "invalid_status", "invalid_digest",
-		"invalid_proposal", "lock_held", "write_conflict", "recovery_pending",
+		"invalid_proposal", "lock_held", "delegated_write_refused", "write_conflict", "recovery_pending",
 		"partial_write", "rollback_failed",
 	}
 	dependencyErrors = mergeCodes(writerErrors, []string{
@@ -135,7 +135,7 @@ var (
 		"invalid_arguments", "not_initialized", "incompatible_layout",
 		"migration_in_progress", "repository_invalid", "invalid_digest", "source_changed",
 		"invalid_proposal", "prompt_invalid", "destination_exists", "path_blocked",
-		"lock_held", "write_conflict", "recovery_pending", "partial_write", "rollback_failed",
+		"lock_held", "delegated_write_refused", "write_conflict", "recovery_pending", "partial_write", "rollback_failed",
 	}
 	contentWriterErrors = mergeCodes(writerErrors, []string{
 		"invalid_digest", "source_changed", "destination_exists", "path_blocked", "git_state",

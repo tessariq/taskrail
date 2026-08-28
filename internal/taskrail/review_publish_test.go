@@ -1,12 +1,15 @@
 package taskrail
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/tessariq/taskrail/internal/repolock"
 )
 
 func TestReviewPublishTaskPreviewAndApplyBindExactBytes(t *testing.T) {
@@ -46,6 +49,7 @@ func TestReviewPublishTaskPreviewAndApplyBindExactBytes(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(repo, "planning", "reviews", "task", "T-215-review", "session-1")); !os.IsNotExist(err) {
 		t.Fatalf("preview created destination: %v", err)
 	}
+	assertDirectReviewLockHeld(t, svc, input)
 	applied, err := svc.ReviewPublish(input)
 	if err != nil {
 		t.Fatalf("apply: %v", err)
@@ -74,6 +78,7 @@ func TestReviewPublishSpecPreviewAndApplyBindExactBytes(t *testing.T) {
 	if preview.Applied || len(preview.Files) != 5 || len(preview.Subjects) != 1 {
 		t.Fatalf("preview = %+v", preview)
 	}
+	assertDirectReviewLockHeld(t, svc, input)
 	if _, err := svc.ReviewPublish(input); err != nil {
 		t.Fatalf("apply: %v", err)
 	}
@@ -109,6 +114,7 @@ func TestReviewPublishDecompositionPreviewAndApplyBindExactBytes(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(repo, "planning", "reviews", "decomposition", "v0.5.0", "decomposition-1")); !os.IsNotExist(err) {
 		t.Fatalf("preview created destination: %v", err)
 	}
+	assertDirectReviewLockHeld(t, svc, input)
 	applied, err := svc.ReviewPublish(input)
 	if err != nil {
 		t.Fatalf("apply: %v", err)
@@ -121,6 +127,80 @@ func TestReviewPublishDecompositionPreviewAndApplyBindExactBytes(t *testing.T) {
 		if err != nil || string(got) != string(want) {
 			t.Fatalf("published %s = %q, err=%v", name, got, err)
 		}
+	}
+}
+
+func TestReviewPublishRefusesDelegatedInvocationBeforePublication(t *testing.T) {
+	storages := []struct {
+		name  string
+		setup func(t *testing.T) (*Service, string)
+	}{
+		{"committed", func(t *testing.T) (*Service, string) {
+			repo := realGitRepo(t)
+			seedFixtureTree(t, repo)
+			svc, err := NewService(repo)
+			if err != nil {
+				t.Fatal(err)
+			}
+			return svc, repo
+		}},
+		{"local", localWriterFixture},
+	}
+	delegations := []struct {
+		name string
+		set  func(t *testing.T, svc *Service)
+	}{
+		{"invalid", func(t *testing.T, _ *Service) { t.Setenv("TASKRAIL_DELEGATION_TOKEN", "child-token") }},
+		{"valid", func(t *testing.T, svc *Service) { setValidLoopDelegation(t, svc, "T-215-review") }},
+	}
+	for _, storage := range storages {
+		for _, delegation := range delegations {
+			for _, reviewType := range []string{"task", "spec", "decomposition", "workflow"} {
+				for _, dryRun := range []bool{true, false} {
+					t.Run(storage.name+"/"+delegation.name+"/"+reviewType+"/"+map[bool]string{true: "preview", false: "apply"}[dryRun], func(t *testing.T) {
+						svc, repo := storage.setup(t)
+						delegation.set(t, svc)
+						before := snapshotTree(t, repo)
+						lockBefore := snapshotLockFile(t, svc)
+
+						_, err := svc.ReviewPublish(ReviewPublishInput{Type: reviewType, DryRun: dryRun})
+						if err == nil || MachineFailureFor(err).Code != MachineCodeDelegatedRefused {
+							t.Fatalf("delegated %s review publish = %v, want delegated_write_refused", reviewType, err)
+						}
+						if got := snapshotTree(t, repo); !mapEqual(got, before) {
+							t.Fatalf("delegated %s review publish changed repository bytes", reviewType)
+						}
+						if got := snapshotLockFile(t, svc); got != lockBefore {
+							t.Fatalf("delegated %s review publish changed lock bytes", reviewType)
+						}
+					})
+				}
+			}
+		}
+	}
+}
+
+func assertDirectReviewLockHeld(t *testing.T, svc *Service, input ReviewPublishInput) {
+	t.Helper()
+	lock, err := repolock.Acquire(context.Background(), repolock.Request{
+		Repository: svc.paths.LockRepository(),
+		Command:    "test",
+		Capability: repolock.Capability{Commands: []string{"test"}},
+	})
+	if err != nil {
+		t.Fatalf("acquire direct test lock: %v", err)
+	}
+	t.Cleanup(func() { _ = lock.Release() })
+	before := snapshotLockFile(t, svc)
+	_, err = svc.ReviewPublish(input)
+	if err == nil || MachineFailureFor(err).Code != MachineCodeLockHeld {
+		t.Fatalf("contended %s review publish = %v, want lock_held", input.Type, err)
+	}
+	if got := snapshotLockFile(t, svc); got != before {
+		t.Fatalf("contended %s review publish changed lock bytes", input.Type)
+	}
+	if err := lock.Release(); err != nil {
+		t.Fatalf("release direct lock: %v", err)
 	}
 }
 

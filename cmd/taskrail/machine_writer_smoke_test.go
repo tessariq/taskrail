@@ -385,6 +385,66 @@ func TestWriterRefusalsPublishRegisteredErrorEnvelopes(t *testing.T) {
 	}
 }
 
+func TestDelegatedAuthorAndReviewPublishRefuseInTextAndJSONModes(t *testing.T) {
+	cases := []struct {
+		name    string
+		args    []string
+		command string
+	}{
+		{"task author", []string{"task", "author", "T-100", "--body", "proposal.md", "--expect-sha256", strings.Repeat("a", 64)}, "task author"},
+		{"task review", []string{"review", "publish", "--type", "task", "--destination", "planning/reviews/task/T-100/session-1"}, "review publish"},
+		{"spec review", []string{"review", "publish", "--type", "spec", "--destination", "planning/reviews/spec/v0.1.0/session-1"}, "review publish"},
+		{"decomposition review", []string{"review", "publish", "--type", "decomposition", "--destination", "planning/reviews/decomposition/v0.1.0/session-1"}, "review publish"},
+		{"workflow review", []string{"review", "publish", "--type", "workflow", "--destination", "planning/reviews/workflow-adversarial/runs/v0.1.0/session-1.json"}, "review publish"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			root := seedTodo(t)
+			before := readAllFiles(t, root)
+			t.Setenv("TASKRAIL_DELEGATION_TOKEN", "child-token")
+
+			machineArgs := append(slices.Clone(tc.args), "--json")
+			stdout, _, err := runRootSplit(t, machineArgs...)
+			if err == nil || taskrail.MachineFailureFor(err).Code != taskrail.MachineCodeDelegatedRefused {
+				t.Fatalf("delegated %v = %v, want delegated_write_refused", machineArgs, err)
+			}
+			failure := decodeMachineError(t, stdout)
+			if failure.Code != taskrail.MachineCodeDelegatedRefused || failure.Details.Applied || len(failure.Details.Violations) != 0 || len(failure.Details.Paths) != 0 || len(failure.Details.Snapshots) != 0 || failure.Details.Recovery != nil {
+				t.Fatalf("delegated machine failure = %+v", failure)
+			}
+
+			textOut, textErr, err := runRootSplit(t, tc.args...)
+			if err == nil || taskrail.MachineFailureFor(err).Code != taskrail.MachineCodeDelegatedRefused {
+				t.Fatalf("delegated %v = %v, want delegated_write_refused", tc.args, err)
+			}
+			if strings.Contains(textOut, `"schema_version"`) || strings.Contains(textErr, `"schema_version"`) {
+				t.Fatalf("delegated text output = stdout %q stderr %q", textOut, textErr)
+			}
+			if after := readAllFiles(t, root); !maps.Equal(after, before) {
+				t.Fatal("delegated command changed repository bytes")
+			}
+		})
+	}
+}
+
+func TestDelegatedTaskAuthorDoesNotBootstrapLocalStorage(t *testing.T) {
+	root := setupUninitializedGitRepo(t)
+	before := readAllFiles(t, root)
+	t.Setenv("TASKRAIL_DELEGATION_TOKEN", "child-token")
+
+	stdout, _, err := runRootSplit(t, "task", "author", "T-100", "--body", "proposal.md", "--expect-sha256", strings.Repeat("a", 64), "--json")
+	if err == nil || taskrail.MachineFailureFor(err).Code != taskrail.MachineCodeDelegatedRefused {
+		t.Fatalf("delegated uninitialized task author = %v, want delegated_write_refused", err)
+	}
+	if failure := decodeMachineError(t, stdout); failure.Code != taskrail.MachineCodeDelegatedRefused || failure.Details.Applied {
+		t.Fatalf("delegated uninitialized machine failure = %+v", failure)
+	}
+	if after := readAllFiles(t, root); !maps.Equal(after, before) {
+		t.Fatal("delegated task author bootstrapped local storage")
+	}
+}
+
 // A3: a refused writer leaves the repository exactly as it found it, so the
 // error envelope's `applied:false` is a fact about the tree and not just a
 // constant.

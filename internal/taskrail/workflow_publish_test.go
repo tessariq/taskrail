@@ -55,6 +55,7 @@ func TestReviewPublishWorkflowPreviewAndApplyBindReportAndMemory(t *testing.T) {
 		t.Fatalf("preview created memory: %v", err)
 	}
 	requireRecoveryDirectoryDurability(t, repo)
+	assertDirectReviewLockHeld(t, svc, input)
 	if _, err := svc.ReviewPublish(input); err != nil {
 		t.Fatalf("apply: %v", err)
 	}

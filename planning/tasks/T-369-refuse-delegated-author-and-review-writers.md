@@ -1,13 +1,18 @@
 ---
 id: T-369-refuse-delegated-author-and-review-writers
 title: Refuse delegated author and review writers consistently
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#uniform-agent-machine-results
 dependencies:
     - T-161-apply-reviewed-task-bodies-with-compare-and-swap
     - T-215-add-the-generic-review-artifact-publisher
-updated_at: "2026-08-26T09:03:48Z"
+updated_at: "2026-08-28T08:26:52Z"
+completion_id: "5f5ad1aec93b9d94bc72151ba7f0b50c"
+last_verification_id: "1bee71b62476869edf7766820b5a1ecf"
+last_verification_result: pass
+last_verified_at: "2026-08-28T08:26:52Z"
+last_verified_completion_id: "5f5ad1aec93b9d94bc72151ba7f0b50c"
 ---
 
 # T-369-refuse-delegated-author-and-review-writers Refuse delegated author and review writers consistently
@@ -35,3 +40,6 @@ write sets. Strict JSON and human modes must classify the same refusal.
   and cross-platform CI.
 
 ## Implementation Notes
+
+- 2026-08-28T08:26:40Z: Refused delegated task authoring and review publication before semantic reads or writes; aligned machine contracts and regression coverage.
+- 2026-08-28T08:26:52Z: verification pass id 1bee71b62476869edf7766820b5a1ecf previous none completion 5f5ad1aec93b9d94bc72151ba7f0b50c

@@ -141,6 +141,9 @@ func (s *Service) ReviewPublish(input ReviewPublishInput) (ReviewPublishResult, 
 	if err := validateReviewPublishInput(input); err != nil {
 		return ReviewPublishResult{}, err
 	}
+	if delegatedInvocation() {
+		return ReviewPublishResult{}, WithMachineErrorCode(MachineCodeDelegatedRefused, fmt.Errorf("delegated loop children cannot invoke review publish"))
+	}
 	switch reviewdir.Type(input.Type) {
 	case reviewdir.TypeTask:
 		return s.reviewPublishTask(input)

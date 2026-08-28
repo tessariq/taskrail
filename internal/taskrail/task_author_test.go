@@ -1,10 +1,13 @@
 package taskrail
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/tessariq/taskrail/internal/repolock"
 )
 
 func TestTaskAuthorPreviewAndApplyOnlyReplaceReviewedSections(t *testing.T) {
@@ -101,6 +104,150 @@ func TestTaskAuthorRefusesInvalidProposalAndStaleDigestWithoutWriting(t *testing
 			}
 		})
 	}
+}
+
+func TestTaskAuthorRefusesDelegatedInvocationWithoutWriting(t *testing.T) {
+	storages := []struct {
+		name  string
+		setup func(t *testing.T) (*Service, string)
+	}{
+		{"committed", func(t *testing.T) (*Service, string) {
+			repo := realGitRepo(t)
+			seedFixtureTree(t, repo)
+			writeFile(t, filepath.Join(repo, ".taskrail", "config.yml"), layout2Marker("committed", "specs", "planning"))
+			writeAuthorableTask(t, repo)
+			svc, err := NewService(repo)
+			if err != nil {
+				t.Fatal(err)
+			}
+			return svc, repo
+		}},
+		{"local", localWriterFixture},
+	}
+	delegations := []struct {
+		name string
+		set  func(t *testing.T, svc *Service)
+	}{
+		{"invalid", func(t *testing.T, _ *Service) { t.Setenv("TASKRAIL_DELEGATION_TOKEN", "child-token") }},
+		{"valid", func(t *testing.T, svc *Service) { setValidLoopDelegation(t, svc, "T-215-author") }},
+	}
+	for _, storage := range storages {
+		for _, delegation := range delegations {
+			for _, dryRun := range []bool{true, false} {
+				t.Run(storage.name+"/"+delegation.name+"/"+map[bool]string{true: "preview", false: "apply"}[dryRun], func(t *testing.T) {
+					svc, repo := storage.setup(t)
+					delegation.set(t, svc)
+					before := snapshotTree(t, repo)
+					lockBefore := snapshotLockFile(t, svc)
+
+					_, err := svc.TaskAuthor(TaskAuthorInput{TaskID: "T-215-author", BodyPath: "proposal.md", ExpectSHA256: strings.Repeat("a", 64), DryRun: dryRun})
+					if err == nil || MachineFailureFor(err).Code != MachineCodeDelegatedRefused {
+						t.Fatalf("delegated task author = %v, want delegated_write_refused", err)
+					}
+					if got := snapshotTree(t, repo); !mapEqual(got, before) {
+						t.Fatal("delegated task author changed repository bytes")
+					}
+					if got := snapshotLockFile(t, svc); got != lockBefore {
+						t.Fatal("delegated task author changed lock bytes")
+					}
+				})
+			}
+		}
+	}
+}
+
+func TestTaskAuthorDirectContentionReturnsLockHeld(t *testing.T) {
+	for _, storage := range []struct {
+		name  string
+		setup func(t *testing.T) (*Service, string)
+	}{
+		{"committed", func(t *testing.T) (*Service, string) {
+			repo := realGitRepo(t)
+			seedFixtureTree(t, repo)
+			writeFile(t, filepath.Join(repo, ".taskrail", "config.yml"), layout2Marker("committed", "specs", "planning"))
+			writeAuthorableTask(t, repo)
+			svc, err := NewService(repo)
+			if err != nil {
+				t.Fatal(err)
+			}
+			return svc, repo
+		}},
+		{"local", localWriterFixture},
+	} {
+		t.Run(storage.name, func(t *testing.T) {
+			svc, _ := storage.setup(t)
+			lock := acquireDirectTestLock(t, svc)
+			before := snapshotLockFile(t, svc)
+
+			_, err := svc.TaskAuthor(TaskAuthorInput{TaskID: "T-215-author", BodyPath: "proposal.md", ExpectSHA256: strings.Repeat("a", 64)})
+			if err == nil || MachineFailureFor(err).Code != MachineCodeLockHeld {
+				t.Fatalf("contended task author = %v, want lock_held", err)
+			}
+			if got := snapshotLockFile(t, svc); got != before {
+				t.Fatal("contended task author changed lock bytes")
+			}
+			if err := lock.Release(); err != nil {
+				t.Fatalf("release direct lock: %v", err)
+			}
+		})
+	}
+}
+
+func acquireDirectTestLock(t *testing.T, svc *Service) *repolock.Lock {
+	t.Helper()
+	lock, err := repolock.Acquire(context.Background(), repolock.Request{
+		Repository: svc.paths.LockRepository(),
+		Command:    "test",
+		Capability: repolock.Capability{Commands: []string{"test"}},
+	})
+	if err != nil {
+		t.Fatalf("acquire direct test lock: %v", err)
+	}
+	t.Cleanup(func() { _ = lock.Release() })
+	return lock
+}
+
+func snapshotLockFile(t *testing.T, svc *Service) string {
+	t.Helper()
+	data, err := os.ReadFile(repolock.LockPath(svc.paths.LockRepository()))
+	if os.IsNotExist(err) {
+		return ""
+	}
+	if err != nil {
+		t.Fatalf("read lock file: %v", err)
+	}
+	return string(data)
+}
+
+func setValidLoopDelegation(t *testing.T, svc *Service, selectedTask string) {
+	t.Helper()
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatalf("resolve test executable: %v", err)
+	}
+	lock, err := repolock.Acquire(context.Background(), repolock.Request{
+		Repository:    svc.paths.LockRepository(),
+		Command:       "loop",
+		TransactionID: "0123456789abcdef0123456789abcdef",
+		Capability: repolock.Capability{
+			Commands:     []string{"loop"},
+			SelectedTask: selectedTask,
+			Writes:       svc.loopDelegationGrant(selectedTask).Writes,
+		},
+		ExecutablePath: executable,
+	})
+	if err != nil {
+		t.Fatalf("acquire delegating lock: %v", err)
+	}
+	t.Cleanup(func() { _ = lock.Release() })
+	delegation, err := lock.Delegation()
+	if err != nil {
+		t.Fatalf("delegate loop lock: %v", err)
+	}
+	t.Setenv("TASKRAIL", executable)
+	t.Setenv("TASKRAIL_DELEGATION_ID", "0123456789abcdef0123456789abcdef")
+	t.Setenv("TASKRAIL_DELEGATION_TOKEN", delegation.Token)
+	t.Setenv("TASKRAIL_EXECUTABLE_SHA256", delegation.ExecutableSHA256)
 }
 
 func TestTaskAuthorRejectsNonTodoArtifactProposalAndLateTaskChange(t *testing.T) {

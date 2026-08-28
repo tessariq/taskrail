@@ -199,6 +199,13 @@ func withDependencies(tasks []*Task, target *Task, dependencies []string) []*Tas
 func nonNilStrings(values []string) []string { return append([]string{}, values...) }
 
 func delegatedInvocation() bool {
+	return DelegatedInvocation()
+}
+
+// DelegatedInvocation reports whether a loop parent supplied any delegation
+// credential. Admission checks refuse partial credentials before a child can
+// cause bootstrap or other writer-side effects.
+func DelegatedInvocation() bool {
 	for _, name := range []string{"TASKRAIL_DELEGATION_ID", "TASKRAIL_DELEGATION_TOKEN", "TASKRAIL_EXECUTABLE_SHA256"} {
 		if _, present := os.LookupEnv(name); present {
 			return true

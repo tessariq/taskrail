@@ -45,7 +45,7 @@ func (s *Service) TaskAuthor(input TaskAuthorInput) (result TaskAuthorResult, er
 		return result, WithMachineErrorCode(MachineCodeInvalidDigest, fmt.Errorf("expected task digest must be lower-case 64-hex"))
 	}
 	if delegatedInvocation() {
-		return result, invalidArgumentsf("delegated loop children cannot invoke task author")
+		return result, WithMachineErrorCode(MachineCodeDelegatedRefused, fmt.Errorf("delegated loop children cannot invoke task author"))
 	}
 	if err := s.requireLayout2ForTaskAuthor(); err != nil {
 		return result, err
