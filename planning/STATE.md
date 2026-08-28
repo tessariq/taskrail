@@ -1,6 +1,6 @@
 ---
 schema_version: 1
-updated_at: "2026-08-28T11:40:00Z"
+updated_at: "2026-08-28T12:16:54Z"
 active_spec_version: v0.5.0
 active_spec_path: specs/v0.5.0.md
 current_task: ""
@@ -8,9 +8,9 @@ current_task_title: ""
 status_summary: idle
 blockers: []
 next_action: Select the next eligible task
-last_verification_result: pass for T-375-prevent-git-fixture-cleanup-races at 2026-08-28T11:40:00Z id 60149651c5057bb92cf2a24eb1df606e
-last_verification_id: 60149651c5057bb92cf2a24eb1df606e
-last_verified_completion_id: f964ed643a3734d6c46bddbbd5a9b82c
+last_verification_result: pass for T-258-retire-the-temporary-source-checkout-autonomous at 2026-08-28T12:16:54Z id 107c849f34caf3ab6d5cab6880adab7d
+last_verification_id: 107c849f34caf3ab6d5cab6880adab7d
+last_verified_completion_id: 965b19bc38c99106354aeefe9fc0074f
 relevant_artifacts: []
 continuation_notes:
     - This repository is temporarily dogfooding bootstrap workflow tooling until Taskrail v0.1.0 exists.
@@ -36,7 +36,7 @@ continuation_notes:
 
 ## Last Verification
 
-- pass for T-375-prevent-git-fixture-cleanup-races at 2026-08-28T11:40:00Z id 60149651c5057bb92cf2a24eb1df606e
+- pass for T-258-retire-the-temporary-source-checkout-autonomous at 2026-08-28T12:16:54Z id 107c849f34caf3ab6d5cab6880adab7d
 
 ## Next Action
 
@@ -52,8 +52,8 @@ continuation_notes:
 
 ## Task Counts
 
-- todo: 52
+- todo: 51
 - in_progress: 0
-- completed: 322
+- completed: 323
 - blocked: 0
 - cancelled: 0

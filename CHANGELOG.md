@@ -140,13 +140,6 @@ All notable user-visible changes to Taskrail will be documented in this file.
   through one normal transaction. Source or destination races refuse with
   `write_conflict`; handled failures roll back unchanged candidates and retain
   common conflict evidence instead of returning a partial-success result.
-- The temporary source-checkout autonomous loop now includes an operator-owned
-  parent-agent bridge that elicits finite runner choices, requires an exact
-  dry-run and confirmation, supervises ranked batch and delivery outcomes,
-  observes GitHub workflows only for the exact pushed head, and safely offers
-  delivery-only recovery for an identified private XDG bundle. Quota and reset
-  statements remain attributed external evidence and never authorize retry,
-  replacement, background relaunch, queue mutation, or a false green result.
 - Fresh/adopted `taskrail init` and `taskrail retrofit --apply` now publish
   their complete marker, scaffold, note, and optional skill sets through one
   repository-locked normal transaction. Concurrent destination or source edits
@@ -318,9 +311,6 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 - Read-only Git probes now suppress Git's optional locks and index refreshes, so
   loop dry-runs cannot change `.git/index` merely by checking repository status.
-- The temporary source-checkout autonomous loop now recognizes and validates the
-  stable verification identity fields introduced by T-285 while retaining strict
-  rejection of malformed identities and unrelated report fields.
 
 ## v0.4.0 - 2026-07-30
 

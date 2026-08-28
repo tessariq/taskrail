@@ -1,14 +1,19 @@
 ---
 id: T-258-retire-the-temporary-source-checkout-autonomous
 title: Retire the temporary source-checkout autonomous loop
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#source-checkout-bootstrap-loop-retirement
 dependencies:
     - T-225-prove-local-autonomous-delivery-across-git
     - T-257-add-the-temporary-source-checkout-autonomous-loop
     - T-338-guide-temporary-loop-orchestration-and-delivery
-updated_at: "2026-08-08T11:19:52Z"
+updated_at: "2026-08-28T12:16:54Z"
+completion_id: "965b19bc38c99106354aeefe9fc0074f"
+last_verification_id: "107c849f34caf3ab6d5cab6880adab7d"
+last_verification_result: pass
+last_verified_at: "2026-08-28T12:16:54Z"
+last_verified_completion_id: "965b19bc38c99106354aeefe9fc0074f"
 ---
 
 # T-258-retire-the-temporary-source-checkout-autonomous Retire the temporary source-checkout autonomous loop
@@ -41,3 +46,6 @@ repository to human-invoked task execution before cross-surface and release gate
 - Inspect release artifacts to prove no deleted bootstrap file is packaged.
 
 ## Implementation Notes
+
+- 2026-08-28T12:16:41Z: Retired the source-checkout bootstrap by deleting scripts/autonomous-loop in full, removing unreleased live changelog claims, and reducing the active spec section to historical retirement evidence while preserving the v0.5 source-checkout exclusion.
+- 2026-08-28T12:16:54Z: verification pass id 107c849f34caf3ab6d5cab6880adab7d previous none completion 965b19bc38c99106354aeefe9fc0074f
