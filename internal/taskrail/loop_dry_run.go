@@ -231,6 +231,25 @@ func (s *Service) loopParallelPlan(snapshot LoopPreflightSnapshot, rows []TaskLo
 		Workspace: workspace, Delivery: invocation.Delivery, ReviewAdapter: adapter, Frontier: frontier}, nil
 }
 
+func (s *Service) frozenTaskNumericMaximum(snapshot LoopPreflightSnapshot) int {
+	maximum := 0
+	taskRoot := filepath.ToSlash(relPath(s.paths.RepoRoot, s.paths.TasksDir)) + "/"
+	for inputPath, data := range snapshot.Inputs() {
+		filename, found := strings.CutPrefix(inputPath, taskRoot)
+		if !found || path.Dir(filename) != "." || path.Ext(filename) != ".md" {
+			continue
+		}
+		frontmatter, _, err := parseFrontmatter[TaskFrontmatter](data)
+		if err != nil || frontmatter.ID == "" {
+			continue
+		}
+		if number, ok := taskNumericPrefix(frontmatter.ID); ok && number > maximum {
+			maximum = number
+		}
+	}
+	return maximum
+}
+
 func resolveReviewAdapter(adapter string) (string, error) {
 	if adapter == "" {
 		return "", invalidArgumentsf("--delivery review requires exactly one --review-adapter")

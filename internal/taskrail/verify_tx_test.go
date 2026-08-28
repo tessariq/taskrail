@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -506,7 +507,7 @@ func TestVerifyPreservesNonCanonicalStatusBytes(t *testing.T) {
 // verifyDelegationFixture acquires a loop-style delegating lock over the
 // fixture repository, granting exactly the write set a delegated verify must
 // claim for the selected task.
-func verifyDelegationFixture(t *testing.T, selected string) (*Service, string, repolock.Delegation) {
+func verifyDelegationFixture(t *testing.T, selected string, sequence ...*repolock.FollowupSequence) (*Service, string, repolock.Delegation) {
 	t.Helper()
 	repo := seedFixtureRepo(t)
 	writeTask(t, repo, selected, "Verified item", "completed", "high", "specs/v0.1.0.md#summary", nil)
@@ -528,14 +529,16 @@ updated_at: "2026-03-31T00:00:00Z"
 	if err != nil {
 		t.Fatalf("resolve test executable: %v", err)
 	}
+	grant := svc.loopDelegationGrant(selected, sequence...)
 	lock, err := repolock.Acquire(context.Background(), repolock.Request{
 		Repository:    svc.paths.LockRepository(),
 		Command:       "loop",
 		TransactionID: delegatedVerificationID,
 		Capability: repolock.Capability{
-			Commands:     []string{"loop"},
-			SelectedTask: selected,
-			Writes:       svc.loopDelegationGrant(selected).Writes,
+			Commands:         []string{"loop"},
+			SelectedTask:     selected,
+			Writes:           grant.Writes,
+			FollowupSequence: grant.FollowupSequence,
 		},
 		ExecutablePath: executable,
 	})
@@ -560,6 +563,11 @@ func asVerifyDelegate(t *testing.T, delegation repolock.Delegation) {
 	t.Setenv("TASKRAIL_DELEGATION_ID", "0123456789abcdef0123456789abcdef")
 	t.Setenv("TASKRAIL_DELEGATION_TOKEN", delegation.Token)
 	t.Setenv("TASKRAIL_EXECUTABLE_SHA256", delegation.ExecutableSHA256)
+	if sequence := delegation.Grant.FollowupSequence; sequence != nil {
+		t.Setenv("TASKRAIL_FOLLOWUP_MAX", strconv.Itoa(sequence.Maximum))
+		t.Setenv("TASKRAIL_FOLLOWUP_WIDTH", strconv.Itoa(sequence.Width))
+		t.Setenv("TASKRAIL_FOLLOWUP_RANK", strconv.Itoa(sequence.Rank))
+	}
 }
 
 // A delegated verify joins its parent's broad loop grant and publishes through
@@ -599,6 +607,43 @@ func TestDelegatedVerifyWrites(t *testing.T) {
 		}
 		if result.FollowupTaskID != "T-010-delegated-gap" {
 			t.Fatalf("follow-up id = %q", result.FollowupTaskID)
+		}
+	})
+
+	t.Run("follow-up creation uses its granted worker sequence", func(t *testing.T) {
+		sequence := &repolock.FollowupSequence{Maximum: 9, Width: 2, Rank: 2}
+		svc, _, delegation := verifyDelegationFixture(t, "T-002", sequence)
+		asVerifyDelegate(t, delegation)
+
+		input := baseVerifyInput()
+		input.Result = "fail"
+		input.CreateFollowup = true
+		input.FollowupTitle = "Second worker gap"
+		result, err := runVerify(t, svc, input)
+		if err != nil {
+			t.Fatalf("delegated verify with worker sequence: %v", err)
+		}
+		if result.FollowupTaskID != "T-011-second-worker-gap" {
+			t.Fatalf("follow-up id = %q, want worker rank allocation", result.FollowupTaskID)
+		}
+	})
+
+	t.Run("altered worker sequence refuses without writes", func(t *testing.T) {
+		sequence := &repolock.FollowupSequence{Maximum: 9, Width: 2, Rank: 2}
+		svc, repo, delegation := verifyDelegationFixture(t, "T-002", sequence)
+		asVerifyDelegate(t, delegation)
+		t.Setenv("TASKRAIL_FOLLOWUP_RANK", "1")
+		before := snapshotTree(t, repo)
+
+		input := baseVerifyInput()
+		input.Result = "fail"
+		input.CreateFollowup = true
+		input.FollowupTitle = "Altered worker gap"
+		if _, err := runVerify(t, svc, input); err == nil || MachineFailureFor(err).Code != MachineCodeDelegatedRefused {
+			t.Fatalf("altered worker sequence = %v, want delegated_write_refused", err)
+		}
+		if got := snapshotTree(t, repo); !mapEqual(got, before) {
+			t.Fatal("altered worker sequence changed repository bytes")
 		}
 	})
 
@@ -673,6 +718,32 @@ func TestDelegatedVerifyWrites(t *testing.T) {
 			t.Fatalf("delegated verify changed an owned line:\nwant:\n%s\ngot:\n%s", want, after)
 		}
 	})
+}
+
+func TestNextDelegatedFollowupIDPartitionsWorkerSequences(t *testing.T) {
+	tests := []struct {
+		name     string
+		sequence repolock.FollowupSequence
+		tasks    []string
+		want     string
+	}{
+		{name: "two workers rank one first", sequence: repolock.FollowupSequence{Maximum: 9, Width: 2, Rank: 1}, want: "T-010"},
+		{name: "two workers rank two first", sequence: repolock.FollowupSequence{Maximum: 9, Width: 2, Rank: 2}, want: "T-011"},
+		{name: "two workers rank one next", sequence: repolock.FollowupSequence{Maximum: 9, Width: 2, Rank: 1}, tasks: []string{"T-010-first", "T-011-other-worker"}, want: "T-012"},
+		{name: "four workers rank four next", sequence: repolock.FollowupSequence{Maximum: 9, Width: 4, Rank: 4}, tasks: []string{"T-010-first", "T-011-second", "T-012-third", "T-013-fourth"}, want: "T-017"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tasks := make([]*Task, len(tt.tasks))
+			for i, id := range tt.tasks {
+				tasks[i] = &Task{Frontmatter: TaskFrontmatter{ID: id}}
+			}
+			got, err := nextDelegatedFollowupID(tasks, &tt.sequence)
+			if err != nil || got != tt.want {
+				t.Fatalf("next delegated follow-up id = %q, %v; want %q", got, err, tt.want)
+			}
+		})
+	}
 }
 
 // Local planning stores verification artifacts beneath its ignored overlay. The

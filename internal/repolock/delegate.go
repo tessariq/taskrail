@@ -128,16 +128,22 @@ func delegationGrant(capability Capability) (Capability, error) {
 	grant := DelegatedCapability()
 	grant.SelectedTask = normalized.SelectedTask
 	grant.Writes = normalized.Writes
+	grant.FollowupSequence = normalized.FollowupSequence
+	if err := ValidateFollowupSequence(grant.FollowupSequence); err != nil {
+		return Capability{}, err
+	}
 	return grant, nil
 }
 
 func delegationDigest(token string, grant Capability) string {
 	canonical, _ := json.Marshal(struct {
-		SelectedTask string   `json:"selected_task"`
-		Writes       []string `json:"writes"`
+		SelectedTask     string            `json:"selected_task"`
+		Writes           []string          `json:"writes"`
+		FollowupSequence *FollowupSequence `json:"followup_sequence,omitempty"`
 	}{
-		SelectedTask: grant.SelectedTask,
-		Writes:       grant.Writes,
+		SelectedTask:     grant.SelectedTask,
+		Writes:           grant.Writes,
+		FollowupSequence: grant.FollowupSequence,
 	})
 	mac := hmac.New(sha256.New, []byte(token))
 	_, _ = mac.Write(canonical)

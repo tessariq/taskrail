@@ -14,6 +14,8 @@ import (
 	"reflect"
 	"strings"
 	"sync"
+
+	"github.com/tessariq/taskrail/internal/repolock"
 )
 
 // ParallelWorker records one immutable worker result in frontier order.
@@ -149,6 +151,7 @@ func (s *Service) loopParallelExecute(ctx context.Context, invocation LoopInvoca
 	if err != nil {
 		return LoopDiagnostic{}, err
 	}
+	maximum := s.frozenTaskNumericMaximum(snapshot)
 	ownership, err := s.beginLoopOwnership(ctx)
 	if err != nil {
 		return LoopDiagnostic{}, err
@@ -200,7 +203,7 @@ func (s *Service) loopParallelExecute(ctx context.Context, invocation LoopInvoca
 		wait.Add(1)
 		go func(i int) {
 			defer wait.Done()
-			batch.Workers[i] = s.runParallelWorker(ctx, invocation, plan, implementationPromptSource, batch.Workers[i], stdout, stderr)
+			batch.Workers[i] = s.runParallelWorker(ctx, invocation, plan, maximum, implementationPromptSource, batch.Workers[i], stdout, stderr)
 		}(i)
 	}
 	wait.Wait()
@@ -251,7 +254,7 @@ func canonicalParallelRoot(root string) (string, error) {
 	return canonical, nil
 }
 
-func (s *Service) runParallelWorker(ctx context.Context, invocation LoopInvocation, plan ParallelPlan, implementationPromptSource string, worker ParallelWorker, stdout, stderr io.Writer) ParallelWorker {
+func (s *Service) runParallelWorker(ctx context.Context, invocation LoopInvocation, plan ParallelPlan, maximum int, implementationPromptSource string, worker ParallelWorker, stdout, stderr io.Writer) ParallelWorker {
 	if worker.Workspace == nil {
 		worker.Violations = append(worker.Violations, parallelViolation("workspace_missing", "worker workspace is missing"))
 		return worker
@@ -287,7 +290,8 @@ func (s *Service) runParallelWorker(ctx context.Context, invocation LoopInvocati
 		worker.Violations = append(worker.Violations, parallelViolation("worker_lock_failed", err.Error()))
 		return worker
 	}
-	iteration, _, mutation, process := service.runLoopIterationTo(ctx, snapshot, ownership, worker.Task, stdout, stderr)
+	sequence := &repolock.FollowupSequence{Maximum: maximum, Width: len(plan.Frontier), Rank: worker.Rank}
+	iteration, _, mutation, process := service.runLoopIterationTo(ctx, snapshot, ownership, worker.Task, stdout, stderr, sequence)
 	if err := ownership.close(); err != nil {
 		mutation = append(mutation, parallelViolation("worker_cleanup_failed", err.Error()))
 	}

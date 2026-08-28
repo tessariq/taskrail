@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
+
+	"github.com/tessariq/taskrail/internal/repolock"
 )
 
 // LoopDiagnostic is the terminal report for one sequential loop invocation.
@@ -147,7 +149,7 @@ func (s *Service) runLoopIteration(ctx context.Context, snapshot LoopPreflightSn
 	return s.runLoopIterationTo(ctx, snapshot, ownership, selected, nil, nil)
 }
 
-func (s *Service) runLoopIterationTo(ctx context.Context, snapshot LoopPreflightSnapshot, ownership *loopOwnership, selected TaskLoopRow, stdout, stderr io.Writer) (LoopIteration, int, []MachineViolation, []MachineViolation) {
+func (s *Service) runLoopIterationTo(ctx context.Context, snapshot LoopPreflightSnapshot, ownership *loopOwnership, selected TaskLoopRow, stdout, stderr io.Writer, sequence ...*repolock.FollowupSequence) (LoopIteration, int, []MachineViolation, []MachineViolation) {
 	task, _ := taskByIDFromSlice(s.mustLoadTasks(), selected.TaskID)
 	if task == nil {
 		return LoopIteration{TaskID: selected.TaskID, Outcome: "invalid_postflight", Policy: selected}, 0, []MachineViolation{{Code: "postflight_evidence_missing", Message: "selected task is unavailable"}}, []MachineViolation{}
@@ -156,7 +158,7 @@ func (s *Service) runLoopIterationTo(ctx context.Context, snapshot LoopPreflight
 	if err != nil {
 		return LoopIteration{TaskID: selected.TaskID, Outcome: "invalid_postflight", Policy: selected}, 0, []MachineViolation{{Code: "prompt_changed", Message: err.Error()}}, []MachineViolation{}
 	}
-	identity, err := ownership.delegate(s.loopDelegationGrant(selected.TaskID))
+	identity, err := ownership.delegate(s.loopDelegationGrant(selected.TaskID, sequence...))
 	if err != nil {
 		return LoopIteration{TaskID: selected.TaskID, Outcome: "invalid_postflight", Policy: selected}, 0, []MachineViolation{{Code: "executable_changed", Message: err.Error()}}, []MachineViolation{}
 	}

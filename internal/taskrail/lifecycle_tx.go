@@ -74,14 +74,15 @@ func (s *Service) beginWriterWrite(w writerCommand, selectedTask string, writes 
 			return nil, nil, WithMachineErrorCode(MachineCodeDelegatedRefused,
 				fmt.Errorf("delegated %s has invalid loop identity: %w", w.command, err))
 		}
+		grant := s.loopDelegationGrant(selectedTask, identity.followupSequence)
 		joined, err := repolock.Join(repolock.JoinRequest{
 			Repository:       s.paths.LockRepository(),
 			Command:          w.command,
 			InvocationID:     identity.invocationID,
 			Token:            identity.token,
 			ExecutableSHA256: identity.executableSHA256,
-			Grant:            s.loopDelegationGrant(selectedTask),
-			Capability:       repolock.Capability{Commands: []string{w.command}, TaskFields: w.taskFields, SelectedTask: selectedTask, Writes: writes},
+			Grant:            grant,
+			Capability:       repolock.Capability{Commands: []string{w.command}, TaskFields: w.taskFields, SelectedTask: selectedTask, Writes: writes, FollowupSequence: identity.followupSequence},
 		})
 		if err != nil {
 			return nil, nil, WithMachineErrorCode(MachineCodeDelegatedRefused,
@@ -106,8 +107,12 @@ func (s *Service) beginWriterWrite(w writerCommand, selectedTask string, writes 
 // before a child narrows to one lifecycle transaction. Verification destinations
 // include a runtime-generated timestamp and ID, so its selected-task prefix is
 // part of the canonical grant rather than a concrete writer claim.
-func (s *Service) loopDelegationGrant(taskID string) repolock.Capability {
-	return repolock.Capability{SelectedTask: taskID, Writes: []string{
+func (s *Service) loopDelegationGrant(taskID string, sequence ...*repolock.FollowupSequence) repolock.Capability {
+	var followupSequence *repolock.FollowupSequence
+	if len(sequence) != 0 {
+		followupSequence = sequence[0]
+	}
+	return repolock.Capability{SelectedTask: taskID, FollowupSequence: followupSequence, Writes: []string{
 		s.reportedStatePath(),
 		path.Join(s.paths.LogicalPlanningDir, "tasks") + "/",
 		relPath(s.paths.RepoRoot, filepath.Join(s.paths.VerifyDir, taskID)) + "/",
@@ -118,6 +123,7 @@ type delegatedIdentity struct {
 	invocationID     string
 	token            string
 	executableSHA256 string
+	followupSequence *repolock.FollowupSequence
 }
 
 func delegatedWriterIdentity() (delegatedIdentity, error) {
@@ -156,10 +162,45 @@ func delegatedWriterIdentity() (delegatedIdentity, error) {
 	if err != nil || runningDigest != stagedDigest {
 		return delegatedIdentity{}, errors.New("running executable digest does not match TASKRAIL")
 	}
+	sequence, err := delegatedFollowupSequence()
+	if err != nil {
+		return delegatedIdentity{}, err
+	}
 	return delegatedIdentity{
 		invocationID: values["TASKRAIL_DELEGATION_ID"],
-		token:        values["TASKRAIL_DELEGATION_TOKEN"], executableSHA256: stagedDigest,
+		token:        values["TASKRAIL_DELEGATION_TOKEN"], executableSHA256: stagedDigest, followupSequence: sequence,
 	}, nil
+}
+
+func delegatedFollowupSequence() (*repolock.FollowupSequence, error) {
+	values := [3]string{}
+	present := 0
+	for i, name := range loopFollowupSequenceEnvironmentNames {
+		value, ok := os.LookupEnv(name)
+		if ok {
+			values[i] = value
+			present++
+		}
+	}
+	if present == 0 {
+		return nil, nil
+	}
+	if present != len(values) {
+		return nil, errors.New("delegated follow-up sequence is incomplete")
+	}
+	parsed := [3]int{}
+	for i, value := range values {
+		number, err := strconv.Atoi(value)
+		if err != nil {
+			return nil, errors.New("delegated follow-up sequence is invalid")
+		}
+		parsed[i] = number
+	}
+	sequence := &repolock.FollowupSequence{Maximum: parsed[0], Width: parsed[1], Rank: parsed[2]}
+	if err := repolock.ValidateFollowupSequence(sequence); err != nil {
+		return nil, err
+	}
+	return sequence, nil
 }
 
 // lifecycleLedger is the complete candidate set one lifecycle writer validated

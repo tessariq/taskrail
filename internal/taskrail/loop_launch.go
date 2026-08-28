@@ -8,8 +8,11 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
+
+	"github.com/tessariq/taskrail/internal/repolock"
 )
 
 // loopChildLaunch holds the frozen values a single generic child receives.
@@ -245,16 +248,28 @@ func loopChildEnvironment(identity loopChildIdentity) []string {
 			values = append(values, entry)
 		}
 	}
-	return append(values,
+	values = append(values,
 		"TASKRAIL="+identity.Executable,
 		"TASKRAIL_EXECUTABLE_SHA256="+identity.SHA256,
 		"TASKRAIL_DELEGATION_ID="+identity.InvocationID,
 		"TASKRAIL_DELEGATION_TOKEN="+identity.Token,
 	)
+	return append(values, loopFollowupSequenceEnvironment(identity.FollowupSequence)...)
+}
+
+func loopFollowupSequenceEnvironment(sequence *repolock.FollowupSequence) []string {
+	if sequence == nil {
+		return nil
+	}
+	return []string{
+		"TASKRAIL_FOLLOWUP_MAX=" + strconv.Itoa(sequence.Maximum),
+		"TASKRAIL_FOLLOWUP_WIDTH=" + strconv.Itoa(sequence.Width),
+		"TASKRAIL_FOLLOWUP_RANK=" + strconv.Itoa(sequence.Rank),
+	}
 }
 
 func containsLoopChildEnvironmentName(name string) bool {
-	for _, candidate := range loopChildEnvironmentNames {
+	for _, candidate := range append(loopChildEnvironmentNames, loopFollowupSequenceEnvironmentNames...) {
 		if name == candidate {
 			return true
 		}

@@ -129,6 +129,17 @@ func TestParallelCloneUsesShallowTransportClone(t *testing.T) {
 	}
 }
 
+func TestFrozenTaskNumericMaximumIgnoresNonTaskMarkdown(t *testing.T) {
+	_, svc := loopFixture(t)
+	snapshot := LoopPreflightSnapshot{inputs: map[string][]byte{
+		"planning/tasks/T-009-task.md": []byte("---\nid: T-009-task\n---\n"),
+		"specs/v0.5.0.md":              []byte("---\nid: T-999-not-a-task\n---\n"),
+	}}
+	if got := svc.frozenTaskNumericMaximum(snapshot); got != 9 {
+		t.Fatalf("frozen task numeric maximum = %d, want 9", got)
+	}
+}
+
 func TestLoopExecuteDeliversParallelCloneBatch(t *testing.T) {
 	clearLoopChildEnvironment(t)
 	repo, svc := loopFixture(t)

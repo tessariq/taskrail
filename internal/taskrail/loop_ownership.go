@@ -22,6 +22,12 @@ var loopChildEnvironmentNames = []string{
 	"TASKRAIL_DELEGATION_TOKEN",
 }
 
+var loopFollowupSequenceEnvironmentNames = []string{
+	"TASKRAIL_FOLLOWUP_MAX",
+	"TASKRAIL_FOLLOWUP_WIDTH",
+	"TASKRAIL_FOLLOWUP_RANK",
+}
+
 var loopExecutablePath = os.Executable
 
 type loopStagedExecutable struct {
@@ -40,17 +46,18 @@ type loopOwnership struct {
 // loopChildIdentity is the immutable executable identity plus the per-task
 // delegation secret a later launcher passes only to its selected child.
 type loopChildIdentity struct {
-	Executable   string
-	SHA256       string
-	InvocationID string
-	Token        string
+	Executable       string
+	SHA256           string
+	InvocationID     string
+	Token            string
+	FollowupSequence *repolock.FollowupSequence
 }
 
 // beginLoopOwnership takes the loop's one long-lived writer lock before it
 // creates its private executable copy. Later loop stages perform semantic
 // preflight and child execution while this ownership remains live.
 func (s *Service) beginLoopOwnership(ctx context.Context) (*loopOwnership, error) {
-	for _, name := range loopChildEnvironmentNames {
+	for _, name := range append(loopChildEnvironmentNames, loopFollowupSequenceEnvironmentNames...) {
 		if _, present := os.LookupEnv(name); present {
 			return nil, fmt.Errorf("loop refuses inherited %s", name)
 		}
@@ -92,7 +99,7 @@ func (o *loopOwnership) delegate(grant repolock.Capability) (loopChildIdentity, 
 	}
 	return loopChildIdentity{
 		Executable: o.executable.Path, SHA256: o.executable.SHA256,
-		InvocationID: o.invocation, Token: delegation.Token,
+		InvocationID: o.invocation, Token: delegation.Token, FollowupSequence: delegation.Grant.FollowupSequence,
 	}, nil
 }
 

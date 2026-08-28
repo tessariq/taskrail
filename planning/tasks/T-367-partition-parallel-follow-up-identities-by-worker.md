@@ -1,13 +1,18 @@
 ---
 id: T-367-partition-parallel-follow-up-identities-by-worker
 title: Partition parallel follow-up identities by worker rank
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#parallel-isolated-clone-batches
 dependencies:
     - T-318-accept-inline-loop-follow-up-recommendations
     - T-334-deliver-parallel-clone-batches-locally
-updated_at: "2026-08-26T09:03:46Z"
+updated_at: "2026-08-28T08:18:01Z"
+completion_id: "6580ae07732f1470a9b0e60d13cc15d5"
+last_verification_id: "306d06ac265820b9cd72aaa462dbbd68"
+last_verification_result: pass
+last_verified_at: "2026-08-28T08:18:01Z"
+last_verified_completion_id: "6580ae07732f1470a9b0e60d13cc15d5"
 ---
 
 # T-367-partition-parallel-follow-up-identities-by-worker Partition parallel follow-up identities by worker rank
@@ -36,3 +41,6 @@ sequence while retaining the existing no-cap semantic follow-up policy.
   vet, and cross-platform CI.
 
 ## Implementation Notes
+
+- 2026-08-28T08:17:42Z: Authenticated worker-rank follow-up allocation from the frozen task ledger.
+- 2026-08-28T08:18:01Z: verification pass id 306d06ac265820b9cd72aaa462dbbd68 previous none completion 6580ae07732f1470a9b0e60d13cc15d5

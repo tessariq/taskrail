@@ -25,6 +25,17 @@ type Capability struct {
 	SelectedTask string
 	// Writes is the exact set of reported paths this ownership may publish.
 	Writes []string
+	// FollowupSequence constrains delegated verification-created task identities.
+	// Nil retains the sequential and direct-operator allocation contract.
+	FollowupSequence *FollowupSequence
+}
+
+// FollowupSequence is the frozen arithmetic sequence assigned to one parallel
+// worker. The Kth follow-up uses Maximum + Rank + K*Width.
+type FollowupSequence struct {
+	Maximum int
+	Width   int
+	Rank    int
 }
 
 // delegatedCommands is the exact command set a delegated child writer may join
@@ -60,11 +71,31 @@ func DelegatedCapability() Capability {
 // set. An entry that trims to empty is dropped.
 func (c Capability) normalized() Capability {
 	return Capability{
-		Commands:     normalizeSet(c.Commands),
-		TaskFields:   normalizeSet(c.TaskFields),
-		SelectedTask: strings.TrimSpace(c.SelectedTask),
-		Writes:       normalizeSet(c.Writes),
+		Commands:         normalizeSet(c.Commands),
+		TaskFields:       normalizeSet(c.TaskFields),
+		SelectedTask:     strings.TrimSpace(c.SelectedTask),
+		Writes:           normalizeSet(c.Writes),
+		FollowupSequence: cloneFollowupSequence(c.FollowupSequence),
 	}
+}
+
+func cloneFollowupSequence(sequence *FollowupSequence) *FollowupSequence {
+	if sequence == nil {
+		return nil
+	}
+	copy := *sequence
+	return &copy
+}
+
+// ValidateFollowupSequence rejects incomplete or non-disjoint worker grants.
+func ValidateFollowupSequence(sequence *FollowupSequence) error {
+	if sequence == nil {
+		return nil
+	}
+	if sequence.Maximum < 0 || sequence.Width < 1 || sequence.Rank < 1 || sequence.Rank > sequence.Width {
+		return errors.New("invalid delegated follow-up sequence")
+	}
+	return nil
 }
 
 func normalizeSet(values []string) []string {
@@ -87,6 +118,9 @@ func (c Capability) Includes(other Capability) bool {
 	if outer.SelectedTask != "" && inner.SelectedTask != outer.SelectedTask {
 		return false
 	}
+	if !sameFollowupSequence(outer.FollowupSequence, inner.FollowupSequence) {
+		return false
+	}
 	// A bounded outer write set demands a bounded inner one that stays inside it.
 	// The emptiness half matters on its own: `subset` alone would accept an
 	// unbounded inner set, because nothing is a subset of everything.
@@ -94,6 +128,13 @@ func (c Capability) Includes(other Capability) bool {
 		return false
 	}
 	return subset(inner.Commands, outer.Commands) && subset(inner.TaskFields, outer.TaskFields)
+}
+
+func sameFollowupSequence(left, right *FollowupSequence) bool {
+	if left == nil || right == nil {
+		return left == right
+	}
+	return *left == *right
 }
 
 func subset(inner, outer []string) bool {
@@ -193,12 +234,12 @@ func (c Capability) validate() error {
 	if len(c.normalized().Commands) == 0 {
 		return errors.New("capability names no command")
 	}
-	return nil
+	return ValidateFollowupSequence(c.FollowupSequence)
 }
 
 func (c Capability) describe() string {
 	normalized := c.normalized()
-	return fmt.Sprintf("capability{commands: [%s], task_fields: [%s], selected_task: %q, writes: [%s]}",
+	return fmt.Sprintf("capability{commands: [%s], task_fields: [%s], selected_task: %q, writes: [%s], followup_sequence: %v}",
 		strings.Join(normalized.Commands, " "), strings.Join(normalized.TaskFields, " "),
-		normalized.SelectedTask, strings.Join(normalized.Writes, " "))
+		normalized.SelectedTask, strings.Join(normalized.Writes, " "), normalized.FollowupSequence)
 }

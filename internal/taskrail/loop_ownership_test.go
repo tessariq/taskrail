@@ -130,6 +130,22 @@ func TestLoopOwnershipPinsOneExecutableAndRetainsItsLock(t *testing.T) {
 	}
 }
 
+func TestLoopOwnershipDelegatesFrozenFollowupSequence(t *testing.T) {
+	clearLoopChildEnvironment(t)
+	_, svc := loopFixture(t)
+	ownership, err := svc.beginLoopOwnership(context.Background())
+	if err != nil {
+		t.Fatalf("begin loop ownership: %v", err)
+	}
+	t.Cleanup(func() { _ = ownership.close() })
+
+	sequence := &repolock.FollowupSequence{Maximum: 9, Width: 4, Rank: 3}
+	identity, err := ownership.delegate(svc.loopDelegationGrant("T-001-ready", sequence))
+	if err != nil || identity.FollowupSequence == nil || *identity.FollowupSequence != *sequence {
+		t.Fatalf("delegated sequence = %+v, %v; want %+v", identity.FollowupSequence, err, sequence)
+	}
+}
+
 func TestStageLoopExecutableRefusesCollisionAndReplacementCleanup(t *testing.T) {
 	common := t.TempDir()
 	source := filepath.Join(t.TempDir(), "taskrail")
@@ -249,7 +265,7 @@ func TestLoopOwnershipRefusesToRotateAfterStagedBytesChange(t *testing.T) {
 }
 
 func TestLoopOwnershipRefusesInheritedChildIdentity(t *testing.T) {
-	for _, name := range loopChildEnvironmentNames {
+	for _, name := range append(loopChildEnvironmentNames, loopFollowupSequenceEnvironmentNames...) {
 		t.Run(name, func(t *testing.T) {
 			clearLoopChildEnvironment(t)
 			_, svc := loopFixture(t)
@@ -264,7 +280,7 @@ func TestLoopOwnershipRefusesInheritedChildIdentity(t *testing.T) {
 
 func clearLoopChildEnvironment(t *testing.T) {
 	t.Helper()
-	for _, name := range loopChildEnvironmentNames {
+	for _, name := range append(loopChildEnvironmentNames, loopFollowupSequenceEnvironmentNames...) {
 		value, present := os.LookupEnv(name)
 		if err := os.Unsetenv(name); err != nil {
 			t.Fatalf("unset %s: %v", name, err)

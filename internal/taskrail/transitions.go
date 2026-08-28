@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/tessariq/taskrail/internal/repolock"
 	"github.com/tessariq/taskrail/internal/repotx"
 )
 
@@ -707,6 +708,28 @@ func (s *Service) createFollowupTask(tasks []*Task, source *Task, input VerifyIn
 		return nil, nil, WithMachineErrorCode(MachineCodeInvalidArguments, err)
 	}
 	nextID, warnings := nextTaskIDWithSlug(tasks, title, false, true)
+	if delegatedInvocation() {
+		identity, err := delegatedWriterIdentity()
+		if err != nil {
+			return nil, nil, WithMachineErrorCode(MachineCodeDelegatedRefused,
+				fmt.Errorf("delegated follow-up identity: %w", err))
+		}
+		if identity.followupSequence != nil {
+			nextID, err = nextDelegatedFollowupID(tasks, identity.followupSequence)
+			if err != nil {
+				return nil, nil, WithMachineErrorCode(MachineCodeDelegatedRefused, err)
+			}
+			warnings = nil
+			slug := slugify(title)
+			if slug == "" {
+				warnings = emptySlugWarnings(title, nextID)
+			} else if slug = capSlug(slug); slug == "" {
+				warnings = emptySlugWarnings(title, nextID)
+			} else {
+				nextID += "-" + slug
+			}
+		}
+	}
 
 	body := renderFollowupTaskBody(nextID, title, description, source.Frontmatter.ID)
 	filename := filepath.Join(s.paths.TasksDir, nextID+".md")
@@ -725,6 +748,28 @@ func (s *Service) createFollowupTask(tasks []*Task, source *Task, input VerifyIn
 		Filename: filename,
 	}
 	return task, warnings, nil
+}
+
+func nextDelegatedFollowupID(tasks []*Task, sequence *repolock.FollowupSequence) (string, error) {
+	if err := repolock.ValidateFollowupSequence(sequence); err != nil {
+		return "", err
+	}
+	count := 0
+	for _, task := range tasks {
+		number, ok := taskNumericPrefix(task.Frontmatter.ID)
+		if !ok {
+			continue
+		}
+		delta := number - sequence.Maximum - sequence.Rank
+		if delta >= 0 && delta%sequence.Width == 0 && delta/sequence.Width >= count {
+			count = delta/sequence.Width + 1
+		}
+	}
+	maxInt := int(^uint(0) >> 1)
+	if count > (maxInt-sequence.Maximum-sequence.Rank)/sequence.Width {
+		return "", errors.New("delegated follow-up sequence exceeds task identity range")
+	}
+	return fmt.Sprintf("T-%03d", sequence.Maximum+sequence.Rank+count*sequence.Width), nil
 }
 
 func nextTaskIDWithSlug(tasks []*Task, source string, explicit, supplied bool) (string, []Warning) {
