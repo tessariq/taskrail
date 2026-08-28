@@ -1,12 +1,17 @@
 ---
 id: T-359-make-containment-cleanup-timing-race-aware
 title: Make containment cleanup timing race-aware
-status: todo
+status: completed
 priority: medium
 spec_ref: specs/v0.5.0.md#cross-platform-autonomous-loop
 dependencies:
     - T-358-prevent-read-only-git-probes-from-refreshing-index
-updated_at: "2026-08-24T07:55:55Z"
+updated_at: "2026-08-28T10:09:41Z"
+completion_id: "646302a69ded9320420b9e39d70658d5"
+last_verification_id: "92771becae8cc96d7c94cb3feb0e0284"
+last_verification_result: pass
+last_verified_at: "2026-08-28T10:09:41Z"
+last_verified_completion_id: "646302a69ded9320420b9e39d70658d5"
 ---
 
 # T-359-make-containment-cleanup-timing-race-aware Make containment cleanup timing race-aware
@@ -39,3 +44,6 @@ though the descendant is gone and containment evidence is correct.
   vet, build, and cross-platform CI.
 
 ## Implementation Notes
+
+- 2026-08-28T10:09:23Z: Made the Unix containment timing fixture race-aware without changing production process behavior; focused normal/race repetitions, full package race, full tests, vet, build, validation, skill parity, and task-body checks pass.
+- 2026-08-28T10:09:41Z: verification pass id 92771becae8cc96d7c94cb3feb0e0284 previous none completion 646302a69ded9320420b9e39d70658d5

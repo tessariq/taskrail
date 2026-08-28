@@ -355,11 +355,24 @@ func TestLoopLaunchChildHelper(t *testing.T) {
 		if err := descendant.Start(); err != nil {
 			os.Exit(92)
 		}
+		deadline := time.Now().Add(5 * time.Second)
+		for {
+			if _, err := os.Stat(record + ".ready"); err == nil {
+				break
+			}
+			if time.Now().After(deadline) {
+				os.Exit(90)
+			}
+			time.Sleep(time.Millisecond)
+		}
 		if err := os.WriteFile(record+".descendant", []byte(strconv.Itoa(descendant.Process.Pid)), 0o600); err != nil {
 			os.Exit(91)
 		}
 		os.Exit(0)
 	case "linger":
+		if err := os.WriteFile(record+".ready", nil, 0o600); err != nil {
+			os.Exit(90)
+		}
 		time.Sleep(5 * time.Second)
 		os.Exit(0)
 	case "observe":

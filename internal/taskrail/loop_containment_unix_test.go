@@ -14,24 +14,63 @@ import (
 )
 
 func TestLoopLaunchChildTerminatesDescendantsAfterLeaderExit(t *testing.T) {
+	// The race runtime delays child exit by one second unless this fixture
+	// disables that unrelated post-exit sleep.
+	raceOptions := os.Getenv("GORACE")
+	if raceOptions != "" {
+		raceOptions += " "
+	}
+	t.Setenv("GORACE", raceOptions+"atexit_sleep_ms=0")
 	input := loopHelperLaunch(t, "spawn-descendant", nil)
+	record := input.Command[len(input.Command)-1]
+	result := make(chan struct {
+		execution loopChildExecution
+		err       error
+	}, 1)
+	go func() {
+		execution, err := launchLoopChild(input)
+		result <- struct {
+			execution loopChildExecution
+			err       error
+		}{execution, err}
+	}()
+
+	deadline := time.NewTimer(5 * time.Second)
+	defer deadline.Stop()
+	for {
+		if _, err := os.Stat(record + ".descendant"); err == nil {
+			break
+		} else if !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("inspect descendant readiness: %v", err)
+		}
+		select {
+		case result := <-result:
+			t.Fatalf("launchLoopChild returned before descendant readiness: %+v, %v", result.execution, result.err)
+		case <-deadline.C:
+			t.Fatal("descendant did not become ready")
+		default:
+			time.Sleep(time.Millisecond)
+		}
+	}
+
 	started := time.Now()
-	execution, err := launchLoopChild(input)
+	outcome := <-result
+	execution, err := outcome.execution, outcome.err
 	if err != nil || execution.Failed() {
 		t.Fatalf("launchLoopChild = %+v, %v", execution, err)
 	}
 	if !execution.Containment.TerminationRequested {
 		t.Fatalf("containment = %+v, want requested termination", execution.Containment)
 	}
-	pid, err := strconv.Atoi(string(readBytes(t, input.Command[len(input.Command)-1]+".descendant")))
+	pid, err := strconv.Atoi(string(readBytes(t, record+".descendant")))
 	if err != nil {
 		t.Fatalf("read descendant pid: %v", err)
 	}
 	if err := syscall.Kill(pid, 0); err != syscall.ESRCH {
 		t.Fatalf("descendant %d remains after containment cleanup: %v", pid, err)
 	}
-	if elapsed := time.Since(started); elapsed > 2*time.Second {
-		t.Fatalf("cleanup took %s, want less than two seconds", elapsed)
+	if elapsed := time.Since(started); elapsed > time.Second {
+		t.Fatalf("cleanup took %s, want less than one second", elapsed)
 	}
 }
 
