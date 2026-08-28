@@ -1,7 +1,7 @@
 ---
 id: T-246-classify-every-v0-5-writer-transaction-and
 title: Classify every v0.5 writer transaction and exception
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#repository-discovery-locking-and-recovery
 dependencies:
@@ -13,7 +13,12 @@ dependencies:
     - T-300-bind-decomposition-publication-to-resolved-prompts
     - T-305-publish-workflow-review-reports-and-memory
     - T-315-promote-local-packaged-skills-with-explicit
-updated_at: "2026-08-08T08:40:49Z"
+updated_at: "2026-08-28T11:10:54Z"
+completion_id: "982cd67b08ec391fafea8cc62e4e3a28"
+last_verification_id: "e7513b395bedcac4a7ce17d5d5db40c2"
+last_verification_result: pass
+last_verified_at: "2026-08-28T11:10:54Z"
+last_verified_completion_id: "982cd67b08ec391fafea8cc62e4e3a28"
 ---
 
 # T-246-classify-every-v0-5-writer-transaction-and Classify every v0.5 writer transaction and exception
@@ -42,3 +47,6 @@ result publication, or an explicit non-transactional/read-only surface.
 - A3: cross-flow interruption fixtures demonstrate the promised boundary for each class.
 
 ## Implementation Notes
+
+- 2026-08-28T11:10:41Z: Added an executable writer transaction matrix with publication-entrypoint drift checks.
+- 2026-08-28T11:10:54Z: verification pass id e7513b395bedcac4a7ce17d5d5db40c2 previous none completion 982cd67b08ec391fafea8cc62e4e3a28
