@@ -1,7 +1,7 @@
 ---
 id: T-173-check-cross-surface-workflow-contract-integrity
 title: Derive and check the v0.5 workflow contract index
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#skill-and-prompt-behavioral-contract-tests
 dependencies:
@@ -18,7 +18,12 @@ dependencies:
     - T-367-partition-parallel-follow-up-identities-by-worker
     - T-368-expose-selected-spec-digests-in-machine-results
     - T-369-refuse-delegated-author-and-review-writers
-updated_at: "2026-08-08T08:40:49Z"
+updated_at: "2026-08-28T13:38:13Z"
+completion_id: "8fb0cea2ca32ff18daaf37abdc8b3cbd"
+last_verification_id: "d06ce7eb7e1a7f749005ff212eda9483"
+last_verification_result: pass
+last_verified_at: "2026-08-28T13:38:13Z"
+last_verified_completion_id: "8fb0cea2ca32ff18daaf37abdc8b3cbd"
 ---
 
 # T-173-check-cross-surface-workflow-contract-integrity Derive and check the v0.5 workflow contract index
@@ -77,3 +82,6 @@ Feature-specific behavior remains owned and verified by its implementation task.
   and freshness as integration evidence, not as substitutes for feature oracles.
 
 ## Implementation Notes
+
+- 2026-08-28T13:38:00Z: Derived the v0.5 workflow contract manifest from authoritative prompt, skill, and machine registries; added a fail-closed cross-platform suite runner, durable binding drift checks, and registry closure validation for T-248 consumption.
+- 2026-08-28T13:38:13Z: verification pass id d06ce7eb7e1a7f749005ff212eda9483 previous none completion 8fb0cea2ca32ff18daaf37abdc8b3cbd

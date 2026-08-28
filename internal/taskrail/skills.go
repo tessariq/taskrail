@@ -32,6 +32,28 @@ var shippableSkillTargets = []string{
 	filepath.Join(".claude", "skills"),
 }
 
+// shippableSkills is the exact set promoted to the product surface. It is kept
+// beside the embedded package so installers, the workflow-contract manifest, and
+// documentation checks share one skill registry.
+var shippableSkills = []string{
+	"autonomous-backlog",
+	"autonomous-task",
+	"autonomous-verify",
+	"autonomous-recovery",
+	"autonomous-manual-test",
+	"taskrail-loop",
+	"taskrail-import",
+	"taskrail-retrofit",
+	"taskrail-repair",
+	"taskrail-spec",
+	"taskrail-spec-review",
+	"taskrail-decompose",
+	"taskrail-sdd-handoff",
+	"taskrail-gap",
+	"taskrail-task-review",
+	"taskrail-workflow-adversarial",
+}
+
 // SkillInstallResult reports what WriteShippableSkills changed on disk so callers
 // can show the user exactly which skill files were created, replaced from the
 // embedded set, and backed up before replacement. Paths are repo-relative and in
@@ -42,42 +64,70 @@ type SkillInstallResult struct {
 	BackedUp    []string // timestamped backups written before an overwrite (force only)
 }
 
-// packagedSkillFiles lists every embedded skill file, in walk order, as a
-// package-relative slash path. It is the one enumeration behind both the
+// packagedSkillFiles lists every registered embedded skill file, in walk order,
+// as a package-relative slash path. It is the one enumeration behind both the
 // installer and the reported inventory, so the two cannot disagree about what
-// the package contains.
+// the package contains or install an unregistered embedded root.
 func packagedSkillFiles() ([]string, error) {
-	var files []string
-	err := fs.WalkDir(shippableSkillsFS, shippableSkillsRoot, func(p string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if !d.IsDir() {
-			files = append(files, strings.TrimPrefix(p, shippableSkillsRoot+"/"))
-		}
-		return nil
-	})
-	if err != nil {
+	if err := validateShippableSkillRegistry(); err != nil {
 		return nil, err
 	}
+	var files []string
+	for _, name := range shippableSkills {
+		root := path.Join(shippableSkillsRoot, name)
+		err := fs.WalkDir(shippableSkillsFS, root, func(p string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if !d.IsDir() {
+				files = append(files, strings.TrimPrefix(p, shippableSkillsRoot+"/"))
+			}
+			return nil
+		})
+		if err != nil {
+			return nil, err
+		}
+	}
+	slices.Sort(files)
 	return files, nil
 }
 
 // packagedSkillNames lists the packaged skills' own directory names, which are
 // the subtrees an installation owns in each assistant root.
 func packagedSkillNames() ([]string, error) {
-	entries, err := fs.ReadDir(shippableSkillsFS, shippableSkillsRoot)
-	if err != nil {
+	if err := validateShippableSkillRegistry(); err != nil {
 		return nil, err
 	}
-	names := make([]string, 0, len(entries))
+	return slices.Clone(shippableSkills), nil
+}
+
+func validateShippableSkillRegistry() error {
+	entries, err := fs.ReadDir(shippableSkillsFS, shippableSkillsRoot)
+	if err != nil {
+		return err
+	}
+	registered := make(map[string]struct{}, len(shippableSkills))
+	for _, name := range shippableSkills {
+		if name == "" || strings.Contains(name, "/") || strings.Contains(name, `\`) {
+			return fmt.Errorf("invalid shippable skill name %q", name)
+		}
+		if _, exists := registered[name]; exists {
+			return fmt.Errorf("shippable skill registry repeats %q", name)
+		}
+		registered[name] = struct{}{}
+	}
 	for _, entry := range entries {
-		if entry.IsDir() {
-			names = append(names, entry.Name())
+		if !entry.IsDir() {
+			return fmt.Errorf("embedded skill package has non-directory root %q", entry.Name())
+		}
+		if _, exists := registered[entry.Name()]; !exists {
+			return fmt.Errorf("embedded skill root %q is not registered", entry.Name())
 		}
 	}
-	slices.Sort(names)
-	return names, nil
+	if len(registered) != len(entries) {
+		return fmt.Errorf("shippable skill registry has %d roots, embedded package has %d", len(registered), len(entries))
+	}
+	return nil
 }
 
 // skillReport is the machine inventory of one `--with-skills` installation: every

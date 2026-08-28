@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -13,27 +14,6 @@ import (
 // T-055 it is the single skill source: the bespoke repo-root skills/ tree was
 // retired and this repository adopts the packaged set like any adopter.
 const shippableSkillsDir = "skills"
-
-// shippableSkills is the exact set promoted to the product surface, per the
-// portability contract in docs/workflow/skills-productization.md (T-031).
-var shippableSkills = []string{
-	"autonomous-backlog",
-	"autonomous-task",
-	"autonomous-verify",
-	"autonomous-recovery",
-	"autonomous-manual-test",
-	"taskrail-loop",
-	"taskrail-import",
-	"taskrail-retrofit",
-	"taskrail-repair",
-	"taskrail-spec",
-	"taskrail-spec-review",
-	"taskrail-decompose",
-	"taskrail-sdd-handoff",
-	"taskrail-gap",
-	"taskrail-task-review",
-	"taskrail-workflow-adversarial",
-}
 
 // taskAuthoringSkills create tracked tasks via `taskrail task new`. taskrail-import
 // and taskrail-retrofit are excluded: they author tasks through
@@ -683,5 +663,20 @@ func TestEmbeddedPackageMatchesDeclaredShippableSet(t *testing.T) {
 		if !packaged[name] {
 			t.Errorf("declared shippable skill %q has no directory in the embedded package", name)
 		}
+	}
+}
+
+func TestShippableSkillRegistryRejectsMissingOrRepeatedRoots(t *testing.T) {
+	original := slices.Clone(shippableSkills)
+	t.Cleanup(func() { shippableSkills = original })
+
+	shippableSkills = original[1:]
+	if _, err := packagedSkillFiles(); err == nil || !strings.Contains(err.Error(), "not registered") {
+		t.Fatalf("packagedSkillFiles missing-root error = %v, want unregistered-root rejection", err)
+	}
+
+	shippableSkills = append(slices.Clone(original), original[0])
+	if _, err := packagedSkillFiles(); err == nil || !strings.Contains(err.Error(), "repeats") {
+		t.Fatalf("packagedSkillFiles repeated-root error = %v, want duplicate-registry rejection", err)
 	}
 }
