@@ -6,6 +6,9 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ### Fixed
 
+- Review-adapter delivery now requires an external `--result-file` before any
+  repository, workspace, or adapter activity, preserving its terminal outcome
+  after the foreground run.
 - Post-spec review findings now use disjoint `CONS-`, `GAPS-`, `ADDS-`, and
   `ADV-` lens namespaces, so independently produced observations cannot collide
   when their bundle is published.

@@ -22,15 +22,15 @@ func newLoopCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "loop",
 		Short: "Preview deterministic unattended task execution",
-		Args:  machineArgs(cobra.ArbitraryArgs),
+		Args: machineArgs(func(cmd *cobra.Command, args []string) error {
+			if err := cobra.ArbitraryArgs(cmd, args); err != nil {
+				return err
+			}
+			captureLoopInput(cmd, &input, maxReviewRounds, timeout, args)
+			return taskrail.ValidateLoopInvocation(input)
+		}),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if cmd.Flags().Changed("max-review-rounds") {
-				input.MaxReviewRounds = &maxReviewRounds
-			}
-			if cmd.Flags().Changed("timeout") {
-				input.Timeout = &timeout
-			}
-			input.Child = args
+			captureLoopInput(cmd, &input, maxReviewRounds, timeout, args)
 			if input.DryRun && input.ResultFile != "" {
 				return invalidArgumentsf("loop --dry-run does not support --result-file")
 			}
@@ -74,7 +74,7 @@ func newLoopCmd() *cobra.Command {
 	cmd.Flags().StringVar(&input.AllowPromptOverrideSHA256, "allow-prompt-override-sha256", "", "authorize an exact replacement prompt template")
 	cmd.Flags().IntVar(&maxReviewRounds, "max-review-rounds", 0, "override implementation review rounds (1-2)")
 	cmd.Flags().DurationVar(&timeout, "timeout", 0, "per-child timeout")
-	cmd.Flags().StringVar(&input.ResultFile, "result-file", "", "publish the terminal machine envelope outside the repository")
+	cmd.Flags().StringVar(&input.ResultFile, "result-file", "", "publish the terminal machine envelope outside the repository (required for --delivery review)")
 	addMachineJSONFlag(cmd)
 	cmd.PreRunE = func(cmd *cobra.Command, _ []string) error {
 		for _, flag := range []struct {
@@ -85,14 +85,24 @@ func newLoopCmd() *cobra.Command {
 				return publishSelectionError(cmd, invalidArgumentsf("loop flag %s is repeated", flag.name))
 			}
 		}
-		input.WorkspaceRootSet = cmd.Flags().Changed("workspace-root")
-		input.CloneDepthSet = cmd.Flags().Changed("clone-depth")
-		input.KeepWorkspacesSet = cmd.Flags().Changed("keep-workspaces")
-		input.DeliverySet = cmd.Flags().Changed("delivery")
-		input.ReviewAdapterSet = cmd.Flags().Changed("review-adapter")
 		return nil
 	}
 	return cmd
+}
+
+func captureLoopInput(cmd *cobra.Command, input *taskrail.LoopInvocation, maxReviewRounds int, timeout time.Duration, args []string) {
+	if cmd.Flags().Changed("max-review-rounds") {
+		input.MaxReviewRounds = &maxReviewRounds
+	}
+	if cmd.Flags().Changed("timeout") {
+		input.Timeout = &timeout
+	}
+	input.Child = args
+	input.WorkspaceRootSet = cmd.Flags().Changed("workspace-root")
+	input.CloneDepthSet = cmd.Flags().Changed("clone-depth")
+	input.KeepWorkspacesSet = cmd.Flags().Changed("keep-workspaces")
+	input.DeliverySet = cmd.Flags().Changed("delivery")
+	input.ReviewAdapterSet = cmd.Flags().Changed("review-adapter")
 }
 
 func runLoopWithResultFile(cmd *cobra.Command, input taskrail.LoopInvocation) error {
@@ -131,7 +141,7 @@ func runLoopWithResultFile(cmd *cobra.Command, input taskrail.LoopInvocation) er
 		}
 		return err
 	}
-	report, executeErr := svc.LoopExecute(cmd.Context(), input)
+	report, executeErr := svc.LoopExecuteWithPreparedResultFile(cmd.Context(), input, result)
 	if executeErr == nil {
 		executeErr = loopDiagnosticGate(report)
 	}

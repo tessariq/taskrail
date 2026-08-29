@@ -82,8 +82,13 @@ func TestLoopExecuteDeliversParallelReviewBatchThroughAdapter(t *testing.T) {
 	}
 	child := []string{helper, "-test.run=^TestLoopLaunchChildHelper$", "--", "parallel-worker", filepath.Join(t.TempDir(), "unused")}
 
-	report, err := svc.LoopExecute(context.Background(), LoopInvocation{MaxIterations: 2, Parallel: 2,
-		Delivery: "review", DeliverySet: true, ReviewAdapter: buildReviewAdapter(t), ReviewAdapterSet: true, Child: child})
+	result, err := PrepareLoopResultFile(filepath.Join(t.TempDir(), "loop-result.json"))
+	if err != nil {
+		t.Fatalf("prepare result file: %v", err)
+	}
+	report, err := svc.LoopExecuteWithPreparedResultFile(context.Background(), LoopInvocation{MaxIterations: 2, Parallel: 2,
+		Delivery: "review", DeliverySet: true, ReviewAdapter: buildReviewAdapter(t), ReviewAdapterSet: true,
+		ResultFile: filepath.Join(t.TempDir(), "loop-result.json"), Child: child}, result)
 	if err != nil {
 		t.Fatalf("LoopExecute: %v", err)
 	}

@@ -1,11 +1,16 @@
 ---
 id: T-379-require-durable-results-for-review-adapter-delivery
 title: Require durable results for review-adapter delivery
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#cross-platform-autonomous-loop
 dependencies: []
-updated_at: "2026-08-28T16:13:41Z"
+updated_at: "2026-08-29T08:18:16Z"
+completion_id: "9bec9442243143c92b3065b3166ea736"
+last_verification_id: "fcf70c3f67c2e817975cf0cbf06d99f3"
+last_verification_result: pass
+last_verified_at: "2026-08-29T08:18:16Z"
+last_verified_completion_id: "9bec9442243143c92b3065b3166ea736"
 ---
 
 # T-379-require-durable-results-for-review-adapter-delivery Require durable results for review-adapter delivery
@@ -31,3 +36,6 @@ GAPS-002 and makes remote side-effect outcomes inspectable after the foreground 
   loop tests, workflow contracts, full tests, and native cross-compilation.
 
 ## Implementation Notes
+
+- 2026-08-29T08:18:02Z: Review delivery now requires a prepared external result file before repository, workspace, or adapter activity; focused, workflow-contract, full-suite, vet, formatting, validation, and cross-build checks passed.
+- 2026-08-29T08:18:16Z: verification pass id fcf70c3f67c2e817975cf0cbf06d99f3 previous none completion 9bec9442243143c92b3065b3166ea736

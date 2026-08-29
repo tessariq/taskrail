@@ -52,8 +52,28 @@ type LoopGitDiagnostic struct {
 // LoopExecute runs one foreground child at a time. Only a fully validated and
 // delivered completed pass can reach another read-only selection.
 func (s *Service) LoopExecute(ctx context.Context, invocation LoopInvocation) (LoopDiagnostic, error) {
+	return s.loopExecute(ctx, invocation, false)
+}
+
+// LoopExecuteWithPreparedResultFile runs a loop after the CLI has retained the
+// result destination identity that it will use for terminal publication.
+func (s *Service) LoopExecuteWithPreparedResultFile(ctx context.Context, invocation LoopInvocation, result *LoopResultFile) (LoopDiagnostic, error) {
+	if result == nil {
+		return LoopDiagnostic{}, invalidArgumentsf("loop execution requires a prepared --result-file")
+	}
+	if err := s.ValidateLoopResultFile(result); err != nil {
+		return LoopDiagnostic{}, err
+	}
+	invocation.ResultFile = result.path
+	return s.loopExecute(ctx, invocation, true)
+}
+
+func (s *Service) loopExecute(ctx context.Context, invocation LoopInvocation, preparedResultFile bool) (LoopDiagnostic, error) {
 	if invocation.DryRun {
 		return LoopDiagnostic{}, invalidArgumentsf("loop execution does not accept --dry-run")
+	}
+	if invocation.Delivery == "review" && !preparedResultFile {
+		return LoopDiagnostic{}, invalidArgumentsf("--delivery review requires a prepared --result-file")
 	}
 	snapshot, err := s.LoopPreflight(invocation)
 	if err != nil {

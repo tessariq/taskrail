@@ -48,11 +48,11 @@ authorization is missing. Do not guess or substitute one.
 
 For parallel execution, ask for a positive width, an optional existing private
 workspace root outside the repository, clone depth, and retention policy. For
-review delivery, require `--delivery review` and one explicit caller-owned
-`--review-adapter <path>`; reject adapter intent in local mode. Ask whether the
-operator requires only Taskrail's local aggregate gate, or also an explicitly
-supplied read-only CI observation. The CI observer is external evidence, never
-Taskrail attestation.
+review delivery, require `--delivery review`, one explicit caller-owned
+`--review-adapter <path>`, and a new `--result-file <absolute-external-path>`;
+reject adapter intent in local mode. Ask whether the operator requires only
+Taskrail's local aggregate gate, or also an explicitly supplied read-only CI
+observation. The CI observer is external evidence, never Taskrail attestation.
 
 Ask for a new absolute result file destination outside the repository, Git
 metadata, and managed inputs. It must be caller-owned, in an existing safe
@@ -112,7 +112,7 @@ ${TASKRAIL:-taskrail} loop \
   --review-adapter <path> -- <child-command> <args...>
 ```
 
-Omit only unset optional flags. Preserve stdout and stderr in a safe
+For review delivery, do not omit `--result-file`. Preserve stdout and stderr in a safe
 caller-owned destination outside committed state when possible. Warn that those
 streams may be sensitive and incomplete, and report preservation failure
 explicitly. Never use free-form output as authority, launch a replacement

@@ -184,6 +184,62 @@ func TestLoopExecutionRejectsJSONBeforeRepositoryDiscovery(t *testing.T) {
 	}
 }
 
+func TestLoopExecutionRejectsReviewDeliveryWithoutResultFileBeforeWorkspaceActivity(t *testing.T) {
+	root := setupLoopDryRunRepo(t)
+	workspaceRoot := t.TempDir()
+	if err := os.Chmod(workspaceRoot, 0o700); err != nil {
+		t.Fatalf("secure workspace root: %v", err)
+	}
+	before := readAllFiles(t, workspaceRoot)
+	adapter, err := os.Executable()
+	if err != nil {
+		t.Fatalf("resolve test executable: %v", err)
+	}
+
+	_, _, err = runRootSplit(t, "loop", "--max-iterations", "2", "--parallel", "2", "--workspace-root", workspaceRoot,
+		"--delivery", "review", "--review-adapter", adapter, "--", "not-run")
+	if err == nil {
+		t.Fatal("review delivery without a result file succeeded")
+	}
+	if failure := taskrail.MachineFailureFor(err); failure.Code != taskrail.MachineCodeInvalidArguments {
+		t.Fatalf("review-delivery refusal error = %v, want invalid_arguments", err)
+	}
+	if after := readAllFiles(t, workspaceRoot); !reflect.DeepEqual(after, before) {
+		t.Fatal("review-delivery refusal created a workspace")
+	}
+	if status := loopGitOutput(t, root, "status", "--porcelain=v1"); status != "" {
+		t.Fatalf("review-delivery refusal dirtied repository: %q", status)
+	}
+}
+
+func TestLoopExecutionRejectsReviewDeliveryWithoutResultFileBeforeLocalBootstrap(t *testing.T) {
+	root := t.TempDir()
+	runLoopGit(t, root, "init", "--quiet")
+	t.Chdir(root)
+	workspaceRoot := t.TempDir()
+	if err := os.Chmod(workspaceRoot, 0o700); err != nil {
+		t.Fatalf("secure workspace root: %v", err)
+	}
+	adapter, err := os.Executable()
+	if err != nil {
+		t.Fatalf("resolve test executable: %v", err)
+	}
+	repositoryBefore := readAllFiles(t, root)
+	workspaceBefore := readAllFiles(t, workspaceRoot)
+
+	_, _, err = runRootSplit(t, "loop", "--max-iterations", "2", "--parallel", "2", "--workspace-root", workspaceRoot,
+		"--delivery", "review", "--review-adapter", adapter, "--", "not-run")
+	if err == nil || taskrail.MachineFailureFor(err).Code != taskrail.MachineCodeInvalidArguments {
+		t.Fatalf("review-delivery refusal error = %v, want invalid_arguments", err)
+	}
+	if after := readAllFiles(t, root); !reflect.DeepEqual(after, repositoryBefore) {
+		t.Fatal("review-delivery refusal performed local bootstrap")
+	}
+	if after := readAllFiles(t, workspaceRoot); !reflect.DeepEqual(after, workspaceBefore) {
+		t.Fatal("review-delivery refusal created a workspace")
+	}
+}
+
 func TestLoopExecutionPublishesTerminalResultOutOfBand(t *testing.T) {
 	clearLoopExecutionEnvironment(t)
 	root := setupLoopDryRunRepo(t)

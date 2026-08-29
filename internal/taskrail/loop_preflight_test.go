@@ -118,6 +118,38 @@ func TestLoopPreflightCapturesCleanRepositoryWithoutMutation(t *testing.T) {
 	}
 }
 
+func TestLoopPreflightRequiresResultFileForReviewDeliveryWithoutSideEffects(t *testing.T) {
+	repo, svc := loopFixture(t)
+	workspaceRoot := t.TempDir()
+	adapterMarker := filepath.Join(t.TempDir(), "adapter-invoked")
+	repositoryBefore := snapshotTree(t, repo)
+	workspaceBefore := snapshotTree(t, workspaceRoot)
+
+	_, err := svc.LoopPreflight(LoopInvocation{
+		MaxIterations:    2,
+		Parallel:         2,
+		WorkspaceRoot:    workspaceRoot,
+		WorkspaceRootSet: true,
+		Delivery:         "review",
+		DeliverySet:      true,
+		ReviewAdapter:    adapterMarker,
+		ReviewAdapterSet: true,
+		Child:            []string{"agent"},
+	})
+	if err == nil || MachineFailureFor(err).Code != MachineCodeInvalidArguments {
+		t.Fatalf("LoopPreflight error = %v, want invalid_arguments", err)
+	}
+	if after := snapshotTree(t, repo); !reflect.DeepEqual(after, repositoryBefore) {
+		t.Fatal("review-delivery refusal changed repository bytes")
+	}
+	if after := snapshotTree(t, workspaceRoot); !reflect.DeepEqual(after, workspaceBefore) {
+		t.Fatal("review-delivery refusal created a workspace")
+	}
+	if _, statErr := os.Stat(adapterMarker); !os.IsNotExist(statErr) {
+		t.Fatalf("review-delivery refusal invoked adapter: %v", statErr)
+	}
+}
+
 func TestLoopConfiguredReviewRounds(t *testing.T) {
 	tests := []struct {
 		name    string

@@ -290,21 +290,22 @@ commits in selection order in a separate integration clone, and fast-forwards th
 source branch only after aggregate validation. `--clone-depth full` opts out of
 the shallow boundary; `--keep-workspaces` retains failed workspaces by default.
 Local delivery is the default. `--delivery review --review-adapter <path>` sends
-each provider-neutral JSON request directly to one caller-owned executable; it
-does not embed credentials, provider APIs, or shell evaluation. The adapter may
-wrap tools such as `gh` or `glab`, but owns their authentication and provider
-semantics. Passing worker branches and changes can open concurrently; Taskrail
-inspects, merges, and refreshes remaining changes in frozen frontier order. A
-failed worker, adapter operation, check, or refresh is not retried, but other
-independently valid changes remain eligible. A replacement implementation prompt
-requires its exact template SHA-256 through `--allow-prompt-override-sha256`; dry
-run never launches a child process.
+each provider-neutral JSON request directly to one caller-owned executable and
+requires `--result-file <external-path>` so its terminal adapter outcome remains
+durable after the foreground run. It does not embed credentials, provider APIs,
+or shell evaluation. The adapter may wrap tools such as `gh` or `glab`, but owns
+their authentication and provider semantics. Passing worker branches and changes
+can open concurrently; Taskrail inspects, merges, and refreshes remaining changes
+in frozen frontier order. A failed worker, adapter operation, check, or refresh is
+not retried, but other independently valid changes remain eligible. A replacement
+implementation prompt requires its exact template SHA-256 through
+`--allow-prompt-override-sha256`; dry run never launches a child process.
 
-Execution keeps child output streaming, so use `--result-file <external-path>`
-to receive its one terminal schema-1 envelope. The target must be absent in an
-existing, non-symlinked directory outside the worktree and Git metadata;
-Taskrail rechecks that directory and creates the file without replacement after
-postflight.
+Execution keeps child output streaming, so local delivery may use
+`--result-file <external-path>` and review delivery requires it to receive the
+one terminal schema-1 envelope. The target must be absent in an existing,
+non-symlinked directory outside the worktree and Git metadata; Taskrail rechecks
+that directory and creates the file without replacement after postflight.
 
 Use the packaged `taskrail-loop` skill when an operator needs one interactive,
 provider-neutral loop run. It elicits unresolved caller-owned choices, explains

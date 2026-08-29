@@ -253,7 +253,7 @@ func positiveLoopInt(name, value string) (int, error) {
 // It takes no lock and does not select work, so it cannot change managed state.
 func (s *Service) LoopPreflight(invocation LoopInvocation) (LoopPreflightSnapshot, error) {
 	invocation = normalizeLoopInvocation(invocation)
-	if err := validateLoopInvocation(invocation); err != nil {
+	if err := ValidateLoopInvocation(invocation); err != nil {
 		return LoopPreflightSnapshot{}, err
 	}
 	if s.paths.WorktreeRoot == "" || s.paths.GitDir == "" || s.paths.GitCommonDir == "" {
@@ -338,7 +338,9 @@ func normalizeLoopInvocation(invocation LoopInvocation) LoopInvocation {
 	return invocation
 }
 
-func validateLoopInvocation(invocation LoopInvocation) error {
+// ValidateLoopInvocation rejects repository-independent loop forms before any
+// repository discovery, workspace allocation, or adapter invocation.
+func ValidateLoopInvocation(invocation LoopInvocation) error {
 	if invocation.MaxIterations <= 0 {
 		return invalidArgumentsf("--max-iterations must be a positive integer")
 	}
@@ -381,6 +383,9 @@ func validateParallelInvocation(invocation LoopInvocation) error {
 	}
 	if invocation.Delivery == "local" && invocation.ReviewAdapterSet {
 		return invalidArgumentsf("--review-adapter requires --delivery review")
+	}
+	if !invocation.DryRun && invocation.Delivery == "review" && invocation.ResultFile == "" {
+		return invalidArgumentsf("--delivery review requires --result-file")
 	}
 	return nil
 }
