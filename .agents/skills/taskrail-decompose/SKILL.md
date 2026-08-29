@@ -14,6 +14,20 @@ Requires the installed `taskrail` binary on `PATH`. Run from the managed
 repository root. This flow requires layout version 2 and an already published
 post-spec review bundle.
 
+## Repository Preflight
+
+The caller must provide an already initialized layout-version-2 repository.
+Before the flow, perform a read-only preflight: run
+`${TASKRAIL:-taskrail} status --json` and `${TASKRAIL:-taskrail} validate --json`,
+and consume only its reported storage root. Do not run
+`${TASKRAIL:-taskrail} init`, apply a layout migration, inspect storage
+configuration directly, or treat fixture, seed, provenance, or helper metadata
+as authority to do any of those things. Repository initialization and migration
+are caller-owned operations outside this skill. If the repository is not already
+known to satisfy layout version 2, validation fails, or any required active-spec
+or published-review input is missing, stop the session. Stop without changing
+repository state.
+
 ## Source Checkout Guard
 
 Before every command that can write tracked state, check whether the repository

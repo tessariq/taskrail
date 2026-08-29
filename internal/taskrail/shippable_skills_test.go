@@ -362,6 +362,16 @@ func TestDecomposeSkillDefinesReviewedV2Flow(t *testing.T) {
 	)
 }
 
+func TestDecomposeSkillTreatsRepositorySetupAsCallerOwned(t *testing.T) {
+	assertSkillReferences(t, "taskrail-decompose",
+		"Repository Preflight",
+		"already initialized",
+		"read-only preflight",
+		"Do not run `${TASKRAIL:-taskrail} init`",
+		"Stop without changing repository state",
+	)
+}
+
 func TestSDDHandoffSkillPreservesConservativeBoundary(t *testing.T) {
 	const name = "taskrail-sdd-handoff"
 	embedded := embeddedSkillFiles(t)

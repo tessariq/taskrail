@@ -14,6 +14,7 @@ dependencies:
     - T-381-restore-portable-verification-predecessor-evidence
     - T-382-make-maintainer-skill-evaluations-executable
     - T-383-accept-real-git-object-ids-in-skill-evaluations
+    - T-384-prevent-decomposition-from-mutating-unmet-preconditions
 updated_at: "2026-08-29T11:10:19Z"
 last_verification_id: "f414774034bb61736378e18cf4520e7d"
 last_verification_result: fail

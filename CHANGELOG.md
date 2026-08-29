@@ -6,6 +6,9 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ### Fixed
 
+- `taskrail-decompose` now treats repository initialization and layout migration
+  as caller-owned preconditions, stopping without mutation when its required
+  layout, active spec, validation, or published review inputs are unavailable.
 - Maintainer skill-evaluation reports now bind `tested_head` to a full SHA-1 or
   SHA-256 Git object ID while keeping content and executable digests strictly
   SHA-256.

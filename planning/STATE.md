@@ -1,6 +1,6 @@
 ---
 schema_version: 1
-updated_at: "2026-08-29T16:37:53Z"
+updated_at: "2026-08-29T20:28:27Z"
 active_spec_version: v0.5.0
 active_spec_path: specs/v0.5.0.md
 current_task: ""
@@ -9,9 +9,9 @@ status_summary: blocked
 blockers:
     - 'T-174-run-the-v0-5-0-gap-and-drift-release-gate: Release gate blocked: the paired skill-evaluation registry lacks executable scenario and deterministic-oracle bindings, and the runner cannot stage completed arms before required human comparisons; T-382 owns remediation before a fresh restart.'
 next_action: Select the next eligible task
-last_verification_result: pass for T-383-accept-real-git-object-ids-in-skill-evaluations at 2026-08-29T16:37:53Z id 25220e68c20221a8975221a62eb78545
-last_verification_id: 25220e68c20221a8975221a62eb78545
-last_verified_completion_id: 405d10f2c711f2543880eb2c68eea065
+last_verification_result: pass for T-384-prevent-decomposition-from-mutating-unmet-preconditions at 2026-08-29T20:28:27Z id ca64a96d614ab9a827fa94280bedb865
+last_verification_id: ca64a96d614ab9a827fa94280bedb865
+last_verified_completion_id: e33ac7e1488aebcaa6bcde018bb51bd8
 relevant_artifacts: []
 continuation_notes:
     - This repository is temporarily dogfooding bootstrap workflow tooling until Taskrail v0.1.0 exists.
@@ -37,7 +37,7 @@ continuation_notes:
 
 ## Last Verification
 
-- pass for T-383-accept-real-git-object-ids-in-skill-evaluations at 2026-08-29T16:37:53Z id 25220e68c20221a8975221a62eb78545
+- pass for T-384-prevent-decomposition-from-mutating-unmet-preconditions at 2026-08-29T20:28:27Z id ca64a96d614ab9a827fa94280bedb865
 
 ## Next Action
 
@@ -55,6 +55,6 @@ continuation_notes:
 
 - todo: 48
 - in_progress: 0
-- completed: 333
+- completed: 334
 - blocked: 1
 - cancelled: 0
