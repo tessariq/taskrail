@@ -171,13 +171,17 @@ func TestSkillEvalRunnerExecutesCompleteRegistryWithWorkingBinary(t *testing.T) 
 		t.Fatalf("Resume: %v", err)
 	}
 	if report.Outcome != "pass" {
-		var failed []SkillEvalCaseReport
+		var failed []string
 		for _, item := range report.Cases {
 			if item.Candidate == nil || item.Candidate.Outcome != "pass" || item.Candidate.DeterministicGrade != "pass" {
-				failed = append(failed, item)
+				evaluation := registry[slices.IndexFunc(registry, func(candidate SkillEvalCase) bool {
+					return candidate.CaseID == item.CaseID
+				})]
+				facts, factsErr := decodeSkillEvalFacts(skillEvalRawRoot(in, evaluation, skillEvalCandidateArm))
+				failed = append(failed, fmt.Sprintf("%s candidate=%+v facts=%+v facts_err=%v", item.CaseID, item.Candidate, facts, factsErr))
 			}
 		}
-		t.Fatalf("complete registry outcome = %q; failed cases = %#v", report.Outcome, failed)
+		t.Fatalf("complete registry outcome = %q; failed cases = %s", report.Outcome, strings.Join(failed, "; "))
 	}
 }
 
