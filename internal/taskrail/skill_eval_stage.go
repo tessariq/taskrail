@@ -36,7 +36,10 @@ func validateSkillEvalRunInput(input SkillEvalRunInput, requireReviews bool) err
 	if input.GeneratedAt.IsZero() || input.GeneratedAt.Location() != time.UTC {
 		return fmt.Errorf("skill evaluation timestamp must be UTC")
 	}
-	for _, digest := range []string{input.TestedHead, input.CandidateExecutableSHA256, input.BaselineExecutableSHA256, input.ProductSHA256, input.CandidateSkillsSHA256, input.BaselineSkillsSHA256, input.FixturesSHA256} {
+	if !skillEvalGitObjectID.MatchString(input.TestedHead) {
+		return fmt.Errorf("skill evaluation contains an invalid tested HEAD")
+	}
+	for _, digest := range []string{input.CandidateExecutableSHA256, input.BaselineExecutableSHA256, input.ProductSHA256, input.CandidateSkillsSHA256, input.BaselineSkillsSHA256, input.FixturesSHA256} {
 		if !skillEvalDigestPattern.MatchString(digest) {
 			return fmt.Errorf("skill evaluation contains an invalid digest")
 		}

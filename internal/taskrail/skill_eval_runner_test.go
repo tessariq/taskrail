@@ -71,6 +71,40 @@ func TestSkillEvalRunnerBuildsCompletePairedSafeReport(t *testing.T) {
 	}
 }
 
+func TestSkillEvalRunnerAcceptsFullGitObjectIDs(t *testing.T) {
+	for _, testedHead := range []string{strings.Repeat("a", 40), strings.Repeat("b", 64)} {
+		in := skillEvalTestInput(t, skillEvalTestAdapter{})
+		in.TestedHead = testedHead
+		report, err := (SkillEvalRunner{}).Run(context.Background(), in)
+		if err != nil {
+			t.Fatalf("Run with %d-character Git object ID: %v", len(testedHead), err)
+		}
+		encoded, err := RenderSkillEvalReport(report)
+		if err != nil {
+			t.Fatalf("Render with %d-character Git object ID: %v", len(testedHead), err)
+		}
+		if _, err := DecodeSkillEvalReport(encoded, report); err != nil {
+			t.Fatalf("Decode with %d-character Git object ID: %v", len(testedHead), err)
+		}
+	}
+}
+
+func TestSkillEvalRunnerRejectsInvalidGitObjectIDs(t *testing.T) {
+	for _, testedHead := range []string{"", strings.Repeat("a", 39), strings.Repeat("a", 41), strings.Repeat("a", 63), strings.Repeat("a", 65), strings.Repeat("A", 40), strings.Repeat("g", 40)} {
+		in := skillEvalTestInput(t, skillEvalTestAdapter{})
+		in.TestedHead = testedHead
+		if _, err := (SkillEvalRunner{}).Execute(context.Background(), in); err == nil {
+			t.Fatalf("Execute accepted tested_head %q", testedHead)
+		}
+	}
+	in := skillEvalTestInput(t, skillEvalTestAdapter{})
+	in.TestedHead = strings.Repeat("a", 40)
+	in.CandidateExecutableSHA256 = strings.Repeat("b", 40)
+	if _, err := (SkillEvalRunner{}).Execute(context.Background(), in); err == nil {
+		t.Fatal("Execute accepted a Git-length executable digest")
+	}
+}
+
 func TestSkillEvalRunnerMarksMissingCandidateIncomplete(t *testing.T) {
 	report, err := (SkillEvalRunner{}).Run(context.Background(), skillEvalTestInput(t, skillEvalMissingAdapter{}))
 	if err != nil {

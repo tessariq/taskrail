@@ -6,6 +6,9 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ### Fixed
 
+- Maintainer skill-evaluation reports now bind `tested_head` to a full SHA-1 or
+  SHA-256 Git object ID while keeping content and executable digests strictly
+  SHA-256.
 - Maintainer skill-evaluation cases now initialize real temporary Git and
   Taskrail repositories, execute only documented commands, and grade canonical
   command, validation, and mutation facts rather than assertion labels.

@@ -36,6 +36,7 @@ var skillEvalGenericScenarioLabels = map[string]bool{
 
 var (
 	skillEvalDigestPattern     = regexp.MustCompile(`^[a-f0-9]{64}$`)
+	skillEvalGitObjectID       = regexp.MustCompile(`^(?:[a-f0-9]{40}|[a-f0-9]{64})$`)
 	skillEvalSessionID         = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
 	skillEvalWindowsPath       = regexp.MustCompile(`(?i)^[a-z]:[\\/]`)
 	skillEvalLocalPath         = regexp.MustCompile(`(?i)(^|[\s(\[=:'"])(/|~/|~\\|[a-z]:[\\/]|\\\\)`)
@@ -563,7 +564,10 @@ func validateSkillEvalReport(report SkillEvalReport) error {
 	if err != nil || generatedAt.Location() != time.UTC || generatedAt.Format(time.RFC3339) != report.GeneratedAt {
 		return fmt.Errorf("skill evaluation report timestamp is not canonical UTC")
 	}
-	for _, digest := range []string{report.TestedHead, report.CandidateExecutableSHA256, report.BaselineExecutableSHA256, report.ProductSHA256, report.Candidate.SkillsSHA256, report.Baseline.SkillsSHA256, report.FixturesSHA256} {
+	if !skillEvalGitObjectID.MatchString(report.TestedHead) {
+		return fmt.Errorf("skill evaluation report contains an invalid tested HEAD")
+	}
+	for _, digest := range []string{report.CandidateExecutableSHA256, report.BaselineExecutableSHA256, report.ProductSHA256, report.Candidate.SkillsSHA256, report.Baseline.SkillsSHA256, report.FixturesSHA256} {
 		if !skillEvalDigestPattern.MatchString(digest) {
 			return fmt.Errorf("skill evaluation report contains an invalid digest")
 		}
