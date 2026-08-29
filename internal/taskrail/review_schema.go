@@ -7,15 +7,22 @@ import (
 	"fmt"
 	"regexp"
 	"slices"
+	"strings"
 	"time"
 )
 
 const reviewFileLimit = 1 << 20
 
 var (
-	portableReviewKey   = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
-	reviewDigest        = regexp.MustCompile(`^[0-9a-f]{64}$`)
-	specReviewLensOrder = []string{"consistency", "gaps", "additions", "adversarial"}
+	portableReviewKey         = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
+	reviewDigest              = regexp.MustCompile(`^[0-9a-f]{64}$`)
+	specReviewLensOrder       = []string{"consistency", "gaps", "additions", "adversarial"}
+	specReviewFindingPrefixes = map[string]string{
+		"consistency": "CONS-",
+		"gaps":        "GAPS-",
+		"additions":   "ADDS-",
+		"adversarial": "ADV-",
+	}
 )
 
 type ReviewPromptBinding struct {
@@ -140,6 +147,14 @@ func DecodeTaskReview(data []byte) (TaskReview, error) {
 }
 
 func DecodeSpecReviewBundle(files map[string][]byte) (SpecReviewBundle, error) {
+	return decodeSpecReviewBundle(files, false)
+}
+
+func decodeSpecReviewProposalBundle(files map[string][]byte) (SpecReviewBundle, error) {
+	return decodeSpecReviewBundle(files, true)
+}
+
+func decodeSpecReviewBundle(files map[string][]byte, requireFindingNamespaces bool) (SpecReviewBundle, error) {
 	var bundle SpecReviewBundle
 	want := append([]string{}, specReviewLensOrder...)
 	for i := range want {
@@ -160,7 +175,7 @@ func DecodeSpecReviewBundle(files map[string][]byte) (SpecReviewBundle, error) {
 	findings := map[string]specFindingBinding{}
 	for _, lensName := range specReviewLensOrder {
 		path := lensName + ".json"
-		lens, err := decodeSpecReviewLens(files[path], lensName)
+		lens, err := decodeSpecReviewLens(files[path], lensName, requireFindingNamespaces)
 		if err != nil {
 			return bundle, fmt.Errorf("%s: %w", path, err)
 		}
@@ -284,7 +299,7 @@ func decodeTaskFindings(raw json.RawMessage) ([]TaskReviewFinding, error) {
 	return result, nil
 }
 
-func decodeSpecReviewLens(data []byte, lensName string) (SpecReviewLens, error) {
+func decodeSpecReviewLens(data []byte, lensName string, requireFindingNamespace bool) (SpecReviewLens, error) {
 	var out SpecReviewLens
 	obj, err := decodeReviewObject(data, "spec review lens")
 	if err != nil {
@@ -320,6 +335,14 @@ func decodeSpecReviewLens(data []byte, lensName string) (SpecReviewLens, error) 
 	}
 	if out.Findings, err = decodeSpecFindings(obj["findings"]); err != nil {
 		return out, err
+	}
+	if requireFindingNamespace {
+		prefix := specReviewFindingPrefixes[lensName]
+		for _, finding := range out.Findings {
+			if !strings.HasPrefix(finding.FindingID, prefix) || finding.FindingID == prefix {
+				return out, fmt.Errorf("finding_id %q does not use the %s namespace", finding.FindingID, prefix)
+			}
+		}
 	}
 	out.Raw = append([]byte(nil), data...)
 	return out, nil

@@ -207,14 +207,15 @@ func TestTaskImplementationPromptDefinesLifecycleCompleteWorkflow(t *testing.T) 
 
 func TestSpecReviewPromptsDefineIndependentSchemaV1Observations(t *testing.T) {
 	for _, test := range []struct {
-		id    string
-		lens  string
-		focus string
+		id     string
+		lens   string
+		focus  string
+		prefix string
 	}{
-		{"spec-consistency", "consistency", "contradictions"},
-		{"spec-gaps", "gaps", "missing actors"},
-		{"spec-additions", "additions", "adjacent behavior"},
-		{"spec-adversarial", "adversarial", "unsafe defaults"},
+		{"spec-consistency", "consistency", "contradictions", "CONS-"},
+		{"spec-gaps", "gaps", "missing actors", "GAPS-"},
+		{"spec-additions", "additions", "adjacent behavior", "ADDS-"},
+		{"spec-adversarial", "adversarial", "unsafe defaults", "ADV-"},
 	} {
 		t.Run(test.id, func(t *testing.T) {
 			content := string(builtinPromptTemplate(t, test.id))
@@ -227,6 +228,8 @@ func TestSpecReviewPromptsDefineIndependentSchemaV1Observations(t *testing.T) {
 				`"lens":"` + test.lens + `"`,
 				"finding_id",
 				"target_version",
+				test.prefix,
+				"unique across the",
 				"Do not mutate",
 				test.focus,
 			} {

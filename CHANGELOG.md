@@ -6,6 +6,9 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ### Fixed
 
+- Post-spec review findings now use disjoint `CONS-`, `GAPS-`, `ADDS-`, and
+  `ADV-` lens namespaces, so independently produced observations cannot collide
+  when their bundle is published.
 - Imported tasks now consistently use the outcome-focused scaffold and remain
   implicitly held. Reviewed decomposition enforces ordered exact body sections,
   preserves body bytes, and ships complete author/reviewer and digest-bound skill

@@ -43,10 +43,12 @@ do not contain the source helper and skip this source-only guard.
    Consume each JSON envelope. Give each reviewer the selected specification and
    relevant repository contracts, but no other lens observations: when supported,
    use separate contexts; otherwise record `same-context`, without earlier
-   conclusions as facts. Each
-   produces one schema-v1 JSON object at its fixed filename, including the exact
-   prompt ID, v1 contract, template digest, source, session, spec digest, and
-   `fresh` or `same-context` identity.
+   conclusions as facts. Each produces one schema-v1 JSON object at its fixed
+   filename, including the exact prompt ID, v1 contract, template digest, source,
+   session, spec digest, and `fresh` or `same-context` identity. Finding IDs use
+   the lens's disjoint namespace: `CONS-` for consistency, `GAPS-` for gaps,
+   `ADDS-` for additions, and `ADV-` for adversarial. IDs remain unique across
+   the complete session.
 3. **Inspect every observation with the human.** Findings remain advisory and
    open in their lens files. For every finding, a human records exactly one
    disposition in `manifest.json`: accepted, rejected, or deferred, with a

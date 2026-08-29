@@ -277,6 +277,25 @@ func TestReviewPublishSpecRefusesInvalidInputsWithoutPublication(t *testing.T) {
 		{"extra proposal member", func(repo string, _ *ReviewPublishInput) {
 			writeFile(t, filepath.Join(repo, "planning", "artifacts", "review-proposals", "spec", "session-1", "extra.json"), "{}")
 		}, MachineCodeInvalidProposal},
+		{"cross-lens finding namespace", func(repo string, input *ReviewPublishInput) {
+			proposal := filepath.Join(repo, filepath.FromSlash(input.Proposal))
+			lensPath := filepath.Join(proposal, "gaps.json")
+			lens, err := os.ReadFile(lensPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			lens = []byte(strings.Replace(string(lens), `"finding_id":"GAPS-001"`, `"finding_id":"CONS-999"`, 1))
+			manifestPath := filepath.Join(proposal, "manifest.json")
+			manifest, err := os.ReadFile(manifestPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			manifest = []byte(strings.Replace(string(manifest), `"finding_id":"GAPS-001"`, `"finding_id":"CONS-999"`, 1))
+			files := map[string][]byte{"gaps.json": lens, "manifest.json": manifest}
+			refreshManifestDigest(files, "gaps.json")
+			writeFile(t, lensPath, string(files["gaps.json"]))
+			writeFile(t, manifestPath, string(files["manifest.json"]))
+		}, MachineCodeInvalidProposal},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			repo, svc, input, _ := specReviewPublishFixture(t)

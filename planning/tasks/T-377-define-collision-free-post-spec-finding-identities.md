@@ -1,11 +1,16 @@
 ---
 id: T-377-define-collision-free-post-spec-finding-identities
 title: Define collision-free post-spec finding identities
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#post-spec-review-lenses
 dependencies: []
-updated_at: "2026-08-28T16:13:29Z"
+updated_at: "2026-08-29T07:27:37Z"
+completion_id: "0a590ff664dab91ca7f1df54ba2ba2a8"
+last_verification_id: "a870bff9c627063846781a97e1997657"
+last_verification_result: pass
+last_verified_at: "2026-08-29T07:27:37Z"
+last_verified_completion_id: "0a590ff664dab91ca7f1df54ba2ba2a8"
 ---
 
 # T-377-define-collision-free-post-spec-finding-identities Define collision-free post-spec finding identities
@@ -30,3 +35,6 @@ This resolves final v0.5 finding GAPS-001 without letting one lens inspect anoth
   prompt, review-publication, parity, full-test, and workflow-contract checks.
 
 ## Implementation Notes
+
+- 2026-08-29T07:27:23Z: Defined disjoint CONS-, GAPS-, ADDS-, and ADV- post-spec finding namespaces; strict proposal publication now rejects cross-lens IDs while historical published bundles remain readable. Verified focused schema/publication/prompt coverage, skill parity, full tests, vet, workflow contracts, task-body hygiene, and manual acceptance evidence.
+- 2026-08-29T07:27:37Z: verification pass id a870bff9c627063846781a97e1997657 previous none completion 0a590ff664dab91ca7f1df54ba2ba2a8

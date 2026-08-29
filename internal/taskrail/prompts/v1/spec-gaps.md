@@ -16,7 +16,8 @@ this request; use the selected spec path and digest, the shared session identity
 
 Each finding has exactly `finding_id`, `severity`, `evidence`, `impact`,
 `recommendation`, `scope`, `disposition`, `rationale`, and only future findings
-add `target_version`. IDs are unique across the session; severity is
+add `target_version`. IDs use the `GAPS-` prefix and are unique across the
+session; severity is
 `high|medium|low`, scope is `current|future|reject`, disposition is exactly
 `open`, and every textual field is non-empty. High means plausible
 data/security/lifecycle loss, medium material contract failure, and low bounded

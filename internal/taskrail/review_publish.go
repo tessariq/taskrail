@@ -506,7 +506,7 @@ func (s *Service) specReviewPublication(input ReviewPublishInput) (specReviewPub
 	if err != nil {
 		return out, err
 	}
-	bundle, err := DecodeSpecReviewBundle(files)
+	bundle, err := decodeSpecReviewProposalBundle(files)
 	if err != nil {
 		return out, WithMachineErrorCode(MachineCodeInvalidProposal, err)
 	}

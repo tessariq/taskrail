@@ -65,7 +65,7 @@ func TestDecodeTaskReviewRejectsStrictMutations(t *testing.T) {
 
 func TestDecodeSpecReviewBundleValidatesLensesAndManifest(t *testing.T) {
 	files := specReviewGolden()
-	bundle, err := DecodeSpecReviewBundle(files)
+	bundle, err := decodeSpecReviewProposalBundle(files)
 	if err != nil {
 		t.Fatalf("DecodeSpecReviewBundle: %v", err)
 	}
@@ -77,6 +77,20 @@ func TestDecodeSpecReviewBundleValidatesLensesAndManifest(t *testing.T) {
 	}
 	if string(bundle.Manifest.Raw) != string(files["manifest.json"]) || string(bundle.Raw["manifest.json"]) != string(files["manifest.json"]) {
 		t.Fatal("accepted manifest bytes were not preserved")
+	}
+}
+
+func TestDecodeSpecReviewBundlePreservesHistoricalFindingIDs(t *testing.T) {
+	files := specReviewGolden()
+	files["additions.json"] = []byte(strings.ReplaceAll(string(files["additions.json"]), "ADDS-001", "ADD-001"))
+	files["manifest.json"] = []byte(strings.ReplaceAll(string(files["manifest.json"]), "ADDS-001", "ADD-001"))
+	refreshManifestDigest(files, "additions.json")
+
+	if _, err := DecodeSpecReviewBundle(files); err != nil {
+		t.Fatalf("historical bundle: %v", err)
+	}
+	if _, err := decodeSpecReviewProposalBundle(files); err == nil || !strings.Contains(err.Error(), "ADDS- namespace") {
+		t.Fatalf("new proposal error = %v, want ADDS- namespace refusal", err)
 	}
 }
 
@@ -120,9 +134,13 @@ func TestDecodeSpecReviewBundleRejectsBindingAndDispositionMutations(t *testing.
 			refreshManifestDigest(f, "gaps.json")
 		}, "session_id does not match"},
 		{"cross-lens finding", func(f map[string][]byte) {
-			f["gaps.json"] = []byte(strings.Replace(string(f["gaps.json"]), `"finding_id":"gaps-1"`, `"finding_id":"consistency-1"`, 1))
+			f["gaps.json"] = []byte(strings.Replace(string(f["gaps.json"]), `"finding_id":"GAPS-001"`, `"finding_id":"CONS-999"`, 1))
 			refreshManifestDigest(f, "gaps.json")
-		}, "duplicate finding_id"},
+		}, `finding_id "CONS-999" does not use the GAPS- namespace`},
+		{"bare finding namespace", func(f map[string][]byte) {
+			f["gaps.json"] = []byte(strings.Replace(string(f["gaps.json"]), `"finding_id":"GAPS-001"`, `"finding_id":"GAPS-"`, 1))
+			refreshManifestDigest(f, "gaps.json")
+		}, `finding_id "GAPS-" does not use the GAPS- namespace`},
 		{"lens order", func(f map[string][]byte) {
 			f["manifest.json"] = []byte(strings.Replace(string(f["manifest.json"]), `"lens":"consistency"`, `"lens":"gaps"`, 1))
 		}, "fixed lens order"},
@@ -136,30 +154,30 @@ func TestDecodeSpecReviewBundleRejectsBindingAndDispositionMutations(t *testing.
 			f["manifest.json"] = []byte(strings.Replace(string(f["manifest.json"]), `"spec_sha256":"`+reviewDigestA+`"`, `"spec_sha256":"`+reviewDigestB+`"`, 1))
 		}, "snapshot does not match"},
 		{"duplicate disposition", func(f map[string][]byte) {
-			f["manifest.json"] = []byte(strings.Replace(string(f["manifest.json"]), `"finding_id":"gaps-1"`, `"finding_id":"consistency-1"`, 1))
+			f["manifest.json"] = []byte(strings.Replace(string(f["manifest.json"]), `"finding_id":"GAPS-001"`, `"finding_id":"CONS-001"`, 1))
 		}, "duplicate disposition"},
 		{"severity conflict", func(f map[string][]byte) {
-			f["manifest.json"] = []byte(strings.Replace(string(f["manifest.json"]), `"finding_id":"gaps-1","lens":"gaps","severity":"medium"`, `"finding_id":"gaps-1","lens":"gaps","severity":"low"`, 1))
+			f["manifest.json"] = []byte(strings.Replace(string(f["manifest.json"]), `"finding_id":"GAPS-001","lens":"gaps","severity":"medium"`, `"finding_id":"GAPS-001","lens":"gaps","severity":"low"`, 1))
 		}, "severity conflicts"},
 		{"lens conflict", func(f map[string][]byte) {
-			f["manifest.json"] = []byte(strings.Replace(string(f["manifest.json"]), `"finding_id":"gaps-1","lens":"gaps"`, `"finding_id":"gaps-1","lens":"additions"`, 1))
+			f["manifest.json"] = []byte(strings.Replace(string(f["manifest.json"]), `"finding_id":"GAPS-001","lens":"gaps"`, `"finding_id":"GAPS-001","lens":"additions"`, 1))
 		}, "lens conflicts"},
 		{"digest mismatch", func(f map[string][]byte) { f["gaps.json"] = append(f["gaps.json"], ' ') }, "digest does not match"},
 		{"missing disposition", func(f map[string][]byte) {
 			s := string(f["manifest.json"])
-			start := strings.Index(s, `,{"finding_id":"gaps-1"`)
+			start := strings.Index(s, `,{"finding_id":"GAPS-001"`)
 			end := start + strings.Index(s[start+1:], `}`) + 2
 			f["manifest.json"] = []byte(s[:start] + s[end:])
 		}, "missing disposition"},
 		{"unknown disposition", func(f map[string][]byte) {
-			f["manifest.json"] = []byte(strings.Replace(string(f["manifest.json"]), `"finding_id":"gaps-1"`, `"finding_id":"unknown-1"`, 1))
+			f["manifest.json"] = []byte(strings.Replace(string(f["manifest.json"]), `"finding_id":"GAPS-001"`, `"finding_id":"unknown-1"`, 1))
 		}, "unknown finding_id"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			files := specReviewGolden()
 			tc.mutate(files)
-			_, err := DecodeSpecReviewBundle(files)
+			_, err := decodeSpecReviewProposalBundle(files)
 			if err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Fatalf("error = %v, want containing %q", err, tc.want)
 			}
@@ -183,8 +201,9 @@ func taskReviewGolden() []byte {
 
 func specReviewGolden() map[string][]byte {
 	files := map[string][]byte{}
+	prefixes := map[string]string{"consistency": "CONS", "gaps": "GAPS", "additions": "ADDS", "adversarial": "ADV"}
 	for _, lens := range specReviewLensOrder {
-		files[lens+".json"] = []byte(`{"schema_version":1,"prompt_id":"spec-` + lens + `","prompt_contract_version":"v1","prompt_template_sha256":"` + reviewDigestB + `","prompt_source":"builtin","session_id":"spec-review-1","lens":"` + lens + `","spec_path":"specs/v0.5.0.md","spec_sha256":"` + reviewDigestA + `","context_mode":"fresh","generated_at":"2026-08-12T10:00:00Z","findings":[{"finding_id":"` + lens + `-1","severity":"` + map[string]string{"consistency": "high", "gaps": "medium", "additions": "low", "adversarial": "low"}[lens] + `","evidence":"evidence","impact":"impact","recommendation":"recommendation","scope":"current","disposition":"open","rationale":"rationale"}]}`)
+		files[lens+".json"] = []byte(`{"schema_version":1,"prompt_id":"spec-` + lens + `","prompt_contract_version":"v1","prompt_template_sha256":"` + reviewDigestB + `","prompt_source":"builtin","session_id":"spec-review-1","lens":"` + lens + `","spec_path":"specs/v0.5.0.md","spec_sha256":"` + reviewDigestA + `","context_mode":"fresh","generated_at":"2026-08-12T10:00:00Z","findings":[{"finding_id":"` + prefixes[lens] + `-001","severity":"` + map[string]string{"consistency": "high", "gaps": "medium", "additions": "low", "adversarial": "low"}[lens] + `","evidence":"evidence","impact":"impact","recommendation":"recommendation","scope":"current","disposition":"open","rationale":"rationale"}]}`)
 	}
 	entries := make([]string, 0, 4)
 	dispositions := make([]string, 0, 4)
@@ -192,10 +211,10 @@ func specReviewGolden() map[string][]byte {
 		sum := sha256.Sum256(files[lens+".json"])
 		entries = append(entries, `{"lens":"`+lens+`","path":"`+lens+`.json","sha256":"`+hex.EncodeToString(sum[:])+`","spec_sha256":"`+reviewDigestA+`"}`)
 		severity := map[string]string{"consistency": "high", "gaps": "medium", "additions": "low", "adversarial": "low"}[lens]
-		dispositions = append(dispositions, `{"finding_id":"`+lens+`-1","lens":"`+lens+`","severity":"`+severity+`","disposition":"rejected","rationale":"not applicable"}`)
+		dispositions = append(dispositions, `{"finding_id":"`+prefixes[lens]+`-001","lens":"`+lens+`","severity":"`+severity+`","disposition":"rejected","rationale":"not applicable"}`)
 	}
 	// Make one accepted decision exercise the required resulting spec reference.
-	dispositions[0] = `{"finding_id":"consistency-1","lens":"consistency","severity":"high","disposition":"accepted","rationale":"fixed","resulting_spec_ref":"specs/v0.5.0.md#safe-review-artifact-publication"}`
+	dispositions[0] = `{"finding_id":"CONS-001","lens":"consistency","severity":"high","disposition":"accepted","rationale":"fixed","resulting_spec_ref":"specs/v0.5.0.md#safe-review-artifact-publication"}`
 	files["manifest.json"] = []byte(`{"schema_version":1,"session_id":"spec-review-1","spec_path":"specs/v0.5.0.md","spec_sha256":"` + reviewDigestA + `","generated_at":"2026-08-12T10:00:00Z","approved_at":"2026-08-12T11:00:00Z","lenses":[` + strings.Join(entries, ",") + `],"dispositions":[` + strings.Join(dispositions, ",") + `]}`)
 	return files
 }
