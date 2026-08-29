@@ -60,6 +60,8 @@ execution and report construction.
    commit on the same evaluation platform; record their digests.
 2. Run every candidate and required baseline arm exactly once through a
    caller-owned agent adapter with candidate and baseline in isolated sandboxes.
+   Invoke each bound executable directly; do not resolve an unverified same-name
+   executable through `PATH`.
    Execute every declared setup and action command, retain the stub or provider
    transcript as raw evidence, and record only actual command facts.
 3. Render and retain the canonical sealed stage beside the producer-local raw

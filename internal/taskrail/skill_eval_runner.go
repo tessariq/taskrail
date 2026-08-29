@@ -42,8 +42,9 @@ var (
 	errSkillEvalArmUnavailable = errors.New("skill evaluation arm unavailable")
 )
 
-// SkillEvalAdapter is supplied by a maintainer. It owns provider selection and
-// must write raw output only to the RawRoot provided for the requested arm.
+// SkillEvalAdapter is supplied by a maintainer. It owns provider selection,
+// executes the caller-bound executable for each arm without rediscovering it by
+// name, and writes raw output only to the provided RawRoot.
 type SkillEvalAdapter interface {
 	Run(context.Context, SkillEvalAdapterRequest) (SkillEvalAdapterResult, error)
 }
