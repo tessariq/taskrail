@@ -171,9 +171,10 @@ func TestSkillEvalRunnerExecutesCompleteRegistryWithWorkingBinary(t *testing.T) 
 		t.Fatalf("Resume: %v", err)
 	}
 	if report.Outcome != "pass" {
-		var failed []string
+		failed := 0
 		for _, item := range report.Cases {
 			if item.Candidate == nil || item.Candidate.Outcome != "pass" || item.Candidate.DeterministicGrade != "pass" {
+				failed++
 				evaluation := registry[slices.IndexFunc(registry, func(candidate SkillEvalCase) bool {
 					return candidate.CaseID == item.CaseID
 				})]
@@ -181,10 +182,14 @@ func TestSkillEvalRunnerExecutesCompleteRegistryWithWorkingBinary(t *testing.T) 
 				rawRoot := skillEvalRawRoot(in, evaluation, skillEvalCandidateArm)
 				stdout, _ := os.ReadFile(filepath.Join(rawRoot, "initialize-taskrail-repository.stdout"))
 				stderr, _ := os.ReadFile(filepath.Join(rawRoot, "initialize-taskrail-repository.stderr"))
-				failed = append(failed, fmt.Sprintf("%s candidate=%+v facts=%+v facts_err=%v init_stdout=%q init_stderr=%q", item.CaseID, item.Candidate, facts, factsErr, stdout, stderr))
+				t.Logf("failed case %s candidate=%+v facts_err=%v", item.CaseID, item.Candidate, factsErr)
+				for _, fact := range facts {
+					t.Logf("failed case %s action=%s exit=%d", item.CaseID, fact.Action, fact.ExitCode)
+				}
+				t.Logf("failed case %s init_stdout=%q init_stderr=%q", item.CaseID, stdout, stderr)
 			}
 		}
-		t.Fatalf("complete registry outcome = %q; failed cases = %s", report.Outcome, strings.Join(failed, "; "))
+		t.Fatalf("complete registry outcome = %q; failed cases = %d", report.Outcome, failed)
 	}
 }
 
