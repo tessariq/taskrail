@@ -45,7 +45,37 @@ type SkillEvalCase struct {
 	ExpectedObservation  string
 	Assertions           []string
 	HumanReviewQuestions []string
+	Scenario             SkillEvalScenario
+	Oracle               SkillEvalOracle
 	FixtureSHA256        string
+	fixtureRoot          string
+}
+
+// SkillEvalScenario is an adapter-neutral recipe for an isolated evaluation.
+// It gives a caller-owned adapter exact fixture, sandbox, and command inputs.
+type SkillEvalScenario struct {
+	Fixture string
+	Sandbox string
+	Setup   []SkillEvalScenarioAction
+	Actions []SkillEvalScenarioAction
+}
+
+type SkillEvalScenarioAction struct {
+	ID        string
+	Operation string
+	Command   []string
+}
+
+// SkillEvalOracle maps every authored assertion to one independently observed
+// command predicate. Adapters provide facts, never assertion identities or grades.
+type SkillEvalOracle struct {
+	Assertions []SkillEvalAssertionOracle
+}
+
+type SkillEvalAssertionOracle struct {
+	Assertion string
+	Action    string
+	Predicate string
 }
 
 func loadSkillEvalRegistry(root string, shippedSkills []string) ([]SkillEvalCase, error) {
@@ -138,21 +168,26 @@ func loadSkillEvalCase(root string) (SkillEvalCase, error) {
 	if err := validateSkillEvalFixtureTree(root); err != nil {
 		return SkillEvalCase{}, err
 	}
-	if evaluation.StorageMode == "local" {
-		for _, fixture := range []string{
-			filepath.Join("fixture", "decoy", "planning", "STATE.md"),
-			filepath.Join("fixture", "git-provenance.txt"),
-		} {
-			if _, err := os.ReadFile(filepath.Join(root, fixture)); err != nil {
-				return SkillEvalCase{}, fmt.Errorf("read local fixture %s: %w", fixture, err)
-			}
-		}
+	fixtureInfo, err := os.Stat(filepath.Join(root, evaluation.Scenario.Fixture))
+	if err != nil {
+		return SkillEvalCase{}, fmt.Errorf("read scenario fixture %s: %w", evaluation.Scenario.Fixture, err)
+	}
+	if !fixtureInfo.IsDir() {
+		return SkillEvalCase{}, fmt.Errorf("scenario fixture %s is not a directory", evaluation.Scenario.Fixture)
+	}
+	seed, err := validateSkillEvalSeed(filepath.Join(root, evaluation.Scenario.Fixture, "seed.json"), evaluation.StorageMode)
+	if err != nil {
+		return SkillEvalCase{}, err
+	}
+	if !skillEvalScenarioUsesSeed(evaluation.Scenario, seed) {
+		return SkillEvalCase{}, fmt.Errorf("scenario does not execute its fixture seed initialization")
 	}
 	digest, err := skillEvalTreeDigest("taskrail-skill-eval-case-v1", root)
 	if err != nil {
 		return SkillEvalCase{}, err
 	}
 	evaluation.FixtureSHA256 = digest
+	evaluation.fixtureRoot = root
 	return evaluation, nil
 }
 
@@ -167,7 +202,7 @@ func parseSkillEvalCase(data []byte) (SkillEvalCase, error) {
 	}
 	if err := exactMembers(object, "case", []string{
 		"schema_version", "case_id", "skill", "storage_mode", "baseline_required",
-		"prompt", "expected_observation", "assertions", "human_review_questions",
+		"prompt", "expected_observation", "assertions", "human_review_questions", "scenario", "oracle",
 	}); err != nil {
 		return SkillEvalCase{}, err
 	}
@@ -213,7 +248,15 @@ func parseSkillEvalCase(data []byte) (SkillEvalCase, error) {
 	if err != nil {
 		return SkillEvalCase{}, err
 	}
-	return SkillEvalCase{
+	scenario, err := parseSkillEvalScenario(object["scenario"])
+	if err != nil {
+		return SkillEvalCase{}, err
+	}
+	oracle, err := parseSkillEvalOracle(object["oracle"])
+	if err != nil {
+		return SkillEvalCase{}, err
+	}
+	evaluation := SkillEvalCase{
 		CaseID:               caseID,
 		Skill:                skill,
 		StorageMode:          storageMode,
@@ -222,7 +265,109 @@ func parseSkillEvalCase(data []byte) (SkillEvalCase, error) {
 		ExpectedObservation:  expectedObservation,
 		Assertions:           assertions,
 		HumanReviewQuestions: questions,
-	}, nil
+		Scenario:             scenario,
+		Oracle:               oracle,
+	}
+	if err := validateSkillEvalCaseDefinition(evaluation); err != nil {
+		return SkillEvalCase{}, err
+	}
+	return evaluation, nil
+}
+
+func parseSkillEvalScenario(raw json.RawMessage) (SkillEvalScenario, error) {
+	object, err := strictObject(raw, "scenario")
+	if err != nil {
+		return SkillEvalScenario{}, err
+	}
+	if err := exactMembers(object, "scenario", []string{"fixture", "sandbox", "setup", "actions"}); err != nil {
+		return SkillEvalScenario{}, err
+	}
+	fixture, err := stringMember(object, "scenario", "fixture")
+	if err != nil {
+		return SkillEvalScenario{}, err
+	}
+	sandbox, err := stringMember(object, "scenario", "sandbox")
+	if err != nil {
+		return SkillEvalScenario{}, err
+	}
+	setup, err := parseSkillEvalScenarioActions(object["setup"], "setup")
+	if err != nil || len(setup) == 0 {
+		return SkillEvalScenario{}, fmt.Errorf("scenario member %q must be non-empty", "setup")
+	}
+	actions, err := parseSkillEvalScenarioActions(object["actions"], "actions")
+	if err != nil || len(actions) == 0 {
+		return SkillEvalScenario{}, fmt.Errorf("scenario member %q must be non-empty", "actions")
+	}
+	return SkillEvalScenario{Fixture: fixture, Sandbox: sandbox, Setup: setup, Actions: actions}, nil
+}
+
+func parseSkillEvalScenarioActions(raw json.RawMessage, name string) ([]SkillEvalScenarioAction, error) {
+	elements, err := arrayMember(raw, "scenario", name)
+	if err != nil {
+		return nil, err
+	}
+	actions := make([]SkillEvalScenarioAction, 0, len(elements))
+	for _, element := range elements {
+		action, err := strictObject(element, "scenario action")
+		if err != nil {
+			return nil, err
+		}
+		if err := exactMembers(action, "scenario action", []string{"id", "operation", "command"}); err != nil {
+			return nil, err
+		}
+		id, err := stringMember(action, "scenario action", "id")
+		if err != nil {
+			return nil, err
+		}
+		operation, err := enumMember(action, "scenario action", "operation", []string{"git-command", "taskrail-command"})
+		if err != nil {
+			return nil, err
+		}
+		command, err := skillEvalStringArray(action, "command")
+		if err != nil {
+			return nil, err
+		}
+		actions = append(actions, SkillEvalScenarioAction{ID: id, Operation: operation, Command: command})
+	}
+	return actions, nil
+}
+
+func parseSkillEvalOracle(raw json.RawMessage) (SkillEvalOracle, error) {
+	object, err := strictObject(raw, "oracle")
+	if err != nil {
+		return SkillEvalOracle{}, err
+	}
+	if err := exactMembers(object, "oracle", []string{"assertions"}); err != nil {
+		return SkillEvalOracle{}, err
+	}
+	elements, err := arrayMember(object["assertions"], "oracle", "assertions")
+	if err != nil || len(elements) == 0 {
+		return SkillEvalOracle{}, fmt.Errorf("oracle member %q must be non-empty", "assertions")
+	}
+	assertions := make([]SkillEvalAssertionOracle, 0, len(elements))
+	for _, element := range elements {
+		assertion, err := strictObject(element, "oracle assertion")
+		if err != nil {
+			return SkillEvalOracle{}, err
+		}
+		if err := exactMembers(assertion, "oracle assertion", []string{"assertion", "action", "predicate"}); err != nil {
+			return SkillEvalOracle{}, err
+		}
+		name, err := stringMember(assertion, "oracle assertion", "assertion")
+		if err != nil {
+			return SkillEvalOracle{}, err
+		}
+		action, err := stringMember(assertion, "oracle assertion", "action")
+		if err != nil {
+			return SkillEvalOracle{}, err
+		}
+		predicate, err := enumMember(assertion, "oracle assertion", "predicate", []string{"command-exit-zero", "taskrail-validation-pass", "git-worktree-clean"})
+		if err != nil {
+			return SkillEvalOracle{}, err
+		}
+		assertions = append(assertions, SkillEvalAssertionOracle{Assertion: name, Action: action, Predicate: predicate})
+	}
+	return SkillEvalOracle{Assertions: assertions}, nil
 }
 
 func skillEvalStringArray(object map[string]json.RawMessage, name string) ([]string, error) {
@@ -280,6 +425,57 @@ func validateSkillEvalFixtureTree(root string) error {
 		files = append(files, info)
 		return nil
 	})
+}
+
+type skillEvalSeed struct {
+	SchemaVersion int      `json:"schema_version"`
+	StorageMode   string   `json:"storage_mode"`
+	GitInit       bool     `json:"git_init"`
+	TaskrailInit  []string `json:"taskrail_init"`
+	Decoy         *struct {
+		Path     string `json:"path"`
+		Contents string `json:"contents"`
+	} `json:"decoy,omitempty"`
+	Provenance string `json:"provenance,omitempty"`
+}
+
+func validateSkillEvalSeed(path, mode string) (skillEvalSeed, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return skillEvalSeed{}, fmt.Errorf("read fixture seed: %w", err)
+	}
+	if err := checkDocumentFraming(data); err != nil {
+		return skillEvalSeed{}, fmt.Errorf("decode fixture seed: %w", err)
+	}
+	var seed skillEvalSeed
+	if err := json.Unmarshal(data, &seed); err != nil || seed.SchemaVersion != 1 || seed.StorageMode != mode || !seed.GitInit {
+		return skillEvalSeed{}, fmt.Errorf("fixture seed %s is not a runnable %s repository seed", path, mode)
+	}
+	want := []string{"init", "--json"}
+	if mode == "local" {
+		want = []string{"init", "--local", "--json"}
+		if seed.Decoy == nil || seed.Decoy.Path == "" || seed.Decoy.Contents == "" || seed.Provenance == "" {
+			return skillEvalSeed{}, fmt.Errorf("local fixture seed %s lacks concrete decoy or provenance", path)
+		}
+	}
+	if !slices.Equal(seed.TaskrailInit, want) {
+		return skillEvalSeed{}, fmt.Errorf("fixture seed %s has unsupported Taskrail initialization", path)
+	}
+	return seed, nil
+}
+
+func skillEvalScenarioUsesSeed(scenario SkillEvalScenario, seed skillEvalSeed) bool {
+	gitInitialized := false
+	for _, setup := range scenario.Setup {
+		if setup.Operation == "git-command" && slices.Equal(setup.Command, []string{"git", "init"}) {
+			gitInitialized = true
+			continue
+		}
+		if setup.Operation == "taskrail-command" && slices.Equal(setup.Command, append([]string{"taskrail"}, seed.TaskrailInit...)) {
+			return gitInitialized
+		}
+	}
+	return false
 }
 
 func skillEvalTreeDigest(domain, root string) (string, error) {

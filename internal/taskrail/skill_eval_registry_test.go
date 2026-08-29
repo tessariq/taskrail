@@ -20,13 +20,13 @@ func TestSkillEvalRegistryCoversEveryShippedSkill(t *testing.T) {
 }
 
 func TestParseSkillEvalCaseRejectsStrictMutations(t *testing.T) {
-	base := `{"schema_version":1,"case_id":"autonomous-task-committed","skill":"autonomous-task","storage_mode":"committed","baseline_required":true,"prompt":"run the documented workflow","expected_observation":"it remains valid","assertions":["uses JSON"],"human_review_questions":["was it safe?"]}`
+	base := `{"schema_version":1,"case_id":"autonomous-task-committed","skill":"autonomous-task","storage_mode":"committed","baseline_required":true,"prompt":"run the documented workflow","expected_observation":"it remains valid","assertions":["uses JSON"],"scenario":{"fixture":"fixture","sandbox":"autonomous-task-committed","setup":[{"id":"initialize-git","operation":"git-command","command":["git","init"]}],"actions":[{"id":"uses-json","operation":"taskrail-command","command":["taskrail","validate","--json"]}]},"oracle":{"assertions":[{"assertion":"uses JSON","action":"uses-json","predicate":"command-exit-zero"}]},"human_review_questions":["was it safe?"]}`
 	for _, tc := range []struct {
 		name   string
 		mutate func(string) string
 		want   string
 	}{
-		{"unknown member", func(s string) string { return strings.Replace(s, "}", `,"extra":true}`, 1) }, "unknown member"},
+		{"unknown member", func(s string) string { return s[:len(s)-1] + `,"extra":true}` }, "unknown member"},
 		{"duplicate member", func(s string) string { return strings.Replace(s, `"prompt":`, `"prompt":"first","prompt":`, 1) }, "repeats member"},
 		{"empty assertions", func(s string) string { return strings.Replace(s, `["uses JSON"]`, `[]`, 1) }, "assertions"},
 		{"duplicate assertion", func(s string) string { return strings.Replace(s, `["uses JSON"]`, `["uses JSON","uses JSON"]`, 1) }, "repeats"},
@@ -36,6 +36,13 @@ func TestParseSkillEvalCaseRejectsStrictMutations(t *testing.T) {
 		{"wrong storage", func(s string) string {
 			return strings.Replace(s, `"storage_mode":"committed"`, `"storage_mode":"other"`, 1)
 		}, "allowed value"},
+		{"missing scenario", func(s string) string {
+			return strings.Replace(s, `,"scenario":{"fixture":"fixture","sandbox":"autonomous-task-committed","setup":[{"id":"initialize-git","operation":"git-command","command":["git","init"]}],"actions":[{"id":"uses-json","operation":"taskrail-command","command":["taskrail","validate","--json"]}]}`, "", 1)
+		}, "missing member"},
+		{"unsupported oracle predicate", func(s string) string { return strings.Replace(s, `"command-exit-zero"`, `"unknown"`, 1) }, "allowed value"},
+		{"generic scenario", func(s string) string {
+			return strings.Replace(s, `"sandbox":"autonomous-task-committed"`, `"sandbox":"case"`, 1)
+		}, "incomplete executable"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if _, err := parseSkillEvalCase([]byte(tc.mutate(base))); err == nil || !strings.Contains(err.Error(), tc.want) {
@@ -84,7 +91,7 @@ func TestSkillEvalRegistryRejectsRegistryMutations(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if err := os.WriteFile(path, []byte(strings.Replace(string(data), `"case_id":"other"`, `"case_id":"different"`, 1)), 0o644); err != nil {
+			if err := os.WriteFile(path, []byte(strings.ReplaceAll(string(data), "other", "different")), 0o644); err != nil {
 				t.Fatal(err)
 			}
 		}, nil, "does not match its path"},
@@ -95,7 +102,7 @@ func TestSkillEvalRegistryRejectsRegistryMutations(t *testing.T) {
 		{"missing local fixture", func(t *testing.T, root string) {
 			writeSkillEvalFixture(t, root, "autonomous-task", "committed", "task-committed", true, true)
 			writeSkillEvalFixture(t, root, "autonomous-task", "local", "task-local", true, false)
-		}, nil, "read local fixture"},
+		}, nil, "lacks concrete decoy"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			root := t.TempDir()
@@ -131,8 +138,25 @@ func writeSkillEvalFixture(t *testing.T, root, skill, mode, caseID string, basel
 	if err := os.MkdirAll(caseRoot, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	caseJSON := `{"schema_version":1,"case_id":"` + caseID + `","skill":"` + skill + `","storage_mode":"` + mode + `","baseline_required":` + strconv.FormatBool(baseline) + `,"prompt":"run","expected_observation":"observe","assertions":["assert"],"human_review_questions":["review?"]}`
+	init := `["taskrail","init","--json"]`
+	if mode == "local" {
+		init = `["taskrail","init","--local","--json"]`
+	}
+	caseJSON := `{"schema_version":1,"case_id":"` + caseID + `","skill":"` + skill + `","storage_mode":"` + mode + `","baseline_required":` + strconv.FormatBool(baseline) + `,"prompt":"run","expected_observation":"observe","assertions":["assert"],"scenario":{"fixture":"fixture","sandbox":"` + caseID + `","setup":[{"id":"initialize-git","operation":"git-command","command":["git","init"]},{"id":"initialize-taskrail","operation":"taskrail-command","command":` + init + `}],"actions":[{"id":"assert","operation":"taskrail-command","command":["taskrail","validate","--json"]}]},"oracle":{"assertions":[{"assertion":"assert","action":"assert","predicate":"command-exit-zero"}]},"human_review_questions":["review?"]}`
 	if err := os.WriteFile(filepath.Join(caseRoot, "case.json"), []byte(caseJSON), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(caseRoot, "fixture"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	seed := `{"schema_version":1,"storage_mode":"` + mode + `","git_init":true,"taskrail_init":["init","--json"]}` + "\n"
+	if mode == "local" {
+		seed = `{"schema_version":1,"storage_mode":"local","git_init":true,"taskrail_init":["init","--local","--json"],"decoy":{"path":"decoy/planning/STATE.md","contents":"fixture decoy"},"provenance":"fixture provenance"}` + "\n"
+		if !localFixtures {
+			seed = `{"schema_version":1,"storage_mode":"local","git_init":true,"taskrail_init":["init","--local","--json"]}` + "\n"
+		}
+	}
+	if err := os.WriteFile(filepath.Join(caseRoot, "fixture", "seed.json"), []byte(seed), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if mode != "local" || !localFixtures {

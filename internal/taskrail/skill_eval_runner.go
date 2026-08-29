@@ -3,6 +3,8 @@ package taskrail
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -24,6 +26,14 @@ var skillEvalRequiredWaiverChecks = []string{
 	"command", "cross-platform", "lifecycle", "machine-api", "parity", "security",
 }
 
+var skillEvalGenericScenarioLabels = map[string]bool{
+	"create-isolated-sandbox": true,
+	"positive":                true,
+	"negative":                true,
+	"recovery":                true,
+	"boundary":                true,
+}
+
 var (
 	skillEvalDigestPattern     = regexp.MustCompile(`^[a-f0-9]{64}$`)
 	skillEvalSessionID         = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
@@ -39,14 +49,33 @@ type SkillEvalAdapter interface {
 }
 
 type SkillEvalAdapterRequest struct {
-	Case    SkillEvalCase
-	Arm     string
-	RawRoot string
+	Case        SkillEvalCase
+	Arm         string
+	FixtureRoot string
+	RawRoot     string
 }
 
 type SkillEvalAdapterResult struct {
-	Outcome            string
-	DeterministicGrade string
+	Outcome string
+	Facts   []SkillEvalObservedFact
+}
+
+// SkillEvalObservedFact records one command the adapter ran in the sandbox.
+// The same canonical facts must be present in raw facts.json before the runner
+// will evaluate an oracle predicate.
+type SkillEvalObservedFact struct {
+	Action           string   `json:"action"`
+	Operation        string   `json:"operation"`
+	Command          []string `json:"command"`
+	ExitCode         int      `json:"exit_code"`
+	StdoutSHA256     string   `json:"stdout_sha256"`
+	StderrSHA256     string   `json:"stderr_sha256"`
+	BeforeSHA256     string   `json:"before_sha256"`
+	AfterSHA256      string   `json:"after_sha256"`
+	GitBeforeSHA256  string   `json:"git_before_sha256"`
+	GitAfterSHA256   string   `json:"git_after_sha256"`
+	ValidationPassed bool     `json:"validation_passed"`
+	StoragePaths     []string `json:"storage_paths"`
 }
 
 type SkillEvalIdentity struct {
@@ -163,22 +192,25 @@ type skillEvalExpectedCase struct {
 
 type SkillEvalRunner struct{}
 
-// Run invokes each required arm once. Adapter failures are reportable missing
-// evidence rather than runner failures, so unavailable credentials can never be
-// mistaken for a passing release evaluation.
+// Run is the single-call convenience path. Execute and Resume let a maintainer
+// stop at the required human comparison boundary without rerunning any arm.
 func (SkillEvalRunner) Run(ctx context.Context, input SkillEvalRunInput) (SkillEvalReport, error) {
-	if err := validateSkillEvalRunInput(input); err != nil {
+	stage, err := (SkillEvalRunner{}).Execute(ctx, input)
+	if err != nil {
 		return SkillEvalReport{}, err
+	}
+	return (SkillEvalRunner{}).Resume(stage, input, input.HumanReview, input.CaseReviews)
+}
+
+// Execute invokes every candidate and required baseline arm exactly once, then
+// returns an unrenderable staged record with only inconclusive comparisons.
+func (SkillEvalRunner) Execute(ctx context.Context, input SkillEvalRunInput) (SkillEvalStage, error) {
+	if err := validateSkillEvalRunInput(input, false); err != nil {
+		return SkillEvalStage{}, err
 	}
 	cases := slices.Clone(input.Registry)
 	slices.SortFunc(cases, compareSkillEvalCases)
-	manifest := skillEvalReportManifest{Cases: make(map[string]skillEvalExpectedCase, len(cases))}
-	for _, item := range cases {
-		manifest.Cases[item.CaseID] = skillEvalExpectedCase{
-			Skill: item.Skill, StorageMode: item.StorageMode, FixtureSHA256: item.FixtureSHA256,
-			BaselineRequired: item.BaselineRequired, CandidateSkill: input.CandidateSkillSHA256[item.Skill], BaselineSkill: input.BaselineSkillSHA256[item.Skill],
-		}
-	}
+	manifest := skillEvalManifest(cases, input)
 	report := SkillEvalReport{
 		SchemaVersion:             1,
 		SessionID:                 input.SessionID,
@@ -193,29 +225,27 @@ func (SkillEvalRunner) Run(ctx context.Context, input SkillEvalRunInput) (SkillE
 		Adapter:                   input.AdapterIdentity,
 		Model:                     input.ModelIdentity,
 		DeterministicChecks:       input.DeterministicChecks,
-		HumanReview:               input.HumanReview,
+		HumanReview:               "",
 		Waiver:                    nil,
 		manifest:                  manifest,
 	}
 	for _, evaluation := range cases {
-		review := input.CaseReviews[evaluation.CaseID]
 		item := SkillEvalCaseReport{
 			CaseID: evaluation.CaseID, Skill: evaluation.Skill, StorageMode: evaluation.StorageMode,
 			FixtureSHA256: evaluation.FixtureSHA256, BaselineRequired: evaluation.BaselineRequired,
-			HumanReview: review.HumanReview,
+			Comparison: "inconclusive",
 		}
 		var err error
 		item.Candidate, err = runSkillEvalArm(ctx, input, evaluation, skillEvalCandidateArm)
 		if err != nil {
-			return SkillEvalReport{}, fmt.Errorf("candidate %s: %w", evaluation.CaseID, err)
+			return SkillEvalStage{}, fmt.Errorf("candidate %s: %w", evaluation.CaseID, err)
 		}
 		if evaluation.BaselineRequired {
 			item.Baseline, err = runSkillEvalArm(ctx, input, evaluation, skillEvalBaselineArm)
 			if err != nil {
-				return SkillEvalReport{}, fmt.Errorf("baseline %s: %w", evaluation.CaseID, err)
+				return SkillEvalStage{}, fmt.Errorf("baseline %s: %w", evaluation.CaseID, err)
 			}
 		}
-		item.Comparison = comparisonForSkillEvalCase(item, review.Comparison)
 		report.Cases = append(report.Cases, item)
 	}
 	observed := false
@@ -224,77 +254,37 @@ func (SkillEvalRunner) Run(ctx context.Context, input SkillEvalRunInput) (SkillE
 	}
 	report.Adapter.Observed = observed
 	report.Model.Observed = observed
-	report.Outcome = skillEvalOutcome(report)
-	return report, nil
-}
-
-func validateSkillEvalRunInput(input SkillEvalRunInput) error {
-	if !skillEvalSessionID.MatchString(input.SessionID) || len(input.SessionID) > 64 {
-		return fmt.Errorf("skill evaluation session ID is not portable")
+	stage := SkillEvalStage{SchemaVersion: 1, Report: report}
+	for _, item := range cases {
+		reportCase := report.Cases[len(stage.Worksheet)]
+		stage.Worksheet = append(stage.Worksheet, SkillEvalWorksheetCase{
+			CaseID: item.CaseID, Skill: item.Skill, HumanReviewQuestions: slices.Clone(item.HumanReviewQuestions),
+			Candidate: reportCase.Candidate, Baseline: reportCase.Baseline,
+		})
 	}
-	if input.GeneratedAt.IsZero() || input.GeneratedAt.Location() != time.UTC {
-		return fmt.Errorf("skill evaluation timestamp must be UTC")
-	}
-	for _, digest := range []string{input.TestedHead, input.CandidateExecutableSHA256, input.BaselineExecutableSHA256, input.ProductSHA256, input.CandidateSkillsSHA256, input.BaselineSkillsSHA256, input.FixturesSHA256} {
-		if !skillEvalDigestPattern.MatchString(digest) {
-			return fmt.Errorf("skill evaluation contains an invalid digest")
-		}
-	}
-	if input.ArtifactRoot == "" || input.Adapter == nil {
-		return fmt.Errorf("skill evaluation requires an artifact root and adapter")
-	}
-	if err := validateSkillEvalIdentity(input.AdapterIdentity); err != nil {
-		return fmt.Errorf("adapter identity: %w", err)
-	}
-	if err := validateSkillEvalIdentity(input.ModelIdentity); err != nil {
-		return fmt.Errorf("model identity: %w", err)
-	}
-	if err := validateSkillEvalChecks(input.DeterministicChecks); err != nil {
-		return err
-	}
-	if err := validateSkillEvalSummary(input.HumanReview, input.ArtifactRoot); err != nil {
-		return fmt.Errorf("human review: %w", err)
-	}
-	if len(input.Registry) == 0 {
-		return fmt.Errorf("skill evaluation registry is empty")
-	}
-	seen := map[string]bool{}
-	for _, item := range input.Registry {
-		if item.CaseID == "" || len(item.CaseID) > 64 || seen[item.CaseID] || !skillEvalDigestPattern.MatchString(item.FixtureSHA256) {
-			return fmt.Errorf("skill evaluation registry is invalid")
-		}
-		seen[item.CaseID] = true
-		if !skillEvalCaseID.MatchString(item.CaseID) || !skillEvalCaseID.MatchString(item.Skill) {
-			return fmt.Errorf("skill evaluation case %q has an unsafe raw evidence path", item.CaseID)
-		}
-		if !skillEvalDigestPattern.MatchString(input.CandidateSkillSHA256[item.Skill]) {
-			return fmt.Errorf("skill evaluation case %q has no candidate skill digest", item.CaseID)
-		}
-		if item.BaselineRequired && !skillEvalDigestPattern.MatchString(input.BaselineSkillSHA256[item.Skill]) {
-			return fmt.Errorf("skill evaluation case %q has no baseline skill digest", item.CaseID)
-		}
-		review, ok := input.CaseReviews[item.CaseID]
-		if !ok || !validSkillEvalComparison(review.Comparison) {
-			return fmt.Errorf("skill evaluation case %q has no valid human comparison", item.CaseID)
-		}
-		if err := validateSkillEvalSummary(review.HumanReview, input.ArtifactRoot); err != nil {
-			return fmt.Errorf("skill evaluation case %q review: %w", item.CaseID, err)
-		}
-	}
-	return nil
+	stage.Seal = skillEvalStageSeal(stage)
+	return stage, nil
 }
 
 func runSkillEvalArm(ctx context.Context, input SkillEvalRunInput, evaluation SkillEvalCase, arm string) (*SkillEvalRun, error) {
-	rawRoot := filepath.Join(input.ArtifactRoot, "skill-evals", "v0.5.0", input.SessionID, "raw", evaluation.Skill, evaluation.CaseID, arm)
+	rawRoot := skillEvalRawRoot(input, evaluation, arm)
 	if err := os.MkdirAll(rawRoot, 0o700); err != nil {
 		return nil, fmt.Errorf("create raw root: %w", err)
 	}
-	result, err := input.Adapter.Run(ctx, SkillEvalAdapterRequest{Case: evaluation, Arm: arm, RawRoot: rawRoot})
+	fixtureRoot := ""
+	if evaluation.fixtureRoot != "" {
+		fixtureRoot = filepath.Join(evaluation.fixtureRoot, evaluation.Scenario.Fixture)
+	}
+	result, err := input.Adapter.Run(ctx, SkillEvalAdapterRequest{Case: evaluation, Arm: arm, FixtureRoot: fixtureRoot, RawRoot: rawRoot})
 	if err != nil {
 		return nil, nil
 	}
-	if !validSkillEvalRunOutcome(result.Outcome) || !validSkillEvalGrade(result.DeterministicGrade) {
+	if !validSkillEvalRunOutcome(result.Outcome) {
 		return nil, nil
+	}
+	grade, err := skillEvalDeterministicGrade(evaluation, rawRoot, result.Facts)
+	if err != nil {
+		return nil, fmt.Errorf("evaluate deterministic oracle: %w", err)
 	}
 	digest, err := nonEmptySkillEvalRawDigest(rawRoot)
 	if err != nil {
@@ -304,7 +294,182 @@ func runSkillEvalArm(ctx context.Context, input SkillEvalRunInput, evaluation Sk
 	if arm == skillEvalBaselineArm {
 		skills, executable = input.BaselineSkillSHA256[evaluation.Skill], input.BaselineExecutableSHA256
 	}
-	return &SkillEvalRun{Outcome: result.Outcome, SkillSHA256: skills, ExecutableSHA256: executable, DeterministicGrade: result.DeterministicGrade, RawSHA256: digest}, nil
+	return &SkillEvalRun{Outcome: result.Outcome, SkillSHA256: skills, ExecutableSHA256: executable, DeterministicGrade: grade, RawSHA256: digest}, nil
+}
+
+func skillEvalRawRoot(input SkillEvalRunInput, evaluation SkillEvalCase, arm string) string {
+	return filepath.Join(input.ArtifactRoot, "skill-evals", "v0.5.0", input.SessionID, "raw", evaluation.Skill, evaluation.CaseID, arm)
+}
+
+func skillEvalDeterministicGrade(evaluation SkillEvalCase, rawRoot string, facts []SkillEvalObservedFact) (string, error) {
+	recorded, err := decodeSkillEvalFacts(rawRoot)
+	if err != nil {
+		return "", err
+	}
+	if !slices.EqualFunc(facts, recorded, skillEvalSameFact) {
+		return "", fmt.Errorf("adapter facts do not match raw facts receipt")
+	}
+	byAction := make(map[string]SkillEvalObservedFact, len(facts))
+	for _, fact := range facts {
+		if _, exists := byAction[fact.Action]; exists {
+			return "", fmt.Errorf("duplicate observed action %q", fact.Action)
+		}
+		byAction[fact.Action] = fact
+	}
+	declared := append(slices.Clone(evaluation.Scenario.Setup), evaluation.Scenario.Actions...)
+	if len(byAction) != len(declared) {
+		return "fail", nil
+	}
+	actions := make(map[string]SkillEvalScenarioAction, len(declared))
+	for _, action := range declared {
+		actions[action.ID] = action
+	}
+	for _, oracle := range evaluation.Oracle.Assertions {
+		action, found := actions[oracle.Action]
+		fact, observed := byAction[oracle.Action]
+		if !found || !observed || action.Operation != fact.Operation || !slices.Equal(action.Command, fact.Command) {
+			return "fail", nil
+		}
+		if !skillEvalPredicatePasses(oracle.Predicate, fact) {
+			return "fail", nil
+		}
+	}
+	return "pass", nil
+}
+
+func skillEvalSameFact(a, b SkillEvalObservedFact) bool {
+	return a.Action == b.Action && a.Operation == b.Operation && slices.Equal(a.Command, b.Command) && a.ExitCode == b.ExitCode && a.StdoutSHA256 == b.StdoutSHA256 && a.StderrSHA256 == b.StderrSHA256 && a.BeforeSHA256 == b.BeforeSHA256 && a.AfterSHA256 == b.AfterSHA256 && a.GitBeforeSHA256 == b.GitBeforeSHA256 && a.GitAfterSHA256 == b.GitAfterSHA256 && a.ValidationPassed == b.ValidationPassed && slices.Equal(a.StoragePaths, b.StoragePaths)
+}
+
+func skillEvalPredicatePasses(predicate string, fact SkillEvalObservedFact) bool {
+	switch predicate {
+	case "command-exit-zero":
+		return fact.ExitCode == 0
+	case "taskrail-validation-pass":
+		return fact.Operation == "taskrail-command" && fact.ExitCode == 0 && fact.ValidationPassed
+	case "git-worktree-clean":
+		return fact.Operation == "git-command" && fact.ExitCode == 0 && fact.GitBeforeSHA256 == fact.GitAfterSHA256
+	default:
+		return false
+	}
+}
+
+func validateSkillEvalCaseDefinition(item SkillEvalCase) error {
+	if item.Prompt == "" || item.ExpectedObservation == "" || !utf8.ValidString(item.Prompt) || !utf8.ValidString(item.ExpectedObservation) {
+		return fmt.Errorf("has an invalid prompt or expected observation")
+	}
+	if !validSkillEvalStorageMode(item.StorageMode) || !validSkillEvalStrings(item.Assertions) || !validSkillEvalStrings(item.HumanReviewQuestions) {
+		return fmt.Errorf("has invalid assertions, questions, or storage mode")
+	}
+	if item.Scenario.Fixture != "fixture" || item.Scenario.Sandbox != item.CaseID || len(item.Scenario.Setup) == 0 || len(item.Scenario.Actions) != len(item.Assertions) || len(item.Oracle.Assertions) != len(item.Assertions) {
+		return fmt.Errorf("has an incomplete executable scenario or oracle")
+	}
+	assertions, actions, declared := map[string]bool{}, map[string]bool{}, map[string]bool{}
+	for _, assertion := range item.Assertions {
+		assertions[assertion] = true
+	}
+	for _, action := range append(slices.Clone(item.Scenario.Setup), item.Scenario.Actions...) {
+		if action.ID == "" || skillEvalGenericScenarioLabels[action.ID] || !skillEvalCaseID.MatchString(action.ID) || (action.Operation != "git-command" && action.Operation != "taskrail-command") || len(action.Command) < 2 || declared[action.ID] {
+			return fmt.Errorf("has ambiguous executable actions")
+		}
+		if action.Operation == "git-command" && action.Command[0] != "git" || action.Operation == "taskrail-command" && action.Command[0] != "taskrail" {
+			return fmt.Errorf("does not use a documented %s executable", action.Operation)
+		}
+		for _, part := range action.Command {
+			if part == "" || !utf8.ValidString(part) {
+				return fmt.Errorf("has invalid executable action command")
+			}
+		}
+		declared[action.ID] = true
+	}
+	for _, action := range item.Scenario.Actions {
+		actions[action.ID] = true
+	}
+	for _, oracle := range item.Oracle.Assertions {
+		if !assertions[oracle.Assertion] || !actions[oracle.Action] || !validSkillEvalPredicate(oracle.Predicate) || assertions[oracle.Assertion] == false {
+			return fmt.Errorf("has an unsupported or ambiguous oracle predicate")
+		}
+		delete(assertions, oracle.Assertion)
+		delete(actions, oracle.Action)
+	}
+	if len(assertions) != 0 || len(actions) != 0 {
+		return fmt.Errorf("does not map every assertion to one executable oracle")
+	}
+	return nil
+}
+
+func validSkillEvalPredicate(value string) bool {
+	return value == "command-exit-zero" || value == "taskrail-validation-pass" || value == "git-worktree-clean"
+}
+
+func skillEvalBytesDigest(data []byte) string {
+	digest := sha256.Sum256(data)
+	return hex.EncodeToString(digest[:])
+}
+
+func validSkillEvalStrings(values []string) bool {
+	if len(values) == 0 {
+		return false
+	}
+	seen := make(map[string]bool, len(values))
+	for _, value := range values {
+		if value == "" || !utf8.ValidString(value) || seen[value] {
+			return false
+		}
+		seen[value] = true
+	}
+	return true
+}
+
+func skillEvalSafeStrings(values []string) bool {
+	if !validSkillEvalStrings(values) {
+		return false
+	}
+	for _, value := range values {
+		if validateSkillEvalSummary(value, "") != nil {
+			return false
+		}
+	}
+	return true
+}
+
+func decodeSkillEvalFacts(rawRoot string) ([]SkillEvalObservedFact, error) {
+	data, err := os.ReadFile(filepath.Join(rawRoot, "facts.json"))
+	if err != nil {
+		return nil, fmt.Errorf("read raw facts receipt: %w", err)
+	}
+	if err := checkDocumentFraming(data); err != nil {
+		return nil, fmt.Errorf("decode raw facts receipt: %w", err)
+	}
+	var facts []SkillEvalObservedFact
+	if err := json.Unmarshal(data, &facts); err != nil || len(facts) == 0 {
+		return nil, fmt.Errorf("decode raw facts receipt: invalid facts")
+	}
+	canonical, err := json.MarshalIndent(facts, "", "  ")
+	if err != nil || !bytes.Equal(data, append(canonical, '\n')) {
+		return nil, fmt.Errorf("raw facts receipt is not canonical")
+	}
+	return facts, nil
+}
+
+func writeSkillEvalFacts(root string, facts []SkillEvalObservedFact) error {
+	data, err := json.MarshalIndent(facts, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(root, "facts.json"), append(data, '\n'), 0o600)
+}
+
+func skillEvalManifest(cases []SkillEvalCase, input SkillEvalRunInput) skillEvalReportManifest {
+	manifest := skillEvalReportManifest{Cases: make(map[string]skillEvalExpectedCase, len(cases))}
+	for _, item := range cases {
+		manifest.Cases[item.CaseID] = skillEvalExpectedCase{Skill: item.Skill, StorageMode: item.StorageMode, FixtureSHA256: item.FixtureSHA256, BaselineRequired: item.BaselineRequired, CandidateSkill: input.CandidateSkillSHA256[item.Skill], BaselineSkill: input.BaselineSkillSHA256[item.Skill]}
+	}
+	return manifest
+}
+
+func skillEvalCaseComplete(item SkillEvalCaseReport) bool {
+	return item.Candidate != nil && item.Candidate.Outcome != "incomplete" && (!item.BaselineRequired || item.Baseline != nil && item.Baseline.Outcome != "incomplete")
 }
 
 func nonEmptySkillEvalRawDigest(root string) (string, error) {
@@ -327,13 +492,6 @@ func nonEmptySkillEvalRawDigest(root string) (string, error) {
 	return skillEvalTreeDigest("taskrail-skill-eval-raw-v1", root)
 }
 
-func comparisonForSkillEvalCase(item SkillEvalCaseReport, comparison string) string {
-	if item.Candidate == nil || item.Candidate.Outcome == "incomplete" || (item.BaselineRequired && (item.Baseline == nil || item.Baseline.Outcome == "incomplete")) {
-		return "inconclusive"
-	}
-	return comparison
-}
-
 func skillEvalOutcome(report SkillEvalReport) string {
 	if report.DeterministicChecks.Outcome == "fail" {
 		return "fail"
@@ -343,7 +501,11 @@ func skillEvalOutcome(report SkillEvalReport) string {
 		if item.Candidate != nil && (item.Candidate.Outcome == "fail" || item.Candidate.DeterministicGrade == "fail") || item.Comparison == "worse" {
 			return "fail"
 		}
-		if item.Candidate == nil || item.Candidate.Outcome != "pass" || item.Candidate.DeterministicGrade != "pass" || (item.BaselineRequired && (item.Baseline == nil || item.Baseline.Outcome == "incomplete")) || (item.Comparison != "same" && item.Comparison != "better") {
+		comparisonPasses := item.Comparison == "candidate-only"
+		if item.BaselineRequired {
+			comparisonPasses = item.Comparison == "same" || item.Comparison == "better"
+		}
+		if item.Candidate == nil || item.Candidate.Outcome != "pass" || item.Candidate.DeterministicGrade != "pass" || (item.BaselineRequired && (item.Baseline == nil || item.Baseline.Outcome == "incomplete")) || !comparisonPasses {
 			allPass = false
 		}
 	}
@@ -442,9 +604,12 @@ func validateSkillEvalReport(report SkillEvalReport) error {
 		if item.Baseline != nil && (!validSkillEvalReportRun(*item.Baseline, report.BaselineExecutableSHA256) || item.Baseline.SkillSHA256 != expected.BaselineSkill) {
 			return fmt.Errorf("skill evaluation report baseline %q is invalid", item.CaseID)
 		}
-		complete := item.Candidate != nil && item.Candidate.Outcome != "incomplete" && (!item.BaselineRequired || item.Baseline != nil && item.Baseline.Outcome != "incomplete")
+		complete := skillEvalCaseComplete(item)
 		if complete && item.Comparison == "inconclusive" || !complete && item.Comparison != "inconclusive" {
 			return fmt.Errorf("skill evaluation report case %q comparison is inconsistent", item.CaseID)
+		}
+		if complete && !item.BaselineRequired && item.Comparison != "candidate-only" || complete && item.BaselineRequired && !validSkillEvalPairedComparison(item.Comparison) {
+			return fmt.Errorf("skill evaluation report case %q comparison does not match its baseline", item.CaseID)
 		}
 	}
 	observed := false
@@ -525,7 +690,7 @@ func skillEvalIncompleteCoverage(cases []SkillEvalCaseReport) ([]string, []strin
 	missingSkills := map[string]struct{}{}
 	var missingCases []string
 	for _, item := range cases {
-		complete := item.Candidate != nil && item.Candidate.Outcome != "incomplete" && (!item.BaselineRequired || item.Baseline != nil && item.Baseline.Outcome != "incomplete")
+		complete := skillEvalCaseComplete(item)
 		if complete {
 			continue
 		}
@@ -549,6 +714,9 @@ func validateSkillEvalIdentity(identity SkillEvalIdentity) error {
 	if identity.Name == "" || identity.Version == "" || !utf8.ValidString(identity.Name) || !utf8.ValidString(identity.Version) {
 		return fmt.Errorf("name and version must be non-empty UTF-8")
 	}
+	if skillEvalSummaryContainsLocalPath(identity.Name) || skillEvalSummaryContainsLocalPath(identity.Version) {
+		return fmt.Errorf("name and version must not contain producer-local paths")
+	}
 	return nil
 }
 
@@ -557,7 +725,7 @@ func validateSkillEvalChecks(checks SkillEvalDeterministicChecks) error {
 		return fmt.Errorf("deterministic checks must have a pass/fail outcome and sorted non-empty evidence")
 	}
 	for i, evidence := range checks.Evidence {
-		if !utf8.ValidString(evidence) || i > 0 && checks.Evidence[i-1] == evidence {
+		if !utf8.ValidString(evidence) || skillEvalSummaryContainsLocalPath(evidence) || i > 0 && checks.Evidence[i-1] == evidence {
 			return fmt.Errorf("deterministic check evidence is not unique UTF-8")
 		}
 	}
@@ -607,7 +775,10 @@ func validSkillEvalRunOutcome(value string) bool {
 func validSkillEvalGrade(value string) bool       { return value == "pass" || value == "fail" }
 func validSkillEvalStorageMode(value string) bool { return value == "committed" || value == "local" }
 func validSkillEvalComparison(value string) bool {
-	return value == "better" || value == "same" || value == "worse" || value == "inconclusive"
+	return validSkillEvalPairedComparison(value) || value == "candidate-only" || value == "inconclusive"
+}
+func validSkillEvalPairedComparison(value string) bool {
+	return value == "better" || value == "same" || value == "worse"
 }
 func validSkillEvalReportOutcome(value string) bool {
 	return value == "pass" || value == "fail" || value == "incomplete" || value == "waived"

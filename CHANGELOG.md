@@ -6,6 +6,9 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ### Fixed
 
+- Maintainer skill-evaluation cases now initialize real temporary Git and
+  Taskrail repositories, execute only documented commands, and grade canonical
+  command, validation, and mutation facts rather than assertion labels.
 - Verification validation now accepts absent producer-local predecessor
   artifacts in fresh clones while still rejecting malformed or contradictory
   predecessor evidence that is locally available.
@@ -36,6 +39,10 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ### Added
 
+- Maintainer skill evaluations now use case-specific executable sandbox actions,
+  raw-receipt-bound mechanical oracles, and portable sealed stage evidence for
+  asynchronous human review. New skills use explicit candidate-only comparisons
+  rather than fabricated baseline results.
 - Added `taskrail local promote [--apply] [--with-skills] [--json]`. Its default preview reports
   the complete local-to-committed semantic candidate without mutation; apply
   uses one recoverable transaction to publish exact specs, planning, prompts,

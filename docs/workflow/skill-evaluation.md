@@ -29,7 +29,24 @@ provenance sentinel. The registry validator rejects missing skill/mode coverage,
 duplicate case IDs, path/name disagreement, malformed strict JSON, incorrect
 v0.4.0 baseline classification, and incomplete local fixtures.
 
-Case and registry fixture digests use the domain-separated tree framing in
+Each case has a strict executable `scenario`: the fixture source, a sandbox name
+equal to its case ID, setup commands, and action command vectors. Commands are
+only documented `taskrail` or `git` invocations. `fixture/seed.json` is a
+validated concrete initialization recipe: it requires `git init`, selects the
+documented committed or local `taskrail init --json` form, and local seeds carry
+their decoy and provenance bytes. Its `oracle` maps every authored assertion
+exactly once to a supported mechanical predicate over action facts. The supported
+predicates are `command-exit-zero`, `taskrail-validation-pass`, and
+`git-worktree-clean` (the named Git command exits zero and leaves the observed
+worktree digest unchanged). An adapter returns structured facts containing exact
+command argv/exit code, stdout/stderr, filesystem and Git before/after digests,
+validation result, and storage paths, then writes the same canonical `facts.json`
+receipt beneath its raw root. The runner rejects missing, extra, fabricated, or
+receipt-mismatched facts and derives the deterministic grade only from predicate
+evaluation; adapters do not supply assertion names or grades. Semantic claims
+such as ambiguity handling, authority, or safe repair belong only in
+`human_review_questions`. Case and registry fixture digests use
+the domain-separated tree framing in
 `specs/v0.5.0.md#maintainer-skill-release-evaluations`. These assets define the
 complete deterministic input set. They contain no provider runner, credentials,
 transcripts, raw evidence, or installed skill content. T-307 owns caller-adapter
@@ -38,12 +55,21 @@ execution and report construction.
 ## Manual Behavioral Run
 
 1. Freeze the case set, deterministic assertions, candidate skill bytes, and prior
-   released baseline bytes by SHA-256.
-2. Run realistic positive, negative, recovery, and boundary cases through a
+   released baseline bytes by SHA-256. Select the candidate executable from the
+   clean attached tested HEAD and the baseline executable from the fixed v0.4.0
+   commit on the same evaluation platform; record their digests.
+2. Run every candidate and required baseline arm exactly once through a
    caller-owned agent adapter with candidate and baseline in isolated sandboxes.
-3. Preserve raw outcomes, missing runs, adapter/model identity, timing and usage
-   when available, and deterministic repository grades.
-4. Review paired outputs without treating model judgement as a mechanical fact.
+   Execute every declared setup and action command, retain the stub or provider
+   transcript as raw evidence, and record only actual command facts.
+3. Render and retain the canonical sealed stage beside the producer-local raw
+   evidence, then stop for a human worksheet. The stage contains no producer-local paths;
+   resume reconstructs them from current input and refuses a changed receipt or
+   raw tree. Do not render a final report or invent a comparison here.
+4. Decode and resume from that exact staged evidence after human review. A completed paired
+   case is `same`, `better`, or `worse`; a completed skill without a v0.4.0 arm is
+   exactly `candidate-only`; missing or incomplete required evidence is
+   `inconclusive`.
 5. Let an agent propose candidate patches in an isolated workspace if failures
    reveal a general skill problem. Do not let it edit fixtures or shipped sources.
 6. Have a human select and apply any revision, rerun required checks, then run an
@@ -53,12 +79,19 @@ An absent credential, timeout, incomplete pair, or missing grade is explicit
 incomplete evidence, never a passing evaluation.
 
 The maintainer harness is `SkillEvalRunner` in `internal/taskrail`. A caller
-supplies its provider adapter, the status-reported artifacts root, fixed
-candidate and baseline evidence bindings, and the human comparisons. The runner
-invokes every required arm once, accepts an adapter error as a missing arm,
-rejects unsafe or empty raw evidence, and returns an unpersisted schema-v1 safe
-summary. `RenderSkillEvalReport` produces canonical JSON for human review; it
-never writes a durable review, alters skills or fixtures, or applies a proposal.
+supplies its provider adapter, the status-reported artifacts root, and fixed
+candidate and baseline evidence bindings. Each adapter request receives the
+case's resolved fixture directory, sandbox name, setup, and action vectors.
+`Execute` invokes every required arm
+once, accepts an adapter error as a missing arm, rejects unsafe, empty, or
+receipt-mismatched raw evidence, and returns sealed staged evidence.
+`RenderSkillEvalStage` and `DecodeSkillEvalStage` make the stop/resume boundary
+durable without serializing producer-local roots. `Resume` accepts exact human
+reviews plus a freshly recomputed caller snapshot, rechecks its seal, bindings,
+and reconstructed raw trees, and produces the unpersisted schema-v1
+safe summary without invoking the adapter. `RenderSkillEvalReport` produces
+canonical JSON; it never writes a durable review, alters skills or fixtures, or
+applies a proposal.
 
 ## Waived Evidence
 

@@ -567,6 +567,11 @@ hacking on Taskrail itself — see
 for the full contract. See [CONTRIBUTING.md](CONTRIBUTING.md) for the PR
 checklist, the AI-assisted contribution policy, and tracked-work rules.
 
+Maintainer-run skill evaluations are provider-neutral release evidence: execute
+case-specific sandbox actions, freeze canonical raw-receipt-bound stage evidence
+before human comparison, then resume it to render the safe report. See
+[docs/workflow/skill-evaluation.md](docs/workflow/skill-evaluation.md).
+
 ## Status
 
 Taskrail is an in-progress open-source project. The current release is `v0.4.0`;

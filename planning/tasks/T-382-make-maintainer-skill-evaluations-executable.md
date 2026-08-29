@@ -1,11 +1,17 @@
 ---
 id: T-382-make-maintainer-skill-evaluations-executable
 title: Make maintainer skill evaluations executable
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#maintainer-skill-release-evaluations
 dependencies: []
-updated_at: "2026-08-29T11:09:41Z"
+updated_at: "2026-08-29T13:00:56Z"
+completion_id: "2187deed3c84aec3e6fc2541e7471e3e"
+last_verification_id: "f2d43cadc91a5a7b5cfc6ac9abfa0710"
+last_verification_result: pass
+last_verified_at: "2026-08-29T13:00:56Z"
+last_verified_completion_id: "2187deed3c84aec3e6fc2541e7471e3e"
+last_verification_previous_id: "7f6df73d564d35e8856cf1c8fe12fa65"
 ---
 
 # T-382-make-maintainer-skill-evaluations-executable Make maintainer skill evaluations executable
@@ -53,3 +59,9 @@ canonical digest-bound report without rerunning or inventing evidence.
   candidate, and manual-test evidence paths without committing provider output.
 
 ## Implementation Notes
+
+- 2026-08-29T11:53:55Z: Implemented sealed two-phase skill evaluation staging with strict scenarios, oracle-derived grades, and candidate-only comparisons; manual evidence: planning/artifacts/manual-test/T-382-make-maintainer-skill-evaluations-executable/20260829T114500Z/report.md.
+- 2026-08-29T11:54:07Z: verification pass id 7fd6d871012a6072e146f45fdcf39638 previous none completion 2187deed3c84aec3e6fc2541e7471e3e
+- 2026-08-29T12:27:33Z: verification pass id a212159213a98053903c9bd9321b152f previous 7fd6d871012a6072e146f45fdcf39638 completion 2187deed3c84aec3e6fc2541e7471e3e
+- 2026-08-29T12:34:24Z: verification pass id 7f6df73d564d35e8856cf1c8fe12fa65 previous a212159213a98053903c9bd9321b152f completion 2187deed3c84aec3e6fc2541e7471e3e
+- 2026-08-29T13:00:56Z: verification pass id f2d43cadc91a5a7b5cfc6ac9abfa0710 previous 7f6df73d564d35e8856cf1c8fe12fa65 completion 2187deed3c84aec3e6fc2541e7471e3e

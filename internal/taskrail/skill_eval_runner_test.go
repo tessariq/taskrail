@@ -2,8 +2,10 @@ package taskrail
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -13,8 +15,8 @@ import (
 
 func TestSkillEvalRunnerBuildsCompletePairedSafeReport(t *testing.T) {
 	registry := []SkillEvalCase{
-		{CaseID: "existing", Skill: "autonomous-task", StorageMode: "committed", BaselineRequired: true, FixtureSHA256: testSkillEvalDigest("a")},
-		{CaseID: "new", Skill: "taskrail-loop", StorageMode: "local", FixtureSHA256: testSkillEvalDigest("b")},
+		testSkillEvalCase("existing", "autonomous-task", "committed", true, "a"),
+		testSkillEvalCase("new", "taskrail-loop", "local", false, "b"),
 	}
 	root := t.TempDir()
 	report, err := (SkillEvalRunner{}).Run(context.Background(), SkillEvalRunInput{
@@ -34,11 +36,11 @@ func TestSkillEvalRunnerBuildsCompletePairedSafeReport(t *testing.T) {
 		Adapter:                   skillEvalTestAdapter{},
 		AdapterIdentity:           SkillEvalIdentity{Name: "adapter", Version: "1", Observed: true},
 		ModelIdentity:             SkillEvalIdentity{Name: "model", Version: "1", Observed: true},
-		DeterministicChecks:       SkillEvalDeterministicChecks{Outcome: "pass", Evidence: []string{"go test ./..."}},
+		DeterministicChecks:       SkillEvalDeterministicChecks{Outcome: "pass", Evidence: []string{"go-test-all"}},
 		HumanReview:               "A maintainer reviewed each paired outcome.",
 		CaseReviews: map[string]SkillEvalCaseReview{
 			"existing": {Comparison: "better", HumanReview: "Candidate handled the case safely."},
-			"new":      {Comparison: "same", HumanReview: "New skill has no baseline arm."},
+			"new":      {Comparison: "candidate-only", HumanReview: "New skill has no baseline arm."},
 		},
 	})
 	if err != nil {
@@ -53,7 +55,7 @@ func TestSkillEvalRunnerBuildsCompletePairedSafeReport(t *testing.T) {
 	if report.Cases[0].Candidate.SkillSHA256 != testSkillEvalDigest("candidate-task") || report.Cases[0].Baseline.SkillSHA256 != testSkillEvalDigest("baseline-task") {
 		t.Fatalf("per-skill digest bindings = %#v", report.Cases[0])
 	}
-	if !slices.Equal(report.DeterministicChecks.Evidence, []string{"go test ./..."}) {
+	if !slices.Equal(report.DeterministicChecks.Evidence, []string{"go-test-all"}) {
 		t.Fatalf("evidence = %#v", report.DeterministicChecks.Evidence)
 	}
 	encoded, err := RenderSkillEvalReport(report)
@@ -78,6 +80,92 @@ func TestSkillEvalRunnerMarksMissingCandidateIncomplete(t *testing.T) {
 	}
 	if !report.Adapter.Observed || !report.Model.Observed {
 		t.Fatalf("one completed baseline arm must mark identities observed: %#v %#v", report.Adapter, report.Model)
+	}
+}
+
+func TestSkillEvalRunnerRejectsDirectRegistryMutations(t *testing.T) {
+	for _, mutate := range []func(*SkillEvalCase){
+		func(item *SkillEvalCase) { item.Assertions = []string{"assertion", "assertion"} },
+		func(item *SkillEvalCase) { item.Scenario.Actions = nil },
+		func(item *SkillEvalCase) { item.Oracle.Assertions[0].Predicate = "unknown" },
+		func(item *SkillEvalCase) {
+			item.Scenario.Actions[0].ID, item.Oracle.Assertions[0].Action = "positive", "positive"
+		},
+	} {
+		in := skillEvalTestInput(t, skillEvalTestAdapter{})
+		mutate(&in.Registry[0])
+		if _, err := (SkillEvalRunner{}).Execute(context.Background(), in); err == nil {
+			t.Fatal("Execute accepted an ambiguous direct registry case")
+		}
+	}
+}
+
+func TestSkillEvalRunnerDerivesGradeFromMechanicalFacts(t *testing.T) {
+	in := skillEvalTestInput(t, skillEvalMissingFactsAdapter{})
+	report, err := (SkillEvalRunner{}).Run(context.Background(), in)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if report.Cases[0].Candidate.DeterministicGrade != "fail" || report.Outcome != "fail" {
+		t.Fatalf("oracle report = %#v", report)
+	}
+}
+
+func TestSkillEvalRunnerRejectsAssertionEchoesAndFabricatedFacts(t *testing.T) {
+	in := skillEvalTestInput(t, skillEvalAssertionEchoAdapter{})
+	stage, err := (SkillEvalRunner{}).Execute(context.Background(), in)
+	if err != nil || stage.Report.Cases[0].Candidate.DeterministicGrade != "fail" {
+		t.Fatalf("assertion echo did not produce a mechanical failure: stage=%#v err=%v", stage, err)
+	}
+	in = skillEvalTestInput(t, skillEvalFabricatedFactsAdapter{})
+	if _, err := (SkillEvalRunner{}).Execute(context.Background(), in); err == nil {
+		t.Fatal("Execute accepted fabricated facts that differ from the raw receipt")
+	}
+}
+
+func TestSkillEvalRunnerUsesCandidateOnlyComparisonForNewSkills(t *testing.T) {
+	in := skillEvalTestInput(t, skillEvalTestAdapter{})
+	in.Registry[0].BaselineRequired = false
+	in.BaselineSkillSHA256 = nil
+	in.CaseReviews["existing"] = SkillEvalCaseReview{Comparison: "candidate-only", HumanReview: "Candidate behavior met every deterministic oracle."}
+	report, err := (SkillEvalRunner{}).Run(context.Background(), in)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if report.Outcome != "pass" || report.Cases[0].Baseline != nil || report.Cases[0].Comparison != "candidate-only" {
+		t.Fatalf("candidate-only report = %#v", report)
+	}
+}
+
+func TestSkillEvalRunnerExecutesCompleteRegistryWithWorkingBinary(t *testing.T) {
+	registry, err := loadSkillEvalRegistry(filepath.Join("testdata", "skill-evals", "v1", "cases"), shippableSkills)
+	if err != nil {
+		t.Fatalf("loadSkillEvalRegistry: %v", err)
+	}
+	in := skillEvalCompleteRegistryInput(t, registry, skillEvalScenarioAdapter{})
+	stage, err := (SkillEvalRunner{}).Execute(context.Background(), in)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	wantArms := 0
+	for _, item := range registry {
+		wantArms++
+		if item.BaselineRequired {
+			wantArms++
+		}
+	}
+	if got := len(stage.Report.Cases); got != len(registry) {
+		t.Fatalf("staged cases = %d, want %d", got, len(registry))
+	}
+	if got := skillEvalStagedArmCount(stage); got != wantArms {
+		t.Fatalf("staged arms = %d, want %d", got, wantArms)
+	}
+	report, err := (SkillEvalRunner{}).Resume(stage, in, "Maintainer reviewed all frozen working-binary outcomes.", in.CaseReviews)
+	if err != nil {
+		t.Fatalf("Resume: %v", err)
+	}
+	if report.Outcome != "pass" {
+		t.Fatalf("complete registry outcome = %q", report.Outcome)
 	}
 }
 
@@ -294,9 +382,9 @@ func TestRenderSkillEvalReportRejectsBindingAndPortabilityMutations(t *testing.T
 
 func TestRenderSkillEvalReportRequiresCompleteRunnerRegistry(t *testing.T) {
 	in := skillEvalTestInput(t, skillEvalTestAdapter{})
-	in.Registry = append(in.Registry, SkillEvalCase{CaseID: "new", Skill: "taskrail-loop", StorageMode: "local", FixtureSHA256: testSkillEvalDigest("new-case")})
+	in.Registry = append(in.Registry, testSkillEvalCase("new", "taskrail-loop", "local", false, "new-case"))
 	in.CandidateSkillSHA256["taskrail-loop"] = testSkillEvalDigest("candidate-loop")
-	in.CaseReviews["new"] = SkillEvalCaseReview{Comparison: "same", HumanReview: "New skill reviewed."}
+	in.CaseReviews["new"] = SkillEvalCaseReview{Comparison: "candidate-only", HumanReview: "New skill reviewed."}
 	report, err := (SkillEvalRunner{}).Run(context.Background(), in)
 	if err != nil {
 		t.Fatalf("Run: %v", err)
@@ -322,7 +410,7 @@ func skillEvalTestInput(t *testing.T, adapter SkillEvalAdapter) SkillEvalRunInpu
 		CandidateExecutableSHA256: testSkillEvalDigest("candidate-exe"),
 		BaselineExecutableSHA256:  testSkillEvalDigest("baseline-exe"),
 		ArtifactRoot:              t.TempDir(),
-		Registry:                  []SkillEvalCase{{CaseID: "existing", Skill: "autonomous-task", StorageMode: "committed", BaselineRequired: true, FixtureSHA256: testSkillEvalDigest("case")}},
+		Registry:                  []SkillEvalCase{testSkillEvalCase("existing", "autonomous-task", "committed", true, "case")},
 		Adapter:                   adapter,
 		AdapterIdentity:           SkillEvalIdentity{Name: "adapter", Version: "1", Observed: true},
 		ModelIdentity:             SkillEvalIdentity{Name: "model", Version: "1", Observed: true},
@@ -359,7 +447,7 @@ func (skillEvalTestAdapter) Run(_ context.Context, request SkillEvalAdapterReque
 	if err := os.WriteFile(filepath.Join(request.RawRoot, "result.txt"), []byte(request.Arm), 0o600); err != nil {
 		return SkillEvalAdapterResult{}, err
 	}
-	return SkillEvalAdapterResult{Outcome: "pass", DeterministicGrade: "pass"}, nil
+	return skillEvalSuccessfulResult(request)
 }
 
 type skillEvalMissingAdapter struct{}
@@ -377,7 +465,7 @@ func (skillEvalUnsafeRawAdapter) Run(_ context.Context, request SkillEvalAdapter
 	if err := os.Symlink("outside", filepath.Join(request.RawRoot, "link")); err != nil {
 		return SkillEvalAdapterResult{}, err
 	}
-	return SkillEvalAdapterResult{Outcome: "pass", DeterministicGrade: "pass"}, nil
+	return skillEvalSuccessfulResult(request)
 }
 
 type skillEvalResultAdapter struct {
@@ -393,7 +481,199 @@ func (adapter skillEvalResultAdapter) Run(_ context.Context, request SkillEvalAd
 	if request.Arm == "baseline" {
 		outcome = adapter.baseline
 	}
-	return SkillEvalAdapterResult{Outcome: outcome, DeterministicGrade: map[string]string{"fail": "fail", "pass": "pass", "incomplete": "pass"}[outcome]}, nil
+	result, err := skillEvalSuccessfulResult(request)
+	result.Outcome = outcome
+	return result, err
+}
+
+func testSkillEvalCase(caseID, skill, mode string, baseline bool, digest string) SkillEvalCase {
+	return SkillEvalCase{
+		CaseID: caseID, Skill: skill, StorageMode: mode, BaselineRequired: baseline,
+		Prompt: "Run the scenario.", ExpectedObservation: "The assertions are observed.",
+		Assertions: []string{"assertion"}, HumanReviewQuestions: []string{"Was the behavior safe?"},
+		Scenario: SkillEvalScenario{Fixture: "fixture", Sandbox: caseID, Setup: []SkillEvalScenarioAction{{ID: "initialize-git", Operation: "git-command", Command: []string{"git", "init"}}}, Actions: []SkillEvalScenarioAction{{ID: "run-assertion", Operation: "taskrail-command", Command: []string{"taskrail", "validate", "--json"}}}},
+		Oracle:   SkillEvalOracle{Assertions: []SkillEvalAssertionOracle{{Assertion: "assertion", Action: "run-assertion", Predicate: "command-exit-zero"}}}, FixtureSHA256: testSkillEvalDigest(digest),
+	}
+}
+
+func skillEvalCompleteRegistryInput(t *testing.T, registry []SkillEvalCase, adapter SkillEvalAdapter) SkillEvalRunInput {
+	t.Helper()
+	in := skillEvalTestInput(t, adapter)
+	in.Registry = registry
+	in.CandidateSkillSHA256 = map[string]string{}
+	in.BaselineSkillSHA256 = map[string]string{}
+	in.CaseReviews = map[string]SkillEvalCaseReview{}
+	for _, item := range registry {
+		in.CandidateSkillSHA256[item.Skill] = testSkillEvalDigest("candidate-" + item.Skill)
+		comparison := "candidate-only"
+		if item.BaselineRequired {
+			in.BaselineSkillSHA256[item.Skill] = testSkillEvalDigest("baseline-" + item.Skill)
+			comparison = "same"
+		}
+		in.CaseReviews[item.CaseID] = SkillEvalCaseReview{Comparison: comparison, HumanReview: "Fake adapter outcome reviewed."}
+	}
+	return in
+}
+
+func skillEvalStagedArmCount(stage SkillEvalStage) int {
+	count := 0
+	for _, item := range stage.Report.Cases {
+		if item.Candidate != nil {
+			count++
+		}
+		if item.Baseline != nil {
+			count++
+		}
+	}
+	return count
+}
+
+type skillEvalScenarioAdapter struct{}
+
+func (skillEvalScenarioAdapter) Run(ctx context.Context, request SkillEvalAdapterRequest) (SkillEvalAdapterResult, error) {
+	if request.FixtureRoot == "" {
+		return SkillEvalAdapterResult{}, fmt.Errorf("missing case fixture root")
+	}
+	seed, err := os.ReadFile(filepath.Join(request.FixtureRoot, "seed.json"))
+	if err != nil {
+		return SkillEvalAdapterResult{}, err
+	}
+	var config skillEvalSeed
+	if err := json.Unmarshal(seed, &config); err != nil {
+		return SkillEvalAdapterResult{}, err
+	}
+	sandbox := filepath.Join(request.RawRoot, "sandbox")
+	if err := os.MkdirAll(sandbox, 0o700); err != nil {
+		return SkillEvalAdapterResult{}, err
+	}
+	if err := os.WriteFile(filepath.Join(request.RawRoot, "agent-transcript.txt"), []byte("stubbed agent transcript\n"+request.Case.Prompt+"\n"), 0o600); err != nil {
+		return SkillEvalAdapterResult{}, err
+	}
+	binary, err := skillEvalWorkingBinary(ctx, request.RawRoot)
+	if err != nil {
+		return SkillEvalAdapterResult{}, err
+	}
+	facts := make([]SkillEvalObservedFact, 0, len(request.Case.Scenario.Setup)+len(request.Case.Scenario.Actions))
+	for _, action := range append(slices.Clone(request.Case.Scenario.Setup), request.Case.Scenario.Actions...) {
+		fact, err := runSkillEvalScenarioCommand(ctx, sandbox, binary, action)
+		if err != nil {
+			return SkillEvalAdapterResult{}, err
+		}
+		facts = append(facts, fact)
+	}
+	if err := writeSkillEvalFacts(request.RawRoot, facts); err != nil {
+		return SkillEvalAdapterResult{}, err
+	}
+	return SkillEvalAdapterResult{Outcome: "pass", Facts: facts}, nil
+}
+
+func skillEvalWorkingBinary(ctx context.Context, rawRoot string) (string, error) {
+	root, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		return "", err
+	}
+	binary := filepath.Join(rawRoot, "taskrail")
+	command := exec.CommandContext(ctx, "go", "build", "-o", binary, "./cmd/taskrail")
+	command.Dir = root
+	if output, err := command.CombinedOutput(); err != nil {
+		return "", fmt.Errorf("build working Taskrail binary: %w: %s", err, output)
+	}
+	return binary, nil
+}
+
+func runSkillEvalScenarioCommand(ctx context.Context, sandbox, binary string, action SkillEvalScenarioAction) (SkillEvalObservedFact, error) {
+	before, err := skillEvalTreeDigest("taskrail-skill-eval-sandbox-v1", sandbox)
+	if err != nil {
+		return SkillEvalObservedFact{}, err
+	}
+	gitBefore := skillEvalGitDigest(ctx, sandbox)
+	program, args := action.Command[0], action.Command[1:]
+	command := exec.CommandContext(ctx, program, args...)
+	command.Dir = sandbox
+	command.Env = append(os.Environ(), "PATH="+filepath.Dir(binary)+string(os.PathListSeparator)+os.Getenv("PATH"))
+	stdout, err := command.Output()
+	stderr := []byte{}
+	exitCode := 0
+	if err != nil {
+		if exit, ok := err.(*exec.ExitError); ok {
+			exitCode = exit.ExitCode()
+			stderr = exit.Stderr
+		} else {
+			return SkillEvalObservedFact{}, err
+		}
+	}
+	after, err := skillEvalTreeDigest("taskrail-skill-eval-sandbox-v1", sandbox)
+	if err != nil {
+		return SkillEvalObservedFact{}, err
+	}
+	fact := SkillEvalObservedFact{Action: action.ID, Operation: action.Operation, Command: action.Command, ExitCode: exitCode, StdoutSHA256: skillEvalBytesDigest(stdout), StderrSHA256: skillEvalBytesDigest(stderr), BeforeSHA256: before, AfterSHA256: after, GitBeforeSHA256: gitBefore, GitAfterSHA256: skillEvalGitDigest(ctx, sandbox), StoragePaths: []string{}}
+	if action.Operation == "taskrail-command" && len(args) > 0 && args[0] == "validate" {
+		var envelope struct {
+			Result struct {
+				Valid bool `json:"valid"`
+			} `json:"result"`
+		}
+		fact.ValidationPassed = json.Unmarshal(stdout, &envelope) == nil && envelope.Result.Valid
+	}
+	return fact, nil
+}
+
+func skillEvalGitDigest(ctx context.Context, sandbox string) string {
+	command := exec.CommandContext(ctx, "git", "status", "--porcelain=v1")
+	command.Dir = sandbox
+	output, _ := command.Output()
+	return skillEvalBytesDigest(output)
+}
+
+type skillEvalMissingFactsAdapter struct{}
+
+func (skillEvalMissingFactsAdapter) Run(_ context.Context, request SkillEvalAdapterRequest) (SkillEvalAdapterResult, error) {
+	if err := os.WriteFile(filepath.Join(request.RawRoot, "result.txt"), []byte(request.Arm), 0o600); err != nil {
+		return SkillEvalAdapterResult{}, err
+	}
+	facts := []SkillEvalObservedFact{{Action: request.Case.Scenario.Actions[0].ID, Command: request.Case.Scenario.Actions[0].Command, ExitCode: 1}}
+	if err := writeSkillEvalFacts(request.RawRoot, facts); err != nil {
+		return SkillEvalAdapterResult{}, err
+	}
+	return SkillEvalAdapterResult{Outcome: "pass", Facts: facts}, nil
+}
+
+func skillEvalSuccessfulResult(request SkillEvalAdapterRequest) (SkillEvalAdapterResult, error) {
+	facts := make([]SkillEvalObservedFact, 0, len(request.Case.Scenario.Actions))
+	for _, action := range append(slices.Clone(request.Case.Scenario.Setup), request.Case.Scenario.Actions...) {
+		facts = append(facts, SkillEvalObservedFact{Action: action.ID, Operation: action.Operation, Command: action.Command, ExitCode: 0})
+	}
+	if err := writeSkillEvalFacts(request.RawRoot, facts); err != nil {
+		return SkillEvalAdapterResult{}, err
+	}
+	return SkillEvalAdapterResult{Outcome: "pass", Facts: facts}, nil
+}
+
+type skillEvalAssertionEchoAdapter struct{}
+
+func (skillEvalAssertionEchoAdapter) Run(_ context.Context, request SkillEvalAdapterRequest) (SkillEvalAdapterResult, error) {
+	if err := os.WriteFile(filepath.Join(request.RawRoot, "result.txt"), []byte(request.Arm), 0o600); err != nil {
+		return SkillEvalAdapterResult{}, err
+	}
+	facts := []SkillEvalObservedFact{{Action: request.Case.Assertions[0], Command: request.Case.Scenario.Actions[0].Command, ExitCode: 0}}
+	if err := writeSkillEvalFacts(request.RawRoot, facts); err != nil {
+		return SkillEvalAdapterResult{}, err
+	}
+	return SkillEvalAdapterResult{Outcome: "pass", Facts: facts}, nil
+}
+
+type skillEvalFabricatedFactsAdapter struct{}
+
+func (skillEvalFabricatedFactsAdapter) Run(_ context.Context, request SkillEvalAdapterRequest) (SkillEvalAdapterResult, error) {
+	if err := os.WriteFile(filepath.Join(request.RawRoot, "result.txt"), []byte(request.Arm), 0o600); err != nil {
+		return SkillEvalAdapterResult{}, err
+	}
+	recorded, err := skillEvalSuccessfulResult(request)
+	if err != nil {
+		return SkillEvalAdapterResult{}, err
+	}
+	recorded.Facts[0].ExitCode = 1
+	return recorded, nil
 }
 
 func testSkillEvalDigest(value string) string {
