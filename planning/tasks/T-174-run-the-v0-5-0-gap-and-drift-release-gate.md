@@ -12,10 +12,12 @@ dependencies:
     - T-379-require-durable-results-for-review-adapter-delivery
     - T-380-close-parallel-integration-publication-boundaries
     - T-381-restore-portable-verification-predecessor-evidence
-updated_at: "2026-08-28T16:14:34Z"
-last_verification_id: "bbffe73d3b28bd8eee671d2220af9351"
+    - T-382-make-maintainer-skill-evaluations-executable
+updated_at: "2026-08-29T11:10:19Z"
+last_verification_id: "f414774034bb61736378e18cf4520e7d"
 last_verification_result: fail
-last_verified_at: "2026-08-28T16:14:34Z"
+last_verified_at: "2026-08-29T11:10:19Z"
+last_verification_previous_id: "bbffe73d3b28bd8eee671d2220af9351"
 ---
 
 # T-174-run-the-v0-5-0-gap-and-drift-release-gate Run the v0.5.0 gap and drift release gate
@@ -95,3 +97,6 @@ and remediation task is complete. Do not tag or claim current until it passes.
 
 - 2026-08-28T16:14:33Z: Final fresh spec review found current v0.5 contract blockers tracked as direct dependencies T-377 through T-380; remediate them and restart the gate on fresh bytes.
 - 2026-08-28T16:14:34Z: verification fail id bbffe73d3b28bd8eee671d2220af9351 previous none completion none
+- 2026-08-29T11:09:23Z: Direct remediation dependencies T-377 through T-381 are completed and pass-verified; restart the v0.5.0 release gate on current bytes.
+- 2026-08-29T11:10:12Z: Release gate blocked: the paired skill-evaluation registry lacks executable scenario and deterministic-oracle bindings, and the runner cannot stage completed arms before required human comparisons; T-382 owns remediation before a fresh restart.
+- 2026-08-29T11:10:19Z: verification fail id f414774034bb61736378e18cf4520e7d previous bbffe73d3b28bd8eee671d2220af9351 completion none
