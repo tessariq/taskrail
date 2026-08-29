@@ -144,6 +144,11 @@ func TestSkillEvalRunnerExecutesCompleteRegistryWithWorkingBinary(t *testing.T) 
 		t.Fatalf("loadSkillEvalRegistry: %v", err)
 	}
 	in := skillEvalCompleteRegistryInput(t, registry, skillEvalScenarioAdapter{})
+	in.ArtifactRoot, err = os.MkdirTemp("", "se")
+	if err != nil {
+		t.Fatalf("create short artifact root: %v", err)
+	}
+	t.Cleanup(func() { os.RemoveAll(in.ArtifactRoot) })
 	stage, err := (SkillEvalRunner{}).Execute(context.Background(), in)
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
