@@ -6,6 +6,9 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ### Fixed
 
+- Verification validation now accepts absent producer-local predecessor
+  artifacts in fresh clones while still rejecting malformed or contradictory
+  predecessor evidence that is locally available.
 - Review-adapter delivery now requires an external `--result-file` before any
   repository, workspace, or adapter activity, preserving its terminal outcome
   after the foreground run.

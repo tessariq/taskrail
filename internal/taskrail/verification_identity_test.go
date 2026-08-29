@@ -121,7 +121,136 @@ func TestVerifyPublishesStableIdentityAndPredecessor(t *testing.T) {
 		t.Fatalf("remove predecessor report: %v", err)
 	}
 	if validation, err := svc.Validate(); err != nil || validation.Valid || !hasViolation(validation.Violations, "verification evidence") {
-		t.Fatalf("missing predecessor report accepted: validation=%+v err=%v", validation, err)
+		t.Fatalf("missing report in available predecessor artifact rejected: validation=%+v err=%v", validation, err)
+	}
+}
+
+func TestValidateAllowsMissingPredecessorArtifactInFreshClone(t *testing.T) {
+	repo := seedFixtureRepo(t)
+	writeTask(t, repo, "T-001", "One", "completed", "high", "specs/v0.1.0.md#summary", nil)
+	now := time.Date(2026, 8, 21, 12, 0, 0, 0, time.UTC)
+	svc := newTestService(t, repo, now)
+	ids := []string{firstVerificationID, secondVerificationID}
+	svc.verificationID = func() (string, error) {
+		id := ids[0]
+		ids = ids[1:]
+		return id, nil
+	}
+	if _, err := svc.Verify(VerifyInput{TaskID: "T-001", Result: "fail", Summary: "first"}); err != nil {
+		t.Fatalf("first verify: %v", err)
+	}
+	second, err := svc.Verify(VerifyInput{TaskID: "T-001", Result: "fail", Summary: "second"})
+	if err != nil {
+		t.Fatalf("second verify: %v", err)
+	}
+
+	clone := seedFixtureRepo(t)
+	writeTask(t, clone, "T-001", "One", "completed", "high", "specs/v0.1.0.md#summary", nil)
+	cloneSvc := newTestService(t, clone, now)
+	state, tasks, err := svc.loadStateAndTasks()
+	if err != nil {
+		t.Fatalf("load source: %v", err)
+	}
+	cloneState, cloneTasks, err := cloneSvc.loadStateAndTasks()
+	if err != nil {
+		t.Fatalf("load clone: %v", err)
+	}
+	cloneState.Frontmatter, cloneState.Body = state.Frontmatter, state.Body
+	cloneTask, _ := taskByID(cloneTasks, "T-001")
+	sourceTask, _ := taskByID(tasks, "T-001")
+	cloneTask.Frontmatter, cloneTask.Body = sourceTask.Frontmatter, sourceTask.Body
+	if err := cloneSvc.saveState(cloneState); err != nil {
+		t.Fatalf("write clone state: %v", err)
+	}
+	if err := cloneSvc.saveTask(cloneTask); err != nil {
+		t.Fatalf("write clone task: %v", err)
+	}
+
+	report, err := os.ReadFile(filepath.Join(repo, second.ReportPath))
+	if err != nil {
+		t.Fatalf("read latest report: %v", err)
+	}
+	writeFile(t, filepath.Join(clone, second.ReportPath), string(report))
+
+	if validation, err := cloneSvc.Validate(); err != nil || !validation.Valid {
+		t.Fatalf("fresh clone with only latest report rejected: validation=%+v err=%v", validation, err)
+	}
+}
+
+func TestValidateRejectsAvailableMalformedOrContradictoryPredecessorEvidence(t *testing.T) {
+	for _, tt := range []struct {
+		name   string
+		mutate func(t *testing.T, path string)
+	}{
+		{
+			name: "malformed report",
+			mutate: func(t *testing.T, path string) {
+				writeFile(t, path, "{")
+			},
+		},
+		{
+			name: "cross-task report",
+			mutate: func(t *testing.T, path string) {
+				data, err := os.ReadFile(path)
+				if err != nil {
+					t.Fatalf("read predecessor report: %v", err)
+				}
+				var report VerificationArtifact
+				if err := json.Unmarshal(data, &report); err != nil {
+					t.Fatalf("decode predecessor report: %v", err)
+				}
+				report.TaskID = "T-999"
+				data, err = json.Marshal(report)
+				if err != nil {
+					t.Fatalf("encode predecessor report: %v", err)
+				}
+				writeFile(t, path, string(data))
+			},
+		},
+		{
+			name: "cyclic report",
+			mutate: func(t *testing.T, path string) {
+				data, err := os.ReadFile(path)
+				if err != nil {
+					t.Fatalf("read predecessor report: %v", err)
+				}
+				var report VerificationArtifact
+				if err := json.Unmarshal(data, &report); err != nil {
+					t.Fatalf("decode predecessor report: %v", err)
+				}
+				previous := secondVerificationID
+				report.PreviousVerificationID = &previous
+				data, err = json.Marshal(report)
+				if err != nil {
+					t.Fatalf("encode predecessor report: %v", err)
+				}
+				writeFile(t, path, string(data))
+			},
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			repo := seedFixtureRepo(t)
+			writeTask(t, repo, "T-001", "One", "completed", "high", "specs/v0.1.0.md#summary", nil)
+			svc := newTestService(t, repo, time.Date(2026, 8, 21, 12, 0, 0, 0, time.UTC))
+			ids := []string{firstVerificationID, secondVerificationID}
+			svc.verificationID = func() (string, error) {
+				id := ids[0]
+				ids = ids[1:]
+				return id, nil
+			}
+			first, err := svc.Verify(VerifyInput{TaskID: "T-001", Result: "fail", Summary: "first"})
+			if err != nil {
+				t.Fatalf("first verify: %v", err)
+			}
+			if _, err := svc.Verify(VerifyInput{TaskID: "T-001", Result: "fail", Summary: "second"}); err != nil {
+				t.Fatalf("second verify: %v", err)
+			}
+
+			tt.mutate(t, filepath.Join(repo, first.ReportPath))
+			if validation, err := svc.Validate(); err != nil || validation.Valid || !hasViolation(validation.Violations, "verification evidence") {
+				t.Fatalf("invalid available predecessor accepted: validation=%+v err=%v", validation, err)
+			}
+		})
 	}
 }
 

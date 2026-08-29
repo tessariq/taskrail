@@ -10,8 +10,7 @@ import (
 
 // validateVerificationEvidence keeps predecessor validation independent from
 // wall-clock ordering. A task's persisted latest tuple must match its report,
-// and each predecessor named by that report must be a real prior report for the
-// same task.
+// and available predecessor reports must form a consistent same-task chain.
 func (s *Service) validateVerificationEvidence(state *State, tasks []*Task) []string {
 	violations := make([]string, 0)
 	byID := make(map[string]*Task, len(tasks))
@@ -113,7 +112,12 @@ func validateTaskVerificationReports(task *Task, reports map[string]Verification
 	seen := map[string]bool{report.VerificationID: true}
 	for previous != "" {
 		prior, ok := reports[previous]
-		if !ok || prior.TaskID != task.Frontmatter.ID {
+		if !ok {
+			// Predecessor artifacts are producer-local, so a clone may retain only
+			// the latest report it has just produced.
+			return nil
+		}
+		if prior.TaskID != task.Frontmatter.ID {
 			return fmt.Errorf("predecessor %s does not identify a prior task-level verification report", previous)
 		}
 		if seen[prior.VerificationID] {

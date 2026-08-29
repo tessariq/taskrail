@@ -11,6 +11,7 @@ dependencies:
     - T-378-close-implementation-review-disposition-vocabulary
     - T-379-require-durable-results-for-review-adapter-delivery
     - T-380-close-parallel-integration-publication-boundaries
+    - T-381-restore-portable-verification-predecessor-evidence
 updated_at: "2026-08-28T16:14:34Z"
 last_verification_id: "bbffe73d3b28bd8eee671d2220af9351"
 last_verification_result: fail
