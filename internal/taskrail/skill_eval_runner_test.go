@@ -178,7 +178,10 @@ func TestSkillEvalRunnerExecutesCompleteRegistryWithWorkingBinary(t *testing.T) 
 					return candidate.CaseID == item.CaseID
 				})]
 				facts, factsErr := decodeSkillEvalFacts(skillEvalRawRoot(in, evaluation, skillEvalCandidateArm))
-				failed = append(failed, fmt.Sprintf("%s candidate=%+v facts=%+v facts_err=%v", item.CaseID, item.Candidate, facts, factsErr))
+				rawRoot := skillEvalRawRoot(in, evaluation, skillEvalCandidateArm)
+				stdout, _ := os.ReadFile(filepath.Join(rawRoot, "initialize-taskrail-repository.stdout"))
+				stderr, _ := os.ReadFile(filepath.Join(rawRoot, "initialize-taskrail-repository.stderr"))
+				failed = append(failed, fmt.Sprintf("%s candidate=%+v facts=%+v facts_err=%v init_stdout=%q init_stderr=%q", item.CaseID, item.Candidate, facts, factsErr, stdout, stderr))
 			}
 		}
 		t.Fatalf("complete registry outcome = %q; failed cases = %s", report.Outcome, strings.Join(failed, "; "))
@@ -571,7 +574,7 @@ func (skillEvalScenarioAdapter) Run(ctx context.Context, request SkillEvalAdapte
 	}
 	facts := make([]SkillEvalObservedFact, 0, len(request.Case.Scenario.Setup)+len(request.Case.Scenario.Actions))
 	for _, action := range append(slices.Clone(request.Case.Scenario.Setup), request.Case.Scenario.Actions...) {
-		fact, err := runSkillEvalScenarioCommand(ctx, sandbox, binary, action)
+		fact, err := runSkillEvalScenarioCommand(ctx, sandbox, binary, request.RawRoot, action)
 		if err != nil {
 			return SkillEvalAdapterResult{}, err
 		}
@@ -600,7 +603,7 @@ func skillEvalWorkingBinary(ctx context.Context, rawRoot string) (string, error)
 	return binary, nil
 }
 
-func runSkillEvalScenarioCommand(ctx context.Context, sandbox, binary string, action SkillEvalScenarioAction) (SkillEvalObservedFact, error) {
+func runSkillEvalScenarioCommand(ctx context.Context, sandbox, binary, rawRoot string, action SkillEvalScenarioAction) (SkillEvalObservedFact, error) {
 	before, err := skillEvalTreeDigest("taskrail-skill-eval-sandbox-v1", sandbox)
 	if err != nil {
 		return SkillEvalObservedFact{}, err
@@ -622,6 +625,12 @@ func runSkillEvalScenarioCommand(ctx context.Context, sandbox, binary string, ac
 		} else {
 			return SkillEvalObservedFact{}, err
 		}
+	}
+	if err := os.WriteFile(filepath.Join(rawRoot, action.ID+".stdout"), stdout, 0o600); err != nil {
+		return SkillEvalObservedFact{}, err
+	}
+	if err := os.WriteFile(filepath.Join(rawRoot, action.ID+".stderr"), stderr, 0o600); err != nil {
+		return SkillEvalObservedFact{}, err
 	}
 	after, err := skillEvalTreeDigest("taskrail-skill-eval-sandbox-v1", sandbox)
 	if err != nil {
