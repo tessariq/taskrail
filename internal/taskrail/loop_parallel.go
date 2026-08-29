@@ -2,16 +2,21 @@ package taskrail
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/url"
 	"os"
 	"os/exec"
 	"path"
 	"path/filepath"
 	"reflect"
+	"sort"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -85,6 +90,9 @@ type ParallelBatch struct {
 }
 
 var testHookBeforeParallelAggregate func()
+var testHookParallelPublishAfterFetch func()
+var testHookParallelPublishBeforeFastForward func() error
+var testHookParallelPublishAfterFastForward func() error
 
 func parallelClone(source, destination, ref, expectedHead string, depth int) error {
 	if source == "" || destination == "" || ref == "" {
@@ -368,12 +376,6 @@ func (s *Service) integrateParallelWorkers(ctx context.Context, invocation LoopI
 	aggregatePass, aggregateViolations := s.runParallelAggregateChild(ctx, invocation, snapshot, root, batch, stdout, stderr)
 	batch.Integration.AggregatePass = aggregatePass
 	violations = append(violations, aggregateViolations...)
-	if batch.Integration.AggregatePass {
-		if head, err := gitCommand(root, "rev-parse", "HEAD"); err == nil {
-			value := strings.TrimSpace(head)
-			batch.Integration.Head = &value
-		}
-	}
 	return violations
 }
 
@@ -509,8 +511,8 @@ func (s *Service) runParallelAggregateChild(ctx context.Context, invocation Loop
 	if err != nil {
 		return false, nil
 	}
-	result, err := validation.Validate()
-	if err != nil || !result.Valid {
+	inputs, err := loopInputBytes(validation.paths)
+	if err != nil {
 		return false, nil
 	}
 	before, err := loopGitSnapshot(root, validation.paths.GitDir)
@@ -521,6 +523,14 @@ func (s *Service) runParallelAggregateChild(ctx context.Context, invocation Loop
 	if err != nil {
 		return false, nil
 	}
+	worktree, err := parallelWorktreeDigest(root)
+	if err != nil {
+		return false, nil
+	}
+	result, err := validation.Validate()
+	if err != nil || !result.Valid {
+		return false, nil
+	}
 	child, childErr := s.runParallelIntegrationChild(ctx, invocation, snapshot, root, nil, binding, stdout, stderr)
 	batch.Integration.Children = append(batch.Integration.Children, child)
 	if childErr != nil {
@@ -529,12 +539,19 @@ func (s *Service) runParallelAggregateChild(ctx context.Context, invocation Loop
 		}
 		return false, nil
 	}
+	afterInputs, inputErr := loopInputBytes(validation.paths)
 	after, err := loopGitSnapshot(root, validation.paths.GitDir)
 	postConfigs, configErr := loopGitConfigSnapshot(validation.paths.GitDir, validation.paths.GitCommonDir)
+	afterWorktree, worktreeErr := parallelWorktreeDigest(root)
 	if configErr != nil || !reflect.DeepEqual(configs, postConfigs) {
 		return false, []MachineViolation{parallelViolation("git_config_changed", "parallel aggregate child changed Git configuration")}
 	}
-	return err == nil && reflect.DeepEqual(before, after) && child.Outcome == "pass", nil
+	if inputErr != nil || err != nil || worktreeErr != nil || !reflect.DeepEqual(inputs, afterInputs) || !reflect.DeepEqual(before, after) || worktree != afterWorktree || child.Outcome != "pass" {
+		return false, nil
+	}
+	value := child.BoundHead
+	batch.Integration.Head = &value
+	return true, nil
 }
 
 func (s *Service) loopIntegrationPrompt(snapshot LoopPreflightSnapshot, binding parallelIntegrationBinding) (LoopPromptExecution, error) {
@@ -749,10 +766,13 @@ func (s *Service) finishParallelDelivery(snapshot LoopPreflightSnapshot, diagnos
 		parallelOutcome(diagnostic, batch)
 		return
 	}
-	inputs, inputErr := loopInputBytes(s.paths)
-	git, gitErr := loopGitSnapshot(s.paths.WorktreeRoot, s.paths.GitDir)
-	configs, configErr := loopGitConfigSnapshot(s.paths.GitDir, s.paths.GitCommonDir)
-	if inputErr != nil || gitErr != nil || configErr != nil || !reflect.DeepEqual(inputs, snapshot.Inputs()) || !reflect.DeepEqual(git, snapshot.Git()) || !reflect.DeepEqual(configs, snapshot.GitConfig()) {
+	if !parallelAggregateAttested(batch.Integration) {
+		diagnostic.MutationViolations = append(diagnostic.MutationViolations, parallelViolation("aggregate_unattested", "parallel publication requires a passing aggregate gate bound to the exact integration head"))
+		parallelOutcome(diagnostic, batch)
+		return
+	}
+	if git, matches := s.parallelSourceObservation(snapshot); !matches {
+		s.parallelObservedGitDiagnostic(snapshot, diagnostic, git)
 		diagnostic.MutationViolations = append(diagnostic.MutationViolations, parallelViolation("source_drift", "source repository changed before parallel publication"))
 		parallelOutcome(diagnostic, batch)
 		return
@@ -767,8 +787,37 @@ func (s *Service) finishParallelDelivery(snapshot LoopPreflightSnapshot, diagnos
 		parallelOutcome(diagnostic, batch)
 		return
 	}
+	if testHookParallelPublishAfterFetch != nil {
+		testHookParallelPublishAfterFetch()
+	}
+	if git, matches := s.parallelSourceObservation(snapshot); !matches {
+		s.parallelObservedGitDiagnostic(snapshot, diagnostic, git)
+		diagnostic.MutationViolations = append(diagnostic.MutationViolations, parallelViolation("source_drift", "source repository changed after fetch and before parallel publication"))
+		parallelOutcome(diagnostic, batch)
+		return
+	}
+	if testHookParallelPublishBeforeFastForward != nil {
+		if err := testHookParallelPublishBeforeFastForward(); err != nil {
+			s.parallelPublicationFailure(snapshot, diagnostic, err.Error())
+			parallelOutcome(diagnostic, batch)
+			return
+		}
+	}
 	if output, err := exec.Command("git", "-C", s.paths.WorktreeRoot, "merge", "--ff-only", *batch.Integration.Head).CombinedOutput(); err != nil {
-		diagnostic.MutationViolations = append(diagnostic.MutationViolations, parallelViolation("publish_failed", strings.TrimSpace(string(output))))
+		s.parallelPublicationFailure(snapshot, diagnostic, strings.TrimSpace(string(output)))
+		parallelOutcome(diagnostic, batch)
+		return
+	}
+	if testHookParallelPublishAfterFastForward != nil {
+		if err := testHookParallelPublishAfterFastForward(); err != nil {
+			s.parallelPublicationFailure(snapshot, diagnostic, err.Error())
+			parallelOutcome(diagnostic, batch)
+			return
+		}
+	}
+	git, gitErr := loopGitSnapshot(s.paths.WorktreeRoot, s.paths.GitDir)
+	if gitErr != nil || git.Head != *batch.Integration.Head || git.Ref != snapshot.Git().Ref || !git.Clean {
+		s.parallelPublicationFailure(snapshot, diagnostic, "fast-forward postflight did not prove the exact clean target head")
 		parallelOutcome(diagnostic, batch)
 		return
 	}
@@ -783,6 +832,110 @@ func (s *Service) finishParallelDelivery(snapshot LoopPreflightSnapshot, diagnos
 	parallelOutcome(diagnostic, batch)
 }
 
+func parallelAggregateAttested(integration ParallelIntegration) bool {
+	if !integration.AggregatePass || integration.Head == nil {
+		return false
+	}
+	for _, child := range integration.Children {
+		if child.Role == "aggregate_gate" && child.Outcome == "pass" && child.BoundHead == *integration.Head {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *Service) parallelSourceObservation(snapshot LoopPreflightSnapshot) (LoopGitSnapshot, bool) {
+	inputs, inputErr := loopInputBytes(s.paths)
+	git, gitErr := loopGitSnapshot(s.paths.WorktreeRoot, s.paths.GitDir)
+	configs, configErr := loopGitConfigSnapshot(s.paths.GitDir, s.paths.GitCommonDir)
+	matches := inputErr == nil && gitErr == nil && configErr == nil && reflect.DeepEqual(inputs, snapshot.Inputs()) &&
+		reflect.DeepEqual(git, snapshot.Git()) && reflect.DeepEqual(configs, snapshot.GitConfig())
+	return git, matches
+}
+
+func (s *Service) parallelPublicationFailure(snapshot LoopPreflightSnapshot, diagnostic *LoopDiagnostic, detail string) {
+	git, matches := s.parallelSourceObservation(snapshot)
+	s.parallelObservedGitDiagnostic(snapshot, diagnostic, git)
+	if !matches {
+		diagnostic.MutationViolations = append(diagnostic.MutationViolations, parallelViolation("publish_interrupted", detail))
+		diagnostic.NextAction = "Do not retry. Inspect the source branch, index, and worktree; preserve source drift and recover manually before a new invocation."
+		return
+	}
+	diagnostic.MutationViolations = append(diagnostic.MutationViolations, parallelViolation("publish_failed", detail))
+}
+
+func (s *Service) parallelObservedGitDiagnostic(snapshot LoopPreflightSnapshot, diagnostic *LoopDiagnostic, git LoopGitSnapshot) {
+	if git.Head == "" {
+		return
+	}
+	descendant, commits := loopDeliveryHistory(s.paths.WorktreeRoot, snapshot.Git().Head, git.Head)
+	diagnostic.Git = LoopGitDiagnostic{Ref: git.Ref, HeadBefore: snapshot.Git().Head, HeadAfter: git.Head, Clean: git.Clean, Descendant: descendant, Commits: commits}
+}
+
+func parallelWorktreeDigest(root string) (string, error) {
+	files := []string{}
+	if err := filepath.WalkDir(root, func(file string, entry fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		rel, err := filepath.Rel(root, file)
+		if err != nil {
+			return err
+		}
+		if rel == ".git" {
+			if entry.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if entry.IsDir() {
+			return nil
+		}
+		if entry.Type()&fs.ModeSymlink == 0 && !entry.Type().IsRegular() {
+			return fmt.Errorf("parallel aggregate worktree contains non-regular file %q", rel)
+		}
+		files = append(files, rel)
+		return nil
+	}); err != nil {
+		return "", err
+	}
+	sort.Strings(files)
+	hash := sha256.New()
+	hash.Write([]byte("taskrail-parallel-aggregate-worktree-v1\x00"))
+	for _, rel := range files {
+		file := filepath.Join(root, rel)
+		info, err := os.Lstat(file)
+		if err != nil {
+			return "", fmt.Errorf("inspect parallel aggregate worktree file %q: %w", rel, err)
+		}
+		if info.Mode()&fs.ModeSymlink == 0 && !info.Mode().IsRegular() {
+			return "", fmt.Errorf("parallel aggregate worktree file %q is no longer regular", rel)
+		}
+		var data []byte
+		if info.Mode()&fs.ModeSymlink != 0 {
+			target, err := os.Readlink(file)
+			if err != nil {
+				return "", err
+			}
+			data = []byte(target)
+		} else {
+			data, err = os.ReadFile(file)
+			if err != nil {
+				return "", err
+			}
+		}
+		hash.Write([]byte(filepath.ToSlash(rel)))
+		hash.Write([]byte{0})
+		hash.Write([]byte(strconv.FormatUint(uint64(info.Mode().Perm()), 8)))
+		hash.Write([]byte{0})
+		hash.Write([]byte(strconv.Itoa(len(data))))
+		hash.Write([]byte{0})
+		hash.Write(data)
+		hash.Write([]byte{0})
+	}
+	return hex.EncodeToString(hash.Sum(nil)), nil
+}
+
 func parallelIntegratedCommits(workers []ParallelWorker) []string {
 	commits := make([]string, 0, len(workers))
 	for _, worker := range workers {
@@ -794,19 +947,26 @@ func parallelIntegratedCommits(workers []ParallelWorker) []string {
 }
 
 func parallelOutcome(diagnostic *LoopDiagnostic, batch *ParallelBatch) {
+	nextAction := diagnostic.NextAction
 	if len(batch.Delivery.PublishedTasks) == len(batch.Workers) && len(batch.Workers) != 0 &&
 		batch.Delivery.HeadAfter != nil && batch.Integration.AggregatePass {
 		diagnostic.Outcome = "batch_pass"
-		diagnostic.NextAction = "All selected parallel tasks were integrated and published."
+		if nextAction == "" {
+			diagnostic.NextAction = "All selected parallel tasks were integrated and published."
+		}
 		return
 	}
 	if len(batch.Delivery.PublishedTasks) != 0 {
 		diagnostic.Outcome = "batch_partial"
-		diagnostic.NextAction = "Inspect retained failed worker or integration workspaces before a new invocation."
+		if nextAction == "" {
+			diagnostic.NextAction = "Inspect retained failed worker or integration workspaces before a new invocation."
+		}
 		return
 	}
 	diagnostic.Outcome = "batch_failed"
-	diagnostic.NextAction = "Inspect failed worker and integration diagnostics before a new invocation."
+	if nextAction == "" {
+		diagnostic.NextAction = "Inspect failed worker and integration diagnostics before a new invocation."
+	}
 }
 
 func (s *Service) cleanupParallelWorkspaces(owner parallelWorkspaceOwner, retention string, batch *ParallelBatch) []MachineViolation {

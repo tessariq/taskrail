@@ -289,6 +289,13 @@ frozen frontier in private `--no-local` shallow clones, replays valid worker
 commits in selection order in a separate integration clone, and fast-forwards the
 source branch only after aggregate validation. `--clone-depth full` opts out of
 the shallow boundary; `--keep-workspaces` retains failed workspaces by default.
+Aggregate validation is read-only and binds the exact integration commit eligible
+for publication. The source is rechecked after fetch before its guarded
+fast-forward. A final fast-forward is not a durable all-or-none transaction: if
+interruption leaves uncertain branch, index, or worktree state, Taskrail reports
+what it observed and never retries or overwrites drift. Inspect and repair that
+Git state deliberately before a new loop invocation; preflight refuses a dirty
+worktree.
 Local delivery is the default. `--delivery review --review-adapter <path>` sends
 each provider-neutral JSON request directly to one caller-owned executable and
 requires `--result-file <external-path>` so its terminal adapter outcome remains

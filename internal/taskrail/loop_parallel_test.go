@@ -236,6 +236,248 @@ func TestParallelAggregateRejectsGitConfigurationMutation(t *testing.T) {
 	}
 }
 
+func TestParallelAggregateRejectsWorktreeMutation(t *testing.T) {
+	clearLoopChildEnvironment(t)
+	t.Setenv("GO_WANT_LOOP_CHILD", "1")
+	repo, svc := loopFixture(t)
+	helper, err := os.Executable()
+	if err != nil {
+		t.Fatalf("resolve test helper: %v", err)
+	}
+	snapshot, err := svc.LoopPreflight(LoopInvocation{MaxIterations: 1, Child: []string{"child"}})
+	if err != nil {
+		t.Fatalf("preflight: %v", err)
+	}
+	accepted, _ := svc.runParallelAggregateChild(context.Background(), LoopInvocation{Child: []string{helper, "-test.run=^TestLoopLaunchChildHelper$", "--", "mutate-worktree", filepath.Join(t.TempDir(), "record")}}, snapshot, repo, &ParallelBatch{}, nil, nil)
+	if accepted {
+		t.Fatal("parallel aggregate accepted worktree mutation")
+	}
+}
+
+func TestParallelAggregateRejectsIgnoredWorktreeMutation(t *testing.T) {
+	clearLoopChildEnvironment(t)
+	t.Setenv("GO_WANT_LOOP_CHILD", "1")
+	repo, svc := loopFixture(t)
+	writeFile(t, filepath.Join(repo, ".gitignore"), "aggregate-ignored.txt\n")
+	runGit(t, repo, "add", ".gitignore")
+	runGit(t, repo, "commit", "-m", "ignore aggregate evidence")
+	helper, err := os.Executable()
+	if err != nil {
+		t.Fatalf("resolve test helper: %v", err)
+	}
+	snapshot, err := svc.LoopPreflight(LoopInvocation{MaxIterations: 1, Child: []string{"child"}})
+	if err != nil {
+		t.Fatalf("preflight: %v", err)
+	}
+	accepted, _ := svc.runParallelAggregateChild(context.Background(), LoopInvocation{Child: []string{helper, "-test.run=^TestLoopLaunchChildHelper$", "--", "mutate-ignored-worktree", filepath.Join(t.TempDir(), "record")}}, snapshot, repo, &ParallelBatch{}, nil, nil)
+	if accepted {
+		t.Fatal("parallel aggregate accepted ignored worktree mutation")
+	}
+}
+
+func TestParallelAggregateAllowsTrackedSymlink(t *testing.T) {
+	clearLoopChildEnvironment(t)
+	t.Setenv("GO_WANT_LOOP_CHILD", "1")
+	repo, svc := loopFixture(t)
+	writeFile(t, filepath.Join(repo, "target.txt"), "target\n")
+	if err := os.Symlink("target.txt", filepath.Join(repo, "link.txt")); err != nil {
+		t.Skipf("create tracked symlink: %v", err)
+	}
+	runGit(t, repo, "add", "target.txt", "link.txt")
+	runGit(t, repo, "commit", "-m", "add tracked symlink")
+	helper, err := os.Executable()
+	if err != nil {
+		t.Fatalf("resolve test helper: %v", err)
+	}
+	snapshot, err := svc.LoopPreflight(LoopInvocation{MaxIterations: 1, Child: []string{"child"}})
+	if err != nil {
+		t.Fatalf("preflight: %v", err)
+	}
+	accepted, _ := svc.runParallelAggregateChild(context.Background(), LoopInvocation{Child: []string{helper, "-test.run=^TestLoopLaunchChildHelper$", "--", "observe", filepath.Join(t.TempDir(), "record")}}, snapshot, repo, &ParallelBatch{}, nil, nil)
+	if !accepted {
+		t.Fatal("parallel aggregate rejected unchanged tracked symlink")
+	}
+}
+
+func TestFinishParallelDeliveryRefusesUnattestedAggregateHead(t *testing.T) {
+	repo, svc := loopFixture(t)
+	snapshot, err := svc.LoopPreflight(LoopInvocation{MaxIterations: 1, Child: []string{"child"}})
+	if err != nil {
+		t.Fatalf("preflight: %v", err)
+	}
+	ref, err := gitCommand(repo, "symbolic-ref", "HEAD")
+	if err != nil {
+		t.Fatalf("read source ref: %v", err)
+	}
+	base, err := gitCommand(repo, "rev-parse", "HEAD")
+	if err != nil {
+		t.Fatalf("read source head: %v", err)
+	}
+	integration := filepath.Join(t.TempDir(), "integration")
+	if err := parallelClone(repo, integration, strings.TrimSpace(ref), strings.TrimSpace(base), 0); err != nil {
+		t.Fatalf("clone integration: %v", err)
+	}
+	writeFile(t, filepath.Join(integration, "candidate.txt"), "candidate\n")
+	runGit(t, integration, "add", "candidate.txt")
+	runGit(t, integration, "-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-m", "candidate")
+	target, err := gitCommand(integration, "rev-parse", "HEAD")
+	if err != nil {
+		t.Fatalf("read integration head: %v", err)
+	}
+	target = strings.TrimSpace(target)
+	diagnostic := LoopDiagnostic{}
+	batch := ParallelBatch{Integration: ParallelIntegration{AggregatePass: true, Head: &target, Workspace: &integration}}
+
+	svc.finishParallelDelivery(snapshot, &diagnostic, &batch)
+
+	if !hasLoopIntegrityCode(diagnostic.MutationViolations, "aggregate_unattested") {
+		t.Fatalf("delivery violations = %+v, want aggregate attestation refusal", diagnostic.MutationViolations)
+	}
+	if head, err := gitCommand(repo, "rev-parse", "HEAD"); err != nil || strings.TrimSpace(head) != strings.TrimSpace(base) {
+		t.Fatalf("source head after unattested publication = %q, %v; want %q", head, err, base)
+	}
+}
+
+func TestFinishParallelDeliveryRefusesSourceDriftAfterFetch(t *testing.T) {
+	repo, svc := loopFixture(t)
+	snapshot, err := svc.LoopPreflight(LoopInvocation{MaxIterations: 1, Child: []string{"child"}})
+	if err != nil {
+		t.Fatalf("preflight: %v", err)
+	}
+	ref, err := gitCommand(repo, "symbolic-ref", "HEAD")
+	if err != nil {
+		t.Fatalf("read source ref: %v", err)
+	}
+	base, err := gitCommand(repo, "rev-parse", "HEAD")
+	if err != nil {
+		t.Fatalf("read source head: %v", err)
+	}
+	integration := filepath.Join(t.TempDir(), "integration")
+	if err := parallelClone(repo, integration, strings.TrimSpace(ref), strings.TrimSpace(base), 0); err != nil {
+		t.Fatalf("clone integration: %v", err)
+	}
+	writeFile(t, filepath.Join(integration, "candidate.txt"), "candidate\n")
+	runGit(t, integration, "add", "candidate.txt")
+	runGit(t, integration, "-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-m", "candidate")
+	target, err := gitCommand(integration, "rev-parse", "HEAD")
+	if err != nil {
+		t.Fatalf("read integration head: %v", err)
+	}
+	target = strings.TrimSpace(target)
+	testHookParallelPublishAfterFetch = func() {
+		writeFile(t, filepath.Join(repo, "source-drift.txt"), "drift\n")
+	}
+	t.Cleanup(func() { testHookParallelPublishAfterFetch = nil })
+	diagnostic := LoopDiagnostic{}
+	batch := ParallelBatch{Integration: ParallelIntegration{AggregatePass: true, Head: &target, Workspace: &integration,
+		Children: []ParallelIntegrationChild{{Role: "aggregate_gate", BoundHead: target, Outcome: "pass"}}}}
+
+	svc.finishParallelDelivery(snapshot, &diagnostic, &batch)
+
+	if !hasLoopIntegrityCode(diagnostic.MutationViolations, "source_drift") {
+		t.Fatalf("delivery violations = %+v, want source drift refusal", diagnostic.MutationViolations)
+	}
+	if diagnostic.Git.HeadAfter != strings.TrimSpace(base) || diagnostic.Git.Clean {
+		t.Fatalf("source drift Git evidence = %+v", diagnostic.Git)
+	}
+	if head, err := gitCommand(repo, "rev-parse", "HEAD"); err != nil || strings.TrimSpace(head) != strings.TrimSpace(base) {
+		t.Fatalf("source head after source drift = %q, %v; want %q", head, err, base)
+	}
+	if _, err := svc.LoopPreflight(LoopInvocation{MaxIterations: 1, Child: []string{"child"}}); err == nil {
+		t.Fatal("retry accepted source drift left during refused publication")
+	}
+}
+
+func TestFinishParallelDeliveryReportsInterruptedFastForwardForConservativeRecovery(t *testing.T) {
+	repo, svc := loopFixture(t)
+	snapshot, err := svc.LoopPreflight(LoopInvocation{MaxIterations: 1, Child: []string{"child"}})
+	if err != nil {
+		t.Fatalf("preflight: %v", err)
+	}
+	ref, err := gitCommand(repo, "symbolic-ref", "HEAD")
+	if err != nil {
+		t.Fatalf("read source ref: %v", err)
+	}
+	base, err := gitCommand(repo, "rev-parse", "HEAD")
+	if err != nil {
+		t.Fatalf("read source head: %v", err)
+	}
+	integration := filepath.Join(t.TempDir(), "integration")
+	if err := parallelClone(repo, integration, strings.TrimSpace(ref), strings.TrimSpace(base), 0); err != nil {
+		t.Fatalf("clone integration: %v", err)
+	}
+	writeFile(t, filepath.Join(integration, "candidate.txt"), "candidate\n")
+	runGit(t, integration, "add", "candidate.txt")
+	runGit(t, integration, "-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-m", "candidate")
+	target, err := gitCommand(integration, "rev-parse", "HEAD")
+	if err != nil {
+		t.Fatalf("read integration head: %v", err)
+	}
+	target = strings.TrimSpace(target)
+	testHookParallelPublishAfterFastForward = func() error { return errors.New("simulated interruption") }
+	t.Cleanup(func() { testHookParallelPublishAfterFastForward = nil })
+	diagnostic := LoopDiagnostic{}
+	batch := ParallelBatch{Integration: ParallelIntegration{AggregatePass: true, Head: &target, Workspace: &integration,
+		Children: []ParallelIntegrationChild{{Role: "aggregate_gate", BoundHead: target, Outcome: "pass"}}}}
+
+	svc.finishParallelDelivery(snapshot, &diagnostic, &batch)
+
+	if !hasLoopIntegrityCode(diagnostic.MutationViolations, "publish_interrupted") || !strings.Contains(diagnostic.NextAction, "Do not retry") {
+		t.Fatalf("interrupted publication diagnostic = %+v", diagnostic)
+	}
+	if diagnostic.Git.HeadAfter != target || !diagnostic.Git.Clean || diagnostic.Git.Ref != strings.TrimSpace(ref) {
+		t.Fatalf("interrupted publication Git evidence = %+v", diagnostic.Git)
+	}
+	if head, err := gitCommand(repo, "rev-parse", "HEAD"); err != nil || strings.TrimSpace(head) != target {
+		t.Fatalf("source head after interrupted publication = %q, %v; want %q", head, err, target)
+	}
+}
+
+func TestFinishParallelDeliveryTreatsDirtyBaseHeadAsInterrupted(t *testing.T) {
+	repo, svc := loopFixture(t)
+	snapshot, err := svc.LoopPreflight(LoopInvocation{MaxIterations: 1, Child: []string{"child"}})
+	if err != nil {
+		t.Fatalf("preflight: %v", err)
+	}
+	ref, err := gitCommand(repo, "symbolic-ref", "HEAD")
+	if err != nil {
+		t.Fatalf("read source ref: %v", err)
+	}
+	base, err := gitCommand(repo, "rev-parse", "HEAD")
+	if err != nil {
+		t.Fatalf("read source head: %v", err)
+	}
+	integration := filepath.Join(t.TempDir(), "integration")
+	if err := parallelClone(repo, integration, strings.TrimSpace(ref), strings.TrimSpace(base), 0); err != nil {
+		t.Fatalf("clone integration: %v", err)
+	}
+	writeFile(t, filepath.Join(integration, "candidate.txt"), "candidate\n")
+	runGit(t, integration, "add", "candidate.txt")
+	runGit(t, integration, "-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-m", "candidate")
+	target, err := gitCommand(integration, "rev-parse", "HEAD")
+	if err != nil {
+		t.Fatalf("read integration head: %v", err)
+	}
+	target = strings.TrimSpace(target)
+	testHookParallelPublishBeforeFastForward = func() error {
+		writeFile(t, filepath.Join(repo, "partial-checkout.txt"), "partial\n")
+		return errors.New("simulated partial checkout")
+	}
+	t.Cleanup(func() { testHookParallelPublishBeforeFastForward = nil })
+	diagnostic := LoopDiagnostic{}
+	batch := ParallelBatch{Integration: ParallelIntegration{AggregatePass: true, Head: &target, Workspace: &integration,
+		Children: []ParallelIntegrationChild{{Role: "aggregate_gate", BoundHead: target, Outcome: "pass"}}}}
+
+	svc.finishParallelDelivery(snapshot, &diagnostic, &batch)
+
+	if !hasLoopIntegrityCode(diagnostic.MutationViolations, "publish_interrupted") || !strings.Contains(diagnostic.NextAction, "Do not retry") {
+		t.Fatalf("base-head interruption diagnostic = %+v", diagnostic)
+	}
+	if diagnostic.Git.HeadAfter != strings.TrimSpace(base) || diagnostic.Git.Clean {
+		t.Fatalf("base-head interruption Git evidence = %+v", diagnostic.Git)
+	}
+}
+
 func TestParallelIntegrationChildRejectsGitConfigurationMutation(t *testing.T) {
 	clearLoopChildEnvironment(t)
 	t.Setenv("GO_WANT_LOOP_CHILD", "1")

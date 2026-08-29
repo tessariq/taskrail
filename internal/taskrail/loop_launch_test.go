@@ -421,6 +421,18 @@ func TestLoopLaunchChildHelper(t *testing.T) {
 			os.Exit(95)
 		}
 		os.Exit(0)
+	case "mutate-worktree":
+		cwd, err := os.Getwd()
+		if err != nil || os.WriteFile(filepath.Join(cwd, "aggregate-mutation.txt"), []byte("mutated\n"), 0o600) != nil {
+			os.Exit(95)
+		}
+		os.Exit(0)
+	case "mutate-ignored-worktree":
+		cwd, err := os.Getwd()
+		if err != nil || os.WriteFile(filepath.Join(cwd, "aggregate-ignored.txt"), []byte("mutated\n"), 0o600) != nil {
+			os.Exit(95)
+		}
+		os.Exit(0)
 	case "delegate-local-lifecycle":
 		if len(args) < separator+4 {
 			os.Exit(82)

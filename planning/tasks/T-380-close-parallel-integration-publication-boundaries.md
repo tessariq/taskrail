@@ -1,11 +1,16 @@
 ---
 id: T-380-close-parallel-integration-publication-boundaries
 title: Close parallel integration publication boundaries
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#cross-platform-autonomous-loop
 dependencies: []
-updated_at: "2026-08-28T16:13:47Z"
+updated_at: "2026-08-29T08:29:34Z"
+completion_id: "b761f8d974df38e28c3787e8073775b5"
+last_verification_id: "73e988170a9fcc4b0c138381703d6279"
+last_verification_result: pass
+last_verified_at: "2026-08-29T08:29:34Z"
+last_verified_completion_id: "b761f8d974df38e28c3787e8073775b5"
 ---
 
 # T-380-close-parallel-integration-publication-boundaries Close parallel integration publication boundaries
@@ -33,3 +38,6 @@ findings ADV-001 and ADV-003 as one integrated publication-safety outcome.
   full tests, race, workflow contracts, and native cross-platform CI.
 
 ## Implementation Notes
+
+- 2026-08-29T08:29:23Z: Bound aggregate publication to exact clean integration evidence; added drift/interruption recovery safeguards and tests.
+- 2026-08-29T08:29:34Z: verification pass id 73e988170a9fcc4b0c138381703d6279 previous none completion b761f8d974df38e28c3787e8073775b5

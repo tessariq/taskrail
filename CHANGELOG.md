@@ -22,6 +22,10 @@ All notable user-visible changes to Taskrail will be documented in this file.
 - Parallel local delivery now preserves candidate commit identity without Git
   user configuration, accepts filesystem-equivalent delegated repository roots,
   and exercises its native child flow across the CI platform matrix.
+- Parallel local publication now requires a read-only aggregate attestation of
+  the exact integration head, rechecks source drift after fetch, and reports an
+  observed interrupted fast-forward for deliberate operator recovery rather than
+  retrying or overwriting source state.
 - Delegated loop lifecycle writers now authenticate the loop's one canonical
   task-scoped grant before narrowing to each command's exact task fields and
   transaction paths. One child token can therefore safely cover `start`,
