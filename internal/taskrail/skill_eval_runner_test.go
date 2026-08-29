@@ -149,7 +149,7 @@ func TestSkillEvalRunnerExecutesCompleteRegistryWithWorkingBinary(t *testing.T) 
 		t.Fatalf("create short artifact root: %v", err)
 	}
 	t.Cleanup(func() { os.RemoveAll(in.ArtifactRoot) })
-	if !skillEvalDirectoryDurabilitySupported(t, in.ArtifactRoot) {
+	if syncErr := skillEvalDirectoryDurabilityError(t, in.ArtifactRoot); syncErr != nil {
 		registry = slices.DeleteFunc(registry, func(item SkillEvalCase) bool {
 			return item.StorageMode == "local"
 		})
@@ -159,7 +159,7 @@ func TestSkillEvalRunnerExecutesCompleteRegistryWithWorkingBinary(t *testing.T) 
 				delete(in.CaseReviews, caseID)
 			}
 		}
-		t.Log("local-storage cases omitted: host does not support durable directory sync")
+		t.Logf("local-storage cases omitted: host does not support durable directory sync: %v", syncErr)
 	}
 	stage, err := (SkillEvalRunner{}).Execute(context.Background(), in)
 	if err != nil {
@@ -205,7 +205,7 @@ func TestSkillEvalRunnerExecutesCompleteRegistryWithWorkingBinary(t *testing.T) 
 	}
 }
 
-func skillEvalDirectoryDurabilitySupported(t *testing.T, root string) bool {
+func skillEvalDirectoryDurabilityError(t *testing.T, root string) error {
 	t.Helper()
 	directory, err := os.Open(root)
 	if err != nil {
@@ -215,7 +215,7 @@ func skillEvalDirectoryDurabilitySupported(t *testing.T, root string) bool {
 	if err := directory.Close(); err != nil {
 		t.Fatalf("close directory durability probe: %v", err)
 	}
-	return syncErr == nil
+	return syncErr
 }
 
 func TestRenderSkillEvalReportAcceptsExactIncompleteWaiver(t *testing.T) {

@@ -37,9 +37,9 @@ For any code change:
 - Filesystem-level integration tests should use temporary repositories.
 - `task test:filesystem` runs filesystem-sensitive packages and known path/line-ending regressions verbosely so native capability skips remain visible.
 - The working-binary skill-evaluation integration keeps committed-mode coverage
-  and logs omitted local-mode cases when a host lacks durable directory sync.
-  The release evaluation must still run the full registry on a capable
-  filesystem.
+  and logs the native sync error with omitted local-mode cases when a host lacks
+  durable directory sync. The release evaluation must still run the full
+  registry on a capable filesystem.
 - Keep CLI smoke tests sparse and high-signal.
 
 Rules:
