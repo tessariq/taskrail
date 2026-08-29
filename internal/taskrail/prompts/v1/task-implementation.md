@@ -50,15 +50,19 @@ unavailable fresh context, or malformed output fails closed rather than retrying
 invisibly.
 
 Classify every finding as `fix-now`, `separate-followup`, `blocked`, or
-`rejected` with rationale and evidence. Use `fix-now` when the change introduced
-or exposed the issue, current acceptance or specification requires it, an
-affected invariant depends on it, or changed evidence is too weak. Use
+`rejected` with rationale and evidence. Implementation-review findings use only
+`fix-now`, `separate-followup`, `blocked`, and `rejected`; no other disposition
+is valid. Use `fix-now` when the change introduced or exposed the issue, current
+acceptance or specification requires it, an affected invariant depends on it, or
+changed evidence is too weak. Use
 `separate-followup` only for a distinct outcome outside that scope. Repair every
 current-scope finding; budget exhaustion and severity do not turn required work
-into a follow-up. For a test-strength finding, strengthen the test, demonstrate
-that a deliberate relevant regression fails, restore the correct implementation,
-and demonstrate the test passes. Rerun every affected deterministic check after
-repairs.
+into a follow-up. Low-value, non-actionable observations are `rejected` with
+rationale. Current acceptance, specification, invariant, or evidence findings
+cannot use that mapping to evade repair. For a test-strength finding, strengthen
+the test, demonstrate that a deliberate relevant regression fails, restore the
+correct implementation, and demonstrate the test passes. Rerun every affected
+deterministic check after repairs.
 
 One broad round is the default; use a second broad round only within the maximum
 and for a distinct unresolved risk that deterministic verification does not

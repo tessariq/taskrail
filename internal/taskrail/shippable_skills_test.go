@@ -212,6 +212,9 @@ func TestFullTaskSkillsFollowCanonicalLifecycle(t *testing.T) {
 				"one fresh reviewer by default",
 				"one to three reviewers, each with a named, non-duplicative lens",
 				"`fix-now`, `separate-followup`, `blocked`, or `rejected`",
+				"Implementation-review findings use only `fix-now`, `separate-followup`, `blocked`, and `rejected`; no other disposition is valid.",
+				"Low-value, non-actionable observations are `rejected` with rationale.",
+				"Current acceptance, specification, invariant, or evidence findings cannot use that mapping to evade repair.",
 				"Repair all current-scope findings.",
 				"second broad round is allowed only",
 				"final-diff review",
@@ -230,6 +233,11 @@ func TestFullTaskSkillsFollowCanonicalLifecycle(t *testing.T) {
 			} {
 				if !strings.Contains(body, want) {
 					t.Errorf("%s skill must describe %q", name, want)
+				}
+			}
+			for _, invented := range []string{"`report-only`", "`deferred`", "`ignored`"} {
+				if strings.Contains(body, invented) {
+					t.Errorf("%s skill contains invented finding disposition %s", name, invented)
 				}
 			}
 

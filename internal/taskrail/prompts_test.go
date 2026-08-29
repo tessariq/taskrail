@@ -183,7 +183,9 @@ func TestTaskImplementationPromptDefinesLifecycleCompleteWorkflow(t *testing.T) 
 		{"review lenses", "A broad round has one to three reviewers, each with a named, non-duplicative lens."},
 		{"additional reviewers", "Use additional concurrent reviewers only for distinct independently relevant risks the first lens is unlikely to cover, and give every reviewer the same frozen snapshot."},
 		{"finding dispositions", "Classify every finding as `fix-now`, `separate-followup`, `blocked`, or `rejected` with rationale and evidence."},
+		{"closed finding vocabulary", "Implementation-review findings use only `fix-now`, `separate-followup`, `blocked`, and `rejected`; no other disposition is valid."},
 		{"finding routing", "Use `fix-now` when the change introduced or exposed the issue, current acceptance or specification requires it, an affected invariant depends on it, or changed evidence is too weak. Use `separate-followup` only for a distinct outcome outside that scope."},
+		{"low-value finding routing", "Low-value, non-actionable observations are `rejected` with rationale. Current acceptance, specification, invariant, or evidence findings cannot use that mapping to evade repair."},
 		{"regression perturbation", "For a test-strength finding, strengthen the test, demonstrate that a deliberate relevant regression fails, restore the correct implementation, and demonstrate the test passes."},
 		{"second review", "One broad round is the default; use a second broad round only within the maximum and for a distinct unresolved risk that deterministic verification does not adequately cover."},
 		{"final diff", "If review fixes materially change product or test bytes, freeze the repaired candidate and run one narrow final-diff review limited to fix-induced regressions, integration breakage, and behavior drift."},
@@ -202,6 +204,45 @@ func TestTaskImplementationPromptDefinesLifecycleCompleteWorkflow(t *testing.T) 
 				t.Errorf("task-implementation prompt missing %q:\n%s", fixture.want, result.Content)
 			}
 		})
+	}
+	for _, invented := range []string{"`report-only`", "`deferred`", "`ignored`"} {
+		if strings.Contains(content, invented) {
+			t.Errorf("task-implementation prompt contains invented finding disposition %s", invented)
+		}
+	}
+}
+
+func TestTaskImplementationSpecRejectsReportOnlyFindingDisposition(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("..", "..", "specs", "v0.5.0.md"))
+	if err != nil {
+		t.Fatalf("read v0.5.0 spec: %v", err)
+	}
+	content := strings.Join(strings.Fields(string(data)), " ")
+	start := strings.Index(content, "Implementation-review findings use only")
+	if start < 0 {
+		t.Fatal("v0.5.0 implementation-review guidance is not delimited")
+	}
+	end := strings.Index(content[start:], "- Follow-ups cannot offload")
+	if end < 0 {
+		t.Fatal("v0.5.0 implementation-review guidance is not delimited")
+	}
+	guidance := content[start : start+end]
+	for _, want := range []string{
+		"Implementation-review findings use only `fix-now`, `separate-followup`, `blocked`, and `rejected`; no other disposition is valid.",
+		"Low-value, non-actionable observations are `rejected` with rationale.",
+		"Current acceptance, specification, invariant, or evidence findings cannot use that mapping to evade repair.",
+	} {
+		if !strings.Contains(guidance, want) {
+			t.Errorf("v0.5.0 implementation-review guidance missing %q", want)
+		}
+	}
+	if strings.Contains(guidance, "Low-value observations may remain report-only") {
+		t.Error("v0.5.0 implementation-review guidance retains report-only disposition")
+	}
+	for _, invented := range []string{"report-only", "deferred", "ignored"} {
+		if strings.Contains(guidance, invented) {
+			t.Errorf("v0.5.0 implementation-review guidance contains invented disposition %q", invented)
+		}
 	}
 }
 

@@ -61,6 +61,11 @@ do not contain the source helper and skip this source-only guard.
    context, or malformed output fails closed rather than retrying invisibly.
 6. Classify every finding as `fix-now`, `separate-followup`, `blocked`, or
    `rejected`, with rationale and evidence. Repair all current-scope findings.
+   Implementation-review findings use only `fix-now`, `separate-followup`,
+   `blocked`, and `rejected`; no other disposition is valid.
+   Low-value, non-actionable observations are `rejected` with rationale. Current
+   acceptance, specification, invariant, or evidence findings cannot use that
+   mapping to evade repair.
    A test-strength finding requires a strengthened test, a deliberate relevant
    regression that fails, restoration of the implementation, and a passing test.
 7. Rerun affected deterministic checks after repairs. Do not open another broad

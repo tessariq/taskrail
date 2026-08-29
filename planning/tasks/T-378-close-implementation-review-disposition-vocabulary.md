@@ -1,11 +1,16 @@
 ---
 id: T-378-close-implementation-review-disposition-vocabulary
 title: Close implementation review disposition vocabulary
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#task-implementation-prompt
 dependencies: []
-updated_at: "2026-08-28T16:13:36Z"
+updated_at: "2026-08-29T08:09:56Z"
+completion_id: "b7491af40f22046cc38475141bc7f492"
+last_verification_id: "76eb969ce68c30035395d5735515b7cc"
+last_verification_result: pass
+last_verified_at: "2026-08-29T08:09:56Z"
+last_verified_completion_id: "b7491af40f22046cc38475141bc7f492"
 ---
 
 # T-378-close-implementation-review-disposition-vocabulary Close implementation review disposition vocabulary
@@ -30,3 +35,6 @@ undocumented report-only disposition. This resolves final v0.5 finding CONS-002.
   and the full Go suite.
 
 ## Implementation Notes
+
+- 2026-08-29T08:09:39Z: Closed the implementation-review vocabulary across the v0.5 spec, prompt, and full-task skills; added stale/invented-state contract coverage.
+- 2026-08-29T08:09:56Z: verification pass id 76eb969ce68c30035395d5735515b7cc previous none completion b7491af40f22046cc38475141bc7f492
