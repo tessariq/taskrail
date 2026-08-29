@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -579,6 +580,9 @@ func skillEvalWorkingBinary(ctx context.Context, rawRoot string) (string, error)
 		return "", err
 	}
 	binary := filepath.Join(rawRoot, "taskrail")
+	if runtime.GOOS == "windows" {
+		binary += ".exe"
+	}
 	command := exec.CommandContext(ctx, "go", "build", "-o", binary, "./cmd/taskrail")
 	command.Dir = root
 	if output, err := command.CombinedOutput(); err != nil {
