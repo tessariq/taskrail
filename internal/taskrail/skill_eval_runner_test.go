@@ -165,7 +165,13 @@ func TestSkillEvalRunnerExecutesCompleteRegistryWithWorkingBinary(t *testing.T) 
 		t.Fatalf("Resume: %v", err)
 	}
 	if report.Outcome != "pass" {
-		t.Fatalf("complete registry outcome = %q", report.Outcome)
+		var failed []SkillEvalCaseReport
+		for _, item := range report.Cases {
+			if item.Candidate == nil || item.Candidate.Outcome != "pass" || item.Candidate.DeterministicGrade != "pass" {
+				failed = append(failed, item)
+			}
+		}
+		t.Fatalf("complete registry outcome = %q; failed cases = %#v", report.Outcome, failed)
 	}
 }
 
@@ -588,9 +594,11 @@ func runSkillEvalScenarioCommand(ctx context.Context, sandbox, binary string, ac
 	}
 	gitBefore := skillEvalGitDigest(ctx, sandbox)
 	program, args := action.Command[0], action.Command[1:]
+	if action.Operation == "taskrail-command" {
+		program = binary
+	}
 	command := exec.CommandContext(ctx, program, args...)
 	command.Dir = sandbox
-	command.Env = append(os.Environ(), "PATH="+filepath.Dir(binary)+string(os.PathListSeparator)+os.Getenv("PATH"))
 	stdout, err := command.Output()
 	stderr := []byte{}
 	exitCode := 0
