@@ -15,7 +15,8 @@ dependencies:
     - T-382-make-maintainer-skill-evaluations-executable
     - T-383-accept-real-git-object-ids-in-skill-evaluations
     - T-384-prevent-decomposition-from-mutating-unmet-preconditions
-updated_at: "2026-08-29T11:10:19Z"
+    - T-385-make-skill-evaluation-scenarios-match-their-claims
+updated_at: "2026-08-31T11:48:41Z"
 last_verification_id: "f414774034bb61736378e18cf4520e7d"
 last_verification_result: fail
 last_verified_at: "2026-08-29T11:10:19Z"
@@ -102,3 +103,5 @@ and remediation task is complete. Do not tag or claim current until it passes.
 - 2026-08-29T11:09:23Z: Direct remediation dependencies T-377 through T-381 are completed and pass-verified; restart the v0.5.0 release gate on current bytes.
 - 2026-08-29T11:10:12Z: Release gate blocked: the paired skill-evaluation registry lacks executable scenario and deterministic-oracle bindings, and the runner cannot stage completed arms before required human comparisons; T-382 owns remediation before a fresh restart.
 - 2026-08-29T11:10:19Z: verification fail id f414774034bb61736378e18cf4520e7d previous bbffe73d3b28bd8eee671d2220af9351 completion none
+- 2026-08-31T11:48:31Z: The T-382 evaluator capability remediation is complete; the final model-backed run exposed a new scenario-integrity blocker owned by T-385.
+- 2026-08-31T11:48:41Z: Release gate blocked: the final skill-evaluation scenarios did not establish the committed and positive-path states their prompts claimed, allowing deterministic passes over semantically mismatched fixtures; T-385 owns remediation before one fresh final run.
