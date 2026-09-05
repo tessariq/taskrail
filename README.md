@@ -209,7 +209,9 @@ go build ./cmd/taskrail && go test ./...
 CI (`.github/workflows/ci.yml`) is the authoritative gate and runs the build/test
 matrix over Linux, Windows, and macOS. Optional
 [lefthook](https://github.com/evilmartians/lefthook) hooks mirror it locally
-(`task hooks:install`); do not bypass them with `--no-verify`. See
+(`task hooks:install`, or `go install
+github.com/evilmartians/lefthook@v1.13.6`); do not bypass them with
+`--no-verify`. See
 [CONTRIBUTING.md](CONTRIBUTING.md) for the PR checklist and the AI-assisted
 contribution policy, and
 [AGENTS.md](AGENTS.md#toolchain-and-environment) for the binary-freshness
