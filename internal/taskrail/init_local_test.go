@@ -513,8 +513,6 @@ func TestLocalWritersRefuseCommittedStateAddedAfterDiscovery(t *testing.T) {
 }
 
 func TestLocalWriterTransactionsRejectMixedStateBeforePublication(t *testing.T) {
-	t.Parallel()
-
 	for _, command := range []string{"next", "task new", "verify follow-up"} {
 		t.Run(command, func(t *testing.T) {
 			repo := t.TempDir()
@@ -578,8 +576,6 @@ func localWriterFixture(t *testing.T) (*Service, string) {
 }
 
 func TestLocalLifecycleAndVerificationRollbackStayInOverlay(t *testing.T) {
-	t.Parallel()
-
 	requirePermissionFaultInjection(t)
 	for _, command := range []string{"start", "verify follow-up"} {
 		t.Run(command, func(t *testing.T) {
@@ -634,8 +630,6 @@ func TestLocalLifecycleAndVerificationRollbackStayInOverlay(t *testing.T) {
 }
 
 func TestLocalTaskMutationRollbackStaysInOverlay(t *testing.T) {
-	t.Parallel()
-
 	requirePermissionFaultInjection(t)
 	for _, command := range []string{"new", "rename", "repoint", "dependency"} {
 		t.Run(command, func(t *testing.T) {
