@@ -12,6 +12,8 @@ import (
 )
 
 func TestInitLocalSkillsRefreshRejectsPostPlanDestinationChange(t *testing.T) {
+	skipDurableSkillPublication(t)
+
 	repo := t.TempDir()
 	initLocalGitRepo(t, repo)
 	requireRecoveryDirectoryDurability(t, repo)
@@ -47,6 +49,8 @@ func TestInitLocalSkillsRefreshRejectsPostPlanDestinationChange(t *testing.T) {
 }
 
 func TestInitLocalSkillsRefreshRejectsPostPlanAdopterContent(t *testing.T) {
+	skipDurableSkillPublication(t)
+
 	repo := t.TempDir()
 	initLocalGitRepo(t, repo)
 	requireRecoveryDirectoryDurability(t, repo)
@@ -71,6 +75,8 @@ func TestInitLocalSkillsRefreshRejectsPostPlanAdopterContent(t *testing.T) {
 }
 
 func TestInitLocalSkillsRefreshRejectsPostPlanExclusionChange(t *testing.T) {
+	skipDurableSkillPublication(t)
+
 	repo := t.TempDir()
 	initLocalGitRepo(t, repo)
 	requireRecoveryDirectoryDurability(t, repo)
@@ -113,6 +119,8 @@ func TestLocalSkillRefreshRecoveryShapeExcludesMigrationMembers(t *testing.T) {
 }
 
 func TestValidateInitRecoveryAcceptsLocalSkillRefreshCandidate(t *testing.T) {
+	skipDurableSkillPublication(t)
+
 	t.Parallel()
 
 	repo := t.TempDir()

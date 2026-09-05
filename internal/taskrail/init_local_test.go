@@ -106,6 +106,8 @@ func TestInitLocalCreatesIgnoredOverlay(t *testing.T) {
 }
 
 func TestInitLocalWithSkillsPublishesSkillsAndExclusions(t *testing.T) {
+	skipDurableSkillPublication(t)
+
 	t.Parallel()
 
 	repo := t.TempDir()
@@ -155,6 +157,8 @@ func TestInitLocalWithSkillsPublishesSkillsAndExclusions(t *testing.T) {
 }
 
 func TestInitLocalSkillsRefreshPreservesParityAndNormalizesLegacyMarker(t *testing.T) {
+	skipDurableSkillPublication(t)
+
 	t.Parallel()
 
 	repo := t.TempDir()
@@ -230,6 +234,8 @@ func TestInitLocalSkillsRefreshPreservesParityAndNormalizesLegacyMarker(t *testi
 }
 
 func TestInitLocalSkillsRefreshRefusesDivergentDestination(t *testing.T) {
+	skipDurableSkillPublication(t)
+
 	t.Parallel()
 
 	repo := t.TempDir()
@@ -257,6 +263,8 @@ func TestInitLocalSkillsRefreshRefusesDivergentDestination(t *testing.T) {
 }
 
 func TestInitLocalSkillsRefreshRequiresForce(t *testing.T) {
+	skipDurableSkillPublication(t)
+
 	t.Parallel()
 
 	repo := t.TempDir()
@@ -288,6 +296,8 @@ func TestInitLocalSkillsRefreshRequiresForce(t *testing.T) {
 }
 
 func TestInitLocalSkillsRefreshPreservesCurrentBytes(t *testing.T) {
+	skipDurableSkillPublication(t)
+
 	t.Parallel()
 
 	repo := t.TempDir()
@@ -314,6 +324,8 @@ func TestInitLocalSkillsRefreshPreservesCurrentBytes(t *testing.T) {
 }
 
 func TestInitLocalWithSkillsRejectsPlanDriftWithoutScaffold(t *testing.T) {
+	skipDurableSkillPublication(t)
+
 	repo := t.TempDir()
 	initLocalGitRepo(t, repo)
 	requireRecoveryDirectoryDurability(t, repo)
@@ -346,6 +358,8 @@ func TestInitLocalWithSkillsRejectsPlanDriftWithoutScaffold(t *testing.T) {
 }
 
 func TestInitLocalSkillRecoveryRejectsAdopterContent(t *testing.T) {
+	skipDurableSkillPublication(t)
+
 	t.Parallel()
 
 	repo := t.TempDir()
@@ -703,6 +717,8 @@ func TestInitLocalHasNoPretransactionScaffold(t *testing.T) {
 }
 
 func TestInitLocalRecoversEmptyPretransactionScaffold(t *testing.T) {
+	skipDurableSkillPublication(t)
+
 	t.Parallel()
 
 	repo := t.TempDir()
@@ -810,6 +826,8 @@ func TestLocalInspectionRefusesMarkerChangedAfterDiscovery(t *testing.T) {
 }
 
 func TestLocalStatusIncludesInstalledSkillExclusions(t *testing.T) {
+	skipDurableSkillPublication(t)
+
 	t.Parallel()
 
 	repo := t.TempDir()

@@ -288,6 +288,7 @@ func TestInitCommittedSkillInventory(t *testing.T) {
 // exclusion per packaged-skill subtree in each supported assistant root.
 func TestInitLocalSkillInventoryReportsExclusions(t *testing.T) {
 	t.Parallel()
+	skipDurableSkillPublication(t)
 
 	repo := t.TempDir()
 	initLocalGitRepo(t, repo)

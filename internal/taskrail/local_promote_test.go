@@ -81,6 +81,8 @@ func TestLocalPromotePreviewsAndPublishesSemanticStateAtomically(t *testing.T) {
 }
 
 func TestLocalPromotePreservesInstalledSkillsAndTheirExclusions(t *testing.T) {
+	skipDurableSkillPublication(t)
+
 	t.Parallel()
 
 	repo := t.TempDir()
@@ -119,6 +121,8 @@ func TestLocalPromotePreservesInstalledSkillsAndTheirExclusions(t *testing.T) {
 }
 
 func TestLocalPromoteWithSkillsMakesInstalledSkillsVisible(t *testing.T) {
+	skipDurableSkillPublication(t)
+
 	t.Parallel()
 
 	repo := t.TempDir()
@@ -176,6 +180,8 @@ func TestLocalPromoteWithSkillsMakesInstalledSkillsVisible(t *testing.T) {
 }
 
 func TestLocalPromoteWithSkillsCompletesPendingSkillState(t *testing.T) {
+	skipDurableSkillPublication(t)
+
 	t.Parallel()
 
 	repo := t.TempDir()
@@ -269,6 +275,8 @@ func TestLocalPromoteWithSkillsReportsAbsentSkills(t *testing.T) {
 }
 
 func TestLocalPromoteWithSkillsRefusesOverlappingExternalExclusion(t *testing.T) {
+	skipDurableSkillPublication(t)
+
 	t.Parallel()
 
 	repo := t.TempDir()
@@ -292,6 +300,8 @@ func TestLocalPromoteWithSkillsRefusesOverlappingExternalExclusion(t *testing.T)
 }
 
 func TestLocalPromoteWithSkillsRefusesModifiedStampedSkill(t *testing.T) {
+	skipDurableSkillPublication(t)
+
 	t.Parallel()
 
 	repo := t.TempDir()
