@@ -38,4 +38,4 @@ commit-msg:
 pre-push:
   commands:
     tests:
-      run: task test
+      run: task test:short

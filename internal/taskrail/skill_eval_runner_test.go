@@ -10,6 +10,7 @@ import (
 	"runtime"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -173,6 +174,13 @@ func TestSkillEvalRunnerUsesCandidateOnlyComparisonForNewSkills(t *testing.T) {
 }
 
 func TestSkillEvalRunnerExecutesCompleteRegistryWithWorkingBinary(t *testing.T) {
+	// The only test that builds and drives a real binary across every registry
+	// case. CI runs it; the pre-push hook uses -short so a push does not pay for
+	// it twice.
+	if testing.Short() {
+		t.Skip("builds and executes the working-tree binary over the whole eval registry")
+	}
+
 	registry, err := loadSkillEvalRegistry(filepath.Join("testdata", "skill-evals", "v1", "cases"), shippableSkills)
 	if err != nil {
 		t.Fatalf("loadSkillEvalRegistry: %v", err)
@@ -650,19 +658,64 @@ func (skillEvalScenarioAdapter) Run(ctx context.Context, request SkillEvalAdapte
 	return SkillEvalAdapterResult{Outcome: "pass", Facts: facts}, nil
 }
 
+// The eval adapter needs a real working-tree binary for every registry case. The
+// build result is identical across cases, so it is produced once per test binary
+// and copied in; rebuilding per case dominated this package's runtime without
+// adding coverage. skillEvalBuiltBinaryDir is removed by TestMain.
+var (
+	skillEvalBinaryOnce sync.Once
+	skillEvalBinaryDir  string
+	skillEvalBinaryPath string
+	skillEvalBinaryErr  error
+)
+
+func skillEvalBuiltBinary(ctx context.Context) (string, error) {
+	skillEvalBinaryOnce.Do(func() {
+		root, absErr := filepath.Abs(filepath.Join("..", ".."))
+		if absErr != nil {
+			skillEvalBinaryErr = absErr
+			return
+		}
+		dir, tempErr := os.MkdirTemp("", "taskrail-skill-eval-bin")
+		if tempErr != nil {
+			skillEvalBinaryErr = tempErr
+			return
+		}
+		skillEvalBinaryDir = dir
+		binary := filepath.Join(dir, skillEvalBinaryName())
+		command := exec.CommandContext(ctx, "go", "build", "-o", binary, "./cmd/taskrail")
+		command.Dir = root
+		if output, buildErr := command.CombinedOutput(); buildErr != nil {
+			skillEvalBinaryErr = fmt.Errorf("build working Taskrail binary: %w: %s", buildErr, output)
+			return
+		}
+		skillEvalBinaryPath = binary
+	})
+	return skillEvalBinaryPath, skillEvalBinaryErr
+}
+
+func skillEvalBinaryName() string {
+	if runtime.GOOS == "windows" {
+		return "taskrail.exe"
+	}
+	return "taskrail"
+}
+
+// skillEvalWorkingBinary places the working-tree binary under rawRoot, where the
+// eval receipts for a case live, so the on-disk layout matches what a maintainer
+// run produces.
 func skillEvalWorkingBinary(ctx context.Context, rawRoot string) (string, error) {
-	root, err := filepath.Abs(filepath.Join("..", ".."))
+	source, err := skillEvalBuiltBinary(ctx)
 	if err != nil {
 		return "", err
 	}
-	binary := filepath.Join(rawRoot, "taskrail")
-	if runtime.GOOS == "windows" {
-		binary += ".exe"
+	contents, err := os.ReadFile(source)
+	if err != nil {
+		return "", err
 	}
-	command := exec.CommandContext(ctx, "go", "build", "-o", binary, "./cmd/taskrail")
-	command.Dir = root
-	if output, err := command.CombinedOutput(); err != nil {
-		return "", fmt.Errorf("build working Taskrail binary: %w: %s", err, output)
+	binary := filepath.Join(rawRoot, skillEvalBinaryName())
+	if err := os.WriteFile(binary, contents, 0o700); err != nil {
+		return "", err
 	}
 	return binary, nil
 }
@@ -772,4 +825,13 @@ func (skillEvalFabricatedFactsAdapter) Run(_ context.Context, request SkillEvalA
 
 func testSkillEvalDigest(value string) string {
 	return fmt.Sprintf("%064x", len(value))
+}
+
+// TestMain removes the shared working-tree binary built for the skill-eval cases.
+func TestMain(m *testing.M) {
+	code := m.Run()
+	if skillEvalBinaryDir != "" {
+		os.RemoveAll(skillEvalBinaryDir)
+	}
+	os.Exit(code)
 }

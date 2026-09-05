@@ -106,6 +106,8 @@ func TestInitLocalCreatesIgnoredOverlay(t *testing.T) {
 }
 
 func TestInitLocalWithSkillsPublishesSkillsAndExclusions(t *testing.T) {
+	t.Parallel()
+
 	repo := t.TempDir()
 	initLocalGitRepo(t, repo)
 	requireRecoveryDirectoryDurability(t, repo)
@@ -153,6 +155,8 @@ func TestInitLocalWithSkillsPublishesSkillsAndExclusions(t *testing.T) {
 }
 
 func TestInitLocalSkillsRefreshPreservesParityAndNormalizesLegacyMarker(t *testing.T) {
+	t.Parallel()
+
 	repo := t.TempDir()
 	initLocalGitRepo(t, repo)
 	requireRecoveryDirectoryDurability(t, repo)
@@ -226,6 +230,8 @@ func TestInitLocalSkillsRefreshPreservesParityAndNormalizesLegacyMarker(t *testi
 }
 
 func TestInitLocalSkillsRefreshRefusesDivergentDestination(t *testing.T) {
+	t.Parallel()
+
 	repo := t.TempDir()
 	initLocalGitRepo(t, repo)
 	requireRecoveryDirectoryDurability(t, repo)
@@ -251,6 +257,8 @@ func TestInitLocalSkillsRefreshRefusesDivergentDestination(t *testing.T) {
 }
 
 func TestInitLocalSkillsRefreshRequiresForce(t *testing.T) {
+	t.Parallel()
+
 	repo := t.TempDir()
 	initLocalGitRepo(t, repo)
 	requireRecoveryDirectoryDurability(t, repo)
@@ -280,6 +288,8 @@ func TestInitLocalSkillsRefreshRequiresForce(t *testing.T) {
 }
 
 func TestInitLocalSkillsRefreshPreservesCurrentBytes(t *testing.T) {
+	t.Parallel()
+
 	repo := t.TempDir()
 	initLocalGitRepo(t, repo)
 	requireRecoveryDirectoryDurability(t, repo)
@@ -336,6 +346,8 @@ func TestInitLocalWithSkillsRejectsPlanDriftWithoutScaffold(t *testing.T) {
 }
 
 func TestInitLocalSkillRecoveryRejectsAdopterContent(t *testing.T) {
+	t.Parallel()
+
 	repo := t.TempDir()
 	initLocalGitRepo(t, repo)
 	requireRecoveryDirectoryDurability(t, repo)
@@ -365,6 +377,8 @@ func TestInitLocalSkillRecoveryRejectsAdopterContent(t *testing.T) {
 }
 
 func TestCreateTaskInLocalStorageReportsLogicalPath(t *testing.T) {
+	t.Parallel()
+
 	repo := t.TempDir()
 	initLocalGitRepo(t, repo)
 	requireRecoveryDirectoryDurability(t, repo)
@@ -393,6 +407,8 @@ func TestCreateTaskInLocalStorageReportsLogicalPath(t *testing.T) {
 }
 
 func TestLifecycleAndTaskWritersUseOnlyLocalStorage(t *testing.T) {
+	t.Parallel()
+
 	repo := t.TempDir()
 	initLocalGitRepo(t, repo)
 	requireRecoveryDirectoryDurability(t, repo)
@@ -471,6 +487,8 @@ func TestLifecycleAndTaskWritersUseOnlyLocalStorage(t *testing.T) {
 }
 
 func TestLocalWritersRefuseCommittedStateAddedAfterDiscovery(t *testing.T) {
+	t.Parallel()
+
 	repo := t.TempDir()
 	initLocalGitRepo(t, repo)
 	requireRecoveryDirectoryDurability(t, repo)
@@ -495,6 +513,8 @@ func TestLocalWritersRefuseCommittedStateAddedAfterDiscovery(t *testing.T) {
 }
 
 func TestLocalWriterTransactionsRejectMixedStateBeforePublication(t *testing.T) {
+	t.Parallel()
+
 	for _, command := range []string{"next", "task new", "verify follow-up"} {
 		t.Run(command, func(t *testing.T) {
 			repo := t.TempDir()
@@ -558,6 +578,8 @@ func localWriterFixture(t *testing.T) (*Service, string) {
 }
 
 func TestLocalLifecycleAndVerificationRollbackStayInOverlay(t *testing.T) {
+	t.Parallel()
+
 	requirePermissionFaultInjection(t)
 	for _, command := range []string{"start", "verify follow-up"} {
 		t.Run(command, func(t *testing.T) {
@@ -612,6 +634,8 @@ func TestLocalLifecycleAndVerificationRollbackStayInOverlay(t *testing.T) {
 }
 
 func TestLocalTaskMutationRollbackStaysInOverlay(t *testing.T) {
+	t.Parallel()
+
 	requirePermissionFaultInjection(t)
 	for _, command := range []string{"new", "rename", "repoint", "dependency"} {
 		t.Run(command, func(t *testing.T) {
@@ -685,6 +709,8 @@ func TestInitLocalHasNoPretransactionScaffold(t *testing.T) {
 }
 
 func TestInitLocalRecoversEmptyPretransactionScaffold(t *testing.T) {
+	t.Parallel()
+
 	repo := t.TempDir()
 	initLocalGitRepo(t, repo)
 	requireRecoveryDirectoryDurability(t, repo)

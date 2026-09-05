@@ -12,6 +12,8 @@ import (
 )
 
 func TestLocalPromotePreviewsAndPublishesSemanticStateAtomically(t *testing.T) {
+	t.Parallel()
+
 	repo := t.TempDir()
 	initLocalGitRepo(t, repo)
 	requireRecoveryDirectoryDurability(t, repo)
@@ -79,6 +81,8 @@ func TestLocalPromotePreviewsAndPublishesSemanticStateAtomically(t *testing.T) {
 }
 
 func TestLocalPromotePreservesInstalledSkillsAndTheirExclusions(t *testing.T) {
+	t.Parallel()
+
 	repo := t.TempDir()
 	initLocalGitRepo(t, repo)
 	requireRecoveryDirectoryDurability(t, repo)
@@ -115,6 +119,8 @@ func TestLocalPromotePreservesInstalledSkillsAndTheirExclusions(t *testing.T) {
 }
 
 func TestLocalPromoteWithSkillsMakesInstalledSkillsVisible(t *testing.T) {
+	t.Parallel()
+
 	repo := t.TempDir()
 	initLocalGitRepo(t, repo)
 	requireRecoveryDirectoryDurability(t, repo)
@@ -170,6 +176,8 @@ func TestLocalPromoteWithSkillsMakesInstalledSkillsVisible(t *testing.T) {
 }
 
 func TestLocalPromoteWithSkillsCompletesPendingSkillState(t *testing.T) {
+	t.Parallel()
+
 	repo := t.TempDir()
 	initLocalGitRepo(t, repo)
 	requireRecoveryDirectoryDurability(t, repo)
@@ -237,6 +245,8 @@ func TestLocalPromoteWithSkillsCompletesPendingSkillState(t *testing.T) {
 }
 
 func TestLocalPromoteWithSkillsReportsAbsentSkills(t *testing.T) {
+	t.Parallel()
+
 	repo := t.TempDir()
 	initLocalGitRepo(t, repo)
 	requireRecoveryDirectoryDurability(t, repo)
@@ -259,6 +269,8 @@ func TestLocalPromoteWithSkillsReportsAbsentSkills(t *testing.T) {
 }
 
 func TestLocalPromoteWithSkillsRefusesOverlappingExternalExclusion(t *testing.T) {
+	t.Parallel()
+
 	repo := t.TempDir()
 	initLocalGitRepo(t, repo)
 	requireRecoveryDirectoryDurability(t, repo)
@@ -280,6 +292,8 @@ func TestLocalPromoteWithSkillsRefusesOverlappingExternalExclusion(t *testing.T)
 }
 
 func TestLocalPromoteWithSkillsRefusesModifiedStampedSkill(t *testing.T) {
+	t.Parallel()
+
 	repo := t.TempDir()
 	initLocalGitRepo(t, repo)
 	requireRecoveryDirectoryDurability(t, repo)
@@ -299,6 +313,8 @@ func TestLocalPromoteWithSkillsRefusesModifiedStampedSkill(t *testing.T) {
 }
 
 func TestLocalPromoteSupportsCustomSemanticPaths(t *testing.T) {
+	t.Parallel()
+
 	repo := t.TempDir()
 	initLocalGitRepo(t, repo)
 	requireRecoveryDirectoryDurability(t, repo)
@@ -339,6 +355,8 @@ func TestLocalPromoteSupportsCustomSemanticPaths(t *testing.T) {
 }
 
 func TestLocalPromoteRefusesStagedConfigMarker(t *testing.T) {
+	t.Parallel()
+
 	repo := t.TempDir()
 	initLocalGitRepo(t, repo)
 	requireRecoveryDirectoryDurability(t, repo)
@@ -358,6 +376,8 @@ func TestLocalPromoteRefusesStagedConfigMarker(t *testing.T) {
 }
 
 func TestRecoveredLocalPromotionValidatesCommittedCandidate(t *testing.T) {
+	t.Parallel()
+
 	repo := t.TempDir()
 	initLocalGitRepo(t, repo)
 	requireRecoveryDirectoryDurability(t, repo)
@@ -378,6 +398,8 @@ func TestRecoveredLocalPromotionValidatesCommittedCandidate(t *testing.T) {
 }
 
 func TestLocalPromoteRefusesCommittedCollisionAndUnknownLocalEntry(t *testing.T) {
+	t.Parallel()
+
 	for _, tc := range []struct {
 		name    string
 		prepare func(t *testing.T, svc *Service, repo string)

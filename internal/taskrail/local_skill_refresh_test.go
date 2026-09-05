@@ -101,6 +101,8 @@ func TestInitLocalSkillsRefreshRejectsPostPlanExclusionChange(t *testing.T) {
 }
 
 func TestLocalSkillRefreshRecoveryShapeExcludesMigrationMembers(t *testing.T) {
+	t.Parallel()
+
 	snapshots := []durabletx.Evidence{
 		{Kind: durabletx.Worktree, Reported: ".agents/skills/taskrail-repair/SKILL.md"},
 		{Kind: durabletx.Managed, Reported: ".taskrail/config.yml"},
@@ -111,6 +113,8 @@ func TestLocalSkillRefreshRecoveryShapeExcludesMigrationMembers(t *testing.T) {
 }
 
 func TestValidateInitRecoveryAcceptsLocalSkillRefreshCandidate(t *testing.T) {
+	t.Parallel()
+
 	repo := t.TempDir()
 	initLocalGitRepo(t, repo)
 	requireRecoveryDirectoryDurability(t, repo)

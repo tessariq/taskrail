@@ -65,6 +65,8 @@ func TestPlanLocalSkillsInventoriesFreshDestinationsWithoutMutation(t *testing.T
 }
 
 func TestPlanLocalSkillsClassifiesDestinationSafety(t *testing.T) {
+	t.Parallel()
+
 	repo := t.TempDir()
 	initLocalGitRepo(t, repo)
 	requireRecoveryDirectoryDurability(t, repo)
@@ -163,6 +165,8 @@ func TestPlanLocalSkillsClassifiesDestinationSafety(t *testing.T) {
 }
 
 func TestPlanLocalSkillsRefusesStagedAbsentDestination(t *testing.T) {
+	t.Parallel()
+
 	repo := t.TempDir()
 	initLocalGitRepo(t, repo)
 	requireRecoveryDirectoryDurability(t, repo)
@@ -197,6 +201,8 @@ func TestPlanLocalSkillsRefusesStagedAbsentDestination(t *testing.T) {
 }
 
 func TestPlanLocalSkillsRefusesUnexpectedSubtreeContent(t *testing.T) {
+	t.Parallel()
+
 	repo := t.TempDir()
 	initLocalGitRepo(t, repo)
 	requireRecoveryDirectoryDurability(t, repo)
@@ -228,6 +234,8 @@ func TestPlanLocalSkillsRefusesUnexpectedSubtreeContent(t *testing.T) {
 }
 
 func TestPlanLocalSkillsRejectsSymlinkedExclusionStore(t *testing.T) {
+	t.Parallel()
+
 	repo := t.TempDir()
 	initLocalGitRepo(t, repo)
 	requireRecoveryDirectoryDurability(t, repo)
@@ -253,6 +261,8 @@ func TestPlanLocalSkillsRejectsSymlinkedExclusionStore(t *testing.T) {
 }
 
 func TestPlanLocalSkillsRejectsSymlinkedExclusionParent(t *testing.T) {
+	t.Parallel()
+
 	repo := t.TempDir()
 	initLocalGitRepo(t, repo)
 	requireRecoveryDirectoryDurability(t, repo)
@@ -278,12 +288,16 @@ func TestPlanLocalSkillsRejectsSymlinkedExclusionParent(t *testing.T) {
 }
 
 func TestGitIgnoredExactRefusesFailedInspection(t *testing.T) {
+	t.Parallel()
+
 	if _, err := gitIgnoredExact(t.TempDir(), ".agents/skills/probe"); err == nil {
 		t.Fatal("failed Git ignore inspection was treated as not ignored")
 	}
 }
 
 func TestPlanLocalSkillsClassifiesExclusionOwnership(t *testing.T) {
+	t.Parallel()
+
 	repo := t.TempDir()
 	initLocalGitRepo(t, repo)
 	requireRecoveryDirectoryDurability(t, repo)
@@ -339,6 +353,8 @@ func TestPlanLocalSkillsClassifiesExclusionOwnership(t *testing.T) {
 }
 
 func TestPlanLocalSkillsReportsLinkedWorktreeExclusionScope(t *testing.T) {
+	t.Parallel()
+
 	source := t.TempDir()
 	initLocalGitRepo(t, source)
 	writeFile(t, filepath.Join(source, "README.md"), "# source\n")
@@ -370,6 +386,8 @@ func TestPlanLocalSkillsReportsLinkedWorktreeExclusionScope(t *testing.T) {
 }
 
 func TestPlanLocalSkillsReportsPrimaryWorktreeExclusionScope(t *testing.T) {
+	t.Parallel()
+
 	source := t.TempDir()
 	initLocalGitRepo(t, source)
 	writeFile(t, filepath.Join(source, "README.md"), "# source\n")
