@@ -113,7 +113,7 @@ Guidance for coding agents working in the Taskrail repository.
 ### Git Hooks (Optional)
 
 - Install once: `task hooks:install` (runs `lefthook install`).
-- `lefthook.yml` wires local hooks that mirror CI: `pre-commit` runs `gofmt`, `go vet ./...`, `taskrail validate`, the skill package-parity check, and the binary freshness guard (`task taskrail:check`, so a stale binary cannot write committed tracked-work state); `commit-msg` enforces Conventional Commits with descriptive bodies and rejects agent-attribution trailers; `pre-push` runs `go test ./...`.
+- `lefthook.yml` wires local hooks that mirror CI: `pre-commit` runs `gofmt`, `go vet ./...`, `taskrail validate`, the skill package-parity check, and the binary freshness guard (`task taskrail:check`, so a stale binary cannot write committed tracked-work state); `commit-msg` enforces Conventional Commits with descriptive bodies and rejects agent-attribution trailers; `pre-push` runs `task test:short` (`go test -short ./...`), which skips the working-binary skill-eval suite CI still runs in full.
 - Hooks are an opt-in convenience. CI remains the authoritative gate. Do not bypass with `--no-verify`.
 
 ## Repository Workflow Rules
