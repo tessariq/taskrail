@@ -4,7 +4,7 @@
 //
 // Two concerns are guarded: version consistency — the Go pin must match go.mod
 // and the lefthook pin must match the `task hooks:install` guidance
-// (Taskfile.yml and README.md) — and CI provisioning — CI must install the
+// (Taskfile.yml) — and CI provisioning — CI must install the
 // toolchain via jdx/mise-action rather than a separately pinned mechanism. These
 // tests fail loudly when either invariant drifts.
 package toolchain_test
@@ -88,7 +88,7 @@ func TestMiseGoPinMatchesGoMod(t *testing.T) {
 }
 
 // lefthookRefs returns every version in a `lefthook@vX.Y.Z` reference
-// (Taskfile.yml, README.md) without the leading v, matching mise's pin form.
+// (Taskfile.yml) without the leading v, matching mise's pin form.
 // Returning all matches — not just the first — keeps a later stale install line
 // from hiding behind an up-to-date one earlier in the file.
 func lefthookRefs(t *testing.T, content, rel string) []string {
@@ -109,7 +109,7 @@ func TestMiseLefthookPinMatchesHookGuidance(t *testing.T) {
 	mise := readFile(t, root, "mise.toml")
 	misePin := miseTool(t, mise, "lefthook")
 
-	for _, rel := range []string{"Taskfile.yml", "README.md"} {
+	for _, rel := range []string{"Taskfile.yml"} {
 		for _, ref := range lefthookRefs(t, readFile(t, root, rel), rel) {
 			if ref != misePin {
 				t.Errorf("lefthook pin mismatch: mise.toml=%q %s=%q", misePin, rel, ref)

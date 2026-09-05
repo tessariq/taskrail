@@ -142,8 +142,8 @@ func TestWorkflowContractCurrentGuidanceRetiresSourceCheckoutLoopAndKeepsProvide
 		"CHANGELOG.md": {
 			"## Unreleased", "provider-neutral", "workflow",
 		},
-		"README.md": {
-			"provider-agnostic", "caller-owned executable", "does not embed credentials",
+		"docs/loop.md": {
+			"provider-neutral", "caller-owned executable", "does not embed credentials",
 		},
 		"AGENTS.md": {
 			"Never hand-edit", "taskrail start", "taskrail validate",
