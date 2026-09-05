@@ -8,6 +8,15 @@
 pre-commit:
   parallel: true
   commands:
+    # Identity is checked on every commit, not per file: an agent runner's git
+    # config carries no staged file of its own to key off. A runner that keeps
+    # its own name credits the agent through the author header, which is the
+    # same claim the forbidden trailers make in the body.
+    author-identity:
+      run: bash scripts/check-author.sh
+    guard-checkers:
+      glob: "{lefthook.yml,Taskfile.yml,scripts/check-commit-msg.sh,scripts/check-attribution.sh,scripts/check-author.sh,scripts/check-push-messages.sh,scripts/check-*-test.sh}"
+      run: task test:commit-msg && task test:author && task test:push-messages
     gofmt:
       glob: "*.go"
       run: |
@@ -37,5 +46,13 @@ commit-msg:
 
 pre-push:
   commands:
+    # The commit-msg hook is skipped by `--no-verify`, by a rebase, and by an
+    # amend that reuses a message. This is the last gate before history leaves
+    # the machine, and it runs before the suite: a push that has to be
+    # rewritten anyway should not first pay for the tests.
+    message-policy:
+      priority: 1
+      run: bash scripts/check-push-messages.sh
     tests:
+      priority: 2
       run: task test:short

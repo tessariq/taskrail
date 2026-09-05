@@ -31,6 +31,18 @@ case "$subject" in
       echo "got: ${subject:-<empty>}" >&2
       exit 1
     fi
+    if printf '%s' "$subject" | grep -qE 'T-[0-9]+' \
+      && ! printf '%s' "$subject" | grep -qE '\(T-[0-9]+\)$'; then
+      echo "check-commit-msg: task references must use a short-key subject suffix:" >&2
+      echo "  feat: add version reporting to taskrail CLI (T-012)" >&2
+      exit 1
+    fi
+    subject_without_task_suffix="$(printf '%s' "$subject" | sed -E 's/ \(T-[0-9]+\)$//')"
+    if printf '%s' "$subject_without_task_suffix" | grep -qE 'T-[0-9]+'; then
+      echo "check-commit-msg: task references must use a short-key subject suffix:" >&2
+      echo "  feat: add version reporting to taskrail CLI (T-012)" >&2
+      exit 1
+    fi
     ;;
 esac
 
@@ -61,17 +73,11 @@ if [[ "$require_body" == true ]]; then
   fi
 fi
 
-if printf '%s' "$subject" | grep -qE '\(T-[0-9]+-[^)]+\)$'; then
-  echo "check-commit-msg: use only the short task key in the subject suffix:" >&2
-  echo "  (T-155), not (T-155-descriptive-task-slug)" >&2
-  exit 1
-fi
-
-# Reject automated-attribution lines.
-if grep -qiE '^[[:space:]]*(co-authored-by|assisted-by):|generated with[[:space:]]' "$msg_file" \
-  || grep -qF '🤖' "$msg_file"; then
+# The attribution policy lives in one script, so the pre-push scan refuses
+# exactly what this hook refuses.
+if ! bash "$(dirname "${BASH_SOURCE[0]}")/check-attribution.sh" "$msg_file"; then
   echo "check-commit-msg: remove automated-attribution lines" >&2
-  echo "  (Co-authored-by: / Assisted-by: / 'Generated with ...' / 🤖) — attribution is disabled for this repo." >&2
+  echo "  (Co-authored-by: / Assisted-by: / agent session links / 🤖) — attribution is disabled for this repo." >&2
   exit 1
 fi
 

@@ -210,7 +210,9 @@ CI (`.github/workflows/ci.yml`) is the authoritative gate and runs the build/tes
 matrix over Linux, Windows, and macOS. Optional
 [lefthook](https://github.com/evilmartians/lefthook) hooks mirror it locally
 (`task hooks:install`), with `pre-push` on the shorter `task test:short` lane;
-do not bypass them with `--no-verify`. See
+`pre-commit` also runs the agent-identity guard, and `commit-msg`/`pre-push`
+refuse agent-attribution trailers and session links. Do not bypass them with
+`--no-verify`. See
 [CONTRIBUTING.md](CONTRIBUTING.md) for the PR checklist and the AI-assisted
 contribution policy, and
 [AGENTS.md](AGENTS.md#toolchain-and-environment) for the binary-freshness

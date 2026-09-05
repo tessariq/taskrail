@@ -84,6 +84,21 @@ tasks:
       - go test -v ./internal/durablefs ./internal/durabletx ./internal/repolock ./internal/repotx
       - go test -v ./internal/taskrail -run '^(TestParseFrontmatterHandlesCRLF|TestAppendTaskNoteTwiceKeepsOneHeading|TestApplyImportDraftResolvesSpecRefAgainstPendingImportedSpec|TestDecodeDecompositionBundlePreservesCompleteValidBundle|TestDiscoverPathsLinkedWorktreePreservesGitIdentities)$'
 
+  test:commit-msg:
+    desc: Test the commit-message policy
+    cmds:
+      - scripts/check-commit-msg-test.sh
+
+  test:author:
+    desc: Test the agent-identity author guard
+    cmds:
+      - scripts/check-author-test.sh
+
+  test:push-messages:
+    desc: Test the pre-push attribution guard
+    cmds:
+      - scripts/check-push-messages-test.sh
+
   test:workflow-contract:
     desc: Run the manifest-selected deterministic workflow-contract suites
     cmds:
