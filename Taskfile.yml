@@ -99,6 +99,11 @@ tasks:
     cmds:
       - scripts/check-push-messages-test.sh
 
+  test:orb-setup:
+    desc: Test the committed Amp orb lifecycle setup
+    cmds:
+      - scripts/check-orb-setup-test.sh
+
   test:workflow-contract:
     desc: Run the manifest-selected deterministic workflow-contract suites
     cmds:

@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$repo_root"
+
+if ! command -v mise >/dev/null 2>&1; then
+  curl https://mise.run | sh
+fi
+export PATH="$HOME/.local/bin:$PATH"
+
+profile_marker='# Taskrail mise activation'
+if ! grep -Fqx "$profile_marker" "$HOME/.bash_profile" 2>/dev/null; then
+  cat >>"$HOME/.bash_profile" <<'EOF'
+
+# Taskrail mise activation
+if [ -x "$HOME/.local/bin/mise" ]; then
+  eval "$("$HOME/.local/bin/mise" activate bash)"
+fi
+EOF
+fi
+
+hooks_dir="$(cd "$(git rev-parse --git-common-dir)" && pwd)/hooks"
+git config --local core.hooksPath "$hooks_dir"
+
+mise trust --yes "$repo_root/mise.toml"
+time mise run setup

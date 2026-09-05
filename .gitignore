@@ -55,3 +55,6 @@ go.work.sum
 
 # JetBrains IDE
 .idea/
+
+# Amp orb portal runtime metadata
+/.amp/portals/*

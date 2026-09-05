@@ -15,8 +15,8 @@ pre-commit:
     author-identity:
       run: bash scripts/check-author.sh
     guard-checkers:
-      glob: "{lefthook.yml,Taskfile.yml,scripts/check-commit-msg.sh,scripts/check-attribution.sh,scripts/check-author.sh,scripts/check-push-messages.sh,scripts/check-*-test.sh}"
-      run: task test:commit-msg && task test:author && task test:push-messages
+      glob: "{.agents/setup,.agents/resume,lefthook.yml,Taskfile.yml,scripts/check-commit-msg.sh,scripts/check-attribution.sh,scripts/check-author.sh,scripts/check-push-messages.sh,scripts/check-*-test.sh}"
+      run: task test:commit-msg && task test:author && task test:push-messages && task test:orb-setup
     gofmt:
       glob: "*.go"
       run: |

@@ -16,6 +16,7 @@ fail() {
 repo="$tmp_dir/repo"
 git init -q "$repo"
 cd "$repo"
+git config core.hooksPath .git/hooks
 git config user.email fixture@example.com
 git config user.name Fixture
 git config commit.gpgsign false

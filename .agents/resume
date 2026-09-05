@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$repo_root"
+export PATH="$HOME/.local/bin:$PATH"
+
+hooks_dir="$(cd "$(git rev-parse --git-common-dir)" && pwd)/hooks"
+git config --local core.hooksPath "$hooks_dir"
+mise exec -- lefthook install
