@@ -5,6 +5,41 @@ Deep-dive reference for command behaviors that need more than a flag list. The
 → verify`) and installation; this page holds the contracts and edge cases behind
 the individual commands.
 
+## Command effects
+
+Taskrail commands intentionally use different write conventions based on risk:
+
+| Class | Current examples | Effect |
+|---|---|---|
+| Read-only | `validate`, `status`, `stats`, `coverage`, `task show`, `spec list/show/diff`, `prompt list/show`, `loop --dry-run`, `review show`, `lock status` | Inspect only; never rewrite tracked planning state. |
+| Mode-dependent initialization | `init` | Fresh, unmarked-standard, and current-layout adoption/repair paths may write immediately; detected migration or retrofit paths preview unless `--apply` is supplied. Fresh/adopted writes, including `--with-skills`, publish as one locked normal transaction. A repository at layout 1 reports the read-only layout 2 upgrade preview instead — see [migration.md](migration.md). |
+| Preview by default | `retrofit`, `repair` | Report a candidate; `--apply` is the write opt-in. Retrofit apply publishes its complete scaffold under the repository lock, while its preview rechecks inputs without creating lock or transaction artifacts. |
+| Local semantic promotion | `local promote` | Previews ignored local specs, planning, prompts, exclusions, and installed-skill preservation with zero writes. `--apply` atomically publishes semantic bytes into committed paths, removes only their exact local sources and local-mode exclusions, and never creates a Git commit. `--with-skills` separately makes only validated, unchanged managed skills visible by removing their exact exclusions. |
+| Apply with preview option | `task rename`, `task repoint`, `task release`, `task author`, `task dependency add/remove` | Write by default; `--dry-run` validates the candidate first. |
+| Lifecycle/state writers | `next`, `start`, `complete`, `block`, `unblock`, `task release`, `verify`, `spec activate`, `task new` | Rewrite `STATE.md` and sometimes task files; inspect `git status` afterward. |
+| Operator lock recovery | `lock clear <lock-id> --expect-sha256 <digest>` | Removes only the unchanged mutation lock observed via `lock status`; refuses a provably live same-host owner and never touches retained transaction data. Never rewrites tracked planning state. |
+| Operator transaction recovery | `recover <transaction-id> [--take-over-lock <lock-id> --expect-sha256 <digest>] [--apply]` | Previews the single safe action a retained durable transaction derives (restore-original, accept-candidate, clear-fence); `--apply` performs exactly that action. A held lock requires the paired, exact observed takeover operands; a live same-host owner still refuses. |
+| Reviewed import writer | `import --apply <draft>` | Validates an external draft and writes its bounded task/spec/state set. |
+| Review publisher | `review publish --type task\|spec\|decomposition\|workflow` | Validates an ignored proposal and exact reviewed subjects; `--dry-run` is read-only. Workflow apply durably publishes its report and `INDEX.json` as one recoverable pair; other types create one absent review session directory. Neither changes task lifecycle or planning state. |
+
+`next` is not a read-only selection probe: it persists `next_action` and
+`updated_at`. Use `status` when you need the same next-task computation without a
+tracked write.
+
+`next`, `start`, `complete`, `block`, `unblock`, `task release`, and `verify` take
+the repository mutation lock and publish their exact state/task write set (plus
+verification artifacts and any `--create-followup` task) transactionally. So do the
+task mutation writers — `task new`, `task rename`, `task repoint`, `task author`,
+and `task dependency add/remove`: rename publishes its coupled move by filesystem
+operations (no `git mv` staging), and each writer publishes only the task and state
+files it declares. A concurrent writer refuses with `lock_held`; unselected task
+bytes are never re-encoded.
+
+Each successful `complete` also creates a fresh random lower-case 32-hex
+`completion_id`, persists it on the completed task, and returns that exact value.
+Completing again replaces the identity, and completion clears prior task-level
+verification metadata without changing repository-level verification history.
+
 ## Machine output envelope
 
 Every `--json` command — including the `start`, `complete`, and `block`
