@@ -20,8 +20,25 @@ func newLoopCmd() *cobra.Command {
 	delivery := loopStringFlag{target: &input.Delivery}
 	reviewAdapter := loopStringFlag{target: &input.ReviewAdapter}
 	cmd := &cobra.Command{
-		Use:   "loop",
-		Short: "Preview deterministic unattended task execution",
+		Use:   "loop [flags] -- <command> <args...>",
+		Short: "Run deterministic unattended task execution",
+		Long: "Select tracked work deterministically and execute it: the default " +
+			"invocation launches one fresh external child process per selected task, " +
+			"writes the rendered prompt to its stdin, and validates the repository " +
+			"state that child leaves behind. Use --dry-run for the preview-only " +
+			"mode, which accepts no child command and reports the selected task and " +
+			"rendered prompt without launching one. Execution inside the Taskrail " +
+			"source checkout is unsupported.\n\n" +
+			"--parallel greater than one runs that many isolated workers " +
+			"concurrently in private repository clones, and requires committed " +
+			"storage in a clean, attached worktree. Under the default " +
+			"--delivery local, Taskrail replays each successful candidate as one " +
+			"integration commit in a separate integration clone and, only after the " +
+			"aggregate gate passes, fast-forwards the attached branch and worktree " +
+			"to the integrated head; it never pushes, merges, or opens pull " +
+			"requests itself. Under --delivery review, publishing, opening, and " +
+			"merging changes is performed by the caller-owned --review-adapter " +
+			"executable that Taskrail invokes.",
 		Args: machineArgs(func(cmd *cobra.Command, args []string) error {
 			if err := cobra.ArbitraryArgs(cmd, args); err != nil {
 				return err
@@ -65,7 +82,7 @@ func newLoopCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&input.DryRun, "dry-run", false, "report the selected task without launching a child")
 	cmd.Flags().IntVar(&input.MaxIterations, "max-iterations", 1, "maximum tasks to run")
 	input.Parallel, input.CloneDepth, input.KeepWorkspaces, input.Delivery = 1, "1", "failure", "local"
-	cmd.Flags().Var(&parallel, "parallel", "maximum isolated tasks to preview")
+	cmd.Flags().Var(&parallel, "parallel", "concurrently executed isolated tasks")
 	cmd.Flags().Var(&workspaceRoot, "workspace-root", "existing private root for parallel workspaces")
 	cmd.Flags().Var(&cloneDepth, "clone-depth", "parallel clone depth or full")
 	cmd.Flags().Var(&keepWorkspaces, "keep-workspaces", "parallel workspace retention")

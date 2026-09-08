@@ -6,6 +6,16 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ### Fixed
 
+- `taskrail loop --help` now describes the command as executing rather than
+  previewing. The default invocation launches one external child process per
+  selected task, and `--dry-run` is named as the preview-only mode; `--parallel`
+  reads as a count of concurrently executed isolated tasks and states the
+  parallel blast radius per delivery mode (clones and committed-storage
+  requirement always, integration commits and the attached-branch fast-forward
+  under `--delivery local`, caller-owned adapter publish/merge under
+  `--delivery review`), source-checkout execution is called out as unsupported,
+  and the usage line shows the required `-- <command>`. Help text only: no flag,
+  default, or machine-result change.
 - `taskrail-decompose` now treats repository initialization and layout migration
   as caller-owned preconditions, stopping without mutation when its required
   layout, active spec, validation, or published review inputs are unavailable.
