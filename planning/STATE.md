@@ -1,6 +1,6 @@
 ---
 schema_version: 1
-updated_at: "2026-09-08T11:56:17Z"
+updated_at: "2026-09-08T17:55:47Z"
 active_spec_version: v0.5.0
 active_spec_path: specs/v0.5.0.md
 current_task: ""
@@ -8,10 +8,10 @@ current_task_title: ""
 status_summary: blocked
 blockers:
     - 'T-174-run-the-v0-5-0-gap-and-drift-release-gate: Release gate blocked: the final skill-evaluation scenarios did not establish the committed and positive-path states their prompts claimed, allowing deterministic passes over semantically mismatched fixtures; T-385 owns remediation before one fresh final run.'
-    - 'T-385-make-skill-evaluation-scenarios-match-their-claims: Deterministic scope is complete and green: the registry refuses a case whose setup does not commit a real HEAD and create a tracked-work subject, a failed setup action now grades the arm fail, git-worktree-clean requires an actually empty worktree, and all 32 cases execute end to end against the working binary. The remaining acceptance criterion is a focused model-backed replay through the caller-owned provider adapter; provider execution and credentials are operator-owned, so this unattended run did not invoke one.'
-next_action: Resolve verification findings for T-385-make-skill-evaluation-scenarios-match-their-claims
-last_verification_result: fail for T-385-make-skill-evaluation-scenarios-match-their-claims at 2026-09-08T11:56:17Z id e2300a54329669025922479ac302c35b
-last_verification_id: e2300a54329669025922479ac302c35b
+next_action: Select the next eligible task
+last_verification_result: pass for T-385-make-skill-evaluation-scenarios-match-their-claims at 2026-09-08T17:55:47Z id 8f35481c18dce63370f0d7434a7beaa2
+last_verification_id: 8f35481c18dce63370f0d7434a7beaa2
+last_verified_completion_id: 5d1baa02b8bb4e5e4e4850d4e2ae9a83
 relevant_artifacts: []
 continuation_notes:
     - This repository is temporarily dogfooding bootstrap workflow tooling until Taskrail v0.1.0 exists.
@@ -34,15 +34,14 @@ continuation_notes:
 ## Blockers
 
 - T-174-run-the-v0-5-0-gap-and-drift-release-gate: Release gate blocked: the final skill-evaluation scenarios did not establish the committed and positive-path states their prompts claimed, allowing deterministic passes over semantically mismatched fixtures; T-385 owns remediation before one fresh final run.
-- T-385-make-skill-evaluation-scenarios-match-their-claims: Deterministic scope is complete and green: the registry refuses a case whose setup does not commit a real HEAD and create a tracked-work subject, a failed setup action now grades the arm fail, git-worktree-clean requires an actually empty worktree, and all 32 cases execute end to end against the working binary. The remaining acceptance criterion is a focused model-backed replay through the caller-owned provider adapter; provider execution and credentials are operator-owned, so this unattended run did not invoke one.
 
 ## Last Verification
 
-- fail for T-385-make-skill-evaluation-scenarios-match-their-claims at 2026-09-08T11:56:17Z id e2300a54329669025922479ac302c35b
+- pass for T-385-make-skill-evaluation-scenarios-match-their-claims at 2026-09-08T17:55:47Z id 8f35481c18dce63370f0d7434a7beaa2
 
 ## Next Action
 
-- Resolve verification findings for T-385-make-skill-evaluation-scenarios-match-their-claims
+- Select the next eligible task
 
 ## Relevant Artifacts
 
@@ -56,6 +55,6 @@ continuation_notes:
 
 - todo: 51
 - in_progress: 0
-- completed: 334
-- blocked: 2
+- completed: 335
+- blocked: 1
 - cancelled: 0
