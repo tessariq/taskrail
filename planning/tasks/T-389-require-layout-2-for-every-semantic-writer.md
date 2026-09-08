@@ -4,7 +4,8 @@ title: Require layout 2 for every v0.5 semantic writer
 status: todo
 priority: high
 spec_ref: specs/v0.5.0.md#layout-compatibility-and-upgrade
-dependencies: []
+dependencies:
+    - T-391-read-and-write-state-schema-2-at-layout-2
 updated_at: "2026-09-08T19:21:25Z"
 ---
 
@@ -83,3 +84,11 @@ repository, and raising the layout without the gate leaves the erasure open.
   documented upgrade.
 
 ## Implementation Notes
+
+- Blocked before `start` on a prerequisite discovered while sizing: the layout-2
+  raise requires this repository's own layout-1 marker to be upgraded, and the
+  upgrade currently produces a repository the same binary reports as invalid
+  (`validate` fails with `state schema_version must be 1`, and every lifecycle
+  writer reports `validation.valid: false`). The ordinary state reader,
+  validator, and writers never learned state schema 2; only the T-157 migration
+  candidate did. Recorded as dependency T-391, which must land first.
