@@ -284,7 +284,13 @@ func runSkillEvalArm(ctx context.Context, input SkillEvalRunInput, evaluation Sk
 	}
 	result, err := input.Adapter.Run(ctx, SkillEvalAdapterRequest{Case: evaluation, Arm: arm, FixtureRoot: fixtureRoot, RawRoot: rawRoot})
 	if err != nil {
-		return nil, nil
+		// Only a caller-declared unavailable arm is a reportable gap that leaves
+		// the run incomplete. Any other adapter failure is a defect in this run
+		// and must name itself rather than vanish into a lower arm count.
+		if errors.Is(err, errSkillEvalArmUnavailable) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("%s arm: %w", arm, err)
 	}
 	if !validSkillEvalRunOutcome(result.Outcome) {
 		return nil, nil

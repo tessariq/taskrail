@@ -119,6 +119,20 @@ func TestSkillEvalRunnerMarksMissingCandidateIncomplete(t *testing.T) {
 	}
 }
 
+func TestSkillEvalRunnerFailsClosedOnUnexpectedAdapterErrors(t *testing.T) {
+	// An arm the caller declares unavailable is a reportable gap; any other
+	// adapter error is a defect in the run. Swallowing both alike turned a real
+	// host failure into a silent arm count mismatch with no cause recorded.
+	in := skillEvalTestInput(t, skillEvalBrokenAdapter{})
+	_, err := (SkillEvalRunner{}).Execute(context.Background(), in)
+	if err == nil {
+		t.Fatal("Execute silently dropped an arm whose adapter failed")
+	}
+	if !strings.Contains(err.Error(), "candidate") || !strings.Contains(err.Error(), "disk on fire") {
+		t.Fatalf("adapter failure must name the arm and cause: %v", err)
+	}
+}
+
 func TestSkillEvalRunnerRejectsDirectRegistryMutations(t *testing.T) {
 	for _, mutate := range []func(*SkillEvalCase){
 		func(item *SkillEvalCase) { item.Assertions = []string{"assertion", "assertion"} },
@@ -546,6 +560,15 @@ type skillEvalMissingAdapter struct{}
 func (skillEvalMissingAdapter) Run(_ context.Context, request SkillEvalAdapterRequest) (SkillEvalAdapterResult, error) {
 	if request.Arm == "candidate" {
 		return SkillEvalAdapterResult{}, errSkillEvalArmUnavailable
+	}
+	return skillEvalTestAdapter{}.Run(context.Background(), request)
+}
+
+type skillEvalBrokenAdapter struct{}
+
+func (skillEvalBrokenAdapter) Run(_ context.Context, request SkillEvalAdapterRequest) (SkillEvalAdapterResult, error) {
+	if request.Arm == "candidate" {
+		return SkillEvalAdapterResult{}, fmt.Errorf("disk on fire")
 	}
 	return skillEvalTestAdapter{}.Run(context.Background(), request)
 }

@@ -23,6 +23,10 @@ All notable user-visible changes to Taskrail will be documented in this file.
   refused before any provider is invoked, a failed setup action now grades the
   arm `fail`, and `git-worktree-clean` now requires an actually empty worktree
   instead of an unchanged dirty one.
+- Maintainer skill-evaluation runs now fail closed on an unexpected adapter
+  error. Only an arm the caller explicitly reports as unavailable leaves the run
+  incomplete; any other adapter failure now names its case, arm, and cause
+  instead of silently reducing the staged arm count.
 - Verification validation now accepts absent producer-local predecessor
   artifacts in fresh clones while still rejecting malformed or contradictory
   predecessor evidence that is locally available.
