@@ -142,7 +142,7 @@ func writeSkillEvalFixture(t *testing.T, root, skill, mode, caseID string, basel
 	if mode == "local" {
 		init = `["taskrail","init","--local","--json"]`
 	}
-	caseJSON := `{"schema_version":1,"case_id":"` + caseID + `","skill":"` + skill + `","storage_mode":"` + mode + `","baseline_required":` + strconv.FormatBool(baseline) + `,"prompt":"run","expected_observation":"observe","assertions":["assert"],"scenario":{"fixture":"fixture","sandbox":"` + caseID + `","setup":[{"id":"initialize-git","operation":"git-command","command":["git","init"]},{"id":"initialize-taskrail","operation":"taskrail-command","command":` + init + `}],"actions":[{"id":"assert","operation":"taskrail-command","command":["taskrail","validate","--json"]}]},"oracle":{"assertions":[{"assertion":"assert","action":"assert","predicate":"command-exit-zero"}]},"human_review_questions":["review?"]}`
+	caseJSON := `{"schema_version":1,"case_id":"` + caseID + `","skill":"` + skill + `","storage_mode":"` + mode + `","baseline_required":` + strconv.FormatBool(baseline) + `,"prompt":"run","expected_observation":"observe","assertions":["assert"],"scenario":{"fixture":"fixture","sandbox":"` + caseID + `","setup":[{"id":"initialize-git","operation":"git-command","command":["git","init"]},{"id":"initialize-taskrail","operation":"taskrail-command","command":` + init + `},{"id":"create-tracked-subject-task","operation":"taskrail-command","command":["taskrail","task","new","--title","Evaluation subject task","--json"]},{"id":"stage-seeded-repository","operation":"git-command","command":["git","add","--all"]},{"id":"commit-seeded-repository","operation":"git-command","command":["git","commit","--message","Seed"]}],"actions":[{"id":"assert","operation":"taskrail-command","command":["taskrail","validate","--json"]}]},"oracle":{"assertions":[{"assertion":"assert","action":"assert","predicate":"command-exit-zero"}]},"human_review_questions":["review?"]}`
 	if err := os.WriteFile(filepath.Join(caseRoot, "case.json"), []byte(caseJSON), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -187,5 +187,45 @@ func assertSkillEvalCoverage(t *testing.T, registry []SkillEvalCase, skill strin
 		if !seen[mode] {
 			t.Errorf("%s has no %s case", skill, mode)
 		}
+	}
+}
+
+// skillEvalClaimedStateCase is the canonical shape a scenario must have to match
+// the state its prompt claims: a real commit before agent execution and a
+// concrete tracked-work subject to exercise.
+const skillEvalClaimedStateCase = `{"schema_version":1,"case_id":"autonomous-task-committed","skill":"autonomous-task","storage_mode":"committed","baseline_required":true,"prompt":"run the documented workflow","expected_observation":"it remains valid","assertions":["uses JSON"],"scenario":{"fixture":"fixture","sandbox":"autonomous-task-committed","setup":[{"id":"initialize-git-worktree","operation":"git-command","command":["git","init"]},{"id":"initialize-taskrail-repository","operation":"taskrail-command","command":["taskrail","init","--json"]},{"id":"create-tracked-subject-task","operation":"taskrail-command","command":["taskrail","task","new","--title","Evaluation subject task","--json"]},{"id":"stage-seeded-repository","operation":"git-command","command":["git","add","--all"]},{"id":"commit-seeded-repository","operation":"git-command","command":["git","commit","--message","Seed"]}],"actions":[{"id":"uses-json","operation":"taskrail-command","command":["taskrail","validate","--json"]}]},"oracle":{"assertions":[{"assertion":"uses JSON","action":"uses-json","predicate":"command-exit-zero"}]},"human_review_questions":["was it safe?"]}`
+
+func TestParseSkillEvalCaseRequiresClaimedScenarioState(t *testing.T) {
+	if _, err := parseSkillEvalCase([]byte(skillEvalClaimedStateCase)); err != nil {
+		t.Fatalf("parseSkillEvalCase on a complete scenario: %v", err)
+	}
+	// `git commit -n` skips hooks and still commits, so it must stay accepted.
+	hookless := strings.Replace(skillEvalClaimedStateCase, `["git","commit","--message","Seed"]`, `["git","commit","-n","--message","Seed"]`, 1)
+	if _, err := parseSkillEvalCase([]byte(hookless)); err != nil {
+		t.Fatalf("parseSkillEvalCase on a hook-skipping commit: %v", err)
+	}
+	for _, tc := range []struct {
+		name   string
+		mutate func(string) string
+		want   string
+	}{
+		{"unborn committed repository", func(s string) string {
+			return strings.Replace(s, `,{"id":"stage-seeded-repository","operation":"git-command","command":["git","add","--all"]},{"id":"commit-seeded-repository","operation":"git-command","command":["git","commit","--message","Seed"]}`, "", 1)
+		}, "clean committed HEAD"},
+		{"commit that creates nothing", func(s string) string {
+			return strings.Replace(s, `["git","commit","--message","Seed"]`, `["git","commit","--dry-run"]`, 1)
+		}, "clean committed HEAD"},
+		{"subject command that creates nothing", func(s string) string {
+			return strings.Replace(s, `["taskrail","task","new","--title","Evaluation subject task","--json"]`, `["taskrail","task","new","--help"]`, 1)
+		}, "tracked-work subject"},
+		{"missing positive-path subject", func(s string) string {
+			return strings.Replace(s, `{"id":"create-tracked-subject-task","operation":"taskrail-command","command":["taskrail","task","new","--title","Evaluation subject task","--json"]},`, "", 1)
+		}, "tracked-work subject"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := parseSkillEvalCase([]byte(tc.mutate(skillEvalClaimedStateCase))); err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("parseSkillEvalCase error = %v, want %q", err, tc.want)
+			}
+		})
 	}
 }

@@ -15,6 +15,14 @@ All notable user-visible changes to Taskrail will be documented in this file.
 - Maintainer skill-evaluation cases now initialize real temporary Git and
   Taskrail repositories, execute only documented commands, and grade canonical
   command, validation, and mutation facts rather than assertion labels.
+- Maintainer skill-evaluation scenarios now establish the repository state their
+  prompts claim: every case commits a real `HEAD` and creates a tracked-work
+  subject during setup, so a committed case no longer runs in an unborn
+  repository full of untracked seed files and a positive request no longer
+  degrades into a passing refusal over a missing subject. A case that does not is
+  refused before any provider is invoked, a failed setup action now grades the
+  arm `fail`, and `git-worktree-clean` now requires an actually empty worktree
+  instead of an unchanged dirty one.
 - Verification validation now accepts absent producer-local predecessor
   artifacts in fresh clones while still rejecting malformed or contradictory
   predecessor evidence that is locally available.

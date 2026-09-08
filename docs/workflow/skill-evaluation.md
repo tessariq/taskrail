@@ -34,11 +34,20 @@ equal to its case ID, setup commands, and action command vectors. Commands are
 only documented `taskrail` or `git` invocations. `fixture/seed.json` is a
 validated concrete initialization recipe: it requires `git init`, selects the
 documented committed or local `taskrail init --json` form, and local seeds carry
-their decoy and provenance bytes. Its `oracle` maps every authored assertion
+their decoy and provenance bytes. Setup must also establish the state the prompt
+claims: a `git commit` action, so the agent starts from a real `HEAD` with a
+clean worktree instead of an unborn repository full of untracked seed files, and
+a `taskrail task new` action, so a positive, negative, recovery, or boundary
+request has a concrete tracked-work subject to exercise rather than degrading
+into a passing refusal. Neither counts if the command only prints help or runs
+a dry run. A case that does not is refused before any provider runs.
+Its `oracle` maps every authored assertion
 exactly once to a supported mechanical predicate over action facts. The supported
 predicates are `command-exit-zero`, `taskrail-validation-pass`, and
-`git-worktree-clean` (the named Git command exits zero and leaves the observed
-worktree digest unchanged). An adapter returns structured facts containing exact
+`git-worktree-clean` (the named Git command exits zero and the observed worktree
+state is empty before and after it; an unchanged *dirty* worktree fails). Every
+declared setup action must additionally be observed with exit code zero, or the
+arm grades `fail`. An adapter returns structured facts containing exact
 command argv/exit code, stdout/stderr, filesystem and Git before/after digests,
 validation result, and storage paths, then writes the same canonical `facts.json`
 receipt beneath its raw root. The runner rejects missing, extra, fabricated, or

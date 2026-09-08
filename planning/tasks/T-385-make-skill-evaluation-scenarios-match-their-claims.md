@@ -1,11 +1,14 @@
 ---
 id: T-385-make-skill-evaluation-scenarios-match-their-claims
 title: Make skill evaluation scenarios match their claims
-status: todo
+status: blocked
 priority: high
 spec_ref: specs/v0.5.0.md#maintainer-skill-release-evaluations
 dependencies: []
-updated_at: "2026-08-31T11:47:19Z"
+updated_at: "2026-09-08T11:56:17Z"
+last_verification_id: "e2300a54329669025922479ac302c35b"
+last_verification_result: fail
+last_verified_at: "2026-09-08T11:56:17Z"
 ---
 
 # T-385-make-skill-evaluation-scenarios-match-their-claims Make skill evaluation scenarios match their claims
@@ -60,3 +63,5 @@ executable scenario, so T-174 can run one trustworthy final evaluation.
   prompts running in unborn repositories with untracked seed files and several
   claimed positive paths absent. The unchanged-worktree oracle therefore proved
   stability of an already-dirty fixture rather than the claimed clean state.
+- 2026-09-08T11:56:10Z: Deterministic scope is complete and green: the registry refuses a case whose setup does not commit a real HEAD and create a tracked-work subject, a failed setup action now grades the arm fail, git-worktree-clean requires an actually empty worktree, and all 32 cases execute end to end against the working binary. The remaining acceptance criterion is a focused model-backed replay through the caller-owned provider adapter; provider execution and credentials are operator-owned, so this unattended run did not invoke one.
+- 2026-09-08T11:56:17Z: verification fail id e2300a54329669025922479ac302c35b previous none completion none

@@ -582,7 +582,7 @@ func testSkillEvalCase(caseID, skill, mode string, baseline bool, digest string)
 		CaseID: caseID, Skill: skill, StorageMode: mode, BaselineRequired: baseline,
 		Prompt: "Run the scenario.", ExpectedObservation: "The assertions are observed.",
 		Assertions: []string{"assertion"}, HumanReviewQuestions: []string{"Was the behavior safe?"},
-		Scenario: SkillEvalScenario{Fixture: "fixture", Sandbox: caseID, Setup: []SkillEvalScenarioAction{{ID: "initialize-git", Operation: "git-command", Command: []string{"git", "init"}}}, Actions: []SkillEvalScenarioAction{{ID: "run-assertion", Operation: "taskrail-command", Command: []string{"taskrail", "validate", "--json"}}}},
+		Scenario: SkillEvalScenario{Fixture: "fixture", Sandbox: caseID, Setup: testSkillEvalClaimedStateSetup(mode), Actions: []SkillEvalScenarioAction{{ID: "run-assertion", Operation: "taskrail-command", Command: []string{"taskrail", "validate", "--json"}}}},
 		Oracle:   SkillEvalOracle{Assertions: []SkillEvalAssertionOracle{{Assertion: "assertion", Action: "run-assertion", Predicate: "command-exit-zero"}}}, FixtureSHA256: testSkillEvalDigest(digest),
 	}
 }
@@ -636,6 +636,12 @@ func (skillEvalScenarioAdapter) Run(ctx context.Context, request SkillEvalAdapte
 	sandbox := filepath.Join(request.RawRoot, "sandbox")
 	if err := os.MkdirAll(sandbox, 0o700); err != nil {
 		return SkillEvalAdapterResult{}, err
+	}
+	// Seed the sandbox from the case fixture as a maintainer adapter does. A
+	// local case only reaches its claimed clean committed HEAD when its decoy
+	// and provenance bytes are present to commit.
+	if err := os.CopyFS(sandbox, os.DirFS(request.FixtureRoot)); err != nil {
+		return SkillEvalAdapterResult{}, fmt.Errorf("copy fixture: %w", err)
 	}
 	if err := os.WriteFile(filepath.Join(request.RawRoot, "agent-transcript.txt"), []byte("stubbed agent transcript\n"+request.Case.Prompt+"\n"), 0o600); err != nil {
 		return SkillEvalAdapterResult{}, err
@@ -834,4 +840,90 @@ func TestMain(m *testing.M) {
 		os.RemoveAll(skillEvalBinaryDir)
 	}
 	os.Exit(code)
+}
+
+func TestSkillEvalCleanWorktreePredicateSeparatesCleanFromStableDirty(t *testing.T) {
+	dirty := testSkillEvalDigest("dirty worktree status")
+	for _, tc := range []struct {
+		name string
+		fact SkillEvalObservedFact
+		want bool
+	}{
+		{"clean before and after", SkillEvalObservedFact{Operation: "git-command", GitBeforeSHA256: skillEvalCleanWorktreeDigest, GitAfterSHA256: skillEvalCleanWorktreeDigest}, true},
+		{"unchanged dirty worktree", SkillEvalObservedFact{Operation: "git-command", GitBeforeSHA256: dirty, GitAfterSHA256: dirty}, false},
+		{"cleaned during the action", SkillEvalObservedFact{Operation: "git-command", GitBeforeSHA256: dirty, GitAfterSHA256: skillEvalCleanWorktreeDigest}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := skillEvalPredicatePasses("git-worktree-clean", tc.fact); got != tc.want {
+				t.Fatalf("git-worktree-clean = %t, want %t", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestSkillEvalGradeFailsWhenDeclaredSetupFailed(t *testing.T) {
+	evaluation := testSkillEvalCase("autonomous-task-committed", "autonomous-task", "committed", true, "fixture")
+	rawRoot := t.TempDir()
+	facts := skillEvalObservedScenarioFacts(evaluation)
+	facts[len(evaluation.Scenario.Setup)-1].ExitCode = 1
+	if err := writeSkillEvalFacts(rawRoot, facts); err != nil {
+		t.Fatal(err)
+	}
+	grade, err := skillEvalDeterministicGrade(evaluation, rawRoot, facts)
+	if err != nil {
+		t.Fatalf("skillEvalDeterministicGrade: %v", err)
+	}
+	if grade != "fail" {
+		t.Fatalf("grade = %q, want fail when a declared setup action failed", grade)
+	}
+}
+
+func TestSkillEvalRunnerRefusesContradictoryCaseBeforeInvokingProvider(t *testing.T) {
+	evaluation := testSkillEvalCase("autonomous-task-committed", "autonomous-task", "committed", true, "fixture")
+	evaluation.Scenario.Setup = evaluation.Scenario.Setup[:2]
+	adapter := &skillEvalRecordingAdapter{}
+	in := skillEvalCompleteRegistryInput(t, []SkillEvalCase{evaluation}, adapter)
+	if _, err := (SkillEvalRunner{}).Execute(context.Background(), in); err == nil || !strings.Contains(err.Error(), "clean committed HEAD") {
+		t.Fatalf("Execute error = %v, want a pre-provider refusal", err)
+	}
+	if adapter.calls != 0 {
+		t.Fatalf("adapter invoked %d times, want 0 before the claimed state is established", adapter.calls)
+	}
+}
+
+type skillEvalRecordingAdapter struct{ calls int }
+
+func (adapter *skillEvalRecordingAdapter) Run(ctx context.Context, request SkillEvalAdapterRequest) (SkillEvalAdapterResult, error) {
+	adapter.calls++
+	return skillEvalTestAdapter{}.Run(ctx, request)
+}
+
+// testSkillEvalClaimedStateSetup mirrors the registry contract: a setup only
+// matches a case's claims once it commits a real HEAD and creates the tracked
+// subject the request exercises.
+func testSkillEvalClaimedStateSetup(mode string) []SkillEvalScenarioAction {
+	init := []string{"taskrail", "init", "--json"}
+	if mode == "local" {
+		init = []string{"taskrail", "init", "--local", "--json"}
+	}
+	return []SkillEvalScenarioAction{
+		{ID: "initialize-git-worktree", Operation: "git-command", Command: []string{"git", "init"}},
+		{ID: "initialize-taskrail-repository", Operation: "taskrail-command", Command: init},
+		{ID: "create-tracked-subject-task", Operation: "taskrail-command", Command: []string{"taskrail", "task", "new", "--title", "Evaluation subject task", "--json"}},
+		{ID: "stage-seeded-repository", Operation: "git-command", Command: []string{"git", "add", "--all"}},
+		{ID: "commit-seeded-repository", Operation: "git-command", Command: []string{"git", "commit", "--message", "Seed"}},
+	}
+}
+
+func skillEvalObservedScenarioFacts(item SkillEvalCase) []SkillEvalObservedFact {
+	declared := append(slices.Clone(item.Scenario.Setup), item.Scenario.Actions...)
+	facts := make([]SkillEvalObservedFact, 0, len(declared))
+	for _, action := range declared {
+		facts = append(facts, SkillEvalObservedFact{
+			Action: action.ID, Operation: action.Operation, Command: action.Command,
+			ValidationPassed: action.Operation == "taskrail-command", StoragePaths: []string{},
+			GitBeforeSHA256: skillEvalCleanWorktreeDigest, GitAfterSHA256: skillEvalCleanWorktreeDigest,
+		})
+	}
+	return facts
 }

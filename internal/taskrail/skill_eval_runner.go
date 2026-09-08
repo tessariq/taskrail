@@ -20,6 +20,11 @@ import (
 const (
 	skillEvalCandidateArm = "candidate"
 	skillEvalBaselineArm  = "baseline"
+
+	// skillEvalCleanWorktreeDigest is the observed Git-state digest of an empty
+	// worktree status. Comparing only before against after proves that a dirty
+	// tree stayed dirty, which is not the clean repository a case claims.
+	skillEvalCleanWorktreeDigest = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 )
 
 var skillEvalRequiredWaiverChecks = []string{
@@ -326,6 +331,14 @@ func skillEvalDeterministicGrade(evaluation SkillEvalCase, rawRoot string, facts
 	for _, action := range declared {
 		actions[action.ID] = action
 	}
+	// A failed setup action leaves the agent in a repository the case never
+	// claimed, so its observed outcome cannot be graded against the assertions.
+	for _, action := range evaluation.Scenario.Setup {
+		fact, observed := byAction[action.ID]
+		if !observed || action.Operation != fact.Operation || !slices.Equal(action.Command, fact.Command) || fact.ExitCode != 0 {
+			return "fail", nil
+		}
+	}
 	for _, oracle := range evaluation.Oracle.Assertions {
 		action, found := actions[oracle.Action]
 		fact, observed := byAction[oracle.Action]
@@ -350,7 +363,8 @@ func skillEvalPredicatePasses(predicate string, fact SkillEvalObservedFact) bool
 	case "taskrail-validation-pass":
 		return fact.Operation == "taskrail-command" && fact.ExitCode == 0 && fact.ValidationPassed
 	case "git-worktree-clean":
-		return fact.Operation == "git-command" && fact.ExitCode == 0 && fact.GitBeforeSHA256 == fact.GitAfterSHA256
+		return fact.Operation == "git-command" && fact.ExitCode == 0 &&
+			fact.GitBeforeSHA256 == skillEvalCleanWorktreeDigest && fact.GitAfterSHA256 == skillEvalCleanWorktreeDigest
 	default:
 		return false
 	}
@@ -397,7 +411,49 @@ func validateSkillEvalCaseDefinition(item SkillEvalCase) error {
 	if len(assertions) != 0 || len(actions) != 0 {
 		return fmt.Errorf("does not map every assertion to one executable oracle")
 	}
+	return validateSkillEvalScenarioClaims(item)
+}
+
+// validateSkillEvalScenarioClaims refuses a scenario whose setup does not build
+// the repository its prompt describes. Without a commit the sandbox is an unborn
+// repository whose seed files are untracked, and without a concrete tracked
+// subject a positive request silently degrades into a passing refusal.
+func validateSkillEvalScenarioClaims(item SkillEvalCase) error {
+	committed, subject := false, false
+	for _, action := range item.Scenario.Setup {
+		if !skillEvalEffectiveCommand(action.Command) {
+			continue
+		}
+		switch {
+		case action.Operation == "git-command" && len(action.Command) > 1 && action.Command[1] == "commit":
+			committed = true
+		case action.Operation == "taskrail-command" && len(action.Command) > 2 && action.Command[1] == "task" && action.Command[2] == "new":
+			subject = true
+		}
+	}
+	if !committed {
+		return fmt.Errorf("does not establish a clean committed HEAD before agent execution")
+	}
+	if !subject {
+		return fmt.Errorf("does not establish the tracked-work subject its request claims")
+	}
 	return nil
+}
+
+// skillEvalEffectiveCommand reports whether a command can change the sandbox at
+// all. A help or dry-run invocation exits zero while creating nothing, so it
+// would satisfy a purely syntactic setup check without establishing the state
+// the case claims. `git commit` also turns into a dry run under its status
+// output flags. `-n` is deliberately absent: on `git commit` it means
+// --no-verify, which still commits.
+func skillEvalEffectiveCommand(command []string) bool {
+	for _, part := range command {
+		switch part {
+		case "-h", "--help", "--dry-run", "--porcelain", "--short", "--long":
+			return false
+		}
+	}
+	return true
 }
 
 func validSkillEvalPredicate(value string) bool {
