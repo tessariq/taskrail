@@ -1,16 +1,17 @@
 ---
 schema_version: 1
-updated_at: "2026-09-08T18:00:48Z"
+updated_at: "2026-09-08T19:22:51Z"
 active_spec_version: v0.5.0
 active_spec_path: specs/v0.5.0.md
 current_task: ""
 current_task_title: ""
-status_summary: idle
-blockers: []
-next_action: Select the next eligible task
-last_verification_result: pass for T-385-make-skill-evaluation-scenarios-match-their-claims at 2026-09-08T17:55:47Z id 8f35481c18dce63370f0d7434a7beaa2
-last_verification_id: 8f35481c18dce63370f0d7434a7beaa2
-last_verified_completion_id: 5d1baa02b8bb4e5e4e4850d4e2ae9a83
+status_summary: blocked
+blockers:
+    - 'T-174-run-the-v0-5-0-gap-and-drift-release-gate: Release gate blocked on two confirmed current-version defects plus the operator-owned final evaluation. T-389: v0.5.0 never raises the layout to 2 (currentLayoutVersion is still 1, fresh init writes a layout-1 marker) and only 3 of the semantic writers gate on layout 2, so a layout-1 repository accepts v0.5 lifecycle, loop-policy, and verification writes and a v0.4.0 binary then silently erases loop_policy and loop_reason. T-390: taskrail loop --help describes the executing command as a preview. Both are direct gate dependencies. The final paired skill-evaluation report is still absent and remains operator-owned: no rendered report exists, the four local sessions stopped at the human worksheet, and packaged skills changed since v0.4.0. Restart the gate on fresh bytes after remediation.'
+next_action: Resolve verification findings for T-174-run-the-v0-5-0-gap-and-drift-release-gate
+last_verification_result: fail for T-174-run-the-v0-5-0-gap-and-drift-release-gate at 2026-09-08T19:22:51Z id 525eef8e0e6f39b6ce2558ed2536b5cd
+last_verification_id: 525eef8e0e6f39b6ce2558ed2536b5cd
+last_verification_previous_id: f414774034bb61736378e18cf4520e7d
 relevant_artifacts: []
 continuation_notes:
     - This repository is temporarily dogfooding bootstrap workflow tooling until Taskrail v0.1.0 exists.
@@ -28,19 +29,19 @@ continuation_notes:
 
 ## Status
 
-- idle
+- blocked
 
 ## Blockers
 
-- None
+- T-174-run-the-v0-5-0-gap-and-drift-release-gate: Release gate blocked on two confirmed current-version defects plus the operator-owned final evaluation. T-389: v0.5.0 never raises the layout to 2 (currentLayoutVersion is still 1, fresh init writes a layout-1 marker) and only 3 of the semantic writers gate on layout 2, so a layout-1 repository accepts v0.5 lifecycle, loop-policy, and verification writes and a v0.4.0 binary then silently erases loop_policy and loop_reason. T-390: taskrail loop --help describes the executing command as a preview. Both are direct gate dependencies. The final paired skill-evaluation report is still absent and remains operator-owned: no rendered report exists, the four local sessions stopped at the human worksheet, and packaged skills changed since v0.4.0. Restart the gate on fresh bytes after remediation.
 
 ## Last Verification
 
-- pass for T-385-make-skill-evaluation-scenarios-match-their-claims at 2026-09-08T17:55:47Z id 8f35481c18dce63370f0d7434a7beaa2
+- fail for T-174-run-the-v0-5-0-gap-and-drift-release-gate at 2026-09-08T19:22:51Z id 525eef8e0e6f39b6ce2558ed2536b5cd
 
 ## Next Action
 
-- Select the next eligible task
+- Resolve verification findings for T-174-run-the-v0-5-0-gap-and-drift-release-gate
 
 ## Relevant Artifacts
 
@@ -52,8 +53,8 @@ continuation_notes:
 
 ## Task Counts
 
-- todo: 52
+- todo: 53
 - in_progress: 0
 - completed: 335
-- blocked: 0
+- blocked: 1
 - cancelled: 0

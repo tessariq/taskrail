@@ -1,7 +1,7 @@
 ---
 id: T-174-run-the-v0-5-0-gap-and-drift-release-gate
 title: Run the v0.5.0 gap and drift release gate
-status: todo
+status: blocked
 priority: high
 spec_ref: specs/v0.5.0.md#goals
 dependencies:
@@ -16,11 +16,13 @@ dependencies:
     - T-383-accept-real-git-object-ids-in-skill-evaluations
     - T-384-prevent-decomposition-from-mutating-unmet-preconditions
     - T-385-make-skill-evaluation-scenarios-match-their-claims
-updated_at: "2026-09-08T18:00:48Z"
-last_verification_id: "f414774034bb61736378e18cf4520e7d"
+    - T-389-require-layout-2-for-every-semantic-writer
+    - T-390-describe-loop-as-executing-in-command-help
+updated_at: "2026-09-08T19:22:51Z"
+last_verification_id: "525eef8e0e6f39b6ce2558ed2536b5cd"
 last_verification_result: fail
-last_verified_at: "2026-08-29T11:10:19Z"
-last_verification_previous_id: "bbffe73d3b28bd8eee671d2220af9351"
+last_verified_at: "2026-09-08T19:22:51Z"
+last_verification_previous_id: "f414774034bb61736378e18cf4520e7d"
 ---
 
 # T-174-run-the-v0-5-0-gap-and-drift-release-gate Run the v0.5.0 gap and drift release gate
@@ -106,3 +108,5 @@ and remediation task is complete. Do not tag or claim current until it passes.
 - 2026-08-31T11:48:31Z: The T-382 evaluator capability remediation is complete; the final model-backed run exposed a new scenario-integrity blocker owned by T-385.
 - 2026-08-31T11:48:41Z: Release gate blocked: the final skill-evaluation scenarios did not establish the committed and positive-path states their prompts claimed, allowing deterministic passes over semantically mismatched fixtures; T-385 owns remediation before one fresh final run.
 - 2026-09-08T18:00:48Z: T-385 remediation is complete and pass-verified: evaluation scenarios now establish the committed clean HEAD and tracked-work subject their prompts claim, a focused model-backed replay graded candidate pass through the caller-owned provider adapter, and cross-platform execution is restored with runs failing closed on unexpected adapter errors and sandbox digests no longer racing Git's own internals. All eleven direct dependencies are completed and the full CI matrix is green. The gate restarts on current bytes with one fresh untouched complete paired release evaluation; provider execution and credentials remain operator-owned.
+- 2026-09-08T19:22:39Z: Release gate blocked on two confirmed current-version defects plus the operator-owned final evaluation. T-389: v0.5.0 never raises the layout to 2 (currentLayoutVersion is still 1, fresh init writes a layout-1 marker) and only 3 of the semantic writers gate on layout 2, so a layout-1 repository accepts v0.5 lifecycle, loop-policy, and verification writes and a v0.4.0 binary then silently erases loop_policy and loop_reason. T-390: taskrail loop --help describes the executing command as a preview. Both are direct gate dependencies. The final paired skill-evaluation report is still absent and remains operator-owned: no rendered report exists, the four local sessions stopped at the human worksheet, and packaged skills changed since v0.4.0. Restart the gate on fresh bytes after remediation.
+- 2026-09-08T19:22:51Z: verification fail id 525eef8e0e6f39b6ce2558ed2536b5cd previous f414774034bb61736378e18cf4520e7d completion none
