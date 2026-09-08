@@ -1,7 +1,7 @@
 ---
 id: T-174-run-the-v0-5-0-gap-and-drift-release-gate
 title: Run the v0.5.0 gap and drift release gate
-status: blocked
+status: todo
 priority: high
 spec_ref: specs/v0.5.0.md#goals
 dependencies:
@@ -16,7 +16,7 @@ dependencies:
     - T-383-accept-real-git-object-ids-in-skill-evaluations
     - T-384-prevent-decomposition-from-mutating-unmet-preconditions
     - T-385-make-skill-evaluation-scenarios-match-their-claims
-updated_at: "2026-08-31T11:48:41Z"
+updated_at: "2026-09-08T18:00:48Z"
 last_verification_id: "f414774034bb61736378e18cf4520e7d"
 last_verification_result: fail
 last_verified_at: "2026-08-29T11:10:19Z"
@@ -105,3 +105,4 @@ and remediation task is complete. Do not tag or claim current until it passes.
 - 2026-08-29T11:10:19Z: verification fail id f414774034bb61736378e18cf4520e7d previous bbffe73d3b28bd8eee671d2220af9351 completion none
 - 2026-08-31T11:48:31Z: The T-382 evaluator capability remediation is complete; the final model-backed run exposed a new scenario-integrity blocker owned by T-385.
 - 2026-08-31T11:48:41Z: Release gate blocked: the final skill-evaluation scenarios did not establish the committed and positive-path states their prompts claimed, allowing deterministic passes over semantically mismatched fixtures; T-385 owns remediation before one fresh final run.
+- 2026-09-08T18:00:48Z: T-385 remediation is complete and pass-verified: evaluation scenarios now establish the committed clean HEAD and tracked-work subject their prompts claim, a focused model-backed replay graded candidate pass through the caller-owned provider adapter, and cross-platform execution is restored with runs failing closed on unexpected adapter errors and sandbox digests no longer racing Git's own internals. All eleven direct dependencies are completed and the full CI matrix is green. The gate restarts on current bytes with one fresh untouched complete paired release evaluation; provider execution and credentials remain operator-owned.
