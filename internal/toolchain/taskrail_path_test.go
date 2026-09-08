@@ -125,7 +125,17 @@ func taskfileBlock(content, header string) []string {
 // so both build sites must use identical, reproducible flags. Divergent flags
 // (e.g. one pinning CGO_ENABLED=0 and the other inheriting the ambient default)
 // make a freshly installed binary compare as stale — the exact drift this guard
-// forbids. Both taskrail build sites must therefore pin CGO_ENABLED and -trimpath.
+// forbids. Both taskrail build sites must therefore pin CGO_ENABLED, -trimpath
+// and -buildvcs=false.
+//
+// -buildvcs=false is what actually makes the comparison honest. Go stamps
+// vcs.revision, vcs.time and vcs.modified into a binary built inside a Git
+// repository, and -trimpath does not remove them. Those bytes change when HEAD
+// moves or the worktree merely becomes dirty, so without this flag two builds of
+// byte-identical source differ and the guard reports a stale binary that is not
+// stale. That false positive fires on exactly the workflow this repository
+// prescribes: every tracked-work commit dirties planning/STATE.md before
+// pre-commit runs the guard.
 func TestTaskrailBuildsShareReproducibleFlags(t *testing.T) {
 	taskfile := readFile(t, repoRoot(t), "Taskfile.yml")
 	for _, header := range []string{"taskrail:install:", "taskrail:check:"} {
@@ -139,6 +149,9 @@ func TestTaskrailBuildsShareReproducibleFlags(t *testing.T) {
 		}
 		if !strings.Contains(block, "-trimpath") {
 			t.Errorf("%s must build with -trimpath so its build is byte-reproducible", header)
+		}
+		if !strings.Contains(block, "-buildvcs=false") {
+			t.Errorf("%s must build with -buildvcs=false so Git stamps cannot change the bytes", header)
 		}
 	}
 }

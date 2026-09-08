@@ -33,6 +33,12 @@ All notable user-visible changes to Taskrail will be documented in this file.
   walking them raced with Git and failed an arm on a path that existed a moment
   earlier. Worktree content stays covered, and Git state is still observed
   through the separate `git status` digests.
+- The contributor binary freshness guard (`task taskrail:check`) no longer
+  reports an unchanged binary as stale. Both `taskrail` build sites now pass
+  `-buildvcs=false`, so Go's `vcs.revision`/`vcs.time`/`vcs.modified` stamps —
+  which `-trimpath` does not strip — can no longer change the compared bytes
+  when HEAD moves or the worktree merely becomes dirty. A genuine source change
+  still fails the guard.
 - Verification validation now accepts absent producer-local predecessor
   artifacts in fresh clones while still rejecting malformed or contradictory
   predecessor evidence that is locally available.

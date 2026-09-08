@@ -33,10 +33,17 @@ tasks:
 
   taskrail:install:
     desc: Build the working-tree taskrail CLI onto the mise-provided PATH (./bin)
-    # CGO_ENABLED=0 + -trimpath make the build byte-reproducible so taskrail:check
-    # can compare it against a fresh build; the .exe suffix on Windows lets a bare
-    # `taskrail` resolve via PATHEXT. Both build sites must keep these identical —
-    # guarded by TestTaskrailBuildsShareReproducibleFlags.
+    # CGO_ENABLED=0 + -trimpath + -buildvcs=false make the build byte-reproducible
+    # so taskrail:check can compare it against a fresh build; the .exe suffix on
+    # Windows lets a bare `taskrail` resolve via PATHEXT. Both build sites must keep
+    # these identical — guarded by TestTaskrailBuildsShareReproducibleFlags.
+    #
+    # -buildvcs=false is load-bearing, not tidiness. Go stamps vcs.revision,
+    # vcs.time and vcs.modified into a binary built inside a Git repository and
+    # -trimpath does not strip them, so identical source produces different bytes
+    # once HEAD moves or the worktree goes dirty. Nothing reads those stamps here
+    # (version reports its own constant), so dropping them costs nothing and stops
+    # the guard reporting an unchanged binary as stale.
     #
     # The pathcheck step makes a build that nothing resolves as `taskrail` a loud
     # failure rather than a success the caller is no better off for: the skills run
@@ -45,13 +52,14 @@ tasks:
     env:
       CGO_ENABLED: "0"
     cmds:
-      - go build -trimpath -o bin/taskrail{{if eq OS "windows"}}.exe{{end}} ./cmd/taskrail
+      - go build -trimpath -buildvcs=false -o bin/taskrail{{if eq OS "windows"}}.exe{{end}} ./cmd/taskrail
       - go run ./internal/toolchain/cmd/pathcheck bin/taskrail{{if eq OS "windows"}}.exe{{end}}
 
   taskrail:check:
     desc: Fail if the taskrail on PATH is not the current working-tree build (cross-platform; native Windows too)
     # Builds a fresh binary with the same reproducible flags as taskrail:install
-    # (CGO_ENABLED=0 + -trimpath) and hands it to the freshcheck helper, which
+    # (CGO_ENABLED=0 + -trimpath + -buildvcs=false) and hands it to the freshcheck
+    # helper, which
     # resolves the on-PATH taskrail and byte-compares them. That helper stands in
     # for the POSIX-only coreutils the old check used, so it runs on a stock
     # native Windows install with none of them on PATH (T-082); the fixed output
@@ -63,7 +71,7 @@ tasks:
     env:
       CGO_ENABLED: "0"
     cmds:
-      - go build -trimpath -o bin/taskrail-freshcheck{{if eq OS "windows"}}.exe{{end}} ./cmd/taskrail
+      - go build -trimpath -buildvcs=false -o bin/taskrail-freshcheck{{if eq OS "windows"}}.exe{{end}} ./cmd/taskrail
       - go run ./internal/toolchain/cmd/freshcheck bin/taskrail-freshcheck{{if eq OS "windows"}}.exe{{end}} bin/taskrail{{if eq OS "windows"}}.exe{{end}}
 
   test:
