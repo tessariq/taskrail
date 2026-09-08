@@ -190,8 +190,10 @@ func (s *Service) applyLocalInit(in InitInput) (result InitResult, err error) {
 		case file.kind == writeKindNote:
 			content = []byte(starterNotes())
 		case file.kind == writeKindState:
-			state := starterState(s.now())
-			content, err = marshalFrontmatter(state.Frontmatter, state.Body)
+			// Local init publishes a layout-2 marker, so its fresh state is schema 2.
+			schema := stateSchemaForLayout(layout2Version)
+			state := starterState(s.now(), schema)
+			content, err = marshalStateAtSchema(schema, state)
 			if err != nil {
 				return InitResult{}, err
 			}

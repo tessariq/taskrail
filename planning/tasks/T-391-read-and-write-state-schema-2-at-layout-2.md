@@ -1,11 +1,16 @@
 ---
 id: T-391-read-and-write-state-schema-2-at-layout-2
 title: Read and write state schema 2 at layout 2
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#layout-compatibility-and-upgrade
 dependencies: []
-updated_at: "2026-09-08T19:34:05Z"
+updated_at: "2026-09-08T20:42:45Z"
+completion_id: "7a30d3c5dfaff60218f9aa5ec43634e4"
+last_verification_id: "021e876431a7e745872be8db10e43363"
+last_verification_result: pass
+last_verified_at: "2026-09-08T20:42:45Z"
+last_verified_completion_id: "7a30d3c5dfaff60218f9aa5ec43634e4"
 ---
 
 # T-391-read-and-write-state-schema-2-at-layout-2 Read and write state schema 2 at layout 2
@@ -72,3 +77,6 @@ until the ordinary reader, validator, and state writers accept schema 2.
 - Re-run `go test ./...`, `taskrail validate`, and `task check:skills`.
 
 ## Implementation Notes
+
+- 2026-09-08T20:42:36Z: Layout-conditioned state schema: Paths.LayoutVersion selects schema 2 at layout 2 and schema 1 at layout 1. Reader, validator, and every state writer resolve it through one marshalState chokepoint; schema 2 omits continuation_notes and the rendered Notes section, and reintroducing either is a validation violation. Fresh layout-2 init writes schema 2 directly.
+- 2026-09-08T20:42:45Z: verification pass id 021e876431a7e745872be8db10e43363 previous none completion 7a30d3c5dfaff60218f9aa5ec43634e4

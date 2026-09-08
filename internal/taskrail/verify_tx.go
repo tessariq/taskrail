@@ -76,7 +76,7 @@ func (s *Service) commitVerify(own repotx.Ownership, ledger verifyLedger) error 
 			fmt.Errorf("verify candidate failed validation: %s", strings.Join(validation.Violations, "; ")))
 	}
 
-	stateBytes, err := marshalFrontmatter(ledger.state.Frontmatter, ledger.state.Body)
+	stateBytes, err := s.marshalState(ledger.state)
 	if err != nil {
 		return err
 	}

@@ -89,7 +89,7 @@ func (s *Service) repairApply(own repotx.Ownership) (RepairResult, error) {
 	corrected.UpdatedAt = timestamp(s.now())
 	state.Frontmatter = corrected
 	state.Body = newBody
-	stateBytes, err := marshalFrontmatter(state.Frontmatter, state.Body)
+	stateBytes, err := s.marshalState(state)
 	if err != nil {
 		return RepairResult{}, err
 	}

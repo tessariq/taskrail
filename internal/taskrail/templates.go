@@ -6,9 +6,16 @@ import (
 	"time"
 )
 
-func starterState(now time.Time) *State {
+// starterState renders the fresh state a newly initialized repository publishes.
+// schema is the layout's implied state schema, so a fresh layout-2 repository
+// writes schema 2 directly and seeds no continuation prose.
+func starterState(now time.Time, schema int) *State {
+	notes := []string{}
+	if schema >= stateSchemaVersionLayout2 {
+		notes = nil
+	}
 	frontmatter := StateFrontmatter{
-		SchemaVersion:          stateSchemaVersion,
+		SchemaVersion:          schema,
 		UpdatedAt:              timestamp(now),
 		ActiveSpecVersion:      "v0.1.0",
 		ActiveSpecPath:         "specs/v0.1.0.md",
@@ -19,7 +26,7 @@ func starterState(now time.Time) *State {
 		NextAction:             "Create initial Taskrail tasks and begin tracked work",
 		LastVerificationResult: "Not yet run",
 		RelevantArtifacts:      []string{},
-		ContinuationNotes:      []string{},
+		ContinuationNotes:      notes,
 	}
 
 	state := &State{Frontmatter: frontmatter}
@@ -184,6 +191,14 @@ func renderVerificationReportMarkdown(report VerificationArtifact) string {
 }
 
 func renderStateBody(state StateFrontmatter, tasks []*Task) string {
+	body := renderStateBodySchema1(state, tasks)
+	if state.SchemaVersion >= stateSchemaVersionLayout2 {
+		return stripStateNotesSection(body)
+	}
+	return body
+}
+
+func renderStateBodySchema1(state StateFrontmatter, tasks []*Task) string {
 	var builder strings.Builder
 	builder.WriteString("# STATE\n\n")
 	builder.WriteString("## Active Spec\n\n")

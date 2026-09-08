@@ -1479,6 +1479,27 @@ continuation_notes:
 	// so a fixture must not pre-create it (T-036).
 }
 
+// upgradeStateFixtureToSchema2 rewrites an existing schema-1 STATE.md fixture as
+// schema 2, the shape layout 2 requires: no continuation_notes and no rendered
+// `## Notes` section. It reuses the production writer so a fixture cannot drift
+// from what Taskrail itself publishes.
+func upgradeStateFixtureToSchema2(t *testing.T, statePath string) {
+	t.Helper()
+	data, err := os.ReadFile(statePath)
+	if err != nil {
+		t.Fatalf("read state fixture: %v", err)
+	}
+	frontmatter, body, err := parseFrontmatter[StateFrontmatter](data)
+	if err != nil {
+		t.Fatalf("parse state fixture: %v", err)
+	}
+	upgraded, err := marshalStateAtSchema(stateSchemaVersionLayout2, &State{Frontmatter: frontmatter, Body: body})
+	if err != nil {
+		t.Fatalf("marshal state fixture: %v", err)
+	}
+	writeFile(t, statePath, string(upgraded))
+}
+
 func writeTask(t *testing.T, repo, id, title, status, priority, specRef string, deps []string) {
 	t.Helper()
 	depText := "[]"

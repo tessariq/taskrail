@@ -40,21 +40,24 @@ func TestLayoutLoadRejectsNewerLayoutVersion(t *testing.T) {
 func TestDiscoverPathsAcceptsCurrentAndOlderLayoutVersion(t *testing.T) {
 	t.Parallel()
 
-	for name, marker := range map[string]string{
-		"current": "layout_version: 1\nspecs_dir: specs\nplanning_dir: planning\n",
-		"older":   "layout_version: 0\nspecs_dir: specs\nplanning_dir: planning\n",
+	for name, test := range map[string]struct {
+		marker  string
+		version int
+	}{
+		"current": {"layout_version: 1\nspecs_dir: specs\nplanning_dir: planning\n", 1},
+		"older":   {"layout_version: 0\nspecs_dir: specs\nplanning_dir: planning\n", 0},
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
 			repo := seedFixtureRepo(t)
-			writeFile(t, markerFile(repo), marker)
+			writeFile(t, markerFile(repo), test.marker)
 
 			paths, err := DiscoverPaths(repo)
 			if err != nil {
 				t.Fatalf("discover paths: %v", err)
 			}
-			assertDefaultLayout(t, repo, paths)
+			assertDefaultLayout(t, repo, paths, test.version)
 		})
 	}
 }

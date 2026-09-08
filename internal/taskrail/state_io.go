@@ -75,11 +75,37 @@ func (s *Service) loadTasks() ([]*Task, error) {
 	return tasks, nil
 }
 
+// stateSchemaVersion is the state schema this repository's layout implies. Every
+// reader, validator, and writer resolves it here so a layout-2 repository is
+// never read, judged, or rewritten as schema 1 (and the reverse).
+func (s *Service) stateSchemaVersion() int {
+	return stateSchemaForLayout(s.paths.LayoutVersion)
+}
+
+// marshalState publishes state at the layout's schema. Callers render the body
+// before this point, so a body carrying the schema-1 `## Notes` section (and a
+// frontmatter carrying `continuation_notes`) is normalized here rather than
+// depending on every writer having stamped the version first.
+func (s *Service) marshalState(state *State) ([]byte, error) {
+	return marshalStateAtSchema(s.stateSchemaVersion(), state)
+}
+
+func marshalStateAtSchema(schema int, state *State) ([]byte, error) {
+	frontmatter := state.Frontmatter
+	frontmatter.SchemaVersion = schema
+	body := state.Body
+	if schema >= stateSchemaVersionLayout2 {
+		frontmatter.ContinuationNotes = nil
+		body = stripStateNotesSection(body)
+	}
+	return marshalFrontmatter(frontmatter, body)
+}
+
 func (s *Service) saveState(state *State) error {
 	if strings.TrimSpace(state.Body) == "" {
 		state.Body = renderStateBody(state.Frontmatter, nil)
 	}
-	data, err := marshalFrontmatter(state.Frontmatter, state.Body)
+	data, err := s.marshalState(state)
 	if err != nil {
 		return err
 	}

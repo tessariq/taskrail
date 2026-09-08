@@ -721,6 +721,7 @@ func TestApplyImportDraftV1IgnoresLegacyBodyAndUsesStandardScaffold(t *testing.T
 func TestApplyImportDraftV2PublishesExactReviewedBodies(t *testing.T) {
 	svc := applyFixture(t)
 	writeFile(t, filepath.Join(svc.paths.RepoRoot, ".taskrail", "config.yml"), layout2Marker("committed", "specs", "planning"))
+	upgradeStateFixtureToSchema2(t, svc.paths.StateFile)
 	svc = newTestService(t, svc.paths.RepoRoot, time.Date(2026, 7, 5, 12, 0, 0, 0, time.UTC))
 	files, subjects := decompositionGolden()
 	exactBody := "  ## Description  \r\n\r\nDeliver exact bytes.  \r\n\r\n### Boundary\r\n\r\nKeep CRLF.\r\n\r\n## Acceptance\r\n\r\n- Works.\r\n\r\n## Verification Notes\r\n\r\n- Test it.\r\n\r\n## Implementation Notes\r\n"

@@ -117,7 +117,7 @@ func storageNeutralService(t *testing.T, storage StorageContext, decoys bool) (*
 	writeFile(t, filepath.Join(paths.SpecsDir, "README.md"), "# Specs\n")
 	writeFile(t, filepath.Join(paths.SpecsDir, "v0.5.0.md"), "# v0.5.0\n\n## Potential Features\n\n### Local Planning\n\nRequirements:\n\n- Storage neutral.\n")
 	writeFile(t, paths.StateFile, `---
-schema_version: 1
+schema_version: 2
 updated_at: "2026-08-14T00:00:00Z"
 active_spec_version: v0.5.0
 active_spec_path: product/specs/v0.5.0.md
@@ -128,7 +128,6 @@ blockers: []
 next_action: Select the next eligible task
 last_verification_result: Not yet run
 relevant_artifacts: []
-continuation_notes: []
 ---
 
 # STATE

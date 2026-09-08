@@ -448,7 +448,7 @@ func (s *Service) ensureLayout() error {
 		return err
 	}
 	if _, err := os.Stat(s.paths.StateFile); errors.Is(err, os.ErrNotExist) {
-		if err := s.saveState(starterState(s.now())); err != nil {
+		if err := s.saveState(starterState(s.now(), stateSchemaForLayout(currentLayoutVersion))); err != nil {
 			return err
 		}
 	} else if err != nil {

@@ -602,7 +602,12 @@ func refuseLegacyPolicyPath(root, planningDir string) error {
 }
 
 func renderStateBodyV2(state stateV2Frontmatter, tasks []*Task) string {
-	body := renderStateBody(legacyStateShape(state), tasks)
+	return stripStateNotesSection(renderStateBody(legacyStateShape(state), tasks))
+}
+
+// stripStateNotesSection removes the rendered `## Notes` section schema 2 drops,
+// leaving every other section and the trailing task counts untouched.
+func stripStateNotesSection(body string) string {
 	start := strings.Index(body, "## Notes\n")
 	if start < 0 {
 		return body

@@ -2,7 +2,29 @@ package taskrail
 
 import "github.com/tessariq/taskrail/internal/repolock"
 
-const stateSchemaVersion = 1
+// State schema versions are layout-conditioned: layout 1 keeps schema 1, layout
+// 2 raises STATE.md to schema 2, which drops `continuation_notes` and the
+// rendered `## Notes` section (specs/v0.5.0.md#layout-compatibility-and-upgrade).
+// Reader, validator, and every writer resolve the expected version from the
+// repository's layout rather than a single constant, so an upgraded repository
+// is never reported invalid by its own binary and no writer rewrites one schema
+// as the other.
+const (
+	stateSchemaVersionLayout1 = 1
+	stateSchemaVersionLayout2 = 2
+)
+
+// verificationArtifactSchemaVersion versions the verification report document.
+// It is independent of the state schema above; the two only happened to share a
+// value.
+const verificationArtifactSchemaVersion = 1
+
+func stateSchemaForLayout(layoutVersion int) int {
+	if layoutVersion >= layout2Version {
+		return stateSchemaVersionLayout2
+	}
+	return stateSchemaVersionLayout1
+}
 
 // status_summary values the transition, reconcile, and repair paths write into
 // STATE.md. This axis (idle | in_progress | blocked) is distinct from a task's own
@@ -34,8 +56,11 @@ type Paths struct {
 	GitDir       string
 	GitCommonDir string
 	ConfigFile   string
-	StorageRoot  string
-	LockRoot     string
+	// LayoutVersion is the layout the discovered marker records. It selects the
+	// state schema every reader, validator, and writer works in.
+	LayoutVersion int
+	StorageRoot   string
+	LockRoot      string
 	// Storage is the active storage context every physical directory below was
 	// resolved through, so a reporter states the mode and root it actually used
 	// rather than re-deriving one.
@@ -265,6 +290,17 @@ type StateFrontmatter struct {
 	LastVerifiedCompletionID   string   `yaml:"last_verified_completion_id,omitempty" json:"last_verified_completion_id,omitempty"`
 	RelevantArtifacts          []string `yaml:"relevant_artifacts" json:"relevant_artifacts"`
 	ContinuationNotes          []string `yaml:"continuation_notes" json:"continuation_notes"`
+}
+
+// MarshalYAML emits the key set the frontmatter's own schema version defines.
+// Schema 2 removed `continuation_notes`, and a required-but-empty list cannot be
+// expressed with `omitempty`, so the shape is selected here rather than by tag.
+func (fm StateFrontmatter) MarshalYAML() (any, error) {
+	if fm.SchemaVersion >= stateSchemaVersionLayout2 {
+		return stateV2FromLegacy(fm), nil
+	}
+	type stateSchema1 StateFrontmatter
+	return stateSchema1(fm), nil
 }
 
 type State struct {

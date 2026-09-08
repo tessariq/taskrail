@@ -68,7 +68,7 @@ func (s *Service) ActivateSpec(version string) (result SpecActivateResult, err e
 	state.Frontmatter.ActiveSpecPath = logicalSpecFile
 	state.Frontmatter.UpdatedAt = timestamp(s.now())
 	state.Body = renderStateBody(state.Frontmatter, tasks)
-	stateBytes, err := marshalFrontmatter(state.Frontmatter, state.Body)
+	stateBytes, err := s.marshalState(state)
 	if err != nil {
 		return SpecActivateResult{}, err
 	}

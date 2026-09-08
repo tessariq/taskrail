@@ -248,7 +248,7 @@ func (s *Service) commitLifecycle(own repotx.Ownership, w writerCommand, ledger 
 			fmt.Errorf("%s candidate failed validation: %s", w.command, strings.Join(validation.Violations, "; ")))
 	}
 
-	stateBytes, err := marshalFrontmatter(ledger.state.Frontmatter, ledger.state.Body)
+	stateBytes, err := s.marshalState(ledger.state)
 	if err != nil {
 		return ValidationResult{}, err
 	}

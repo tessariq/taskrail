@@ -153,7 +153,7 @@ func (s *Service) commitTaskWriter(own repotx.Ownership, w taskWriterCommand, le
 			fmt.Errorf("%s candidate failed validation: %s", w.command, strings.Join(validation.Violations, "; ")))
 	}
 
-	stateBytes, err := marshalFrontmatter(ledger.state.Frontmatter, ledger.state.Body)
+	stateBytes, err := s.marshalState(ledger.state)
 	if err != nil {
 		return ValidationResult{}, err
 	}

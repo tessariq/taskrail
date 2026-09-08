@@ -369,7 +369,7 @@ func (s *Service) Verify(input VerifyInput) (result VerifyResult, err error) {
 
 	plan := renderVerificationPlan(task, input, verificationID, previousVerificationID, followupTaskID)
 	report := VerificationArtifact{
-		SchemaVersion:          stateSchemaVersion,
+		SchemaVersion:          verificationArtifactSchemaVersion,
 		TaskID:                 task.Frontmatter.ID,
 		TaskTitle:              task.Frontmatter.Title,
 		VerificationID:         verificationID,

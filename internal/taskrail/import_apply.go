@@ -126,7 +126,7 @@ func (s *Service) applyReviewedImportDraftLocked(own durabletx.Ownership, input 
 	if err != nil {
 		return ApplyDraftResult{}, err
 	}
-	stateBytes, err := marshalFrontmatter(state.Frontmatter, state.Body)
+	stateBytes, err := s.marshalState(state)
 	if err != nil {
 		return ApplyDraftResult{}, err
 	}
@@ -338,7 +338,7 @@ func (s *Service) ApplyImportDraft(input ApplyDraftInput) (result ApplyDraftResu
 	if err != nil {
 		return ApplyDraftResult{}, err
 	}
-	stateBytes, err := marshalFrontmatter(state.Frontmatter, state.Body)
+	stateBytes, err := s.marshalState(state)
 	if err != nil {
 		return ApplyDraftResult{}, err
 	}

@@ -155,8 +155,9 @@ func (s *Service) buildInitTransaction(plan initPlan, in InitInput, markerOrigin
 		case file.kind == writeKindNote:
 			content = []byte(starterNotes())
 		case file.kind == writeKindState:
-			state := starterState(s.now())
-			content, err = marshalFrontmatter(state.Frontmatter, state.Body)
+			schema := stateSchemaForLayout(currentLayoutVersion)
+			state := starterState(s.now(), schema)
+			content, err = marshalStateAtSchema(schema, state)
 			if err != nil {
 				return tx, err
 			}

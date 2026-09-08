@@ -14,6 +14,7 @@ func TestTaskAuthorPreviewAndApplyOnlyReplaceReviewedSections(t *testing.T) {
 	repo := realGitRepo(t)
 	seedFixtureTree(t, repo)
 	writeFile(t, filepath.Join(repo, ".taskrail", "config.yml"), layout2Marker("committed", "specs", "planning"))
+	upgradeStateFixtureToSchema2(t, filepath.Join(repo, "planning", "STATE.md"))
 	writeAuthorableTask(t, repo)
 	taskPath := filepath.Join(repo, "planning", "tasks", "T-215-author.md")
 	before, err := os.ReadFile(taskPath)
@@ -82,6 +83,7 @@ func TestTaskAuthorRefusesInvalidProposalAndStaleDigestWithoutWriting(t *testing
 			repo := realGitRepo(t)
 			seedFixtureTree(t, repo)
 			writeFile(t, filepath.Join(repo, ".taskrail", "config.yml"), layout2Marker("committed", "specs", "planning"))
+			upgradeStateFixtureToSchema2(t, filepath.Join(repo, "planning", "STATE.md"))
 			writeAuthorableTask(t, repo)
 			taskPath := filepath.Join(repo, "planning", "tasks", "T-215-author.md")
 			before := mustReadFile(t, taskPath)
@@ -115,6 +117,7 @@ func TestTaskAuthorRefusesDelegatedInvocationWithoutWriting(t *testing.T) {
 			repo := realGitRepo(t)
 			seedFixtureTree(t, repo)
 			writeFile(t, filepath.Join(repo, ".taskrail", "config.yml"), layout2Marker("committed", "specs", "planning"))
+			upgradeStateFixtureToSchema2(t, filepath.Join(repo, "planning", "STATE.md"))
 			writeAuthorableTask(t, repo)
 			svc, err := NewService(repo)
 			if err != nil {
@@ -165,6 +168,7 @@ func TestTaskAuthorDirectContentionReturnsLockHeld(t *testing.T) {
 			repo := realGitRepo(t)
 			seedFixtureTree(t, repo)
 			writeFile(t, filepath.Join(repo, ".taskrail", "config.yml"), layout2Marker("committed", "specs", "planning"))
+			upgradeStateFixtureToSchema2(t, filepath.Join(repo, "planning", "STATE.md"))
 			writeAuthorableTask(t, repo)
 			svc, err := NewService(repo)
 			if err != nil {
@@ -266,6 +270,7 @@ func TestTaskAuthorRejectsNonTodoArtifactProposalAndLateTaskChange(t *testing.T)
 			repo := realGitRepo(t)
 			seedFixtureTree(t, repo)
 			writeFile(t, filepath.Join(repo, ".taskrail", "config.yml"), layout2Marker("committed", "specs", "planning"))
+			upgradeStateFixtureToSchema2(t, filepath.Join(repo, "planning", "STATE.md"))
 			writeAuthorableTask(t, repo)
 			taskPath := filepath.Join(repo, "planning", "tasks", "T-215-author.md")
 			if test.status != "todo" {
@@ -299,6 +304,7 @@ func TestTaskAuthorRefusesUnmodeledCorpusChangeBeforeTransactionSnapshot(t *test
 	repo := realGitRepo(t)
 	seedFixtureTree(t, repo)
 	writeFile(t, filepath.Join(repo, ".taskrail", "config.yml"), layout2Marker("committed", "specs", "planning"))
+	upgradeStateFixtureToSchema2(t, filepath.Join(repo, "planning", "STATE.md"))
 	writeAuthorableTask(t, repo)
 	writeFile(t, filepath.Join(repo, "planning", "tasks", "T-999-sentinel.md"), `---
 id: T-999-sentinel
@@ -346,6 +352,7 @@ func TestTaskAuthorIgnoresScaffoldHeadingsInsideFencedTargetContent(t *testing.T
 	repo := realGitRepo(t)
 	seedFixtureTree(t, repo)
 	writeFile(t, filepath.Join(repo, ".taskrail", "config.yml"), layout2Marker("committed", "specs", "planning"))
+	upgradeStateFixtureToSchema2(t, filepath.Join(repo, "planning", "STATE.md"))
 	writeAuthorableTask(t, repo)
 	taskPath := filepath.Join(repo, "planning", "tasks", "T-215-author.md")
 	before := strings.Replace(string(mustReadFile(t, taskPath)), "## Description\n\nFixture task.", "```markdown\n## Description\nexample only\n```\n\n## Description\n\nFixture task.", 1)

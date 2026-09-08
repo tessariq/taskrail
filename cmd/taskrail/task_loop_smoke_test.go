@@ -372,9 +372,52 @@ func setupLoopDryRunRepo(t *testing.T) string {
 	if err := os.WriteFile(filepath.Join(root, ".taskrail", "config.yml"), []byte("layout_version: 2\nspecs_dir: specs\nplanning_dir: planning\nstorage_mode: committed\nimplementation_review_max_rounds: 1\n"), 0o644); err != nil {
 		t.Fatalf("write layout-2 fixture: %v", err)
 	}
+	rewriteStateAsSchema2(t, filepath.Join(root, "planning", "STATE.md"))
 	runLoopGit(t, root, "add", ".")
 	runLoopGit(t, root, "commit", "-m", "taskrail layout")
 	return root
+}
+
+// rewriteStateAsSchema2 converts the layout-1 STATE.md `init` wrote into the
+// schema-2 shape layout 2 requires: schema_version 2, no continuation_notes
+// field, and no rendered `## Notes` section. Each removal ends at the next
+// structural boundary — the next frontmatter key or delimiter, the next heading
+// — rather than at a recognized line shape, so note content the fixture may
+// grow cannot survive the rewrite.
+func rewriteStateAsSchema2(t *testing.T, statePath string) {
+	t.Helper()
+	data, err := os.ReadFile(statePath)
+	if err != nil {
+		t.Fatalf("read state fixture: %v", err)
+	}
+	var kept []string
+	dropping := ""
+	for _, line := range strings.Split(string(data), "\n") {
+		switch dropping {
+		case "frontmatter":
+			if strings.HasPrefix(line, " ") {
+				continue
+			}
+		case "body":
+			if !strings.HasPrefix(line, "## ") && line != "---" {
+				continue
+			}
+		}
+		dropping = ""
+		switch {
+		case line == "schema_version: 1":
+			kept = append(kept, "schema_version: 2")
+		case strings.HasPrefix(line, "continuation_notes:"):
+			dropping = "frontmatter"
+		case line == "## Notes":
+			dropping = "body"
+		default:
+			kept = append(kept, line)
+		}
+	}
+	if err := os.WriteFile(statePath, []byte(strings.Join(kept, "\n")), 0o644); err != nil {
+		t.Fatalf("write schema-2 state fixture: %v", err)
+	}
 }
 
 func runLoopGit(t *testing.T, root string, args ...string) {

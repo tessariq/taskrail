@@ -6,6 +6,16 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ### Fixed
 
+- A repository upgraded to layout 2 is no longer reported invalid by its own
+  binary. The state schema is now layout-conditioned: layout 2 reads, validates,
+  and writes `STATE.md` at state schema 2, and layout 1 keeps schema 1. Schema 2
+  drops the `continuation_notes` frontmatter field and the rendered `## Notes`
+  section, and reintroducing either is reported as a validation violation rather
+  than silently erased by the next writer. Fresh layout-2 initialization writes
+  schema 2 directly and seeds no continuation prose. Previously `validate` and
+  every lifecycle writer on an upgraded repository reported
+  `state schema_version must be 1`, leaving validation-gated callers permanently
+  red.
 - `taskrail loop --help` now describes the command as executing rather than
   previewing. The default invocation launches one external child process per
   selected task, and `--dry-run` is named as the preview-only mode; `--parallel`

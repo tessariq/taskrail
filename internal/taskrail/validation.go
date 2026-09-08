@@ -76,8 +76,19 @@ func (s *Service) validateInMemory(state *State, tasks []*Task) ValidationResult
 
 func (s *Service) validateState(state *State) []string {
 	violations := make([]string, 0)
-	if state.Frontmatter.SchemaVersion != stateSchemaVersion {
-		violations = append(violations, fmt.Sprintf("state schema_version must be %d", stateSchemaVersion))
+	expectedSchema := s.stateSchemaVersion()
+	if state.Frontmatter.SchemaVersion != expectedSchema {
+		violations = append(violations, fmt.Sprintf("state schema_version must be %d", expectedSchema))
+	}
+	if expectedSchema >= stateSchemaVersionLayout2 {
+		// Reject reintroduced prose rather than letting a later writer silently
+		// erase it (specs/v0.5.0.md#layout-compatibility-and-upgrade).
+		if state.Frontmatter.ContinuationNotes != nil {
+			violations = append(violations, "state schema 2 must not carry continuation_notes")
+		}
+		if hasMarkdownHeading(state.Body, "Notes") {
+			violations = append(violations, "state schema 2 must not render a Notes section")
+		}
 	}
 	if strings.TrimSpace(state.Frontmatter.ActiveSpecPath) == "" {
 		violations = append(violations, "state active_spec_path must not be empty")

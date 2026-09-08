@@ -404,6 +404,7 @@ func pathsFromDiscovery(root string, cfg LayoutConfig, storage StorageContext, g
 		GitDir:             git.GitDir,
 		GitCommonDir:       git.GitCommonDir,
 		ConfigFile:         markerPath(root),
+		LayoutVersion:      cfg.LayoutVersion,
 		StorageRoot:        storageRoot,
 		LockRoot:           lockRoot,
 		Storage:            storage,

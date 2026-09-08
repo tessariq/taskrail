@@ -20,7 +20,7 @@ func TestDiscoverPathsFallsBackWhenMarkerAbsent(t *testing.T) {
 		t.Fatalf("discover paths: %v", err)
 	}
 
-	assertDefaultLayout(t, repo, paths)
+	assertDefaultLayout(t, repo, paths, currentLayoutVersion)
 }
 
 func TestDiscoverPathsReadsMarkerWithDefaultLayout(t *testing.T) {
@@ -34,7 +34,7 @@ func TestDiscoverPathsReadsMarkerWithDefaultLayout(t *testing.T) {
 	}
 
 	// Marker that pins the current layout must resolve identically to the fallback.
-	assertDefaultLayout(t, repo, paths)
+	assertDefaultLayout(t, repo, paths, currentLayoutVersion)
 }
 
 func TestDiscoverPathsResolvesFromMarkerLocations(t *testing.T) {
@@ -71,7 +71,7 @@ func TestDiscoverPathsDefaultsMissingMarkerFields(t *testing.T) {
 		t.Fatalf("discover paths: %v", err)
 	}
 
-	assertDefaultLayout(t, repo, paths)
+	assertDefaultLayout(t, repo, paths, currentLayoutVersion)
 }
 
 func TestDiscoverPathsRejectsEscapingMarkerLocation(t *testing.T) {
@@ -100,19 +100,24 @@ func TestDiscoverPathsRejectsMalformedMarker(t *testing.T) {
 	}
 }
 
-func assertDefaultLayout(t *testing.T, repo string, paths Paths) {
+// assertDefaultLayout checks the default committed layout. layoutVersion is the
+// version the marker under test resolves to, which selects the state schema, so
+// a marker predating the versioning ("older") is asserted as the 0 it records
+// rather than silently reported as the current layout.
+func assertDefaultLayout(t *testing.T, repo string, paths Paths, layoutVersion int) {
 	t.Helper()
 	planning := filepath.Join(repo, "planning")
 	artifacts := filepath.Join(planning, "artifacts")
 	want := Paths{
-		RepoRoot:     repo,
-		ManagedRoot:  repo,
-		WorktreeRoot: repo,
-		GitDir:       filepath.Join(repo, ".git"),
-		GitCommonDir: filepath.Join(repo, ".git"),
-		ConfigFile:   filepath.Join(repo, ".taskrail", "config.yml"),
-		StorageRoot:  repo,
-		LockRoot:     filepath.Join(repo, ".git", "taskrail"),
+		RepoRoot:      repo,
+		ManagedRoot:   repo,
+		WorktreeRoot:  repo,
+		GitDir:        filepath.Join(repo, ".git"),
+		GitCommonDir:  filepath.Join(repo, ".git"),
+		ConfigFile:    filepath.Join(repo, ".taskrail", "config.yml"),
+		LayoutVersion: layoutVersion,
+		StorageRoot:   repo,
+		LockRoot:      filepath.Join(repo, ".git", "taskrail"),
 		// Discovery resolves the committed context until a local marker exists.
 		Storage:            committedStorage(),
 		LogicalSpecsDir:    "specs",

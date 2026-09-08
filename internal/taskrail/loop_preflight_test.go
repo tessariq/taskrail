@@ -95,6 +95,7 @@ func TestLoopPreflightCapturesCleanRepositoryWithoutMutation(t *testing.T) {
 	useLoopLayout2(t, repo)
 	runGit(t, repo, "add", ".")
 	runGit(t, repo, "commit", "-m", "taskrail")
+	svc = newTestService(t, repo, time.Now())
 
 	before := snapshotTree(t, repo)
 	rounds := 2
@@ -251,6 +252,7 @@ func TestLoopPreflightRefusesDirtyActiveAndLockedRepositories(t *testing.T) {
 			useLoopLayout2(t, repo)
 			runGit(t, repo, "add", ".")
 			runGit(t, repo, "commit", "-m", "taskrail")
+			svc = newTestService(t, repo, time.Now())
 			cleanup := test.mutate(t, repo, svc)
 			defer cleanup()
 
@@ -271,6 +273,7 @@ func TestLoopPreflightCapturesUppercaseGitRootCandidates(t *testing.T) {
 	useLoopLayout2(t, repo)
 	runGit(t, repo, "add", ".")
 	runGit(t, repo, "commit", "-m", "taskrail")
+	svc = newTestService(t, repo, time.Now())
 	path := filepath.Join(repo, ".git", "EVIL_REV")
 	if err := os.WriteFile(path, []byte("candidate\n"), 0o644); err != nil {
 		t.Fatalf("write root candidate: %v", err)
@@ -596,10 +599,13 @@ func loopFixture(t *testing.T) (string, *Service) {
 	useLoopLayout2(t, repo)
 	runGit(t, repo, "add", ".")
 	runGit(t, repo, "commit", "-m", "taskrail")
-	return repo, svc
+	// Rediscover after the marker moves to layout 2, exactly as a real invocation
+	// does: the layout selects the state schema every reader and writer works in.
+	return repo, newTestService(t, repo, time.Now())
 }
 
 func useLoopLayout2(t *testing.T, repo string) {
 	t.Helper()
 	writeFile(t, filepath.Join(repo, ".taskrail", "config.yml"), "layout_version: 2\nspecs_dir: specs\nplanning_dir: planning\nstorage_mode: committed\nimplementation_review_max_rounds: 1\n")
+	upgradeStateFixtureToSchema2(t, filepath.Join(repo, "planning", "STATE.md"))
 }
