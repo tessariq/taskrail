@@ -71,6 +71,43 @@ func miseTool(t *testing.T, mise, tool string) string {
 	return ""
 }
 
+// goReleaseLine reduces a Go version to its major.minor release line, so
+// "1.26" and "1.26.0" compare equal.
+//
+// The release line is the only part these two files can agree on. go.mod's
+// directive is a minimum language version, while mise's pin deliberately floats
+// to the newest patch in its line, so the patch components describe different
+// things and are not comparable. Comparing the whole strings only appeared to
+// work while both files happened to spell the version the same way: `go get`
+// writes the directive in its canonical "1.26.0" form, which failed this guard
+// on every dependency bump while nothing was actually wrong.
+func goReleaseLine(version string) string {
+	parts := strings.SplitN(version, ".", 3)
+	if len(parts) < 2 {
+		return version
+	}
+	return parts[0] + "." + parts[1]
+}
+
+func TestGoReleaseLineIgnoresOnlyThePatchComponent(t *testing.T) {
+	for _, item := range []struct {
+		name        string
+		left, right string
+		equal       bool
+	}{
+		{"canonical and short spelling", "1.26", "1.26.0", true},
+		{"differing patch in one line", "1.26.1", "1.26.4", true},
+		{"different minor", "1.26", "1.27", false},
+		{"different major", "1.26", "2.26", false},
+	} {
+		t.Run(item.name, func(t *testing.T) {
+			if got := goReleaseLine(item.left) == goReleaseLine(item.right); got != item.equal {
+				t.Errorf("goReleaseLine(%q) == goReleaseLine(%q) = %v, want %v", item.left, item.right, got, item.equal)
+			}
+		})
+	}
+}
+
 func TestMiseGoPinMatchesGoMod(t *testing.T) {
 	root := repoRoot(t)
 	goMod := readFile(t, root, "go.mod")
@@ -82,8 +119,8 @@ func TestMiseGoPinMatchesGoMod(t *testing.T) {
 	}
 	goModVersion := m[1]
 
-	if got := miseTool(t, mise, "go"); got != goModVersion {
-		t.Errorf("mise.toml go pin %q does not match go.mod go directive %q", got, goModVersion)
+	if got := miseTool(t, mise, "go"); goReleaseLine(got) != goReleaseLine(goModVersion) {
+		t.Errorf("mise.toml go pin %q is not on the go.mod go directive's release line %q", got, goModVersion)
 	}
 }
 

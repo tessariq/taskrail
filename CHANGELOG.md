@@ -39,6 +39,12 @@ All notable user-visible changes to Taskrail will be documented in this file.
   which `-trimpath` does not strip — can no longer change the compared bytes
   when HEAD moves or the worktree merely becomes dirty. A genuine source change
   still fails the guard.
+- The mise Go pin guard now compares release lines instead of whole version
+  strings. `go.mod`'s directive is a minimum and mise's pin floats within its
+  patch line, so the two never described the same value; whole-string equality
+  only held while both files spelled the version identically, and any `go get`
+  that rewrote the directive to its canonical `1.26.0` form failed CI while
+  nothing had drifted. A real release-line mismatch still fails.
 - Verification validation now accepts absent producer-local predecessor
   artifacts in fresh clones while still rejecting malformed or contradictory
   predecessor evidence that is locally available.
