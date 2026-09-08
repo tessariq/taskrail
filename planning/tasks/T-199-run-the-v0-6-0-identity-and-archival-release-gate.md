@@ -6,6 +6,7 @@ priority: high
 spec_ref: specs/v0.6.0.md#goals
 dependencies:
     - T-198-verify-v0-6-identity-archival-and-recovery
+    - T-388-split-release-gate-deterministic-and-semantic
 updated_at: "2026-08-04T23:06:23Z"
 ---
 

@@ -19,6 +19,12 @@
 - `README.md` and workflow docs are orientation material, not the authoritative product definition.
 - Tasks under `planning/tasks/` must link to one or more live headings in the relevant spec file.
 - `planning/STATE.md` declares the active spec version and active spec path.
+- A spec version stays near the size of `specs/v0.4.0.md` (about 450 lines).
+  Test-requirement inventories, byte-level schemas, and field-order rules belong
+  in code, golden fixtures, and `docs/`, not in the normative spec. Going past
+  the ceiling needs a written reason in the spec's `## Summary`, because spec
+  size drives task count, test volume, and release-gate size downstream
+  (`v0.5.0` grew to four times `v0.4.0` and its gate restarted three times).
 
 ## Version Intent
 
