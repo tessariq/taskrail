@@ -394,11 +394,25 @@ func skillEvalStringArray(object map[string]json.RawMessage, name string) ([]str
 	return values, nil
 }
 
+// skillEvalGitInternals reports whether an entry is a repository's own .git
+// directory. An evaluation sandbox is a live Git repository whose internals Git
+// rewrites on its own schedule: auto maintenance after a commit creates and then
+// removes .git/objects/maintenance.lock, so a walk of .git races with Git and
+// fails on a path that existed a moment earlier. Sandbox content is what a case
+// claims; Git state is observed separately through git status digests. Fixture,
+// skill, and registry trees contain no .git, so this changes nothing for them.
+func skillEvalGitInternals(entry fs.DirEntry) bool {
+	return entry.IsDir() && entry.Name() == ".git"
+}
+
 func validateSkillEvalFixtureTree(root string) error {
 	var files []fs.FileInfo
 	return filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
 		if err != nil {
 			return err
+		}
+		if skillEvalGitInternals(entry) {
+			return fs.SkipDir
 		}
 		if entry.Type()&fs.ModeSymlink != 0 || !entry.Type().IsRegular() && !entry.IsDir() {
 			return fmt.Errorf("fixture %s is not a regular file or directory", path)
@@ -486,6 +500,9 @@ func skillEvalTreeDigest(domain, root string) (string, error) {
 	err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
 		if err != nil {
 			return err
+		}
+		if skillEvalGitInternals(entry) {
+			return fs.SkipDir
 		}
 		if entry.Type().IsRegular() {
 			files = append(files, path)

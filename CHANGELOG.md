@@ -27,6 +27,12 @@ All notable user-visible changes to Taskrail will be documented in this file.
   error. Only an arm the caller explicitly reports as unavailable leaves the run
   incomplete; any other adapter failure now names its case, arm, and cause
   instead of silently reducing the staged arm count.
+- Maintainer skill-evaluation sandbox digests now ignore a sandbox's own `.git`
+  directory. Git rewrites its internals on its own schedule — auto maintenance
+  after a commit creates and removes `.git/objects/maintenance.lock` — so
+  walking them raced with Git and failed an arm on a path that existed a moment
+  earlier. Worktree content stays covered, and Git state is still observed
+  through the separate `git status` digests.
 - Verification validation now accepts absent producer-local predecessor
   artifacts in fresh clones while still rejecting malformed or contradictory
   predecessor evidence that is locally available.

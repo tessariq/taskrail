@@ -229,3 +229,33 @@ func TestParseSkillEvalCaseRequiresClaimedScenarioState(t *testing.T) {
 		})
 	}
 }
+
+func TestSkillEvalTreeDigestIgnoresGitInternals(t *testing.T) {
+	// An evaluation sandbox is a live Git repository. Git's auto maintenance
+	// creates and removes files such as .git/objects/maintenance.lock in the
+	// background after a commit, so walking .git races with Git itself and
+	// observes bytes no case ever claimed. Worktree content is the subject here;
+	// Git state is observed separately through git status digests.
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "tracked.txt"), []byte("content"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	before, err := skillEvalTreeDigest("taskrail-skill-eval-sandbox-v1", root)
+	if err != nil {
+		t.Fatalf("digest without a repository: %v", err)
+	}
+	objects := filepath.Join(root, ".git", "objects")
+	if err := os.MkdirAll(objects, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(objects, "maintenance.lock"), []byte("lock"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	after, err := skillEvalTreeDigest("taskrail-skill-eval-sandbox-v1", root)
+	if err != nil {
+		t.Fatalf("digest with a repository: %v", err)
+	}
+	if before != after {
+		t.Fatalf("Git internals changed the sandbox digest: %s != %s", before, after)
+	}
+}
