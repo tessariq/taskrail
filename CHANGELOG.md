@@ -6,6 +6,21 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ### Fixed
 
+- Maintainer skill evaluations no longer manufacture a paired comparison the
+  evidence cannot support. A baseline arm is required only when both the skill
+  and the case's storage mode existed in v0.4.0, and a baseline-required scenario
+  is checked against a maintainer-owned v0.4.0 command surface: local storage and
+  `task show` never shipped there, so those arms failed for lacking a command and
+  every pairing read as candidate improvement. That release also answers an
+  unknown subcommand with its parent's help and exit code zero, so an unchecked
+  probe would have graded `pass` while observing nothing at all.
+- A skill whose contract is to publish a durable review bundle is no longer
+  graded as leaving a dirty worktree. The blanket `git-worktree-clean` assertion
+  failed such a skill for producing its own required output, and passed only when
+  a run happened not to reach the publish step, so the grade varied by run rather
+  than describing the skill. The new `git-publication-only` predicate admits new
+  untracked paths while still requiring clean tracked state, an unmoved `HEAD`,
+  and an unchanged ref listing.
 - `taskrail lock status` now reports the held lock and its `--take-over-lock` and
   `--expect-sha256` operands for every retained transaction state, instead of
   refusing with `recovery_pending`. `recover --apply` refuses an abandoned lock

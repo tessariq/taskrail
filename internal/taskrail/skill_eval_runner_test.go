@@ -755,6 +755,9 @@ func runSkillEvalScenarioCommand(ctx context.Context, sandbox, binary, rawRoot s
 		return SkillEvalObservedFact{}, err
 	}
 	gitBefore := skillEvalGitDigest(ctx, sandbox)
+	trackedBefore := skillEvalGitTrackedDigest(ctx, sandbox)
+	headBefore := skillEvalGitHead(ctx, sandbox)
+	refsBefore := skillEvalGitRefsDigest(ctx, sandbox)
 	program, args := action.Command[0], action.Command[1:]
 	if action.Operation == "taskrail-command" {
 		program = binary
@@ -782,7 +785,7 @@ func runSkillEvalScenarioCommand(ctx context.Context, sandbox, binary, rawRoot s
 	if err != nil {
 		return SkillEvalObservedFact{}, err
 	}
-	fact := SkillEvalObservedFact{Action: action.ID, Operation: action.Operation, Command: action.Command, ExitCode: exitCode, StdoutSHA256: skillEvalBytesDigest(stdout), StderrSHA256: skillEvalBytesDigest(stderr), BeforeSHA256: before, AfterSHA256: after, GitBeforeSHA256: gitBefore, GitAfterSHA256: skillEvalGitDigest(ctx, sandbox), StoragePaths: []string{}}
+	fact := SkillEvalObservedFact{Action: action.ID, Operation: action.Operation, Command: action.Command, ExitCode: exitCode, StdoutSHA256: skillEvalBytesDigest(stdout), StderrSHA256: skillEvalBytesDigest(stderr), BeforeSHA256: before, AfterSHA256: after, GitBeforeSHA256: gitBefore, GitAfterSHA256: skillEvalGitDigest(ctx, sandbox), GitTrackedBeforeSHA256: trackedBefore, GitTrackedAfterSHA256: skillEvalGitTrackedDigest(ctx, sandbox), GitHeadBefore: headBefore, GitHeadAfter: skillEvalGitHead(ctx, sandbox), GitRefsBeforeSHA256: refsBefore, GitRefsAfterSHA256: skillEvalGitRefsDigest(ctx, sandbox), StoragePaths: []string{}}
 	if action.Operation == "taskrail-command" && len(args) > 0 && args[0] == "validate" {
 		var envelope struct {
 			Result struct {
@@ -792,6 +795,34 @@ func runSkillEvalScenarioCommand(ctx context.Context, sandbox, binary, rawRoot s
 		fact.ValidationPassed = json.Unmarshal(stdout, &envelope) == nil && envelope.Result.Valid
 	}
 	return fact, nil
+}
+
+// skillEvalGitTrackedDigest observes only tracked state, so a durable review
+// bundle the skill was asked to publish does not read as a dirty worktree.
+func skillEvalGitTrackedDigest(ctx context.Context, sandbox string) string {
+	command := exec.CommandContext(ctx, "git", "status", "--porcelain=v1", "--untracked-files=no")
+	command.Dir = sandbox
+	output, _ := command.Output()
+	return skillEvalBytesDigest(output)
+}
+
+// skillEvalGitRefsDigest observes every ref, which neither the worktree status
+// nor HEAD reveals when a branch or tag is created.
+func skillEvalGitRefsDigest(ctx context.Context, sandbox string) string {
+	command := exec.CommandContext(ctx, "git", "show-ref")
+	command.Dir = sandbox
+	output, _ := command.Output()
+	return skillEvalBytesDigest(output)
+}
+
+func skillEvalGitHead(ctx context.Context, sandbox string) string {
+	command := exec.CommandContext(ctx, "git", "rev-parse", "HEAD")
+	command.Dir = sandbox
+	output, err := command.Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(output))
 }
 
 func skillEvalGitDigest(ctx context.Context, sandbox string) string {
@@ -949,4 +980,60 @@ func skillEvalObservedScenarioFacts(item SkillEvalCase) []SkillEvalObservedFact 
 		})
 	}
 	return facts
+}
+
+// TestSkillEvalPublicationOnlyPredicateAdmitsNewUntrackedFiles pins the
+// distinction the publishing skills need: their contract is to leave a durable
+// review bundle in the worktree, so new untracked paths are the success signal,
+// while a modified tracked file or a moved HEAD is still a failure.
+func TestSkillEvalPublicationOnlyPredicateAdmitsNewUntrackedFiles(t *testing.T) {
+	modified := testSkillEvalDigest("modified tracked file")
+	clean := skillEvalCleanWorktreeDigest
+	head := "f58086841529147fbf10746383de3e5ffa499713"
+	refs := testSkillEvalDigest("refs listing")
+	base := func() SkillEvalObservedFact {
+		return SkillEvalObservedFact{
+			Operation: "git-command", ExitCode: 0,
+			GitTrackedBeforeSHA256: clean, GitTrackedAfterSHA256: clean,
+			GitHeadBefore: head, GitHeadAfter: head,
+			GitRefsBeforeSHA256: refs, GitRefsAfterSHA256: refs,
+		}
+	}
+	for _, tc := range []struct {
+		name   string
+		mutate func(SkillEvalObservedFact) SkillEvalObservedFact
+		want   bool
+	}{
+		{"published only new untracked files", func(f SkillEvalObservedFact) SkillEvalObservedFact { return f }, true},
+		{"modified a tracked file", func(f SkillEvalObservedFact) SkillEvalObservedFact {
+			f.GitTrackedAfterSHA256 = modified
+			return f
+		}, false},
+		{"arrived with tracked modifications", func(f SkillEvalObservedFact) SkillEvalObservedFact {
+			f.GitTrackedBeforeSHA256 = modified
+			return f
+		}, false},
+		{"committed its publication", func(f SkillEvalObservedFact) SkillEvalObservedFact {
+			f.GitHeadAfter = "0000000000000000000000000000000000000000"
+			return f
+		}, false},
+		{"unborn HEAD", func(f SkillEvalObservedFact) SkillEvalObservedFact {
+			f.GitHeadBefore, f.GitHeadAfter = "", ""
+			return f
+		}, false},
+		{"created a branch or tag", func(f SkillEvalObservedFact) SkillEvalObservedFact {
+			f.GitRefsAfterSHA256 = testSkillEvalDigest("refs plus a new branch")
+			return f
+		}, false},
+		{"failing git command", func(f SkillEvalObservedFact) SkillEvalObservedFact {
+			f.ExitCode = 1
+			return f
+		}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := skillEvalPredicatePasses("git-publication-only", tc.mutate(base())); got != tc.want {
+				t.Fatalf("git-publication-only = %t, want %t", got, tc.want)
+			}
+		})
+	}
 }

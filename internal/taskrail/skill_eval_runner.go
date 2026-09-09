@@ -71,18 +71,30 @@ type SkillEvalAdapterResult struct {
 // The same canonical facts must be present in raw facts.json before the runner
 // will evaluate an oracle predicate.
 type SkillEvalObservedFact struct {
-	Action           string   `json:"action"`
-	Operation        string   `json:"operation"`
-	Command          []string `json:"command"`
-	ExitCode         int      `json:"exit_code"`
-	StdoutSHA256     string   `json:"stdout_sha256"`
-	StderrSHA256     string   `json:"stderr_sha256"`
-	BeforeSHA256     string   `json:"before_sha256"`
-	AfterSHA256      string   `json:"after_sha256"`
-	GitBeforeSHA256  string   `json:"git_before_sha256"`
-	GitAfterSHA256   string   `json:"git_after_sha256"`
-	ValidationPassed bool     `json:"validation_passed"`
-	StoragePaths     []string `json:"storage_paths"`
+	Action          string   `json:"action"`
+	Operation       string   `json:"operation"`
+	Command         []string `json:"command"`
+	ExitCode        int      `json:"exit_code"`
+	StdoutSHA256    string   `json:"stdout_sha256"`
+	StderrSHA256    string   `json:"stderr_sha256"`
+	BeforeSHA256    string   `json:"before_sha256"`
+	AfterSHA256     string   `json:"after_sha256"`
+	GitBeforeSHA256 string   `json:"git_before_sha256"`
+	GitAfterSHA256  string   `json:"git_after_sha256"`
+	// The tracked-only status and HEAD separate a skill that published durable
+	// review bytes, which is its contract, from one that edited or committed
+	// what it found. The full status above cannot tell those apart.
+	GitTrackedBeforeSHA256 string `json:"git_tracked_before_sha256"`
+	GitTrackedAfterSHA256  string `json:"git_tracked_after_sha256"`
+	GitHeadBefore          string `json:"git_head_before"`
+	GitHeadAfter           string `json:"git_head_after"`
+	// Creating a branch or tag moves neither the worktree status nor HEAD, so
+	// the ref listing is observed separately: a published review bundle must not
+	// smuggle in a ref the skill contracts forbid.
+	GitRefsBeforeSHA256 string   `json:"git_refs_before_sha256"`
+	GitRefsAfterSHA256  string   `json:"git_refs_after_sha256"`
+	ValidationPassed    bool     `json:"validation_passed"`
+	StoragePaths        []string `json:"storage_paths"`
 }
 
 type SkillEvalIdentity struct {
@@ -359,7 +371,10 @@ func skillEvalDeterministicGrade(evaluation SkillEvalCase, rawRoot string, facts
 }
 
 func skillEvalSameFact(a, b SkillEvalObservedFact) bool {
-	return a.Action == b.Action && a.Operation == b.Operation && slices.Equal(a.Command, b.Command) && a.ExitCode == b.ExitCode && a.StdoutSHA256 == b.StdoutSHA256 && a.StderrSHA256 == b.StderrSHA256 && a.BeforeSHA256 == b.BeforeSHA256 && a.AfterSHA256 == b.AfterSHA256 && a.GitBeforeSHA256 == b.GitBeforeSHA256 && a.GitAfterSHA256 == b.GitAfterSHA256 && a.ValidationPassed == b.ValidationPassed && slices.Equal(a.StoragePaths, b.StoragePaths)
+	return a.Action == b.Action && a.Operation == b.Operation && slices.Equal(a.Command, b.Command) && a.ExitCode == b.ExitCode && a.StdoutSHA256 == b.StdoutSHA256 && a.StderrSHA256 == b.StderrSHA256 && a.BeforeSHA256 == b.BeforeSHA256 && a.AfterSHA256 == b.AfterSHA256 && a.GitBeforeSHA256 == b.GitBeforeSHA256 && a.GitAfterSHA256 == b.GitAfterSHA256 &&
+		a.GitTrackedBeforeSHA256 == b.GitTrackedBeforeSHA256 && a.GitTrackedAfterSHA256 == b.GitTrackedAfterSHA256 &&
+		a.GitHeadBefore == b.GitHeadBefore && a.GitHeadAfter == b.GitHeadAfter &&
+		a.GitRefsBeforeSHA256 == b.GitRefsBeforeSHA256 && a.GitRefsAfterSHA256 == b.GitRefsAfterSHA256 && a.ValidationPassed == b.ValidationPassed && slices.Equal(a.StoragePaths, b.StoragePaths)
 }
 
 func skillEvalPredicatePasses(predicate string, fact SkillEvalObservedFact) bool {
@@ -371,6 +386,11 @@ func skillEvalPredicatePasses(predicate string, fact SkillEvalObservedFact) bool
 	case "git-worktree-clean":
 		return fact.Operation == "git-command" && fact.ExitCode == 0 &&
 			fact.GitBeforeSHA256 == skillEvalCleanWorktreeDigest && fact.GitAfterSHA256 == skillEvalCleanWorktreeDigest
+	case "git-publication-only":
+		return fact.Operation == "git-command" && fact.ExitCode == 0 &&
+			fact.GitTrackedBeforeSHA256 == skillEvalCleanWorktreeDigest && fact.GitTrackedAfterSHA256 == skillEvalCleanWorktreeDigest &&
+			fact.GitHeadBefore != "" && fact.GitHeadBefore == fact.GitHeadAfter &&
+			fact.GitRefsBeforeSHA256 == fact.GitRefsAfterSHA256
 	default:
 		return false
 	}
@@ -463,7 +483,8 @@ func skillEvalEffectiveCommand(command []string) bool {
 }
 
 func validSkillEvalPredicate(value string) bool {
-	return value == "command-exit-zero" || value == "taskrail-validation-pass" || value == "git-worktree-clean"
+	return value == "command-exit-zero" || value == "taskrail-validation-pass" ||
+		value == "git-worktree-clean" || value == "git-publication-only"
 }
 
 func skillEvalBytesDigest(data []byte) string {

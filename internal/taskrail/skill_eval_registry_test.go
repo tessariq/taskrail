@@ -3,6 +3,7 @@ package taskrail
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -134,6 +135,9 @@ func TestSkillEvalTreeDigestRejectsHardLinkedFixtures(t *testing.T) {
 
 func writeSkillEvalFixture(t *testing.T, root, skill, mode, caseID string, baseline, localFixtures bool) {
 	t.Helper()
+	// Callers state whether the skill shipped in v0.4.0; local storage did not,
+	// so a local case of such a skill is still candidate-only.
+	baseline = baseline && mode == "committed"
 	caseRoot := filepath.Join(root, skill, caseID)
 	if err := os.MkdirAll(caseRoot, 0o755); err != nil {
 		t.Fatal(err)
@@ -257,5 +261,85 @@ func TestSkillEvalTreeDigestIgnoresGitInternals(t *testing.T) {
 	}
 	if before != after {
 		t.Fatalf("Git internals changed the sandbox digest: %s != %s", before, after)
+	}
+}
+
+// TestBaselineRequiredCasesRunOnTheBaselineRelease pins the property the paired
+// comparison depends on: a baseline arm must be executable by the v0.4.0 binary.
+// A case that seeds or probes through a surface v0.4.0 never shipped grades its
+// baseline `fail` for lacking a command, which reads as candidate improvement.
+func TestBaselineRequiredCasesRunOnTheBaselineRelease(t *testing.T) {
+	registry, err := loadSkillEvalRegistry(filepath.Join("testdata", "skill-evals", "v1", "cases"), shippableSkills)
+	if err != nil {
+		t.Fatalf("loadSkillEvalRegistry: %v", err)
+	}
+	for _, item := range registry {
+		if !item.BaselineRequired {
+			continue
+		}
+		if item.StorageMode != "committed" {
+			t.Errorf("case %q requires a baseline in storage mode %q, which v0.4.0 has no command for", item.CaseID, item.StorageMode)
+		}
+		for _, action := range slices.Concat(item.Scenario.Setup, item.Scenario.Actions) {
+			if err := skillEvalBaselineExecutable(action.Command); err != nil {
+				t.Errorf("case %q action %q: %v", item.CaseID, action.ID, err)
+			}
+		}
+	}
+}
+
+func TestSkillEvalBaselineExecutableReadsCommandShapes(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		command []string
+		wantErr bool
+	}{
+		{"plain command", []string{"taskrail", "validate", "--json"}, false},
+		// v0.4.0 registers --json on the subcommand, so this exits 1 there.
+		{"flag before the command path", []string{"taskrail", "--json", "validate"}, true},
+		{"trailing positional argument", []string{"taskrail", "task", "new", "show"}, true},
+		{"positional after flags", []string{"taskrail", "task", "new", "--title", "X", "extra-positional"}, true},
+		{"flag value that looks like a flag", []string{"taskrail", "task", "new", "--title", "-weird-value", "--json"}, false},
+		{"inline flag value", []string{"taskrail", "task", "new", "--title=Subject", "--json"}, false},
+		{"bare end-of-flags separator", []string{"taskrail", "validate", "--"}, false},
+		// Registered paths are cobra.NoArgs there, so the operand is refused.
+		{"operand after the end-of-flags separator", []string{"taskrail", "validate", "--", "extra"}, true},
+		{"git is external to the release", []string{"git", "status", "--porcelain=v1"}, false},
+		{"command absent from v0.4.0", []string{"taskrail", "task", "show", "T-001-evaluation-subject"}, true},
+		{"flag absent from v0.4.0", []string{"taskrail", "validate", "--active-spec"}, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := skillEvalBaselineExecutable(tc.command)
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("skillEvalBaselineExecutable(%q) = %v, want error %t", tc.command, err, tc.wantErr)
+			}
+		})
+	}
+}
+
+func TestParseSkillEvalCaseRejectsUnrunnableBaselineArms(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		mutate func(string) string
+		want   string
+	}{
+		{"local mode requiring a baseline", func(s string) string {
+			return strings.Replace(s, `"storage_mode":"committed"`, `"storage_mode":"local"`, 1)
+		}, "v0.4.0"},
+		{"baseline arm probing a v0.5 surface", func(s string) string {
+			return strings.Replace(s, `["taskrail","validate","--json"]`, `["taskrail","task","show","T-001-evaluation-subject","--json"]`, 1)
+		}, "v0.4.0"},
+		// v0.4.0 prints its parent's help and exits zero for an unknown
+		// subcommand, so a flagless v0.5 probe would grade pass while reading
+		// nothing. The flag is not what makes this unrunnable; the command is.
+		{"baseline arm probing a v0.5 command without flags", func(s string) string {
+			return strings.Replace(s, `["taskrail","validate","--json"]`, `["taskrail","task","show","T-001-evaluation-subject"]`, 1)
+		}, "v0.4.0"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := parseSkillEvalCase([]byte(tc.mutate(skillEvalClaimedStateCase))); err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("parseSkillEvalCase error = %v, want %q", err, tc.want)
+			}
+		})
 	}
 }

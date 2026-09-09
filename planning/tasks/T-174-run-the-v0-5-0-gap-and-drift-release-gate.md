@@ -18,6 +18,8 @@ dependencies:
     - T-385-make-skill-evaluation-scenarios-match-their-claims
     - T-389-require-layout-2-for-every-semantic-writer
     - T-390-describe-loop-as-executing-in-command-help
+    - T-394-make-skill-eval-baselines-executable
+    - T-395-separate-publication-from-dirty-worktree
 updated_at: "2026-09-09T14:07:00Z"
 last_verification_id: "525eef8e0e6f39b6ce2558ed2536b5cd"
 last_verification_result: fail

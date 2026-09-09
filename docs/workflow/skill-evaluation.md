@@ -27,7 +27,11 @@ one strict `case.json` per case. Every shipped skill has committed and local
 cases; local cases include exact stale logical-state decoy bytes and a Git
 provenance sentinel. The registry validator rejects missing skill/mode coverage,
 duplicate case IDs, path/name disagreement, malformed strict JSON, incorrect
-v0.4.0 baseline classification, and incomplete local fixtures.
+v0.4.0 baseline classification, and incomplete local fixtures. Baseline
+classification covers the storage mode as well as the skill, and a
+baseline-required scenario may use only the v0.4.0 command surface: local storage
+and later flags do not exist there, so such an arm would fail for lacking a
+command and read as candidate improvement.
 
 Each case has a strict executable `scenario`: the fixture source, a sandbox name
 equal to its case ID, setup commands, and action command vectors. Commands are
@@ -43,9 +47,15 @@ into a passing refusal. Neither counts if the command only prints help or runs
 a dry run. A case that does not is refused before any provider runs.
 Its `oracle` maps every authored assertion
 exactly once to a supported mechanical predicate over action facts. The supported
-predicates are `command-exit-zero`, `taskrail-validation-pass`, and
+predicates are `command-exit-zero`, `taskrail-validation-pass`,
 `git-worktree-clean` (the named Git command exits zero and the observed worktree
-state is empty before and after it; an unchanged *dirty* worktree fails). Every
+state is empty before and after it; an unchanged *dirty* worktree fails), and
+`git-publication-only` (tracked state is clean before and after, `HEAD` does not
+move, and no ref is created or moved, while new untracked paths are admitted). A skill whose contract is to
+publish a durable review bundle into the worktree uses the latter: under
+`git-worktree-clean` its own required output grades `fail`, and whether it
+reaches the publish step at all varies by run, so the grade is not a property of
+the skill. Every
 declared setup action must additionally be observed with exit code zero, or the
 arm grades `fail`. An adapter returns structured facts containing exact
 command argv/exit code, stdout/stderr, filesystem and Git before/after digests,

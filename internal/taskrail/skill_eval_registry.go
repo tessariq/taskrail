@@ -34,6 +34,94 @@ var skillEvalBaselineSkills = map[string]bool{
 	"taskrail-spec":          true,
 }
 
+// skillEvalBaselineSurfaces is the v0.4.0 command surface a baseline-required
+// scenario may use: command path to its accepted flags, each mapped to whether
+// the flag takes a value. Like the skill inventory above it is maintainer-owned
+// rather than inferred, because the candidate tree cannot say what the released
+// binary understood. It must stay truthful about absence: v0.4.0 answers an
+// unknown subcommand by printing its parent's help and exiting zero, so a probe
+// that reached past this set would grade `pass` while reading nothing at all.
+// It registers only the paths the scenarios use: `task` also had rename and
+// repoint in v0.4.0, but an unregistered path is refused loudly rather than
+// accepted, so adding one is a deliberate act. `task show` arrived in v0.5.
+var skillEvalBaselineSurfaces = map[string]map[string]bool{
+	"init":     {"--json": false, "--with-skills": false, "--apply": false, "--force": false},
+	"validate": {"--json": false},
+	"task new": {
+		"--json": false, "--title": true, "--slug": true, "--spec-ref": true,
+		"--priority": true, "--dep": true, "--follow-up": true, "--area": true,
+	},
+}
+
+// skillEvalBaselineExecutable reports whether the v0.4.0 binary can run the
+// command. Git invocations are external to the release; the case validator has
+// already established that a non-taskrail command is a git one. Registered paths
+// take no positional argument, so the whole word sequence must name one: a
+// trailing word would otherwise be dropped, and v0.4.0 refuses those as an
+// unknown command.
+func skillEvalBaselineExecutable(command []string) error {
+	if len(command) == 0 || command[0] != "taskrail" {
+		return nil
+	}
+	words, rest, err := skillEvalCommandWords(command[1:])
+	if err != nil {
+		return err
+	}
+	path := strings.Join(words, " ")
+	accepted, known := skillEvalBaselineSurfaces[path]
+	if !known {
+		return fmt.Errorf("command %q is not in the v0.4.0 command surface", strings.Join(command, " "))
+	}
+	return skillEvalBaselineFlags(path, accepted, rest)
+}
+
+// skillEvalCommandWords splits the command path from the arguments that follow
+// it. v0.4.0 registers every flag on its subcommand rather than on the root, so
+// a flag ahead of the path is refused instead of skipped: which flags it would
+// even belong to is unknowable before the path is read.
+func skillEvalCommandWords(arguments []string) ([]string, []string, error) {
+	words := []string{}
+	for index, argument := range arguments {
+		if argument == "--" {
+			return words, arguments[index:], nil
+		}
+		if strings.HasPrefix(argument, "-") {
+			if len(words) == 0 {
+				return nil, nil, fmt.Errorf("flag %q precedes the command path, which v0.4.0 registers per subcommand", argument)
+			}
+			return words, arguments[index:], nil
+		}
+		words = append(words, argument)
+	}
+	return words, nil, nil
+}
+
+func skillEvalBaselineFlags(path string, accepted map[string]bool, arguments []string) error {
+	for index := 0; index < len(arguments); index++ {
+		argument := arguments[index]
+		// Every registered path takes no positional argument, so operands after
+		// the end-of-flags separator are refused exactly like bare ones.
+		if argument == "--" {
+			if index+1 < len(arguments) {
+				return fmt.Errorf("positional argument %q of %q is not in the v0.4.0 command surface", arguments[index+1], path)
+			}
+			return nil
+		}
+		if !strings.HasPrefix(argument, "-") {
+			return fmt.Errorf("positional argument %q of %q is not in the v0.4.0 command surface", argument, path)
+		}
+		name, _, hasInline := strings.Cut(argument, "=")
+		takesValue, ok := accepted[name]
+		if !ok {
+			return fmt.Errorf("flag %q of %q is not in the v0.4.0 command surface", name, path)
+		}
+		if takesValue && !hasInline {
+			index++
+		}
+	}
+	return nil
+}
+
 // SkillEvalCase is the maintainer-owned deterministic input for one behavioral
 // skill evaluation. It intentionally contains no provider or run result data.
 type SkillEvalCase struct {
@@ -229,8 +317,10 @@ func parseSkillEvalCase(data []byte) (SkillEvalCase, error) {
 	if err != nil {
 		return SkillEvalCase{}, err
 	}
-	if baselineRequired != skillEvalBaselineSkills[skill] {
-		return SkillEvalCase{}, fmt.Errorf("case %q baseline requirement does not match v0.4.0 skill inventory", caseID)
+	// Local storage is a v0.5 mode, so a v0.4.0 arm cannot even seed the
+	// repository; those cases are candidate-only rather than missing a baseline.
+	if baselineRequired != (skillEvalBaselineSkills[skill] && storageMode == "committed") {
+		return SkillEvalCase{}, fmt.Errorf("case %q baseline requirement does not match the v0.4.0 skill and storage inventory", caseID)
 	}
 	prompt, err := stringMember(object, "case", "prompt")
 	if err != nil {
@@ -270,6 +360,13 @@ func parseSkillEvalCase(data []byte) (SkillEvalCase, error) {
 	}
 	if err := validateSkillEvalCaseDefinition(evaluation); err != nil {
 		return SkillEvalCase{}, err
+	}
+	if evaluation.BaselineRequired {
+		for _, action := range slices.Concat(evaluation.Scenario.Setup, evaluation.Scenario.Actions) {
+			if err := skillEvalBaselineExecutable(action.Command); err != nil {
+				return SkillEvalCase{}, fmt.Errorf("case %q action %q: %w", caseID, action.ID, err)
+			}
+		}
 	}
 	return evaluation, nil
 }
@@ -361,7 +458,7 @@ func parseSkillEvalOracle(raw json.RawMessage) (SkillEvalOracle, error) {
 		if err != nil {
 			return SkillEvalOracle{}, err
 		}
-		predicate, err := enumMember(assertion, "oracle assertion", "predicate", []string{"command-exit-zero", "taskrail-validation-pass", "git-worktree-clean"})
+		predicate, err := enumMember(assertion, "oracle assertion", "predicate", []string{"command-exit-zero", "taskrail-validation-pass", "git-worktree-clean", "git-publication-only"})
 		if err != nil {
 			return SkillEvalOracle{}, err
 		}
