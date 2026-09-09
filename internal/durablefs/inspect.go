@@ -271,29 +271,18 @@ func openInspectionDirectory(parent *os.Root, name string) (*os.Root, Identity, 
 }
 
 func inspectDirectory(root *os.Root, prefix string) ([]TreeEntry, error) {
-	dir, err := root.Open(".")
+	index, err := readNameIndex(root)
 	if err != nil {
 		return nil, err
 	}
-	names, readErr := dir.ReadDir(-1)
-	closeErr := dir.Close()
-	if readErr != nil {
-		return nil, readErr
-	}
-	if closeErr != nil {
-		return nil, closeErr
-	}
-	slices.SortFunc(names, func(a, b fs.DirEntry) int { return compareNames(a.Name(), b.Name()) })
-	for i := 1; i < len(names); i++ {
-		if aliasKey(names[i-1].Name()) == aliasKey(names[i].Name()) {
-			return nil, fmt.Errorf("%w: %q collides with %q", ErrAlias, names[i-1].Name(), names[i].Name())
-		}
-	}
+	names := slices.Clone(index.names)
+	slices.SortFunc(names, compareNames)
 
 	entries := make([]TreeEntry, 0, len(names))
-	for _, named := range names {
-		name := named.Name()
-		if err := exactName(root, name, true); err != nil {
+	for _, name := range names {
+		// Answers alias exactness from the single listing above, so a folded
+		// collision is still refused wherever it sits in byte order.
+		if err := index.exact(name, true); err != nil {
 			return nil, err
 		}
 		info, err := root.Lstat(name)
@@ -318,7 +307,7 @@ func inspectDirectory(root *os.Root, prefix string) ([]TreeEntry, error) {
 		if !info.Mode().IsRegular() {
 			return nil, fmt.Errorf("%w: entry %q is not regular", ErrNotRegular, name)
 		}
-		snapshot, err := observeFile(root, name)
+		snapshot, err := observeIndexedFile(root, index, name)
 		if err != nil {
 			return nil, err
 		}

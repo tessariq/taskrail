@@ -128,6 +128,7 @@ var (
 	testHookBeforeDirectoryMove   func(string, string)
 	testHookAfterDirectoryCheck   func(string, string)
 	testHookEntryClose            func(*os.Root) error
+	testHookDirectoryRead         func()
 )
 
 // Open binds an absolute repository root without accepting a symlink or reparse
@@ -394,27 +395,45 @@ func splitPath(path string) ([]string, error) {
 	return parts, nil
 }
 
-func exactName(parent *os.Root, name string, required bool) error {
+// nameIndex is one directory listing grouped by alias key. Reading it once and
+// answering every leaf from it is what keeps observing a directory of n files
+// linear: the alias guard used to re-list the whole parent per leaf.
+type nameIndex struct {
+	names  []string
+	folded map[string][]string
+}
+
+func readNameIndex(parent *os.Root) (nameIndex, error) {
 	dir, err := parent.Open(".")
 	if err != nil {
-		return err
+		return nameIndex{}, err
 	}
-	entries, readErr := dir.ReadDir(-1)
+	if testHookDirectoryRead != nil {
+		testHookDirectoryRead()
+	}
+	// Names alone: os.(*File).ReadDir lstats every entry, which the alias guard
+	// never needs.
+	names, readErr := dir.Readdirnames(-1)
 	closeErr := dir.Close()
 	if readErr != nil {
-		return readErr
+		return nameIndex{}, readErr
 	}
 	if closeErr != nil {
-		return closeErr
+		return nameIndex{}, closeErr
 	}
-	wanted := aliasKey(name)
+	index := nameIndex{names: names, folded: make(map[string][]string, len(names))}
+	for _, name := range names {
+		key := aliasKey(name)
+		index.folded[key] = append(index.folded[key], name)
+	}
+	return index, nil
+}
+
+func (i nameIndex) exact(name string, required bool) error {
 	found := false
-	for _, entry := range entries {
-		if aliasKey(entry.Name()) != wanted {
-			continue
-		}
-		if entry.Name() != name || found {
-			return fmt.Errorf("%w: %q collides with %q", ErrAlias, name, entry.Name())
+	for _, candidate := range i.folded[aliasKey(name)] {
+		if candidate != name || found {
+			return fmt.Errorf("%w: %q collides with %q", ErrAlias, name, candidate)
 		}
 		found = true
 	}
@@ -427,12 +446,28 @@ func exactName(parent *os.Root, name string, required bool) error {
 	return nil
 }
 
+func exactName(parent *os.Root, name string, required bool) error {
+	index, err := readNameIndex(parent)
+	if err != nil {
+		return err
+	}
+	return index.exact(name, required)
+}
+
 func aliasKey(name string) string {
 	return cases.Fold().String(norm.NFC.String(name))
 }
 
 func observeFile(parent *os.Root, leaf string) (Snapshot, error) {
-	if err := exactName(parent, leaf, true); err != nil {
+	index, err := readNameIndex(parent)
+	if err != nil {
+		return Snapshot{}, err
+	}
+	return observeIndexedFile(parent, index, leaf)
+}
+
+func observeIndexedFile(parent *os.Root, index nameIndex, leaf string) (Snapshot, error) {
+	if err := index.exact(leaf, true); err != nil {
 		return Snapshot{}, err
 	}
 	info, err := parent.Lstat(leaf)

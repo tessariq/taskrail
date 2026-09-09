@@ -6,6 +6,13 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ### Fixed
 
+- `taskrail init --apply --confirm-quiescent` and `taskrail recover <id> --apply`
+  now complete on a repository holding several hundred tracked files in one
+  directory. Durable observation re-listed a directory once per file it checked
+  and re-observed a whole directory once per transaction member, so a layout
+  upgrade of a few hundred task files never finished. Alias strictness is
+  unchanged: a name that case- or NFC-folds onto an existing entry is still
+  refused, wherever it sits in byte order.
 - A repository upgraded to layout 2 is no longer reported invalid by its own
   binary. The state schema is now layout-conditioned: layout 2 reads, validates,
   and writes `STATE.md` at state schema 2, and layout 1 keeps schema 1. Schema 2

@@ -486,10 +486,15 @@ func identities(values []durablefs.Identity) []identity {
 	return result
 }
 
+// observeEntries is a pure observation pass, so every member sharing a parent
+// directory is resolved from one snapshot of it. Observing that directory per
+// member instead made a transaction over a few hundred managed files in one
+// directory re-read and re-digest the whole directory once per member.
 func observeEntries(store *store, entries []*transactionEntry) ([]observation, error) {
 	result := make([]observation, len(entries))
+	shared := map[string]durablefs.TreeSnapshot{}
 	for i, entry := range entries {
-		observed, _, err := observe(store, entry.manifest.Kind, entry.manifest.Path)
+		observed, _, err := observeWithTrees(store, entry.manifest.Kind, entry.manifest.Path, shared)
 		if err != nil {
 			return nil, err
 		}
@@ -498,18 +503,45 @@ func observeEntries(store *store, entries []*transactionEntry) ([]observation, e
 	return result, nil
 }
 
+// Indirected so a test can count how often one pass observes a directory.
+var (
+	observeRootTree   = durablefs.ObserveRoot
+	observeParentTree = durablefs.ObserveTree
+)
+
 func observe(store *store, kind PathKind, relative string) (observation, []byte, error) {
+	return observeWithTrees(store, kind, relative, nil)
+}
+
+// A non-nil trees map may only span a pass that performs no mutation: a
+// published byte invalidates the directory snapshot every later member is
+// checked against.
+//
+// Sharing narrows one guarantee deliberately. A member that was present in the
+// shared snapshot is still re-read here and refused unless its bytes and
+// identity still match, so a concurrent write to it is caught; what a shared
+// snapshot no longer notices is a sibling appearing or disappearing between the
+// snapshot and a later member's turn in the same loop. That is accepted: every
+// phase takes a fresh map, and each publication re-observes uncached and
+// re-checks the member immediately before writing it.
+func observeWithTrees(store *store, kind PathKind, relative string, trees map[string]durablefs.TreeSnapshot) (observation, []byte, error) {
 	base := store.absoluteFor(kind)
 	parent, leaf := path.Dir(relative), path.Base(relative)
-	var tree durablefs.TreeSnapshot
+	key := string(kind) + "\x00" + parent
+	tree, cached := trees[key]
 	var err error
-	if parent == "." {
-		tree, err = durablefs.ObserveRoot(base)
-	} else {
-		tree, err = durablefs.ObserveTree(base, parent)
-	}
-	if err != nil {
-		return observation{}, nil, err
+	if !cached {
+		if parent == "." {
+			tree, err = observeRootTree(base)
+		} else {
+			tree, err = observeParentTree(base, parent)
+		}
+		if err != nil {
+			return observation{}, nil, err
+		}
+		if trees != nil {
+			trees[key] = tree
+		}
 	}
 	ancestors := slices.Clone(tree.Ancestors)
 	if tree.Present {
