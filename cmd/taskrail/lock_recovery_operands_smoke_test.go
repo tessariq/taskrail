@@ -142,6 +142,9 @@ func TestLockStatusReportsTakeoverOperandsForEveryRetainedShape(t *testing.T) {
 // reading of a storage file.
 func TestRecoverAcceptsTheOperandsLockStatusReportsUnderAPreparingFence(t *testing.T) {
 	root := setupRepo(t)
+	// Applying the recovery archives the transaction directory, which needs the
+	// same directory durability every other recovery apply test requires.
+	requireRecoveryDirectoryDurability(t, root)
 	seedFencedLock(t, root, deadCLIPID(t), "a-host-that-is-not-this-one")
 	writeRetained(t, root, fencedTxID+".preparing.json", preparingMarker())
 

@@ -13,6 +13,9 @@ import (
 // how every ordinary command reaches an upgraded repository.
 func upgradeToLayout2(t *testing.T, repo string) *Service {
 	t.Helper()
+	// The migration runs as a durable transaction, so it needs the same
+	// directory durability every other apply-path test requires.
+	requireRecoveryDirectoryDurability(t, repo)
 	if _, err := layout1Service(t, repo).Init(InitInput{Apply: true, ConfirmQuiescent: true, DropContinuationNotes: true}); err != nil {
 		t.Fatalf("upgrade apply: %v", err)
 	}
