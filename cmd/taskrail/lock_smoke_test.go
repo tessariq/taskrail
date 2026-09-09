@@ -297,7 +297,10 @@ func TestLockStatusIsAdmittedButClearIsFencedByRetainedTransactionState(t *testi
 	}
 }
 
-func TestLockStatusRefusesMalformedRecoveryState(t *testing.T) {
+// Recovery state this binary cannot classify is exactly the state an operator
+// most needs the lock reported for, and status reads no byte of it: it answers
+// about the lock file alone (T-393).
+func TestLockStatusDescribesTheLockUnderMalformedRecoveryState(t *testing.T) {
 	root := setupRepo(t)
 	transaction := strings.Repeat("a", 32)
 	directory := filepath.Join(root, ".git", "taskrail", "transactions", transaction)
@@ -309,11 +312,13 @@ func TestLockStatusRefusesMalformedRecoveryState(t *testing.T) {
 	}
 
 	out, err := runRoot(t, "lock", "status", "--json")
-	if err == nil {
-		t.Fatalf("malformed recovery lock status succeeded: %s", out)
+	if err != nil {
+		t.Fatalf("malformed recovery lock status: %v (%s)", err, out)
 	}
-	if failure := decodeMachineError(t, out); failure.Code != "recovery_pending" || failure.Details.Recovery != nil {
-		t.Fatalf("malformed recovery lock status = %+v", failure)
+	var status lockStatusJSON
+	decodeMachineResult(t, out, &status)
+	if status.Held || status.SHA256 != nil || status.Owner != nil {
+		t.Fatalf("malformed recovery lock status = %+v", status)
 	}
 }
 

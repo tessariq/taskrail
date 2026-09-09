@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"regexp"
 
+	"github.com/tessariq/taskrail/internal/durablefs"
 	"github.com/tessariq/taskrail/internal/repolock"
 )
 
@@ -52,7 +53,8 @@ func (s *Service) lockRepository() repolock.Repository {
 // without writing anything. Unreadable lock metadata is a refusal — the bytes
 // stay exactly where they are for the operator to inspect.
 func (s *Service) LockStatus() (LockStatusResult, error) {
-	if err := s.checkLockStatusRecovery(); err != nil {
+	before, err := s.observeLockRecovery()
+	if err != nil {
 		return LockStatusResult{}, err
 	}
 	status, err := repolock.Inspect(s.lockRepository())
@@ -68,24 +70,30 @@ func (s *Service) LockStatus() (LockStatusResult, error) {
 		result.SHA256 = &status.SHA256
 		result.Owner = status.Owner
 	}
-	if err := s.checkLockStatusRecovery(); err != nil {
+	after, err := s.observeLockRecovery()
+	if err != nil {
 		return LockStatusResult{}, err
+	}
+	if !before.Same(after) {
+		return LockStatusResult{}, WithMachineFailure(
+			MachineFailure{Code: MachineCodeRecoveryPending, Recovery: canonicalRecovery(s.paths, after)},
+			fmt.Errorf("retained transaction state changed while the repository mutation lock was inspected"))
 	}
 	return result, nil
 }
 
-// checkLockStatusRecovery admits only a stable, canonical retained fence. It
-// lets status expose the lock blocking recovery while refusing malformed or
-// changing recovery state before it can publish a stale observation.
-func (s *Service) checkLockStatusRecovery() error {
+// observeLockRecovery keeps status admitted for every retained transaction
+// state, parseable or not. `recover` refuses an abandoned lock and names these
+// operands as the way out, so a fence this binary cannot classify must not be
+// able to withhold them — and withholding protects nothing, since the bytes
+// status publishes are the lock file's alone. Only an unreadable or moving
+// transactions tree refuses, because a tree in motion means a writer still is.
+func (s *Service) observeLockRecovery() (durablefs.TreeSnapshot, error) {
 	current, err := observeRecovery(s.paths)
 	if err != nil {
-		return recoveryPending(s.paths, current)
+		return durablefs.TreeSnapshot{}, recoveryPending(s.paths, current)
 	}
-	if recoveryRetained(current) && canonicalRecovery(s.paths, current) == nil {
-		return recoveryPending(s.paths, current)
-	}
-	return nil
+	return current, nil
 }
 
 // LockClear removes exactly the named, unchanged lock the operator observed.

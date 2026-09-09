@@ -6,6 +6,16 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ### Fixed
 
+- `taskrail lock status` now reports the held lock and its `--take-over-lock` and
+  `--expect-sha256` operands for every retained transaction state, instead of
+  refusing with `recovery_pending`. `recover --apply` refuses an abandoned lock
+  and names those operands as the remedy, but status withheld them for any fence
+  it could not classify as a canonical journal directory — including the
+  `<id>.preparing.json` and `<id>.clearing.json` markers an interrupted durable
+  writer ordinarily leaves — so each command sent the operator to the other and
+  the documented way out was closed. Status still publishes only the lock file's
+  own bytes, and the takeover interlock is unchanged: a stale digest, an unknown
+  lock id, or a provably live owner still refuses.
 - `taskrail init --apply --confirm-quiescent` and `taskrail recover <id> --apply`
   now complete on a repository holding several hundred tracked files in one
   directory. Durable observation re-listed a directory once per file it checked

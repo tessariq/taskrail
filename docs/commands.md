@@ -92,9 +92,10 @@ owner metadata (lock ID, command, PID, host, start time, repository identity,
 transaction, and — for delegated owners — executable and delegation-token
 *digests*, never the token itself) plus the raw lock-file digest. It writes
 nothing, so it is always safe to run against a lock a live writer holds. It is
-also admitted through a valid recovery fence, so an operator can observe the
-lock that blocks recovery. Malformed or substituted fence state still fails
-closed.
+also admitted through every retained recovery fence, parseable or not, because
+its operands are the documented way out of an interrupted transaction and it
+publishes no byte of the fence itself. Only a transactions tree that cannot be
+read, or that moves while the lock is inspected, refuses.
 
 Delegated loop lifecycle writers authenticate the same task-scoped grant that
 the loop issued, then narrow it to their exact command, task fields, and

@@ -1,11 +1,16 @@
 ---
 id: T-393-report-lock-takeover-operands-when-recovery-is
 title: Report lock takeover operands when recovery is pending
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#repository-discovery-locking-and-recovery
 dependencies: []
-updated_at: "2026-09-09T10:30:36Z"
+updated_at: "2026-09-09T11:02:30Z"
+completion_id: "0d5ed744a08c02c570a7a0c87f01cf68"
+last_verification_id: "aae5f1bd06a3aa44c643d8656a0a3c63"
+last_verification_result: pass
+last_verified_at: "2026-09-09T11:02:30Z"
+last_verified_completion_id: "0d5ed744a08c02c570a7a0c87f01cf68"
 ---
 
 # T-393-report-lock-takeover-operands-when-recovery-is Report lock takeover operands when recovery is pending
@@ -67,3 +72,6 @@ about a lock, and withholding it protects nothing.
   upgrade is most likely to be met.
 
 ## Implementation Notes
+
+- 2026-09-09T11:02:22Z: lock status now reports the held lock and its takeover operands for every retained transaction state; only an unreadable or moving transactions tree refuses. Closes the circular refusal between recover --apply (lock_held, naming the operands) and lock status (recovery_pending, withholding them), which the sidecar preparing/clearing markers an interrupted durable writer normally leaves triggered. Interlock and read-only scope unchanged.
+- 2026-09-09T11:02:30Z: verification pass id aae5f1bd06a3aa44c643d8656a0a3c63 previous none completion 0d5ed744a08c02c570a7a0c87f01cf68
