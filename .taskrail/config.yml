@@ -1,3 +1,5 @@
-layout_version: 1
+layout_version: 2
 specs_dir: specs
 planning_dir: planning
+storage_mode: committed
+implementation_review_max_rounds: 1

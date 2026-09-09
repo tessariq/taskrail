@@ -1,11 +1,16 @@
 ---
 id: T-392-make-durable-transaction-observation-scale-past-a
 title: Make durable transaction observation scale past a few hundred managed files
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#layout-compatibility-and-upgrade
 dependencies: []
-updated_at: "2026-09-09T08:46:16Z"
+updated_at: "2026-09-09T10:18:41Z"
+completion_id: "a64f50b5d531f98547d239a84cb92448"
+last_verification_id: "4ab4c271bc4540d3e3bb5ee7d09e9ce5"
+last_verification_result: pass
+last_verified_at: "2026-09-09T10:18:41Z"
+last_verified_completion_id: "a64f50b5d531f98547d239a84cb92448"
 ---
 
 # T-392-make-durable-transaction-observation-scale-past-a Make durable transaction observation scale past a few hundred managed files
@@ -67,3 +72,6 @@ T-389 cannot deliver a usable safety boundary here and depends on this task.
   validates, then repeat with an interrupted apply plus `recover --apply`.
 
 ## Implementation Notes
+
+- 2026-09-09T10:18:32Z: Alias exactness now answers from one Readdirnames-backed fold index per directory instead of a full ReadDir per checked name, and a pure observation pass shares one directory snapshot across members. Mutating call sites keep uncached observation. Verified on a copy of this repository's planning tree: the layout-2 upgrade completes in ~16s instead of spinning past 24 minutes, an interrupted upgrade recovers in ~0.1s, and the retried upgrade validates at layout 2. Bounded-read regression tests added in internal/durablefs and internal/durabletx; full suite, gofmt and vet green.
+- 2026-09-09T10:18:41Z: verification pass id 4ab4c271bc4540d3e3bb5ee7d09e9ce5 previous none completion a64f50b5d531f98547d239a84cb92448
