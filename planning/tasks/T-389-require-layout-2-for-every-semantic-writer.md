@@ -1,16 +1,18 @@
 ---
 id: T-389-require-layout-2-for-every-semantic-writer
 title: Require layout 2 for every v0.5 semantic writer
-status: blocked
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#layout-compatibility-and-upgrade
 dependencies:
     - T-391-read-and-write-state-schema-2-at-layout-2
     - T-392-make-durable-transaction-observation-scale-past-a
-updated_at: "2026-09-09T08:47:10Z"
-last_verification_id: "b4611dd5cbc7cd2d4c48d9b82a8363eb"
-last_verification_result: fail
-last_verified_at: "2026-09-09T08:47:10Z"
+updated_at: "2026-09-09T12:23:50Z"
+completion_id: "321984797bdfb96c9114405c937f3375"
+last_verification_id: "7fa89a74b48e0b9e9463dc56141cf79f"
+last_verification_result: pass
+last_verified_at: "2026-09-09T12:23:50Z"
+last_verified_completion_id: "321984797bdfb96c9114405c937f3375"
 ---
 
 # T-389-require-layout-2-for-every-semantic-writer Require layout 2 for every v0.5 semantic writer
@@ -98,3 +100,6 @@ repository, and raising the layout without the gate leaves the erasure open.
   candidate did. Recorded as dependency T-391, which must land first.
 - 2026-09-09T08:47:02Z: Implementation is complete and green (layout raised to 2, strict five-key marker on fresh init and retrofit, universal incompatible_layout writer gate, full suite passing), but it cannot be delivered: the upgrade every refusal names as its remedy does not complete on this repository. taskrail init --apply --confirm-quiescent --drop-continuation-notes published the migration fence and then spun past 24 minutes of CPU, and recover --apply spun the same way; a SIGQUIT stack shows durablefs.exactName reading the whole 390-entry tasks directory once per observed leaf. It reproduces with a binary built from HEAD, so it predates this change. The repository was restored through the Git escape the fenced-marker error names; no task, spec, or state byte was published. Recorded as dependency T-392, which must land first: committing this gate while the upgrade cannot finish would leave this repository writable by nothing.
 - 2026-09-09T08:47:10Z: verification fail id b4611dd5cbc7cd2d4c48d9b82a8363eb previous none completion none
+- 2026-09-09T11:52:14Z: Both recorded blockers are cleared: T-391 taught the ordinary readers, validator, and writers state schema 2, and T-392 made durable observation scale, so the upgrade this gate names as its remedy now completes. Returning to todo for re-verification of the shipped implementation against current bytes.
+- 2026-09-09T12:23:41Z: Re-verified the shipped layout-2 raise and writer gate against current bytes, now that the upgrade its refusals name completes. Three acceptance gaps found and closed: import --apply given a legacy ImportDraft v1 was ungated and created tasks and rewrote state on a layout-1 repository; retrofit published a zero-byte marker plus schema-1 state, so its own init then failed with parse layout marker EOF; and retrofit did not refresh the layout it had just published, so the same process refused its own next write. Layout-1 refusal and read-only coverage extended to the full acceptance list.
+- 2026-09-09T12:23:50Z: verification pass id 7fa89a74b48e0b9e9463dc56141cf79f previous none completion 321984797bdfb96c9114405c937f3375

@@ -112,6 +112,29 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ### Added
 
+- Taskrail's repository layout is now `2`, and every v0.5 semantic writer
+  requires it. Lifecycle (`next`, `start`, `complete`, `block`, `unblock`,
+  `verify`, `task release`), task mutation (`task new|author|rename|repoint`,
+  `task dependency add|remove`, `task loop allow|hold`), the structural writers
+  (`spec add`, `spec activate`, `repair`), `import --apply`, `review publish`,
+  and `loop` execution now refuse a layout-1 repository with
+  `incompatible_layout` before writing a byte, naming
+  `taskrail init --apply --confirm-quiescent` as the remedy. This closes a
+  silent erasure: a layout-1 repository accepted v0.5 writes, and a v0.4.0
+  binary then rewrote the same task frontmatter from its own struct and dropped
+  `loop_policy` and `loop_reason`. Read-only commands and the init migration
+  still work at layout 1, so an un-upgraded repository stays fully inspectable.
+  Fresh `init` and `retrofit` publish the strict five-key marker
+  (`layout_version`, `specs_dir`, `planning_dir`, `storage_mode`,
+  `implementation_review_max_rounds`) and schema-2 `STATE.md` directly. Three
+  gaps in that boundary are fixed with it: `import --apply` given a legacy
+  ImportDraft v1 was ungated and created tasks and rewrote `STATE.md` on a
+  layout-1 repository; `retrofit` published a zero-byte `.taskrail/config.yml`
+  plus schema-1 state, so a retrofitted repository was refused by its own `init`
+  with `parse layout marker: EOF`; and `retrofit` did not refresh the layout it
+  had just published, so the same process refused its own next write as
+  `incompatible_layout`.
+
 - Maintainer skill evaluations now use case-specific executable sandbox actions,
   raw-receipt-bound mechanical oracles, and portable sealed stage evidence for
   asynchronous human review. New skills use explicit candidate-only comparisons

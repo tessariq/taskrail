@@ -106,7 +106,16 @@ func (s *Service) applyRetrofitTransaction(input RetrofitInput) (result Retrofit
 	if err != nil {
 		return RetrofitResult{}, err
 	}
-	plan := initPlan{marker: defaultLayoutConfig(), createsLayout: true, scaffolds: true, writesMarker: true, validates: true, applied: true}
+	// Retrofit publishes the same strict marker a fresh init does, so it renders
+	// through withMarkerBytes rather than carrying an unrendered plan: those
+	// bytes are also what fixes the layout the scaffolded state is written at.
+	plan, err := withMarkerBytes(initPlan{
+		marker: currentLayoutConfig(), createsLayout: true, scaffolds: true,
+		writesMarker: true, validates: true, applied: true,
+	})
+	if err != nil {
+		return RetrofitResult{}, err
+	}
 	tx, err := s.buildInitTransaction(plan, InitInput{}, markerOriginal)
 	if err != nil {
 		return RetrofitResult{}, err
@@ -119,6 +128,10 @@ func (s *Service) applyRetrofitTransaction(input RetrofitInput) (result Retrofit
 	if err := s.commitInitTransaction(own, "retrofit", tx); err != nil {
 		return RetrofitResult{}, err
 	}
+	// Retrofit publishes a marker for the same reason init does, so it owes the
+	// same refresh: without it this service keeps judging the adopted tree by
+	// the layout it just replaced, and its own next write refuses.
+	s.paths.LayoutVersion = plan.toVersion
 	return RetrofitResult{
 		Applied: true, Mapping: mapping, Bootstrap: bootstrap,
 		Changes: append(pending, markerWriteChange()), Validation: &tx.validation,

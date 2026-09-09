@@ -290,6 +290,12 @@ func (s *Service) ApplyImportDraft(input ApplyDraftInput) (result ApplyDraftResu
 			err = releaseErr
 		}
 	}()
+	// The reviewed v2 path gates above; a v1 draft creates the same tasks and
+	// rewrites the same state, so it cannot be the one writer that still
+	// publishes v0.5 fields into a repository an older binary will accept.
+	if err := s.requireCurrentLayout("import --apply"); err != nil {
+		return ApplyDraftResult{}, err
+	}
 
 	data, draftPath, err := s.readImportDraftBytes(input.DraftPath)
 	if err != nil {
