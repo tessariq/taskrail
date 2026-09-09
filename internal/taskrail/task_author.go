@@ -47,7 +47,7 @@ func (s *Service) TaskAuthor(input TaskAuthorInput) (result TaskAuthorResult, er
 	if delegatedInvocation() {
 		return result, WithMachineErrorCode(MachineCodeDelegatedRefused, fmt.Errorf("delegated loop children cannot invoke task author"))
 	}
-	if err := s.requireLayout2ForTaskAuthor(); err != nil {
+	if err := s.requireCurrentLayout("task author"); err != nil {
 		return result, err
 	}
 
@@ -163,17 +163,6 @@ func taskAuthorTransactionError(err error) error {
 		return WithMachineErrorCode(MachineCodeInvalidProposal, err)
 	}
 	return writerTransactionError(err)
-}
-
-func (s *Service) requireLayout2ForTaskAuthor() error {
-	config, found, err := readMarker(s.paths.RepoRoot)
-	if err != nil {
-		return err
-	}
-	if !found || config.LayoutVersion != layout2Version {
-		return WithMachineErrorCode(MachineCodeIncompatibleLayout, fmt.Errorf("task author requires layout_version 2"))
-	}
-	return nil
 }
 
 func (s *Service) readTaskAuthorProposal(bodyPath string) ([]byte, error) {

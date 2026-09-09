@@ -83,21 +83,31 @@ func TestStateSchemaFollowsLayout(t *testing.T) {
 		}
 	})
 
-	t.Run("a layout-1 repository still writes and validates at schema 1", func(t *testing.T) {
+	// Layout 1 still reads and validates as schema 1, but no semantic writer may
+	// touch it: an older binary would rewrite task frontmatter from its own typed
+	// struct and erase whatever v0.5 fields a layout-1 write had introduced
+	// (specs/v0.5.0.md#layout-compatibility-and-upgrade).
+	t.Run("a layout-1 repository still reads at schema 1 and refuses every writer", func(t *testing.T) {
 		t.Parallel()
 		repo := seedLayout1Repo(t)
 		writeTask(t, repo, "T-001-legacy", "Legacy task", "todo", "high", "specs/v0.1.0.md#summary", nil)
 		svc := layout1Service(t, repo)
-		if _, err := svc.Start("T-001-legacy"); err != nil {
-			t.Fatalf("start: %v", err)
+		before := readStateFile(t, repo)
+
+		_, err := svc.Start("T-001-legacy")
+		if failure := MachineFailureFor(err); failure.Code != MachineCodeIncompatibleLayout {
+			t.Fatalf("start at layout 1 = %v (%s), want incompatible_layout", err, failure.Code)
 		}
-		state := readStateFile(t, repo)
-		if !strings.Contains(state, "schema_version: 1") {
-			t.Fatalf("layout-1 writer left schema 1:\n%s", state)
+		if !strings.Contains(err.Error(), "init --apply --confirm-quiescent") {
+			t.Fatalf("refusal does not name the upgrade remedy: %v", err)
 		}
-		if !strings.Contains(state, "continuation_notes") || !strings.Contains(state, "## Notes") {
-			t.Fatalf("layout-1 state lost its schema-1 shape:\n%s", state)
+		if state := readStateFile(t, repo); state != before {
+			t.Fatalf("refused writer changed state:\n%s", state)
 		}
+		if !strings.Contains(before, "schema_version: 1") || !strings.Contains(before, "continuation_notes") {
+			t.Fatalf("layout-1 state lost its schema-1 shape:\n%s", before)
+		}
+
 		validation, err := svc.Validate()
 		if err != nil {
 			t.Fatalf("validate: %v", err)

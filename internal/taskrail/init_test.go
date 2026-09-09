@@ -163,7 +163,7 @@ func TestInitAdoptsLegacyLayoutNonDestructively(t *testing.T) {
 	t.Parallel()
 
 	// seedFixtureRepo builds a complete v0.1.0 layout with no marker.
-	repo := seedFixtureRepo(t)
+	repo := seedLegacyFixtureRepo(t)
 	writeTask(t, repo, "T-001", "Human task", "todo", "high", "specs/v0.1.0.md#summary", nil)
 	before := snapshotTree(t, repo)
 
@@ -191,15 +191,18 @@ func TestInitAdoptsLegacyLayoutNonDestructively(t *testing.T) {
 	if err != nil || !present {
 		t.Fatalf("read marker: present=%v err=%v", present, err)
 	}
-	if cfg.LayoutVersion != currentLayoutVersion {
-		t.Fatalf("layout_version = %d, want %d", cfg.LayoutVersion, currentLayoutVersion)
+	// Adoption marks the tree it found without touching a byte of it, so the
+	// marker it writes stays legacy: this repository's state file is still
+	// schema 1, and only the durable layout-2 upgrade raises both together.
+	if cfg.LayoutVersion != legacyLayoutVersion {
+		t.Fatalf("layout_version = %d, want %d", cfg.LayoutVersion, legacyLayoutVersion)
 	}
 }
 
 func TestInitMigrationDryRunChangesNothing(t *testing.T) {
 	t.Parallel()
 
-	repo := seedFixtureRepo(t)
+	repo := seedLegacyFixtureRepo(t)
 	writeFile(t, markerFile(repo), "layout_version: 0\nspecs_dir: specs\nplanning_dir: planning\n")
 	before := snapshotTree(t, repo)
 
@@ -214,8 +217,8 @@ func TestInitMigrationDryRunChangesNothing(t *testing.T) {
 	if result.Applied {
 		t.Fatal("dry run must not apply changes")
 	}
-	if result.FromVersion != 0 || result.ToVersion != currentLayoutVersion {
-		t.Fatalf("versions = %d -> %d, want 0 -> %d", result.FromVersion, result.ToVersion, currentLayoutVersion)
+	if result.FromVersion != 0 || result.ToVersion != legacyLayoutVersion {
+		t.Fatalf("versions = %d -> %d, want 0 -> %d", result.FromVersion, result.ToVersion, legacyLayoutVersion)
 	}
 	if !slices.ContainsFunc(result.Writes, func(w WriteEntry) bool { return w.Action == writeActionCreate }) {
 		t.Fatal("dry run must report the paths applying would create")
@@ -237,7 +240,7 @@ func TestInitMigrationDryRunChangesNothing(t *testing.T) {
 func TestInitMigrationApplyBumpsMarkerAndValidates(t *testing.T) {
 	t.Parallel()
 
-	repo := seedFixtureRepo(t)
+	repo := seedLegacyFixtureRepo(t)
 	writeFile(t, markerFile(repo), "layout_version: 0\nspecs_dir: specs\nplanning_dir: planning\n")
 	// A human-authored spec must survive migration untouched.
 	humanSpec := filepath.Join(repo, "specs", "v0.1.0.md")
@@ -273,8 +276,8 @@ func TestInitMigrationApplyBumpsMarkerAndValidates(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read marker: %v", err)
 	}
-	if cfg.LayoutVersion != currentLayoutVersion {
-		t.Fatalf("layout_version = %d, want %d", cfg.LayoutVersion, currentLayoutVersion)
+	if cfg.LayoutVersion != legacyLayoutVersion {
+		t.Fatalf("layout_version = %d, want %d", cfg.LayoutVersion, legacyLayoutVersion)
 	}
 
 	got, err := os.ReadFile(humanSpec)
@@ -296,7 +299,7 @@ func TestInitMigrationApplyBumpsMarkerAndValidates(t *testing.T) {
 func TestInitRejectsNewerLayoutVersion(t *testing.T) {
 	t.Parallel()
 
-	repo := seedFixtureRepo(t)
+	repo := seedLegacyFixtureRepo(t)
 	// The service is built before the marker is bumped, so this exercises Init's
 	// own marker read rather than the discovery-time guard covered in
 	// layout_version_test.go.

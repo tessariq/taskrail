@@ -24,7 +24,7 @@ func TestCommandsRefuseNewerLayoutVersion(t *testing.T) {
 	}
 	before := snapshotTree(t, root)
 
-	const want = "repository layout_version 999 is newer than supported 1; upgrade taskrail"
+	const want = "repository layout_version 999 is newer than supported 2; upgrade taskrail"
 	cases := map[string][]string{
 		"validate": {"validate"},
 		"status":   {"status"},

@@ -30,6 +30,9 @@ func (s *Service) publishWorkflowReview(input ReviewPublishInput) (ReviewPublish
 	if input.DryRun {
 		return candidate.result(false), nil
 	}
+	if err := s.requireCurrentLayout("review publish"); err != nil {
+		return ReviewPublishResult{}, err
+	}
 	transactionID, err := newMigrationTransactionID()
 	if err != nil {
 		return ReviewPublishResult{}, err

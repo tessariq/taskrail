@@ -364,7 +364,7 @@ func TestRepointTaskRequiresActiveSpecForArea(t *testing.T) {
 
 	repo := repointFixture(t)
 	writeFile(t, filepath.Join(repo, "planning", "STATE.md"), `---
-schema_version: 1
+schema_version: 2
 updated_at: "2026-03-31T00:00:00Z"
 active_spec_version: ""
 active_spec_path: ""
@@ -375,8 +375,6 @@ blockers: []
 next_action: Start the next task
 last_verification_result: Not yet run
 relevant_artifacts: []
-continuation_notes:
-  - Fixture repo.
 ---
 
 # STATE

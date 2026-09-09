@@ -25,15 +25,14 @@ func digestBytes(data []byte) string {
 	return hex.EncodeToString(sum[:])
 }
 
-// upgradableCurrentLayout reports whether a found marker pins exactly the
-// binary's current layout while a newer layout is modeled, which is the one
-// classification init can preview an upgrade for. When a later slice raises the
-// current layout to the modeled maximum, this predicate goes false and the
-// older-marker migration branch in planInit receives layout-1 repositories;
-// that slice must re-route this upgrade flow onto the durable publisher rather
-// than inheriting planInit's non-strict scaffold migration.
+// upgradableCurrentLayout reports whether a found marker pins the legacy layout
+// this binary can upgrade. Now that the current layout is the modeled maximum,
+// a legacy marker routes here — onto the durable migration publisher — rather
+// than inheriting planInit's non-strict scaffold migration, which would raise
+// layout_version without the fence, the state-schema rewrite, or the
+// continuation-note decision.
 func upgradableCurrentLayout(cfg LayoutConfig) bool {
-	return cfg.LayoutVersion == currentLayoutVersion && currentLayoutVersion < layout2Version
+	return cfg.LayoutVersion == legacyLayoutVersion && legacyLayoutVersion < layout2Version
 }
 
 // initLayout2Upgrade serves the layout-2 upgrade preview and its gated apply.
@@ -93,7 +92,7 @@ func layout2UpgradeResult(candidate *Layout2MigrationCandidate) InitResult {
 	}
 	digest := digestBytes(candidate.MarkerBytes)
 	return InitResult{
-		FromVersion: currentLayoutVersion,
+		FromVersion: legacyLayoutVersion,
 		ToVersion:   layout2Version,
 		Applied:     false,
 		StorageMode: string(candidate.Marker.StorageMode),

@@ -42,7 +42,7 @@ func TestInitJSONPublishesTheContractedResult(t *testing.T) {
 	}
 	decodeMachineResult(t, stdout, &result)
 
-	if result.Outcome != "created" || result.FromVersion != 0 || result.ToVersion != 1 || !result.Applied {
+	if result.Outcome != "created" || result.FromVersion != 0 || result.ToVersion != 2 || !result.Applied {
 		t.Fatalf("init result header = %+v", result)
 	}
 	if result.StorageMode != "committed" {

@@ -129,7 +129,11 @@ func (s *Service) refreshLocalSkills(in InitInput) (result InitResult, err error
 	if err != nil {
 		return InitResult{}, err
 	}
-	result, err = s.reportInit(s.planInit(marker, found, true))
+	initialized, err := s.planInit(marker, found, true)
+	if err != nil {
+		return InitResult{}, err
+	}
+	result, err = s.reportInit(initialized)
 	if err != nil {
 		return InitResult{}, err
 	}

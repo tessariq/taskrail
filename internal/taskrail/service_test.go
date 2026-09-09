@@ -1403,7 +1403,7 @@ func TestCreateTaskAreaRequiresActiveSpec(t *testing.T) {
 	repo := seedFixtureRepo(t)
 	// STATE with an empty active spec path exercises the missing-active-spec guard.
 	writeFile(t, filepath.Join(repo, "planning", "STATE.md"), `---
-schema_version: 1
+schema_version: 2
 updated_at: "2026-03-31T00:00:00Z"
 active_spec_version: ""
 active_spec_path: ""
@@ -1414,8 +1414,6 @@ blockers: []
 next_action: Start the next task
 last_verification_result: Not yet run
 relevant_artifacts: []
-continuation_notes:
-  - Fixture repo.
 ---
 
 # STATE
@@ -1440,11 +1438,29 @@ func newTestService(t *testing.T, repo string, now time.Time) *Service {
 	return &Service{paths: paths, now: func() time.Time { return now }}
 }
 
+// seedFixtureRepo seeds a repository at the layout this binary writes and every
+// semantic writer requires. Tests that exercise adoption, retrofit, or the
+// layout-2 upgrade need the pre-upgrade shape and use seedLegacyFixtureRepo.
 func seedFixtureRepo(t *testing.T) string {
+	t.Helper()
+	repo := seedLegacyFixtureRepo(t)
+	markCurrentLayout(t, repo)
+	return repo
+}
+
+func seedLegacyFixtureRepo(t *testing.T) string {
 	t.Helper()
 	repo := initGitRepo(t)
 	seedFixtureTree(t, repo)
 	return repo
+}
+
+// markCurrentLayout raises an already-seeded legacy fixture tree to the current
+// layout: the strict committed marker plus the schema-2 state it requires.
+func markCurrentLayout(t *testing.T, repo string) {
+	t.Helper()
+	writeFile(t, filepath.Join(repo, taskrailConfigDir, taskrailConfigFile), layout2Marker("committed", "specs", "planning"))
+	upgradeStateFixtureToSchema2(t, filepath.Join(repo, "planning", "STATE.md"))
 }
 
 // seedFixtureTree writes the fixture planning/spec content into an existing repo
@@ -1531,7 +1547,7 @@ Fixture task.
 func writeFixtureState(t *testing.T, repo, version, currentTask, currentTitle, statusSummary string) {
 	t.Helper()
 	writeFile(t, filepath.Join(repo, "planning", "STATE.md"), fmt.Sprintf(`---
-schema_version: 1
+schema_version: 2
 updated_at: "2026-03-31T00:00:00Z"
 active_spec_version: %s
 active_spec_path: specs/%s.md
@@ -1542,8 +1558,6 @@ blockers: []
 next_action: Start the next task
 last_verification_result: Not yet run
 relevant_artifacts: []
-continuation_notes:
-  - Fixture repo.
 ---
 
 # STATE

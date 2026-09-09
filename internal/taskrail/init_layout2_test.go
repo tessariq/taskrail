@@ -20,7 +20,7 @@ import (
 
 func seedLayout1Repo(t *testing.T) string {
 	t.Helper()
-	repo := seedFixtureRepo(t)
+	repo := seedLegacyFixtureRepo(t)
 	writeFile(t, markerFile(repo), "layout_version: 1\nspecs_dir: specs\nplanning_dir: planning\n")
 	return repo
 }
@@ -581,7 +581,7 @@ func TestInitLayout2UpgradeInputGates(t *testing.T) {
 func TestInitRejectsUpgradeOnlyInputsOutsideTheUpgrade(t *testing.T) {
 	t.Parallel()
 
-	repo := seedFixtureRepo(t)
+	repo := seedLegacyFixtureRepo(t)
 	writeFile(t, markerFile(repo), "layout_version: 0\nspecs_dir: specs\nplanning_dir: planning\n")
 	svc := newTestService(t, repo, time.Date(2026, 8, 17, 12, 0, 0, 0, time.UTC))
 	if _, err := svc.Init(InitInput{Apply: true, ConfirmQuiescent: true}); MachineFailureFor(err).Code != MachineCodeInvalidArguments {
@@ -701,8 +701,10 @@ func TestInitWithSkillsOnUpgradableRepoKeepsCurrentFlow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("init --with-skills: %v", err)
 	}
-	if result.Outcome != InitCurrent || result.ToVersion != currentLayoutVersion {
-		t.Fatalf("outcome = %q to %d, want current at %d", result.Outcome, result.ToVersion, currentLayoutVersion)
+	// The bridge preserves the layout it found; it is the upgrade flow, not this
+	// one, that raises a legacy repository.
+	if result.Outcome != InitCurrent || result.ToVersion != legacyLayoutVersion {
+		t.Fatalf("outcome = %q to %d, want current at %d", result.Outcome, result.ToVersion, legacyLayoutVersion)
 	}
 	if len(result.Skills) == 0 {
 		t.Fatal("current-flow skill install did not report its inventory")

@@ -1,12 +1,16 @@
 ---
 id: T-389-require-layout-2-for-every-semantic-writer
 title: Require layout 2 for every v0.5 semantic writer
-status: todo
+status: blocked
 priority: high
 spec_ref: specs/v0.5.0.md#layout-compatibility-and-upgrade
 dependencies:
     - T-391-read-and-write-state-schema-2-at-layout-2
-updated_at: "2026-09-08T19:21:25Z"
+    - T-392-make-durable-transaction-observation-scale-past-a
+updated_at: "2026-09-09T08:47:10Z"
+last_verification_id: "b4611dd5cbc7cd2d4c48d9b82a8363eb"
+last_verification_result: fail
+last_verified_at: "2026-09-09T08:47:10Z"
 ---
 
 # T-389-require-layout-2-for-every-semantic-writer Require layout 2 for every v0.5 semantic writer
@@ -92,3 +96,5 @@ repository, and raising the layout without the gate leaves the erasure open.
   writer reports `validation.valid: false`). The ordinary state reader,
   validator, and writers never learned state schema 2; only the T-157 migration
   candidate did. Recorded as dependency T-391, which must land first.
+- 2026-09-09T08:47:02Z: Implementation is complete and green (layout raised to 2, strict five-key marker on fresh init and retrofit, universal incompatible_layout writer gate, full suite passing), but it cannot be delivered: the upgrade every refusal names as its remedy does not complete on this repository. taskrail init --apply --confirm-quiescent --drop-continuation-notes published the migration fence and then spun past 24 minutes of CPU, and recover --apply spun the same way; a SIGQUIT stack shows durablefs.exactName reading the whole 390-entry tasks directory once per observed leaf. It reproduces with a binary built from HEAD, so it predates this change. The repository was restored through the Git escape the fenced-marker error names; no task, spec, or state byte was published. Recorded as dependency T-392, which must land first: committing this gate while the upgrade cannot finish would leave this repository writable by nothing.
+- 2026-09-09T08:47:10Z: verification fail id b4611dd5cbc7cd2d4c48d9b82a8363eb previous none completion none

@@ -48,6 +48,9 @@ func (s *Service) beginStructuralWriterWrite(w structuralWriter) (repotx.Ownersh
 	if err := s.paths.ensureStorageCapability(); err != nil {
 		return nil, nil, err
 	}
+	if err := s.requireCurrentLayout(w.command); err != nil {
+		return nil, nil, err
+	}
 	if delegatedInvocation() {
 		return nil, nil, WithMachineErrorCode(MachineCodeDelegatedRefused,
 			fmt.Errorf("delegated loop children cannot invoke %s", w.command))

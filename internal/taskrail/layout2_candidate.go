@@ -19,6 +19,12 @@ import (
 
 const layout2Version = 2
 
+// defaultImplementationReviewMaxRounds is the broad review maximum a marker
+// records when no repository policy selects one. The spec resolves a missing
+// policy to 1 while constructing a candidate, and every published marker then
+// carries it explicitly.
+const defaultImplementationReviewMaxRounds = 1
+
 type Layout2MigrationFence struct {
 	FromLayoutVersion int         `yaml:"from_layout_version" json:"from_layout_version"`
 	FromStorageMode   StorageMode `yaml:"from_storage_mode,omitempty" json:"from_storage_mode,omitempty"`
@@ -379,7 +385,7 @@ func buildLayout2MigrationCandidate(root string) (*Layout2MigrationCandidate, er
 		return nil, err
 	}
 	candidate := &Layout2MigrationCandidate{
-		Marker:     Layout2Config{LayoutVersion: 2, SpecsDir: sourceMarker.SpecsDir, PlanningDir: sourceMarker.PlanningDir, StorageMode: StorageCommitted, ImplementationReviewMaxRounds: 1},
+		Marker:     Layout2Config{LayoutVersion: 2, SpecsDir: sourceMarker.SpecsDir, PlanningDir: sourceMarker.PlanningDir, StorageMode: StorageCommitted, ImplementationReviewMaxRounds: defaultImplementationReviewMaxRounds},
 		MarkerPath: markerRelPath(), StatePath: path.Join(paths.LogicalPlanningDir, "STATE.md"),
 		TaskBytes: taskBytes, ContinuationNotes: slices.Clone(decodedState.ContinuationNotes),
 		SourceStateSchema: decodedState.SourceSchema,

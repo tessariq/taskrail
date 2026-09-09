@@ -68,6 +68,9 @@ func (s *Service) beginWriterWrite(w writerCommand, selectedTask string, writes 
 	if err := s.paths.ensureStorageCapability(); err != nil {
 		return nil, nil, err
 	}
+	if err := s.requireCurrentLayout(w.command); err != nil {
+		return nil, nil, err
+	}
 	if delegatedInvocation() {
 		identity, err := delegatedWriterIdentity()
 		if err != nil {

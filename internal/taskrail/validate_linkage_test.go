@@ -104,7 +104,7 @@ func TestValidateFlagsDanglingArtifactInStateField(t *testing.T) {
 	repo := seedFixtureRepo(t)
 	writeTask(t, repo, "T-001", "First", "todo", "medium", "specs/v0.1.0.md#summary", nil)
 	state := `---
-schema_version: 1
+schema_version: 2
 updated_at: "2026-03-31T00:00:00Z"
 active_spec_version: v0.1.0
 active_spec_path: specs/v0.1.0.md
@@ -115,8 +115,6 @@ blockers: []
 next_action: Start the next task
 last_verification_result: pass; see planning/artifacts/verify/T-001/x/report.md
 relevant_artifacts: []
-continuation_notes:
-  - Fixture repo.
 ---
 
 # STATE
@@ -137,7 +135,7 @@ func TestValidateFlagsDanglingArtifactInStateRelevantArtifacts(t *testing.T) {
 	repo := seedFixtureRepo(t)
 	writeTask(t, repo, "T-001", "First", "todo", "medium", "specs/v0.1.0.md#summary", nil)
 	state := `---
-schema_version: 1
+schema_version: 2
 updated_at: "2026-03-31T00:00:00Z"
 active_spec_version: v0.1.0
 active_spec_path: specs/v0.1.0.md
@@ -149,8 +147,6 @@ next_action: Start the next task
 last_verification_result: Not yet run
 relevant_artifacts:
   - planning/artifacts/verify/T-001/x/report.json
-continuation_notes:
-  - Fixture repo.
 ---
 
 # STATE

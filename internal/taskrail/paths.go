@@ -14,7 +14,15 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-const currentLayoutVersion = 1
+// currentLayoutVersion is the layout this binary publishes and requires of
+// every semantic writer. legacyLayoutVersion is the pre-v0.5 layout an
+// unmarked or un-upgraded repository still reports: it stays readable and
+// upgradable, but no writer may touch it
+// (specs/v0.5.0.md#layout-compatibility-and-upgrade).
+const (
+	legacyLayoutVersion  = 1
+	currentLayoutVersion = layout2Version
+)
 
 const (
 	defaultSpecsDir    = "specs"
@@ -226,7 +234,7 @@ func discoverLayout(root string, markerFound, admitFence bool) (LayoutConfig, St
 		return LayoutConfig{}, StorageContext{}, WithMachineErrorCode(MachineCodeRepositoryInvalid,
 			fmt.Errorf("parse layout marker: %w", err))
 	}
-	if header.LayoutVersion <= currentLayoutVersion {
+	if header.LayoutVersion < layout2Version {
 		cfg, err := loadLayoutConfig(root)
 		return cfg, committedStorage(), err
 	}
@@ -260,10 +268,50 @@ func discoverLayout(root string, markerFound, admitFence bool) (LayoutConfig, St
 	return LayoutConfig{LayoutVersion: cfg.LayoutVersion, SpecsDir: cfg.SpecsDir, PlanningDir: cfg.PlanningDir}, storage, nil
 }
 
+// currentLayoutConfig is the layout a fresh init or retrofit publishes: this
+// binary's current version at the default locations.
+func currentLayoutConfig() LayoutConfig {
+	return LayoutConfig{
+		LayoutVersion: currentLayoutVersion,
+		SpecsDir:      defaultSpecsDir,
+		PlanningDir:   defaultPlanningDir,
+	}
+}
+
+// renderLayoutMarker is the exact marker bytes one layout publishes. Layout 2
+// publishes the strict final marker — exactly layout_version, specs_dir,
+// planning_dir, storage_mode, and implementation_review_max_rounds — while a
+// legacy layout keeps its three-field shape, so an adoption marker never claims
+// a version its state file does not satisfy.
+func renderLayoutMarker(cfg LayoutConfig) ([]byte, error) {
+	if cfg.LayoutVersion != layout2Version {
+		data, err := yaml.Marshal(cfg)
+		if err != nil {
+			return nil, fmt.Errorf("marshal layout marker: %w", err)
+		}
+		return data, nil
+	}
+	mode := cfg.StorageMode
+	if mode == "" {
+		mode = StorageCommitted
+	}
+	data, err := yaml.Marshal(Layout2Config{
+		LayoutVersion:                 layout2Version,
+		SpecsDir:                      cfg.SpecsDir,
+		PlanningDir:                   cfg.PlanningDir,
+		StorageMode:                   mode,
+		ImplementationReviewMaxRounds: defaultImplementationReviewMaxRounds,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("marshal layout marker: %w", err)
+	}
+	return data, nil
+}
+
 // defaultLayoutConfig is the hardcoded v0.1.0 layout used when no marker exists.
 func defaultLayoutConfig() LayoutConfig {
 	return LayoutConfig{
-		LayoutVersion: currentLayoutVersion,
+		LayoutVersion: legacyLayoutVersion,
 		SpecsDir:      defaultSpecsDir,
 		PlanningDir:   defaultPlanningDir,
 	}

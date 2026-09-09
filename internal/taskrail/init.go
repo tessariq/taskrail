@@ -10,8 +10,6 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
-
-	"gopkg.in/yaml.v3"
 )
 
 // Init makes a repository Taskrail-managed in a version-aware, non-destructive
@@ -62,7 +60,10 @@ func (s *Service) Init(in InitInput) (InitResult, error) {
 	if err := rejectUpgradeOnlyInputs(in); err != nil {
 		return InitResult{}, err
 	}
-	plan := s.planInit(cfg, hasMarker, in.Apply)
+	plan, err := s.planInit(cfg, hasMarker, in.Apply)
+	if err != nil {
+		return InitResult{}, err
+	}
 	result, err := s.reportInit(plan)
 	if err != nil {
 		return InitResult{}, err
@@ -84,9 +85,17 @@ func (s *Service) Init(in InitInput) (InitResult, error) {
 // three write steps it performs. Deciding once keeps the reported inventory and
 // the performed writes from disagreeing.
 type initPlan struct {
-	outcome      InitOutcome
-	fromVersion  int
-	marker       LayoutConfig
+	outcome     InitOutcome
+	fromVersion int
+	// toVersion is the layout this outcome publishes, which is not always the
+	// binary's current layout: adoption marks a legacy tree as legacy, and
+	// normalizing an unknown marker version stops at the legacy layout so the
+	// durable layout-2 upgrade owns the raise.
+	toVersion int
+	marker    LayoutConfig
+	// markerBytes are the exact marker bytes this outcome publishes, so the
+	// reported digest and the written file can never be two computations.
+	markerBytes  []byte
 	configAction string
 	// createsLayout is set when this outcome — or the apply a preview describes —
 	// creates missing layout content. It drives the reported inventory, which is
@@ -110,10 +119,10 @@ type initPlan struct {
 //
 // Fresh creation and adoption apply unconditionally, as they always have: there
 // is nothing pre-existing for a dry run to protect.
-func (s *Service) planInit(cfg LayoutConfig, hasMarker bool, apply bool) initPlan {
+func (s *Service) planInit(cfg LayoutConfig, hasMarker bool, apply bool) (initPlan, error) {
 	if hasMarker {
-		if cfg.LayoutVersion != currentLayoutVersion && cfg.LayoutVersion != layout2Version {
-			return initPlan{
+		if cfg.LayoutVersion != legacyLayoutVersion && cfg.LayoutVersion != layout2Version {
+			return withMarkerBytes(initPlan{
 				outcome:       pickOutcome(apply, InitMigrated, InitMigrationPreview),
 				fromVersion:   cfg.LayoutVersion,
 				marker:        migratedMarker(cfg),
@@ -123,9 +132,9 @@ func (s *Service) planInit(cfg LayoutConfig, hasMarker bool, apply bool) initPla
 				writesMarker:  apply,
 				validates:     apply,
 				applied:       apply,
-			}
+			})
 		}
-		return initPlan{
+		return withMarkerBytes(initPlan{
 			outcome:       InitCurrent,
 			fromVersion:   cfg.LayoutVersion,
 			marker:        cfg,
@@ -133,24 +142,27 @@ func (s *Service) planInit(cfg LayoutConfig, hasMarker bool, apply bool) initPla
 			createsLayout: true,
 			scaffolds:     true,
 			applied:       true,
-		}
+		})
 	}
 
 	// An absent marker records no prior layout version, which the contract
 	// reports as version 0 rather than as the version init is moving to.
 	if s.layoutExists() {
-		return initPlan{
+		// Adoption marks an existing v0.1.0 tree without touching a byte of it.
+		// Its state file is still schema 1, so the marker it publishes must stay
+		// legacy; the durable layout-2 upgrade raises both together afterwards.
+		return withMarkerBytes(initPlan{
 			outcome:      InitAdopted,
 			marker:       defaultLayoutConfig(),
 			configAction: configActionCreate,
 			writesMarker: true,
 			applied:      true,
-		}
+		})
 	}
 	if mapping := s.detectRetrofit(); len(mapping) > 0 {
-		return initPlan{
+		return withMarkerBytes(initPlan{
 			outcome:       pickOutcome(apply, InitRetrofitApplied, InitRetrofitPreview),
-			marker:        defaultLayoutConfig(),
+			marker:        currentLayoutConfig(),
 			configAction:  configActionCreate,
 			createsLayout: true,
 			scaffolds:     apply,
@@ -158,17 +170,29 @@ func (s *Service) planInit(cfg LayoutConfig, hasMarker bool, apply bool) initPla
 			validates:     apply,
 			applied:       apply,
 			mapping:       mapping,
-		}
+		})
 	}
-	return initPlan{
+	return withMarkerBytes(initPlan{
 		outcome:       InitCreated,
-		marker:        defaultLayoutConfig(),
+		marker:        currentLayoutConfig(),
 		configAction:  configActionCreate,
 		createsLayout: true,
 		scaffolds:     true,
 		writesMarker:  true,
 		applied:       true,
+	})
+}
+
+// withMarkerBytes renders the plan's marker once and records the version it
+// publishes, so every reporter and the transaction share one candidate.
+func withMarkerBytes(plan initPlan) (initPlan, error) {
+	data, err := renderLayoutMarker(plan.marker)
+	if err != nil {
+		return initPlan{}, err
 	}
+	plan.markerBytes = data
+	plan.toVersion = plan.marker.LayoutVersion
+	return plan, nil
 }
 
 func pickOutcome(apply bool, applied, preview InitOutcome) InitOutcome {
@@ -182,7 +206,10 @@ func pickOutcome(apply bool, applied, preview InitOutcome) InitOutcome {
 // the current version and any location the older marker omitted defaulted.
 func migratedMarker(cfg LayoutConfig) LayoutConfig {
 	migrated := cfg
-	migrated.LayoutVersion = currentLayoutVersion
+	// Normalizing an unrecognized marker version stops at the legacy layout: the
+	// repository's state file is still schema 1, and raising to layout 2 is the
+	// durable upgrade's transaction, not a scaffold rewrite.
+	migrated.LayoutVersion = legacyLayoutVersion
 	if migrated.SpecsDir == "" {
 		migrated.SpecsDir = defaultSpecsDir
 	}
@@ -196,7 +223,7 @@ func migratedMarker(cfg LayoutConfig) LayoutConfig {
 // action it records describes what this outcome does to that path, so a preview
 // and the apply that follows it report the same inventory.
 func (s *Service) reportInit(plan initPlan) (InitResult, error) {
-	digest, err := markerDigest(plan.marker)
+	digest, err := markerDigest(plan.markerBytes)
 	if err != nil {
 		return InitResult{}, err
 	}
@@ -211,7 +238,7 @@ func (s *Service) reportInit(plan initPlan) (InitResult, error) {
 	return InitResult{
 		Outcome:     plan.outcome,
 		FromVersion: plan.fromVersion,
-		ToVersion:   currentLayoutVersion,
+		ToVersion:   plan.toVersion,
 		Applied:     plan.applied,
 		StorageMode: string(s.paths.Storage.Mode),
 		Config: InitConfig{
@@ -230,11 +257,7 @@ func (s *Service) reportInit(plan initPlan) (InitResult, error) {
 
 // markerDigest is the candidate digest over the exact marker bytes writeMarker
 // would persist, so the reported digest and the written file cannot diverge.
-func markerDigest(marker LayoutConfig) (string, error) {
-	data, err := yaml.Marshal(marker)
-	if err != nil {
-		return "", fmt.Errorf("marshal layout marker: %w", err)
-	}
+func markerDigest(data []byte) (string, error) {
 	sum := sha256.Sum256(data)
 	return hex.EncodeToString(sum[:]), nil
 }
@@ -448,7 +471,7 @@ func (s *Service) ensureLayout() error {
 		return err
 	}
 	if _, err := os.Stat(s.paths.StateFile); errors.Is(err, os.ErrNotExist) {
-		if err := s.saveState(starterState(s.now(), stateSchemaForLayout(currentLayoutVersion))); err != nil {
+		if err := s.saveState(starterState(s.now(), stateSchemaForLayout(s.paths.LayoutVersion))); err != nil {
 			return err
 		}
 	} else if err != nil {

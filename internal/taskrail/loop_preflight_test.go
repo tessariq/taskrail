@@ -165,7 +165,7 @@ func TestLoopConfiguredReviewRounds(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			got, err := loopConfiguredReviewRounds([]byte(test.data))
 			if test.wantErr {
-				if err == nil || MachineFailureFor(err).Code != MachineCodeUnsupported {
+				if err == nil || MachineFailureFor(err).Code != MachineCodeIncompatibleLayout {
 					t.Fatalf("loopConfiguredReviewRounds error = %v", err)
 				}
 				return

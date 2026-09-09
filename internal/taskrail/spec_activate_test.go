@@ -207,15 +207,20 @@ func TestActivateSpecLeavesTaskFilesUntouched(t *testing.T) {
 	}
 }
 
-// TestActivateSpecPreservesContinuationNotes proves activate is a generic
-// repoint-only writer: it does not special-case, inject, or clear continuation
-// notes. Removing the one-time bootstrap note is a separate sanctioned hand-edit,
-// not command logic, so pre-existing notes must survive a re-render untouched.
-func TestActivateSpecPreservesContinuationNotes(t *testing.T) {
-	repo := seedFixtureRepo(t) // fixture carries one note: "Fixture repo."
+// TestActivateSpecPreservesUnownedStateFields proves activate is a generic
+// repoint-only writer: it rewrites active_spec_version/active_spec_path and
+// re-renders, and every other frontmatter field survives untouched. Layout 2
+// removed continuation_notes outright, so the fields this now guards are the
+// verification tuple a later verification — not activation — owns.
+func TestActivateSpecPreservesUnownedStateFields(t *testing.T) {
+	repo := seedFixtureRepo(t)
 	writeFile(t, filepath.Join(repo, "specs", "v0.2.0.md"), "# Taskrail v0.2.0\n\n## Summary\n\nNext spec.\n")
 
 	svc := newTestService(t, repo, time.Date(2026, 7, 10, 12, 0, 0, 0, time.UTC))
+	before, err := svc.loadState()
+	if err != nil {
+		t.Fatalf("load state: %v", err)
+	}
 	if _, err := svc.ActivateSpec("v0.2.0"); err != nil {
 		t.Fatalf("ActivateSpec: %v", err)
 	}
@@ -224,7 +229,18 @@ func TestActivateSpecPreservesContinuationNotes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reload state: %v", err)
 	}
-	if len(state.Frontmatter.ContinuationNotes) != 1 || state.Frontmatter.ContinuationNotes[0] != "Fixture repo." {
-		t.Fatalf("continuation notes not preserved verbatim: %v", state.Frontmatter.ContinuationNotes)
+	if state.Frontmatter.SchemaVersion != stateSchemaVersionLayout2 {
+		t.Fatalf("schema_version = %d, want %d", state.Frontmatter.SchemaVersion, stateSchemaVersionLayout2)
+	}
+	if len(state.Frontmatter.ContinuationNotes) != 0 {
+		t.Fatalf("activation reintroduced continuation prose: %v", state.Frontmatter.ContinuationNotes)
+	}
+	if state.Frontmatter.LastVerificationResult != before.Frontmatter.LastVerificationResult {
+		t.Fatalf("last_verification_result = %q, want %q",
+			state.Frontmatter.LastVerificationResult, before.Frontmatter.LastVerificationResult)
+	}
+	if state.Frontmatter.LastVerificationID != before.Frontmatter.LastVerificationID ||
+		state.Frontmatter.LastVerifiedCompletionID != before.Frontmatter.LastVerifiedCompletionID {
+		t.Fatalf("activation changed the verification tuple: %+v", state.Frontmatter)
 	}
 }

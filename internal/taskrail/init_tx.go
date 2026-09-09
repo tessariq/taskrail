@@ -45,7 +45,10 @@ func (s *Service) applyInitTransaction(in InitInput) (result InitResult, err err
 	if err != nil {
 		return InitResult{}, err
 	}
-	plan := s.planInit(cfg, hasMarker, true)
+	plan, err := s.planInit(cfg, hasMarker, true)
+	if err != nil {
+		return InitResult{}, err
+	}
 	result, err = s.reportInit(plan)
 	if err != nil {
 		return InitResult{}, err
@@ -59,6 +62,11 @@ func (s *Service) applyInitTransaction(in InitInput) (result InitResult, err err
 			return InitResult{}, err
 		}
 	}
+	// Publishing a marker can change the layout this repository resolves to, and
+	// with it the state schema every later read and write must use. Refreshing
+	// the discovered layout keeps one process that inits and then inspects from
+	// judging the new tree by the layout it replaced.
+	s.paths.LayoutVersion = plan.toVersion
 	result.SkillInstall = tx.installed
 	result.Skills, result.SkillExclusions, err = s.skillReportForInput(in, tx.installed)
 	if err != nil {
@@ -140,10 +148,7 @@ func (s *Service) buildInitTransaction(plan initPlan, in InitInput, markerOrigin
 		return nil
 	}
 
-	markerBytes, err := yaml.Marshal(plan.marker)
-	if err != nil {
-		return tx, fmt.Errorf("marshal layout marker: %w", err)
-	}
+	markerBytes := plan.markerBytes
 	if err := add(repotx.Worktree, markerRelPath(), filepath.Join(s.paths.RepoRoot, taskrailConfigDir, taskrailConfigFile), markerOriginal, markerBytes, plan.writesMarker, 0); err != nil {
 		return tx, err
 	}
@@ -155,12 +160,13 @@ func (s *Service) buildInitTransaction(plan initPlan, in InitInput, markerOrigin
 		case file.kind == writeKindNote:
 			content = []byte(starterNotes())
 		case file.kind == writeKindState:
-			schema := stateSchemaForLayout(currentLayoutVersion)
+			schema := stateSchemaForLayout(plan.toVersion)
 			state := starterState(s.now(), schema)
-			content, err = marshalStateAtSchema(schema, state)
+			marshalled, err := marshalStateAtSchema(schema, state)
 			if err != nil {
 				return tx, err
 			}
+			content = marshalled
 		}
 		original, readErr := readInitFile(file.physical)
 		if readErr != nil {

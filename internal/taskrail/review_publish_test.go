@@ -18,7 +18,7 @@ func TestReviewPublishTaskPreviewAndApplyBindExactBytes(t *testing.T) {
 	}
 	repo := realGitRepo(t)
 	seedFixtureTree(t, repo)
-	writeFile(t, filepath.Join(repo, ".taskrail", "config.yml"), "layout_version: 1\nspecs_dir: specs\nplanning_dir: planning\n")
+	markCurrentLayout(t, repo)
 	writeFile(t, filepath.Join(repo, ".gitignore"), "planning/artifacts/\n")
 	writeTask(t, repo, "T-215-review", "Review", "todo", "high", "specs/v0.1.0.md#summary", nil)
 	taskPath := "planning/tasks/T-215-review.md"
@@ -944,7 +944,7 @@ func reviewPublishFixture(t *testing.T) (string, *Service, ReviewPublishInput) {
 	t.Helper()
 	repo := realGitRepo(t)
 	seedFixtureTree(t, repo)
-	writeFile(t, filepath.Join(repo, ".taskrail", "config.yml"), "layout_version: 1\nspecs_dir: specs\nplanning_dir: planning\n")
+	markCurrentLayout(t, repo)
 	writeFile(t, filepath.Join(repo, ".gitignore"), "planning/artifacts/\n")
 	writeTask(t, repo, "T-215-review", "Review", "todo", "high", "specs/v0.1.0.md#summary", nil)
 	taskPath := "planning/tasks/T-215-review.md"
@@ -971,7 +971,7 @@ func specReviewPublishFixture(t *testing.T) (string, *Service, ReviewPublishInpu
 	t.Helper()
 	repo := realGitRepo(t)
 	seedFixtureTree(t, repo)
-	writeFile(t, filepath.Join(repo, ".taskrail", "config.yml"), "layout_version: 1\nspecs_dir: specs\nplanning_dir: planning\n")
+	markCurrentLayout(t, repo)
 	writeFile(t, filepath.Join(repo, ".gitignore"), "planning/artifacts/\n")
 	specPath := "specs/v0.1.0.md"
 	specBytes, err := os.ReadFile(filepath.Join(repo, filepath.FromSlash(specPath)))
@@ -1005,7 +1005,7 @@ func decompositionReviewPublishFixture(t *testing.T) (string, *Service, ReviewPu
 	t.Helper()
 	repo := realGitRepo(t)
 	seedFixtureTree(t, repo)
-	writeFile(t, filepath.Join(repo, ".taskrail", "config.yml"), "layout_version: 1\nspecs_dir: specs\nplanning_dir: planning\n")
+	markCurrentLayout(t, repo)
 	writeFile(t, filepath.Join(repo, ".gitignore"), "planning/artifacts/\n")
 	files, subjects := decompositionGolden()
 	files["review-1.json"] = replacePromptBindingDigest(t, files["review-1.json"], "task-decomposition-adversarial")

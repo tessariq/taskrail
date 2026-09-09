@@ -54,12 +54,8 @@ func (s *Service) applyReviewedImportDraft(input ApplyDraftInput) (result ApplyD
 			err = WithMachineErrorCode(MachineCodeRepositoryInvalid, releaseErr)
 		}
 	}()
-	marker, present, err := readMarker(s.paths.RepoRoot)
-	if err != nil {
+	if err := s.requireCurrentLayout("import --apply"); err != nil {
 		return ApplyDraftResult{}, err
-	}
-	if !present || marker.LayoutVersion != layout2Version {
-		return ApplyDraftResult{}, WithMachineErrorCode(MachineCodeUnsupported, errors.New("reviewed import requires layout_version 2"))
 	}
 	data, draftPath, err := s.readImportDraftBytes(input.DraftPath)
 	if err != nil {

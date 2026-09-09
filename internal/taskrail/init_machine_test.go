@@ -50,7 +50,7 @@ func TestInitFreshResultMatchesTheContract(t *testing.T) {
 	if err != nil {
 		t.Fatalf("init: %v", err)
 	}
-	want := `{"outcome":"created","from_version":0,"to_version":1,"applied":true,` +
+	want := `{"outcome":"created","from_version":0,"to_version":2,"applied":true,` +
 		`"storage_mode":"committed",` +
 		`"config":{"path":".taskrail/config.yml","action":"create","candidate_sha256":"` + markerDigestOnDisk(t, repo) + `"},` +
 		`"writes":[` +
@@ -73,7 +73,7 @@ func TestInitFreshResultMatchesTheContract(t *testing.T) {
 func TestInitAdoptedReportsPreservedLayout(t *testing.T) {
 	t.Parallel()
 
-	repo := seedFixtureRepo(t)
+	repo := seedLegacyFixtureRepo(t)
 	svc := newTestService(t, repo, time.Date(2026, 3, 31, 12, 0, 0, 0, time.UTC))
 
 	result, err := svc.Init(InitInput{})
@@ -103,9 +103,9 @@ func TestInitMigrationPreviewAndApplyExposeTheSameCandidates(t *testing.T) {
 	t.Parallel()
 
 	marker := "layout_version: 0\nspecs_dir: specs\nplanning_dir: planning\n"
-	previewRepo := seedFixtureRepo(t)
+	previewRepo := seedLegacyFixtureRepo(t)
 	writeFile(t, markerFile(previewRepo), marker)
-	applyRepo := seedFixtureRepo(t)
+	applyRepo := seedLegacyFixtureRepo(t)
 	writeFile(t, markerFile(applyRepo), marker)
 
 	at := time.Date(2026, 3, 31, 12, 0, 0, 0, time.UTC)
@@ -168,7 +168,7 @@ func TestInitReportsContinuationNoteChoices(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			repo := seedFixtureRepo(t)
+			repo := seedLegacyFixtureRepo(t)
 			writeFile(t, markerFile(repo), "layout_version: 0\nspecs_dir: specs\nplanning_dir: planning\n")
 			if tc.seedSidecar {
 				writeFile(t, notesFile(repo), "# Repository Notes\n")

@@ -62,7 +62,9 @@ func newLocalTestService(t *testing.T, repo string, now time.Time) *Service {
 	if err != nil {
 		t.Fatalf("discover lock context: %v", err)
 	}
-	paths := pathsFromLayout(repo, defaultLayoutConfig(), localStorage())
+	// Local planning is only ever initialized at layout 2, so its fixtures must
+	// resolve the same layout the local initializer publishes.
+	paths := pathsFromLayout(repo, currentLayoutConfig(), localStorage())
 	paths.ManagedRoot = repo
 	paths.WorktreeRoot = git.WorktreeRoot
 	paths.GitDir = git.GitDir

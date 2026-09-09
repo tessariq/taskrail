@@ -43,7 +43,7 @@ func TestInitFreshCreatesNotesTemplate(t *testing.T) {
 func TestInitPreservesExistingNotesByteForByte(t *testing.T) {
 	t.Parallel()
 
-	repo := seedFixtureRepo(t)
+	repo := seedLegacyFixtureRepo(t)
 	human := "# Repository Notes\n\nHand-authored context the operator owns.\n"
 	writeFile(t, notesFile(repo), human)
 
@@ -65,7 +65,7 @@ func TestInitPreviewReportsNotesCandidateWithoutWriting(t *testing.T) {
 
 	t.Run("migration", func(t *testing.T) {
 		t.Parallel()
-		repo := seedFixtureRepo(t)
+		repo := seedLegacyFixtureRepo(t)
 		writeFile(t, markerFile(repo), "layout_version: 0\nspecs_dir: specs\nplanning_dir: planning\n")
 
 		svc := newTestService(t, repo, time.Date(2026, 3, 31, 12, 0, 0, 0, time.UTC))
@@ -108,7 +108,7 @@ func TestInitPreviewReportsNotesCandidateWithoutWriting(t *testing.T) {
 func TestInitPreviewOmitsNotesWhenPresent(t *testing.T) {
 	t.Parallel()
 
-	repo := seedFixtureRepo(t)
+	repo := seedLegacyFixtureRepo(t)
 	writeFile(t, markerFile(repo), "layout_version: 0\nspecs_dir: specs\nplanning_dir: planning\n")
 	writeFile(t, notesFile(repo), "# Repository Notes\n")
 
@@ -169,7 +169,7 @@ var unsafeNotesDestinations = []struct {
 // destination.
 func seedUnsafeNotes(t *testing.T, plant func(t *testing.T, repo string)) string {
 	t.Helper()
-	repo := seedFixtureRepo(t)
+	repo := seedLegacyFixtureRepo(t)
 	writeFile(t, markerFile(repo), "layout_version: 0\nspecs_dir: specs\nplanning_dir: planning\n")
 	plant(t, repo)
 	return repo
@@ -239,7 +239,7 @@ func TestNotesDestinationFollowsConfiguredPlanningDir(t *testing.T) {
 // exclusive create guarantees — a re-stat would see the link's absent target and
 // publish the template outside the planning directory.
 func TestNotesTemplateDoesNotFollowALinkPlantedAfterClassification(t *testing.T) {
-	repo := seedFixtureRepo(t)
+	repo := seedLegacyFixtureRepo(t)
 	outside := filepath.Join(repo, "outside.md")
 	testHookBeforeNotesCreate = func(path string) {
 		testHookBeforeNotesCreate = nil
@@ -270,7 +270,7 @@ func TestNotesExtractionCandidatePreservesTextAndOrder(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			repo := seedFixtureRepo(t)
+			repo := seedLegacyFixtureRepo(t)
 
 			candidate, err := notesExtractionCandidate(repo, planningDirOf(repo), tc.notes)
 			if err != nil {
@@ -306,7 +306,7 @@ func TestNotesExtractionCandidatePreservesTextAndOrder(t *testing.T) {
 func TestNotesExtractionCandidateRejectsEmptyNotes(t *testing.T) {
 	t.Parallel()
 
-	repo := seedFixtureRepo(t)
+	repo := seedLegacyFixtureRepo(t)
 
 	_, err := notesExtractionCandidate(repo, planningDirOf(repo), nil)
 	if err == nil {
@@ -322,7 +322,7 @@ func TestNotesExtractionCandidateRejectsEmptyNotes(t *testing.T) {
 func TestNotesExtractionCandidateRefusesExistingNotes(t *testing.T) {
 	t.Parallel()
 
-	repo := seedFixtureRepo(t)
+	repo := seedLegacyFixtureRepo(t)
 	human := "# Repository Notes\n\nAlready mine.\n"
 	writeFile(t, notesFile(repo), human)
 

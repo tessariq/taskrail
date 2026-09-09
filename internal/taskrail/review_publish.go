@@ -167,6 +167,9 @@ func (s *Service) reviewPublishTask(input ReviewPublishInput) (ReviewPublishResu
 	if input.DryRun {
 		return result, nil
 	}
+	if err := s.requireCurrentLayout("review publish"); err != nil {
+		return ReviewPublishResult{}, err
+	}
 	own, err := repolock.Acquire(context.Background(), repolock.Request{
 		Repository: s.paths.LockRepository(),
 		Command:    "review publish",
@@ -237,6 +240,9 @@ func (s *Service) reviewPublishSpec(input ReviewPublishInput) (ReviewPublishResu
 	result := candidate.result(false)
 	if input.DryRun {
 		return result, nil
+	}
+	if err := s.requireCurrentLayout("review publish"); err != nil {
+		return ReviewPublishResult{}, err
 	}
 	own, err := repolock.Acquire(context.Background(), repolock.Request{
 		Repository: s.paths.LockRepository(),
@@ -622,6 +628,9 @@ func (s *Service) publishDecompositionReview(input ReviewPublishInput) (ReviewPu
 	}
 	if input.DryRun {
 		return candidate.result(false), nil
+	}
+	if err := s.requireCurrentLayout("review publish"); err != nil {
+		return ReviewPublishResult{}, err
 	}
 	own, err := repolock.Acquire(context.Background(), repolock.Request{
 		Repository: s.paths.LockRepository(),

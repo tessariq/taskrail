@@ -232,7 +232,7 @@ func assertPersistedSpecRef(t *testing.T, svc *Service, taskID, want string) {
 func writeFixtureStateWithActivePath(t *testing.T, repo, activePath string) {
 	t.Helper()
 	writeFile(t, filepath.Join(repo, "planning", "STATE.md"), `---
-schema_version: 1
+schema_version: 2
 updated_at: "2026-03-31T00:00:00Z"
 active_spec_version: v0.1.0
 active_spec_path: `+activePath+`
@@ -243,8 +243,6 @@ blockers: []
 next_action: Start the next task
 last_verification_result: Not yet run
 relevant_artifacts: []
-continuation_notes:
-  - Fixture repo.
 ---
 
 # STATE

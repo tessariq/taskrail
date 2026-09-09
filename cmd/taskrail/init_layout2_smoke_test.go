@@ -12,10 +12,32 @@ import (
 // migration_preview, and the operator gates are observable in both modes.
 
 // seedLayout1CLIRepo builds a marked layout-1 repository the way a v0.4 adopter
-// would have it: a real init, then one authored task.
+// would have it: a real init, then the pre-upgrade marker and schema-1 state
+// that release published, then one authored task. A current init writes layout
+// 2, so the pre-upgrade shape this upgrade flow consumes has to be restored
+// explicitly rather than inherited from it.
 func seedLayout1CLIRepo(t *testing.T) string {
 	t.Helper()
 	root := setupRepo(t)
+	writeFileCLI(t, filepath.Join(root, ".taskrail", "config.yml"),
+		"layout_version: 1\nspecs_dir: specs\nplanning_dir: planning\n")
+	writeFileCLI(t, filepath.Join(root, "planning", "STATE.md"), `---
+schema_version: 1
+updated_at: "2026-03-31T00:00:00Z"
+active_spec_version: v0.1.0
+active_spec_path: specs/v0.1.0.md
+current_task: ""
+current_task_title: ""
+status_summary: idle
+blockers: []
+next_action: Start the next task
+last_verification_result: Not yet run
+relevant_artifacts: []
+continuation_notes: []
+---
+
+# STATE
+`)
 	writeTaskCLI(t, root, "T-001-example")
 	return root
 }

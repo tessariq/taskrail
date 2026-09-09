@@ -27,7 +27,7 @@ func TestLayoutLoadRejectsNewerLayoutVersion(t *testing.T) {
 			if err == nil {
 				t.Fatal("expected error for newer-than-supported layout_version")
 			}
-			want := "repository layout_version 999 is newer than supported 1; upgrade taskrail"
+			want := "repository layout_version 999 is newer than supported 2; upgrade taskrail"
 			if err.Error() != want {
 				t.Fatalf("error = %q, want %q", err.Error(), want)
 			}

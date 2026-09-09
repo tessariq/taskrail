@@ -167,7 +167,7 @@ func (s *Service) applyLocalInit(in InitInput) (result InitResult, err error) {
 	}
 	marker := Layout2Config{
 		LayoutVersion: layout2Version, SpecsDir: defaultSpecsDir, PlanningDir: defaultPlanningDir,
-		StorageMode: StorageLocal, ImplementationReviewMaxRounds: 1,
+		StorageMode: StorageLocal, ImplementationReviewMaxRounds: defaultImplementationReviewMaxRounds,
 	}
 	markerBytes, err := yaml.Marshal(marker)
 	if err != nil {

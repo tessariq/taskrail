@@ -161,7 +161,7 @@ updated_at: "2026-08-14T00:00:00Z"
 }
 
 func TestBuildLayout2MigrationCandidateIsCompleteAndWriteFree(t *testing.T) {
-	repo := seedFixtureRepo(t)
+	repo := seedLegacyFixtureRepo(t)
 	writeFile(t, markerFile(repo), "layout_version: 1\nspecs_dir: specs\nplanning_dir: planning\n")
 	writeTask(t, repo, "T-001-example", "Example", "todo", "high", "specs/v0.1.0.md#summary", nil)
 	taskPath := filepath.Join(repo, "planning", "tasks", "T-001-example.md")
@@ -286,7 +286,7 @@ func TestBuildLayout2MigrationCandidateRefusesInvalidSources(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			repo := seedFixtureRepo(t)
+			repo := seedLegacyFixtureRepo(t)
 			writeFile(t, markerFile(repo), "layout_version: 1\nspecs_dir: specs\nplanning_dir: planning\n")
 			tt.edit(t, repo)
 			before := treeDigest(t, repo)
@@ -300,7 +300,7 @@ func TestBuildLayout2MigrationCandidateRefusesInvalidSources(t *testing.T) {
 	}
 
 	t.Run("same basename decoy is unrelated", func(t *testing.T) {
-		repo := seedFixtureRepo(t)
+		repo := seedLegacyFixtureRepo(t)
 		writeFile(t, markerFile(repo), "layout_version: 1\nspecs_dir: specs\nplanning_dir: planning\n")
 		writeFile(t, filepath.Join(repo, "elsewhere", "AUTONOMY.tsv"), "decoy\n")
 		if _, err := buildLayout2MigrationCandidate(repo); err != nil {
@@ -309,7 +309,7 @@ func TestBuildLayout2MigrationCandidateRefusesInvalidSources(t *testing.T) {
 	})
 
 	t.Run("existing regular notes permit drop-only candidate", func(t *testing.T) {
-		repo := seedFixtureRepo(t)
+		repo := seedLegacyFixtureRepo(t)
 		writeFile(t, markerFile(repo), "layout_version: 1\nspecs_dir: specs\nplanning_dir: planning\n")
 		writeFile(t, filepath.Join(repo, "planning", "NOTES.md"), "human-owned\n")
 		candidate, err := buildLayout2MigrationCandidate(repo)

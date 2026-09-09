@@ -20,7 +20,7 @@ func TestDiscoverPathsFallsBackWhenMarkerAbsent(t *testing.T) {
 		t.Fatalf("discover paths: %v", err)
 	}
 
-	assertDefaultLayout(t, repo, paths, currentLayoutVersion)
+	assertDefaultLayout(t, repo, paths, legacyLayoutVersion)
 }
 
 func TestDiscoverPathsReadsMarkerWithDefaultLayout(t *testing.T) {
@@ -33,8 +33,8 @@ func TestDiscoverPathsReadsMarkerWithDefaultLayout(t *testing.T) {
 		t.Fatalf("discover paths: %v", err)
 	}
 
-	// Marker that pins the current layout must resolve identically to the fallback.
-	assertDefaultLayout(t, repo, paths, currentLayoutVersion)
+	// A legacy marker must resolve identically to the unmarked fallback.
+	assertDefaultLayout(t, repo, paths, legacyLayoutVersion)
 }
 
 func TestDiscoverPathsResolvesFromMarkerLocations(t *testing.T) {
@@ -71,7 +71,7 @@ func TestDiscoverPathsDefaultsMissingMarkerFields(t *testing.T) {
 		t.Fatalf("discover paths: %v", err)
 	}
 
-	assertDefaultLayout(t, repo, paths, currentLayoutVersion)
+	assertDefaultLayout(t, repo, paths, legacyLayoutVersion)
 }
 
 func TestDiscoverPathsRejectsEscapingMarkerLocation(t *testing.T) {

@@ -759,6 +759,7 @@ func TestDelegatedLocalVerifyUsesPhysicalArtifactGrant(t *testing.T) {
 	for _, file := range []string{"specs/README.md", "specs/v0.1.0.md", "planning/STATE.md", "planning/tasks/T-002.md"} {
 		writeFile(t, filepath.Join(svc.paths.StorageRoot, filepath.FromSlash(file)), readBytes(t, filepath.Join(repo, filepath.FromSlash(file))))
 	}
+	upgradeStateFixtureToSchema2(t, svc.paths.StateFile)
 	for _, root := range []string{"specs", "planning"} {
 		if err := os.RemoveAll(filepath.Join(repo, root)); err != nil {
 			t.Fatalf("remove committed %s fixture: %v", root, err)

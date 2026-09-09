@@ -231,7 +231,7 @@ func migrationSkillMembers(in InitInput, candidate *Layout2MigrationCandidate) (
 // transaction can publish it.
 func fencedMarkerBytes(marker Layout2Config, transactionID string) ([]byte, error) {
 	fenced := marker
-	fenced.MigrationFence = &Layout2MigrationFence{FromLayoutVersion: currentLayoutVersion, TransactionID: transactionID}
+	fenced.MigrationFence = &Layout2MigrationFence{FromLayoutVersion: legacyLayoutVersion, TransactionID: transactionID}
 	data, err := yaml.Marshal(fenced)
 	if err != nil {
 		return nil, fmt.Errorf("marshal fenced marker: %w", err)

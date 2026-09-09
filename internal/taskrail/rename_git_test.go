@@ -38,6 +38,7 @@ func realGitFixtureRepo(t *testing.T) (string, func(args ...string) string) {
 	}
 	runGit("init", "-q")
 	seedFixtureTree(t, repo)
+	markCurrentLayout(t, repo)
 	return repo, runGit
 }
 

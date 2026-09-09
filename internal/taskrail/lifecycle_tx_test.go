@@ -633,7 +633,7 @@ func TestDelegatedLifecycleWritersShareLoopGrant(t *testing.T) {
 func TestLifecycleWritersLockNonGitRepositoriesUnderRuntime(t *testing.T) {
 	repo := t.TempDir()
 	seedFixtureTree(t, repo)
-	writeFile(t, filepath.Join(repo, ".taskrail", "config.yml"), "layout_version: 1\n")
+	markCurrentLayout(t, repo)
 	writeTask(t, repo, "T-002", "Work item", "todo", "high", "specs/v0.1.0.md#summary", nil)
 	svc := newTestService(t, repo, time.Date(2026, 8, 17, 9, 0, 0, 0, time.UTC))
 

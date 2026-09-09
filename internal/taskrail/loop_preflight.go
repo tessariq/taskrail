@@ -541,7 +541,8 @@ func loopConfiguredReviewRounds(data []byte) (int, error) {
 		return 0, WithMachineErrorCode(MachineCodeRepositoryInvalid, fmt.Errorf("read loop layout: %w", err))
 	}
 	if marker.LayoutVersion != layout2Version {
-		return 0, WithMachineErrorCode(MachineCodeUnsupported, errors.New("loop requires layout_version 2"))
+		return 0, WithMachineErrorCode(MachineCodeIncompatibleLayout,
+			errors.New("loop requires layout_version 2; upgrade this repository with taskrail init --apply --confirm-quiescent"))
 	}
 	return marker.ImplementationReviewMaxRounds, nil
 }
