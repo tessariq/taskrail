@@ -25,6 +25,12 @@ const (
 	// worktree status. Comparing only before against after proves that a dirty
 	// tree stayed dirty, which is not the clean repository a case claims.
 	skillEvalCleanWorktreeDigest = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+
+	// skillEvalManagedPathPrefix is the planning directory the evaluated cases
+	// initialize with. Every tracked-work transition, review publication, and
+	// verification artifact a skill is asked to produce lands beneath it; the
+	// trailing separator keeps a sibling like `planning-other/` outside.
+	skillEvalManagedPathPrefix = "planning/"
 )
 
 var skillEvalRequiredWaiverChecks = []string{
@@ -91,10 +97,18 @@ type SkillEvalObservedFact struct {
 	// Creating a branch or tag moves neither the worktree status nor HEAD, so
 	// the ref listing is observed separately: a published review bundle must not
 	// smuggle in a ref the skill contracts forbid.
-	GitRefsBeforeSHA256 string   `json:"git_refs_before_sha256"`
-	GitRefsAfterSHA256  string   `json:"git_refs_after_sha256"`
-	ValidationPassed    bool     `json:"validation_passed"`
-	StoragePaths        []string `json:"storage_paths"`
+	GitRefsBeforeSHA256 string `json:"git_refs_before_sha256"`
+	GitRefsAfterSHA256  string `json:"git_refs_after_sha256"`
+	// The changed paths themselves, so a grade can distinguish the managed
+	// planning bytes these skills are asked to write from anything else they
+	// touched. A digest alone cannot answer that question.
+	GitChangedPaths []string `json:"git_changed_paths"`
+	// Whether that listing was actually observed. Without it an unrelated git
+	// failure yields no paths, and a predicate looping over them would pass a
+	// skill that wrote anywhere at all.
+	GitChangedPathsObserved bool     `json:"git_changed_paths_observed"`
+	ValidationPassed        bool     `json:"validation_passed"`
+	StoragePaths            []string `json:"storage_paths"`
 }
 
 type SkillEvalIdentity struct {
@@ -374,7 +388,8 @@ func skillEvalSameFact(a, b SkillEvalObservedFact) bool {
 	return a.Action == b.Action && a.Operation == b.Operation && slices.Equal(a.Command, b.Command) && a.ExitCode == b.ExitCode && a.StdoutSHA256 == b.StdoutSHA256 && a.StderrSHA256 == b.StderrSHA256 && a.BeforeSHA256 == b.BeforeSHA256 && a.AfterSHA256 == b.AfterSHA256 && a.GitBeforeSHA256 == b.GitBeforeSHA256 && a.GitAfterSHA256 == b.GitAfterSHA256 &&
 		a.GitTrackedBeforeSHA256 == b.GitTrackedBeforeSHA256 && a.GitTrackedAfterSHA256 == b.GitTrackedAfterSHA256 &&
 		a.GitHeadBefore == b.GitHeadBefore && a.GitHeadAfter == b.GitHeadAfter &&
-		a.GitRefsBeforeSHA256 == b.GitRefsBeforeSHA256 && a.GitRefsAfterSHA256 == b.GitRefsAfterSHA256 && a.ValidationPassed == b.ValidationPassed && slices.Equal(a.StoragePaths, b.StoragePaths)
+		a.GitRefsBeforeSHA256 == b.GitRefsBeforeSHA256 && a.GitRefsAfterSHA256 == b.GitRefsAfterSHA256 &&
+		slices.Equal(a.GitChangedPaths, b.GitChangedPaths) && a.GitChangedPathsObserved == b.GitChangedPathsObserved && a.ValidationPassed == b.ValidationPassed && slices.Equal(a.StoragePaths, b.StoragePaths)
 }
 
 func skillEvalPredicatePasses(predicate string, fact SkillEvalObservedFact) bool {
@@ -386,11 +401,24 @@ func skillEvalPredicatePasses(predicate string, fact SkillEvalObservedFact) bool
 	case "git-worktree-clean":
 		return fact.Operation == "git-command" && fact.ExitCode == 0 &&
 			fact.GitBeforeSHA256 == skillEvalCleanWorktreeDigest && fact.GitAfterSHA256 == skillEvalCleanWorktreeDigest
+	case "git-managed-paths-only":
+		if fact.Operation != "git-command" || fact.ExitCode != 0 || !fact.GitChangedPathsObserved ||
+			fact.GitHeadBefore == "" || fact.GitHeadBefore != fact.GitHeadAfter ||
+			fact.GitRefsBeforeSHA256 != fact.GitRefsAfterSHA256 {
+			return false
+		}
+		for _, path := range fact.GitChangedPaths {
+			if !strings.HasPrefix(path, skillEvalManagedPathPrefix) {
+				return false
+			}
+		}
+		return true
 	case "git-publication-only":
+		// Narrower than the managed-path rule and used alongside it: a skill that
+		// only publishes must add its bundle without rewriting bytes it found.
 		return fact.Operation == "git-command" && fact.ExitCode == 0 &&
-			fact.GitTrackedBeforeSHA256 == skillEvalCleanWorktreeDigest && fact.GitTrackedAfterSHA256 == skillEvalCleanWorktreeDigest &&
-			fact.GitHeadBefore != "" && fact.GitHeadBefore == fact.GitHeadAfter &&
-			fact.GitRefsBeforeSHA256 == fact.GitRefsAfterSHA256
+			fact.GitTrackedBeforeSHA256 == skillEvalCleanWorktreeDigest &&
+			fact.GitTrackedAfterSHA256 == skillEvalCleanWorktreeDigest
 	default:
 		return false
 	}
@@ -484,7 +512,8 @@ func skillEvalEffectiveCommand(command []string) bool {
 
 func validSkillEvalPredicate(value string) bool {
 	return value == "command-exit-zero" || value == "taskrail-validation-pass" ||
-		value == "git-worktree-clean" || value == "git-publication-only"
+		value == "git-worktree-clean" || value == "git-managed-paths-only" ||
+		value == "git-publication-only"
 }
 
 func skillEvalBytesDigest(data []byte) string {

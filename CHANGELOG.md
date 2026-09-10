@@ -14,13 +14,22 @@ All notable user-visible changes to Taskrail will be documented in this file.
   every pairing read as candidate improvement. That release also answers an
   unknown subcommand with its parent's help and exit code zero, so an unchecked
   probe would have graded `pass` while observing nothing at all.
-- A skill whose contract is to publish a durable review bundle is no longer
-  graded as leaving a dirty worktree. The blanket `git-worktree-clean` assertion
-  failed such a skill for producing its own required output, and passed only when
-  a run happened not to reach the publish step, so the grade varied by run rather
-  than describing the skill. The new `git-publication-only` predicate admits new
-  untracked paths while still requiring clean tracked state, an unmoved `HEAD`,
-  and an unchanged ref listing.
+- A skill whose contract is to transition tracked work or publish a durable
+  review bundle is no longer graded as leaving a dirty worktree. The blanket
+  `git-worktree-clean` assertion failed such a skill for producing its own
+  required output, and passed only when a run happened not to reach that step,
+  so the grade varied by run rather than describing the skill. The new
+  `git-managed-paths-only` predicate instead requires every changed path to lie
+  under the managed planning directory, with an unmoved `HEAD`, an unchanged ref
+  listing, and an actually observed path listing — an unobserved listing fails
+  rather than reading as an unchanged tree. `git-publication-only` is narrowed to
+  unchanged tracked bytes and kept alongside it for the review skills, so a skill
+  that only publishes cannot rewrite the bytes it reviewed.
+- A v0.4.0 baseline arm is no longer graded as failing validation for predating
+  the common JSON envelope. `taskrail-validation-pass` reads the wrapped v0.5
+  `result` object and falls back to the bare v0.4.0 body only for a baseline arm,
+  so the predicate measures the validation verdict rather than the envelope the
+  release happened to emit.
 - `taskrail lock status` now reports the held lock and its `--take-over-lock` and
   `--expect-sha256` operands for every retained transaction state, instead of
   refusing with `recovery_pending`. `recover --apply` refuses an abandoned lock

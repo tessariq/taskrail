@@ -20,6 +20,8 @@ dependencies:
     - T-390-describe-loop-as-executing-in-command-help
     - T-394-make-skill-eval-baselines-executable
     - T-395-separate-publication-from-dirty-worktree
+    - T-396-read-baseline-validate-envelope
+    - T-397-grade-on-managed-path-confinement
 updated_at: "2026-09-09T14:07:00Z"
 last_verification_id: "525eef8e0e6f39b6ce2558ed2536b5cd"
 last_verification_result: fail

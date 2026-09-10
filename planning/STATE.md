@@ -1,6 +1,6 @@
 ---
 schema_version: 2
-updated_at: "2026-09-09T18:53:19Z"
+updated_at: "2026-09-10T09:57:30Z"
 active_spec_version: v0.5.0
 active_spec_path: specs/v0.5.0.md
 current_task: ""
@@ -8,9 +8,9 @@ current_task_title: ""
 status_summary: idle
 blockers: []
 next_action: Select the next eligible task
-last_verification_result: pass for T-395-separate-publication-from-dirty-worktree at 2026-09-09T18:53:19Z id 33c2e5761dbb10ac621077fc2e8d5093
-last_verification_id: 33c2e5761dbb10ac621077fc2e8d5093
-last_verified_completion_id: f28d85689931c644f542fbea961ce085
+last_verification_result: pass for T-397-grade-on-managed-path-confinement at 2026-09-10T09:57:30Z id 777735f8d35990c4c974920029987356
+last_verification_id: 777735f8d35990c4c974920029987356
+last_verified_completion_id: c0aef0e5392430db1e46e5a8893ef8dc
 relevant_artifacts: []
 ---
 
@@ -34,7 +34,7 @@ relevant_artifacts: []
 
 ## Last Verification
 
-- pass for T-395-separate-publication-from-dirty-worktree at 2026-09-09T18:53:19Z id 33c2e5761dbb10ac621077fc2e8d5093
+- pass for T-397-grade-on-managed-path-confinement at 2026-09-10T09:57:30Z id 777735f8d35990c4c974920029987356
 
 ## Next Action
 
@@ -48,6 +48,6 @@ relevant_artifacts: []
 
 - todo: 52
 - in_progress: 0
-- completed: 342
+- completed: 344
 - blocked: 0
 - cancelled: 0

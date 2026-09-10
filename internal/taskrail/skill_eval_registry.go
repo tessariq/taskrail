@@ -458,7 +458,7 @@ func parseSkillEvalOracle(raw json.RawMessage) (SkillEvalOracle, error) {
 		if err != nil {
 			return SkillEvalOracle{}, err
 		}
-		predicate, err := enumMember(assertion, "oracle assertion", "predicate", []string{"command-exit-zero", "taskrail-validation-pass", "git-worktree-clean", "git-publication-only"})
+		predicate, err := enumMember(assertion, "oracle assertion", "predicate", []string{"command-exit-zero", "taskrail-validation-pass", "git-worktree-clean", "git-managed-paths-only", "git-publication-only"})
 		if err != nil {
 			return SkillEvalOracle{}, err
 		}

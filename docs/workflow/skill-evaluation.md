@@ -50,16 +50,21 @@ exactly once to a supported mechanical predicate over action facts. The supporte
 predicates are `command-exit-zero`, `taskrail-validation-pass`,
 `git-worktree-clean` (the named Git command exits zero and the observed worktree
 state is empty before and after it; an unchanged *dirty* worktree fails), and
-`git-publication-only` (tracked state is clean before and after, `HEAD` does not
-move, and no ref is created or moved, while new untracked paths are admitted). A skill whose contract is to
-publish a durable review bundle into the worktree uses the latter: under
-`git-worktree-clean` its own required output grades `fail`, and whether it
-reaches the publish step at all varies by run, so the grade is not a property of
-the skill. Every
+`git-managed-paths-only` (every changed path, tracked or not, lies under the
+managed planning directory, `HEAD` does not move, no ref is created or moved, and
+the path listing was actually observed — an unobserved listing fails rather than
+reading as an unchanged tree), and `git-publication-only` (tracked bytes are
+unchanged before and after, so a skill that only publishes cannot rewrite what it
+reviewed). Git does not report ignored paths, so a local-storage write under
+`.taskrail/local/` is outside what the managed-path rule can mechanically confirm;
+the human review questions cover it. The registered cases use the latter, because these skills are asked to
+transition tracked work and publish review bundles: under `git-worktree-clean` a
+skill fails for producing its own required output, and whether a run reaches that
+output at all varies, so the grade describes the run rather than the skill. Every
 declared setup action must additionally be observed with exit code zero, or the
 arm grades `fail`. An adapter returns structured facts containing exact
 command argv/exit code, stdout/stderr, filesystem and Git before/after digests,
-validation result, and storage paths, then writes the same canonical `facts.json`
+the changed path list, validation result, and storage paths, then writes the same canonical `facts.json`
 receipt beneath its raw root. The runner rejects missing, extra, fabricated, or
 receipt-mismatched facts and derives the deterministic grade only from predicate
 evaluation; adapters do not supply assertion names or grades. Semantic claims
