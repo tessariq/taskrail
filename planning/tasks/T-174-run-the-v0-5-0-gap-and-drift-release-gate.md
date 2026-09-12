@@ -23,6 +23,8 @@ dependencies:
     - T-396-read-baseline-validate-envelope
     - T-397-grade-on-managed-path-confinement
     - T-398-ignore-artifacts-on-committed-init
+    - T-413-adopt-pre-staged-baseline-arms
+    - T-414-publish-skill-eval-report
 updated_at: "2026-09-09T14:07:00Z"
 last_verification_id: "525eef8e0e6f39b6ce2558ed2536b5cd"
 last_verification_result: fail
