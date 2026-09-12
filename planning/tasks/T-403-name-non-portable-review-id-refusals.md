@@ -4,7 +4,8 @@ title: Name non-portable review ids in prompt path refusals
 status: todo
 priority: low
 spec_ref: specs/v0.5.0.md#workflow-prompt-catalog-and-overrides
-dependencies: []
+dependencies:
+    - T-174-run-the-v0-5-0-gap-and-drift-release-gate
 updated_at: "2026-09-11T16:28:46Z"
 ---
 

@@ -4,7 +4,9 @@ title: Ignore artifact output in committed-mode init
 status: todo
 priority: high
 spec_ref: specs/v0.5.0.md#safe-review-artifact-publication
-dependencies: []
+dependencies:
+    - T-413-adopt-pre-staged-baseline-arms
+    - T-414-publish-skill-eval-report
 updated_at: "2026-09-11T16:21:42Z"
 ---
 

@@ -1,6 +1,6 @@
 ---
 schema_version: 2
-updated_at: "2026-09-12T07:09:03Z"
+updated_at: "2026-09-12T07:22:49Z"
 active_spec_version: v0.5.0
 active_spec_path: specs/v0.5.0.md
 current_task: ""

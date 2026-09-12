@@ -25,6 +25,14 @@ dependencies:
     - T-398-ignore-artifacts-on-committed-init
     - T-413-adopt-pre-staged-baseline-arms
     - T-414-publish-skill-eval-report
+    - T-399-unindent-starter-spec-heading
+    - T-401-align-proposal-directory-precondition
+    - T-402-document-lens-manifest-path-member
+    - T-404-clarify-pre-start-cannot-proceed-branch
+    - T-405-manual-test-placeholder-acceptance
+    - T-406-task-review-unauthored-task-findings
+    - T-407-spec-review-disposition-authority
+    - T-400-local-mode-committed-skill-exclusion
 updated_at: "2026-09-09T14:07:00Z"
 last_verification_id: "525eef8e0e6f39b6ce2558ed2536b5cd"
 last_verification_result: fail
