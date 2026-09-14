@@ -68,19 +68,27 @@ type SpecReviewFinding struct {
 }
 
 type SpecReviewManifest struct {
-	Raw          []byte
-	SessionID    string
-	SpecPath     string
-	SpecSHA256   string
-	GeneratedAt  string
-	ApprovedAt   string
-	Lenses       []SpecReviewManifestLens
-	Dispositions []SpecReviewDisposition
+	Raw []byte
+	// SchemaVersion distinguishes the legacy five-file single-round form (1)
+	// from the declared round-history form (2).
+	SchemaVersion         int
+	SessionID             string
+	SpecPath              string
+	SpecSHA256            string
+	GeneratedAt           string
+	ApprovedAt            string // schema 1 only
+	DispositionProvenance string // schema 2 only; the fixed unverified-claims label
+	Lenses                []SpecReviewManifestLens
+	Rounds                []SpecReviewRound
+	Dispositions          []SpecReviewDisposition
 }
 
 type SpecReviewManifestLens struct{ Lens, Path, SHA256, SpecSHA256 string }
 
 type SpecReviewDisposition struct {
+	// Round names the occurrence a schema-2 disposition decides; it is zero in
+	// the legacy single-round form.
+	Round                                             int
 	FindingID, Lens, Severity, Disposition, Rationale string
 	ResultingSpecRef, TargetVersion                   *string
 }
@@ -146,36 +154,74 @@ func DecodeTaskReview(data []byte) (TaskReview, error) {
 	return out, nil
 }
 
+// DecodeSpecReviewBundle reads one spec-review bundle: legacy schema-1
+// five-file bundles stay readable as history, and schema-2 history bundles
+// decode with their full declared-round and provenance guarantees.
 func DecodeSpecReviewBundle(files map[string][]byte) (SpecReviewBundle, error) {
-	return decodeSpecReviewBundle(files, false)
+	version, err := specReviewManifestSchemaVersion(files)
+	if err != nil {
+		return SpecReviewBundle{}, err
+	}
+	switch version {
+	case 1:
+		return decodeLegacySpecReviewBundle(files)
+	case 2:
+		return decodeSpecReview2Bundle(files)
+	default:
+		return SpecReviewBundle{}, fmt.Errorf("manifest.json has unsupported schema version %d", version)
+	}
 }
 
+// decodeSpecReviewProposalBundle validates a publication proposal. New
+// sessions publish schema-2 manifests; the legacy single-round form no longer
+// publishes, so agent-recorded dispositions cannot escape the provenance label
+// and declared round history by falling back to the older shape.
 func decodeSpecReviewProposalBundle(files map[string][]byte) (SpecReviewBundle, error) {
-	return decodeSpecReviewBundle(files, true)
+	version, err := specReviewManifestSchemaVersion(files)
+	if err != nil {
+		return SpecReviewBundle{}, err
+	}
+	switch version {
+	case 1:
+		return SpecReviewBundle{}, fmt.Errorf("legacy schema-1 spec review bundles no longer publish; new sessions publish a schema-2 manifest")
+	case 2:
+		return decodeSpecReview2Bundle(files)
+	default:
+		return SpecReviewBundle{}, fmt.Errorf("manifest.json has unsupported schema version %d", version)
+	}
 }
 
-func decodeSpecReviewBundle(files map[string][]byte, requireFindingNamespaces bool) (SpecReviewBundle, error) {
+// requireSpecReviewFiles refuses a bundle whose files are not exactly the
+// wanted inventory, so a history bundle cannot smuggle in or drop members.
+func requireSpecReviewFiles(files map[string][]byte, want []string) error {
+	for _, name := range want {
+		if _, ok := files[name]; !ok {
+			return fmt.Errorf("spec review bundle is missing file %q", name)
+		}
+	}
+	for name := range files {
+		if !slices.Contains(want, name) {
+			return fmt.Errorf("spec review bundle has unknown file %q", name)
+		}
+	}
+	return nil
+}
+
+func decodeLegacySpecReviewBundle(files map[string][]byte) (SpecReviewBundle, error) {
 	var bundle SpecReviewBundle
 	want := append([]string{}, specReviewLensOrder...)
 	for i := range want {
 		want[i] += ".json"
 	}
 	want = append(want, "manifest.json")
-	for _, name := range want {
-		if _, ok := files[name]; !ok {
-			return bundle, fmt.Errorf("spec review bundle is missing file %q", name)
-		}
-	}
-	for name := range files {
-		if !slices.Contains(want, name) {
-			return bundle, fmt.Errorf("spec review bundle has unknown file %q", name)
-		}
+	if err := requireSpecReviewFiles(files, want); err != nil {
+		return bundle, err
 	}
 	bundle.Raw = make(map[string][]byte, len(files))
 	findings := map[string]specFindingBinding{}
 	for _, lensName := range specReviewLensOrder {
 		path := lensName + ".json"
-		lens, err := decodeSpecReviewLens(files[path], lensName, requireFindingNamespaces)
+		lens, err := decodeSpecReviewLens(files[path], lensName, false)
 		if err != nil {
 			return bundle, fmt.Errorf("%s: %w", path, err)
 		}
@@ -220,18 +266,30 @@ func decodeReviewObject(data []byte, what string) (map[string]json.RawMessage, e
 }
 
 func schemaVersionOne(obj map[string]json.RawMessage, what string) error {
-	raw, ok := obj["schema_version"]
-	if !ok {
-		return fmt.Errorf("%s is missing member %q", what, "schema_version")
+	return schemaVersion(obj, what, 1)
+}
+
+func schemaVersion(obj map[string]json.RawMessage, what string, want int) error {
+	version, err := schemaVersionValue(obj, what)
+	if err != nil {
+		return err
 	}
-	version, ok := decodeJSONInteger(raw)
-	if !ok {
-		return fmt.Errorf("%s member %q is not an integer", what, "schema_version")
-	}
-	if version != 1 {
+	if version != int64(want) {
 		return fmt.Errorf("%s has unsupported schema version %d", what, version)
 	}
 	return nil
+}
+
+func schemaVersionValue(obj map[string]json.RawMessage, what string) (int64, error) {
+	raw, ok := obj["schema_version"]
+	if !ok {
+		return 0, fmt.Errorf("%s is missing member %q", what, "schema_version")
+	}
+	version, ok := decodeJSONInteger(raw)
+	if !ok {
+		return 0, fmt.Errorf("%s member %q is not an integer", what, "schema_version")
+	}
+	return version, nil
 }
 
 func decodePromptBinding(obj map[string]json.RawMessage, what, promptID string) (ReviewPromptBinding, error) {
@@ -421,6 +479,7 @@ func decodeSpecReviewManifest(data []byte) (SpecReviewManifest, error) {
 	if err := schemaVersionOne(obj, "spec review manifest"); err != nil {
 		return out, err
 	}
+	out.SchemaVersion = 1
 	if out.SessionID, err = reviewKeyMember(obj, "spec review manifest", "session_id"); err != nil {
 		return out, err
 	}
@@ -439,7 +498,7 @@ func decodeSpecReviewManifest(data []byte) (SpecReviewManifest, error) {
 	if out.Lenses, err = decodeManifestLenses(obj["lenses"]); err != nil {
 		return out, err
 	}
-	if out.Dispositions, err = decodeManifestDispositions(obj["dispositions"]); err != nil {
+	if out.Dispositions, err = decodeManifestDispositions(obj["dispositions"], false); err != nil {
 		return out, err
 	}
 	out.Raw = append([]byte(nil), data...)
@@ -482,31 +541,49 @@ func decodeManifestLenses(raw json.RawMessage) ([]SpecReviewManifestLens, error)
 	return result, nil
 }
 
-func decodeManifestDispositions(raw json.RawMessage) ([]SpecReviewDisposition, error) {
+func decodeManifestDispositions(raw json.RawMessage, requireRound bool) ([]SpecReviewDisposition, error) {
 	elements, err := arrayMember(raw, "spec review manifest", "dispositions")
 	if err != nil {
 		return nil, err
 	}
 	result := make([]SpecReviewDisposition, 0, len(elements))
-	seen := map[string]struct{}{}
+	seen := map[specReviewOccurrence]struct{}{}
 	for i, element := range elements {
 		what := fmt.Sprintf("manifest disposition at index %d", i)
 		obj, err := strictObject(element, what)
 		if err != nil {
 			return nil, err
 		}
+		var d SpecReviewDisposition
 		required := []string{"finding_id", "lens", "severity", "disposition", "rationale"}
+		if requireRound {
+			rawNumber, ok := obj["round"]
+			if !ok {
+				return nil, fmt.Errorf("%s is missing member %q", what, "round")
+			}
+			number, ok := decodeJSONInteger(rawNumber)
+			if !ok || number < 1 {
+				return nil, fmt.Errorf("%s member %q is not a positive integer", what, "round")
+			}
+			if int64(int(number)) != number {
+				return nil, fmt.Errorf("%s member %q exceeds the supported round range", what, "round")
+			}
+			d.Round = int(number)
+			required = append([]string{"round"}, required...)
+		}
 		if err := exactOptionalMembers(obj, what, required, []string{"resulting_spec_ref", "target_version"}); err != nil {
 			return nil, err
 		}
-		var d SpecReviewDisposition
 		if d.FindingID, err = stringMember(obj, what, "finding_id"); err != nil {
 			return nil, err
 		}
-		if _, ok := seen[d.FindingID]; ok {
+		// A schema-2 manifest may re-dispose the same finding_id in a later
+		// round, so duplicate detection keys the occurrence, not the bare ID.
+		occurrence := specReviewOccurrence{Round: d.Round, FindingID: d.FindingID}
+		if _, ok := seen[occurrence]; ok {
 			return nil, fmt.Errorf("duplicate disposition finding_id %q", d.FindingID)
 		}
-		seen[d.FindingID] = struct{}{}
+		seen[occurrence] = struct{}{}
 		if d.Lens, err = enumMember(obj, what, "lens", specReviewLensOrder); err != nil {
 			return nil, err
 		}

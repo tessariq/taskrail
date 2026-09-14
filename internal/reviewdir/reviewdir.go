@@ -125,19 +125,18 @@ func validateDestination(bundleType Type, reviewsRoot, destination string) error
 }
 
 func validateInventory(bundleType Type, files []File) error {
-	want := expectedNames(bundleType, bundleType == TypeDecomposition && len(files) == 5)
-	if want == nil {
-		return fmt.Errorf("unsupported review directory type %q", bundleType)
-	}
-	got := make([]string, len(files))
-	for i, file := range files {
+	for _, file := range files {
 		if len(file.Content) > 1<<20 {
 			return fmt.Errorf("review directory member %q exceeds 1 MiB", file.Name)
 		}
 		if strings.Contains(file.Name, "/") || strings.Contains(file.Name, `\`) {
 			return fmt.Errorf("review directory member %q is not a basename", file.Name)
 		}
-		got[i] = file.Name
+	}
+	got := fileNames(files)
+	want, err := expectedBundleNames(bundleType, got)
+	if err != nil {
+		return err
 	}
 	slices.Sort(got)
 	sortedWant := slices.Clone(want)
@@ -151,12 +150,57 @@ func validateInventory(bundleType Type, files []File) error {
 	return nil
 }
 
+func fileNames(files []File) []string {
+	names := make([]string, len(files))
+	for i, file := range files {
+		names[i] = file.Name
+	}
+	return names
+}
+
+func expectedBundleNames(bundleType Type, names []string) ([]string, error) {
+	switch bundleType {
+	case TypeTask:
+		return expectedNames(bundleType, false), nil
+	case TypeSpec:
+		return expectedSpecReviewNames(names)
+	case TypeDecomposition:
+		return expectedNames(bundleType, len(names) == 5), nil
+	default:
+		return nil, fmt.Errorf("unsupported review directory type %q", bundleType)
+	}
+}
+
+// expectedSpecReviewNames returns the canonical schema-2 spec-review
+// inventory in publication order: every declared round's four lens
+// observations as round-<n>-<lens>.json, then manifest.json. The file count
+// alone fixes the declared round count.
+func expectedSpecReviewNames(names []string) ([]string, error) {
+	if len(names) < 5 || len(names)%4 != 1 {
+		return nil, fmt.Errorf("spec review directory inventory is %v", names)
+	}
+	rounds := (len(names) - 1) / 4
+	want := make([]string, 0, len(names))
+	for round := 1; round <= rounds; round++ {
+		for _, lens := range []string{"consistency", "gaps", "additions", "adversarial"} {
+			want = append(want, fmt.Sprintf("round-%d-%s.json", round, lens))
+		}
+	}
+	want = append(want, "manifest.json")
+	sortedWant := slices.Clone(want)
+	slices.Sort(sortedWant)
+	sortedGot := slices.Clone(names)
+	slices.Sort(sortedGot)
+	if !slices.Equal(sortedGot, sortedWant) {
+		return nil, fmt.Errorf("spec review directory inventory is %v, want %v", sortedGot, sortedWant)
+	}
+	return want, nil
+}
+
 func expectedNames(bundleType Type, secondPass bool) []string {
 	switch bundleType {
 	case TypeTask:
 		return []string{"review.json"}
-	case TypeSpec:
-		return []string{"consistency.json", "gaps.json", "additions.json", "adversarial.json", "manifest.json"}
 	case TypeDecomposition:
 		names := []string{"draft.json", "trace.json", "review-1.json"}
 		if secondPass {

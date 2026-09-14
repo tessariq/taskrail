@@ -12,7 +12,8 @@ deterministic Taskrail reads, validation, publication, and apply.
 
 Requires the installed `taskrail` binary on `PATH`. Run from the managed
 repository root. This flow requires layout version 2 and an already published
-post-spec review bundle.
+schema-2 post-spec review bundle. Schema-1 post-spec bundles remain readable
+historical records, but cannot serve as decomposition evidence.
 
 ## Repository Preflight
 
@@ -40,8 +41,11 @@ Installed adopter repositories skip this source-only guard.
 
 1. **Validate and freeze sources.** First run
    `${TASKRAIL:-taskrail} review show <post-spec-manifest> --json` and validate
-   the final post-spec manifest: its exact digest, selected-spec digest, final
-   four lens entries, every disposition, and no unresolved high/medium finding.
+   the final post-spec manifest: require its schema version to be 2, then check
+   its exact digest, selected-spec digest, final four lens entries, every
+   disposition, and no unresolved high/medium finding. Schema-1 post-spec
+   bundles remain readable historical records, but cannot serve as decomposition
+   evidence.
    Then run `${TASKRAIL:-taskrail} spec show <version> --json` and preserve its
    exact content bytes and reported `sha256` (the exact SHA-256); do not reopen or re-hash the
    logical or local-overlay path. If the selected spec is active, use

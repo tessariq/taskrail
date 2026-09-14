@@ -94,6 +94,9 @@ func DecodeDecompositionBundle(files map[string][]byte, subjects DecompositionSu
 	if err != nil {
 		return bundle, fmt.Errorf("post-spec review bundle: %w", err)
 	}
+	if specReview.Manifest.SchemaVersion != 2 {
+		return bundle, fmt.Errorf("decomposition requires post-spec review manifest schema_version 2")
+	}
 	if specReview.Manifest.SpecPath != subjects.SpecPath || specReview.Manifest.SpecSHA256 != digestRaw(subjects.Spec) {
 		return bundle, fmt.Errorf("post-spec review manifest does not bind selected spec exact bytes")
 	}

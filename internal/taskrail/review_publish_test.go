@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -82,10 +83,38 @@ func TestReviewPublishSpecPreviewAndApplyBindExactBytes(t *testing.T) {
 	if _, err := svc.ReviewPublish(input); err != nil {
 		t.Fatalf("apply: %v", err)
 	}
-	for _, name := range []string{"consistency.json", "gaps.json", "additions.json", "adversarial.json", "manifest.json"} {
+	for name := range files {
 		published, err := os.ReadFile(filepath.Join(repo, "planning", "reviews", "spec", "v0.1.0", "session-1", name))
 		if err != nil || string(published) != string(files[name]) {
 			t.Fatalf("published %s = %q, err=%v", name, published, err)
+		}
+	}
+}
+
+// TestReviewPublishSpecAppliesDeclaredRoundHistory publishes a two-round
+// history whose first round retains its own earlier spec digest, proving the
+// publisher keeps retained rounds and their findings instead of collapsing the
+// history to the final round.
+func TestReviewPublishSpecAppliesDeclaredRoundHistory(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows reports directory durability as unsupported")
+	}
+	earlier := digestRaw([]byte("# v0.1.0 (earlier bytes)\n"))
+	repo, svc, input, _ := writeSpecReview2ProposalFixture(t, earlier)
+	result, err := svc.ReviewPublish(input)
+	if err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+	if len(result.Files) != 9 {
+		t.Fatalf("published files = %d, want 9", len(result.Files))
+	}
+	manifest, err := os.ReadFile(filepath.Join(repo, "planning", "reviews", "spec", "v0.1.0", "session-1", "manifest.json"))
+	if err != nil || !strings.Contains(string(manifest), earlier) {
+		t.Fatalf("published manifest lost the earlier round digest: %s, err=%v", manifest, err)
+	}
+	for _, name := range []string{"round-1-gaps.json", "round-2-gaps.json"} {
+		if _, err := os.Stat(filepath.Join(repo, "planning", "reviews", "spec", "v0.1.0", "session-1", name)); err != nil {
+			t.Fatalf("published %s missing: %v", name, err)
 		}
 	}
 }
@@ -206,11 +235,37 @@ func assertDirectReviewLockHeld(t *testing.T, svc *Service, input ReviewPublishI
 
 func TestReviewPublishDecompositionRequiresCompleteSpecReviewBundle(t *testing.T) {
 	repo, svc, input, _ := decompositionReviewPublishFixture(t)
-	if err := os.Remove(filepath.Join(repo, "planning", "reviews", "spec", "v0.5.0", "spec-review-1", "gaps.json")); err != nil {
+	if err := os.Remove(filepath.Join(repo, "planning", "reviews", "spec", "v0.5.0", "spec-review-1", "round-1-gaps.json")); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := svc.ReviewPublish(input); err == nil {
 		t.Fatal("ReviewPublish accepted an incomplete post-spec review bundle")
+	}
+	assertDecompositionReviewDestinationAbsent(t, repo)
+}
+
+func TestReviewPublishDecompositionRejectsLegacySpecReviewBundle(t *testing.T) {
+	repo, svc, input, files := decompositionReviewPublishFixture(t)
+	spec, err := os.ReadFile(filepath.Join(repo, "specs", "v0.5.0.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	previousDigest := input.ExpectSpecReviewSHA256
+	legacy := legacySpecReviewForDecomposition(spec)
+	subjectDir := filepath.Join(repo, filepath.Dir(filepath.FromSlash(input.SpecReview)))
+	if err := os.RemoveAll(subjectDir); err != nil {
+		t.Fatal(err)
+	}
+	for name, content := range legacy {
+		writeFile(t, filepath.Join(subjectDir, name), string(content))
+	}
+	input.ExpectSpecReviewSHA256 = digestRaw(legacy["manifest.json"])
+	replaceDecomposition(files, "manifest.json", previousDigest, input.ExpectSpecReviewSHA256)
+	writeDecompositionProposalFiles(t, repo, input.Proposal, files, "manifest.json")
+
+	_, err = svc.ReviewPublish(input)
+	if err == nil || MachineFailureFor(err).Code != MachineCodeInvalidProposal || !strings.Contains(err.Error(), "schema_version 2") {
+		t.Fatalf("ReviewPublish error = %v, want schema_version 2 invalid_proposal refusal", err)
 	}
 	assertDecompositionReviewDestinationAbsent(t, repo)
 }
@@ -277,9 +332,78 @@ func TestReviewPublishSpecRefusesInvalidInputsWithoutPublication(t *testing.T) {
 		{"extra proposal member", func(repo string, _ *ReviewPublishInput) {
 			writeFile(t, filepath.Join(repo, "planning", "artifacts", "review-proposals", "spec", "session-1", "extra.json"), "{}")
 		}, MachineCodeInvalidProposal},
+		{"manifest lens spec digest", func(repo string, _ *ReviewPublishInput) {
+			spec, err := os.ReadFile(filepath.Join(repo, "specs", "v0.1.0.md"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			proposal := filepath.Join(repo, "planning", "artifacts", "review-proposals", "spec", "session-1")
+			lensPath := filepath.Join(proposal, "round-1-consistency.json")
+			lens, err := os.ReadFile(lensPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			manifestPath := filepath.Join(proposal, "manifest.json")
+			manifest, err := os.ReadFile(manifestPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			old := `"lens":"consistency","path":"round-1-consistency.json","sha256":"` + digestRaw(lens) + `","spec_sha256":"` + digestRaw(spec) + `"`
+			newValue := `"lens":"consistency","path":"round-1-consistency.json","sha256":"` + digestRaw(lens) + `","spec_sha256":"` + reviewDigestA + `"`
+			mutated := strings.Replace(string(manifest), old, newValue, 1)
+			if mutated == string(manifest) {
+				t.Fatal("manifest lens spec digest mutation did not match the fixture")
+			}
+			writeFile(t, manifestPath, mutated)
+		}, MachineCodeInvalidProposal},
+		{"legacy schema-1 proposal", func(repo string, input *ReviewPublishInput) {
+			proposal := filepath.Join(repo, filepath.FromSlash(input.Proposal))
+			specBytes, err := os.ReadFile(filepath.Join(repo, "specs", "v0.1.0.md"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			legacy := specReviewGolden()
+			for _, lens := range specReviewLensOrder {
+				legacy[lens+".json"] = replacePromptBindingDigest(t, legacy[lens+".json"], "spec-"+lens)
+			}
+			for name, content := range legacy {
+				content = []byte(strings.ReplaceAll(string(content), reviewDigestA, digestRaw(specBytes)))
+				content = []byte(strings.ReplaceAll(string(content), "specs/v0.5.0.md", "specs/v0.1.0.md"))
+				content = []byte(strings.ReplaceAll(string(content), "#safe-review-artifact-publication", "#summary"))
+				content = []byte(strings.ReplaceAll(string(content), "spec-review-1", "session-1"))
+				legacy[name] = content
+			}
+			for _, name := range []string{"consistency.json", "gaps.json", "additions.json", "adversarial.json"} {
+				refreshManifestDigest(legacy, name)
+			}
+			for name, content := range legacy {
+				writeFile(t, filepath.Join(proposal, name), string(content))
+			}
+		}, MachineCodeInvalidProposal},
+		{"deferred high or medium finding", func(repo string, input *ReviewPublishInput) {
+			manifestPath := filepath.Join(repo, filepath.FromSlash(input.Proposal), "manifest.json")
+			data, err := os.ReadFile(manifestPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			writeFile(t, manifestPath, strings.Replace(string(data),
+				`{"round":1,"finding_id":"GAPS-001","lens":"gaps","severity":"medium","disposition":"rejected","rationale":"not applicable"}`,
+				`{"round":1,"finding_id":"GAPS-001","lens":"gaps","severity":"medium","disposition":"deferred","rationale":"later","target_version":"v0.6.0"}`, 1))
+		}, MachineCodeInvalidProposal},
+		{"hidden unchanged-byte repeat", func(repo string, input *ReviewPublishInput) {
+			specBytes, err := os.ReadFile(filepath.Join(repo, "specs", "v0.1.0.md"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			// The repeat fixture's second round reviews identical bytes and is
+			// labeled as a repeat; strip that label before publishing here.
+			_, _, _, files := writeSpecReview2ProposalFixture(t, digestRaw(specBytes))
+			manifest := strings.Replace(string(files["manifest.json"]), `"repeats_earlier_spec":true`, `"repeats_earlier_spec":false`, 1)
+			writeFile(t, filepath.Join(repo, filepath.FromSlash(input.Proposal), "manifest.json"), manifest)
+		}, MachineCodeInvalidProposal},
 		{"cross-lens finding namespace", func(repo string, input *ReviewPublishInput) {
 			proposal := filepath.Join(repo, filepath.FromSlash(input.Proposal))
-			lensPath := filepath.Join(proposal, "gaps.json")
+			lensPath := filepath.Join(proposal, "round-1-gaps.json")
 			lens, err := os.ReadFile(lensPath)
 			if err != nil {
 				t.Fatal(err)
@@ -291,9 +415,9 @@ func TestReviewPublishSpecRefusesInvalidInputsWithoutPublication(t *testing.T) {
 				t.Fatal(err)
 			}
 			manifest = []byte(strings.Replace(string(manifest), `"finding_id":"GAPS-001"`, `"finding_id":"CONS-999"`, 1))
-			files := map[string][]byte{"gaps.json": lens, "manifest.json": manifest}
-			refreshManifestDigest(files, "gaps.json")
-			writeFile(t, lensPath, string(files["gaps.json"]))
+			files := map[string][]byte{"round-1-gaps.json": lens, "manifest.json": manifest}
+			refreshRoundLensDigest(files, "round-1-gaps.json")
+			writeFile(t, lensPath, string(files["round-1-gaps.json"]))
 			writeFile(t, manifestPath, string(files["manifest.json"]))
 		}, MachineCodeInvalidProposal},
 	} {
@@ -344,20 +468,20 @@ func TestReviewPublishSpecPromptBindingPrecedence(t *testing.T) {
 		{
 			name: "malformed lens binding before invalid replacement",
 			setup: func(t *testing.T, repo, proposal string) {
-				lensPath := filepath.Join(repo, filepath.FromSlash(proposal), "gaps.json")
+				lensPath := filepath.Join(repo, filepath.ToSlash(proposal), "round-1-gaps.json")
 				data, err := os.ReadFile(lensPath)
 				if err != nil {
 					t.Fatal(err)
 				}
 				data = []byte(strings.Replace(string(data), `"prompt_id":"spec-gaps"`, `"prompt_id":"spec-consistency"`, 1))
 				writeFile(t, lensPath, string(data))
-				manifestPath := filepath.Join(repo, filepath.FromSlash(proposal), "manifest.json")
+				manifestPath := filepath.Join(repo, filepath.ToSlash(proposal), "manifest.json")
 				manifest, err := os.ReadFile(manifestPath)
 				if err != nil {
 					t.Fatal(err)
 				}
-				files := map[string][]byte{"gaps.json": data, "manifest.json": manifest}
-				refreshManifestDigest(files, "gaps.json")
+				files := map[string][]byte{"round-1-gaps.json": data, "manifest.json": manifest}
+				refreshRoundLensDigest(files, "round-1-gaps.json")
 				writeFile(t, manifestPath, string(files["manifest.json"]))
 				writeFile(t, filepath.Join(repo, ".taskrail", "prompts", "v1", "spec-gaps.md"), "")
 			},
@@ -419,10 +543,10 @@ func TestReviewPublishSpecPreservesMixedPromptBindingsInLensFiles(t *testing.T) 
 		promptID := "spec-" + lens
 		replacement := []byte("replacement " + lens + "\n")
 		writeFile(t, filepath.Join(repo, ".taskrail", "prompts", "v1", promptID+".md"), string(replacement))
-		name := lens + ".json"
+		name := specReview2LensPath(1, lens)
 		files[name] = []byte(strings.ReplaceAll(string(files[name]), `"prompt_source":"builtin"`, `"prompt_source":"replacement"`))
 		files[name] = []byte(strings.ReplaceAll(string(files[name]), builtinPromptDigest(t, promptID), promptDigest(replacement)))
-		refreshManifestDigest(files, name)
+		refreshRoundLensDigest(files, name)
 		writeFile(t, filepath.Join(repo, filepath.FromSlash(input.Proposal), name), string(files[name]))
 	}
 	writeFile(t, filepath.Join(repo, filepath.FromSlash(input.Proposal), "manifest.json"), string(files["manifest.json"]))
@@ -430,7 +554,8 @@ func TestReviewPublishSpecPreservesMixedPromptBindingsInLensFiles(t *testing.T) 
 	if _, err := svc.ReviewPublish(input); err != nil {
 		t.Fatalf("ReviewPublish: %v", err)
 	}
-	for _, name := range []string{"consistency.json", "gaps.json", "additions.json", "adversarial.json"} {
+	for _, lens := range specReviewLensOrder {
+		name := specReview2LensPath(1, lens)
 		published, err := os.ReadFile(filepath.Join(repo, "planning", "reviews", "spec", "v0.1.0", "session-1", name))
 		if err != nil || string(published) != string(files[name]) {
 			t.Fatalf("published %s = %q, err=%v", name, published, err)
@@ -969,6 +1094,15 @@ func reviewPublishFixture(t *testing.T) (string, *Service, ReviewPublishInput) {
 
 func specReviewPublishFixture(t *testing.T) (string, *Service, ReviewPublishInput, map[string][]byte) {
 	t.Helper()
+	return writeSpecReview2ProposalFixture(t, "")
+}
+
+// writeSpecReview2ProposalFixture seeds a schema-2 spec-review proposal bound
+// to the repository's current v0.1.0 bytes. A non-empty earlierDigest declares
+// a first round over different spec bytes; when it equals the current digest
+// the second round is a disclosed unchanged-byte repeat.
+func writeSpecReview2ProposalFixture(t *testing.T, earlierDigest string) (string, *Service, ReviewPublishInput, map[string][]byte) {
+	t.Helper()
 	repo := realGitRepo(t)
 	seedFixtureTree(t, repo)
 	markCurrentLayout(t, repo)
@@ -978,27 +1112,50 @@ func specReviewPublishFixture(t *testing.T) (string, *Service, ReviewPublishInpu
 	if err != nil {
 		t.Fatal(err)
 	}
-	files := specReviewGolden()
-	for _, lens := range specReviewLensOrder {
-		files[lens+".json"] = replacePromptBindingDigest(t, files[lens+".json"], "spec-"+lens)
+	specDigest := digestRaw(specBytes)
+	files := map[string][]byte{}
+	prefixes := map[string]string{"consistency": "CONS", "gaps": "GAPS", "additions": "ADDS", "adversarial": "ADV"}
+	round1 := map[string]string{"consistency": "high", "gaps": "medium", "additions": "low", "adversarial": "low"}
+	type declaredRound struct {
+		number int
+		digest string
+		repeat bool
 	}
+	rounds := []declaredRound{{1, specDigest, false}}
+	if earlierDigest != "" {
+		rounds = []declaredRound{{1, earlierDigest, false}, {2, specDigest, earlierDigest == specDigest}}
+	}
+	roundEntries := make([]string, 0, len(rounds))
+	for _, round := range rounds {
+		entries := make([]string, 0, 4)
+		for _, lens := range specReviewLensOrder {
+			name := specReview2LensPath(round.number, lens)
+			findings := "[]"
+			if round.number == 1 {
+				findings = `[{"finding_id":"` + prefixes[lens] + `-001","severity":"` + round1[lens] + `","evidence":"evidence","impact":"impact","recommendation":"recommendation","scope":"current","disposition":"open","rationale":"rationale"}]`
+			}
+			files[name] = []byte(`{"schema_version":1,"prompt_id":"spec-` + lens + `","prompt_contract_version":"v1","prompt_template_sha256":"` + builtinPromptDigest(t, "spec-"+lens) + `","prompt_source":"builtin","session_id":"session-1","lens":"` + lens + `","spec_path":"` + specPath + `","spec_sha256":"` + round.digest + `","context_mode":"fresh","generated_at":"2026-08-12T10:00:00Z","findings":` + findings + `}`)
+			entries = append(entries, `{"lens":"`+lens+`","path":"`+name+`","sha256":"`+digestRaw(files[name])+`","spec_sha256":"`+round.digest+`"}`)
+		}
+		roundEntries = append(roundEntries, `{"round":`+strconv.Itoa(round.number)+`,"spec_sha256":"`+round.digest+`","repeats_earlier_spec":`+strconv.FormatBool(round.repeat)+`,"lenses":[`+strings.Join(entries, ",")+`]}`)
+	}
+	dispositions := []string{
+		`{"round":1,"finding_id":"CONS-001","lens":"consistency","severity":"high","disposition":"accepted","rationale":"fixed","resulting_spec_ref":"` + specPath + `#summary"}`,
+		`{"round":1,"finding_id":"GAPS-001","lens":"gaps","severity":"medium","disposition":"rejected","rationale":"not applicable"}`,
+		`{"round":1,"finding_id":"ADDS-001","lens":"additions","severity":"low","disposition":"deferred","rationale":"later","target_version":"v0.6.0"}`,
+		`{"round":1,"finding_id":"ADV-001","lens":"adversarial","severity":"low","disposition":"rejected","rationale":"not applicable"}`,
+	}
+	files["manifest.json"] = []byte(`{"schema_version":2,"session_id":"session-1","spec_path":"` + specPath + `","spec_sha256":"` + specDigest + `","generated_at":"2026-08-12T10:00:00Z","disposition_provenance":"` + specReviewProvenanceLabel + `","rounds":[` + strings.Join(roundEntries, ",") + `],"dispositions":[` + strings.Join(dispositions, ",") + `]}`)
+	proposal := "planning/artifacts/review-proposals/spec/session-1"
 	for name, content := range files {
-		content = []byte(strings.ReplaceAll(string(content), reviewDigestA, digestRaw(specBytes)))
-		content = []byte(strings.ReplaceAll(string(content), "specs/v0.5.0.md", specPath))
-		content = []byte(strings.ReplaceAll(string(content), "#safe-review-artifact-publication", "#summary"))
-		content = []byte(strings.ReplaceAll(string(content), "spec-review-1", "session-1"))
-		files[name] = content
+		writeFile(t, filepath.Join(repo, filepath.FromSlash(proposal), name), string(content))
 	}
-	for _, name := range []string{"consistency.json", "gaps.json", "additions.json", "adversarial.json"} {
-		refreshManifestDigest(files, name)
-		writeFile(t, filepath.Join(repo, "planning", "artifacts", "review-proposals", "spec", "session-1", name), string(files[name]))
-	}
-	writeFile(t, filepath.Join(repo, "planning", "artifacts", "review-proposals", "spec", "session-1", "manifest.json"), string(files["manifest.json"]))
 	svc, err := NewService(repo)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return repo, svc, ReviewPublishInput{Type: "spec", Proposal: "planning/artifacts/review-proposals/spec/session-1", Destination: "planning/reviews/spec/v0.1.0/session-1", Spec: "v0.1.0", ExpectSpecSHA256: digestRaw(specBytes)}, files
+	input := ReviewPublishInput{Type: "spec", Proposal: proposal, Destination: "planning/reviews/spec/v0.1.0/session-1", Spec: "v0.1.0", ExpectSpecSHA256: specDigest}
+	return repo, svc, input, files
 }
 
 func decompositionReviewPublishFixture(t *testing.T) (string, *Service, ReviewPublishInput, map[string][]byte) {

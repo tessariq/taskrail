@@ -1,6 +1,6 @@
 ---
 schema_version: 2
-updated_at: "2026-09-12T07:22:49Z"
+updated_at: "2026-09-14T18:23:13Z"
 active_spec_version: v0.5.0
 active_spec_path: specs/v0.5.0.md
 current_task: ""
@@ -8,9 +8,9 @@ current_task_title: ""
 status_summary: idle
 blockers: []
 next_action: Select the next eligible task
-last_verification_result: pass for T-397-grade-on-managed-path-confinement at 2026-09-10T09:57:30Z id 777735f8d35990c4c974920029987356
-last_verification_id: 777735f8d35990c4c974920029987356
-last_verified_completion_id: c0aef0e5392430db1e46e5a8893ef8dc
+last_verification_result: pass for T-407-spec-review-disposition-authority at 2026-09-14T18:23:13Z id f91a011d479bbd63f87a37808bfde379
+last_verification_id: f91a011d479bbd63f87a37808bfde379
+last_verified_completion_id: 61ea2251870cb8c223513c3362d60739
 relevant_artifacts: []
 ---
 
@@ -34,7 +34,7 @@ relevant_artifacts: []
 
 ## Last Verification
 
-- pass for T-397-grade-on-managed-path-confinement at 2026-09-10T09:57:30Z id 777735f8d35990c4c974920029987356
+- pass for T-407-spec-review-disposition-authority at 2026-09-14T18:23:13Z id f91a011d479bbd63f87a37808bfde379
 
 ## Next Action
 
@@ -46,8 +46,8 @@ relevant_artifacts: []
 
 ## Task Counts
 
-- todo: 69
+- todo: 68
 - in_progress: 0
-- completed: 344
+- completed: 345
 - blocked: 0
 - cancelled: 0

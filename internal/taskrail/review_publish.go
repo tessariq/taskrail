@@ -604,7 +604,7 @@ func (s *Service) reviewSpecPath(value string) (version, logical, physical strin
 
 func (s *Service) specReviewProposalFiles(proposal string) (map[string][]byte, error) {
 	tree, err := durablefs.ObserveTree(s.paths.RepoRoot, proposal)
-	if err != nil || !tree.Present || len(tree.Entries) != 5 {
+	if err != nil || !tree.Present || len(tree.Entries) < 5 {
 		return nil, reviewInputError("inspect spec review proposal", err)
 	}
 	files := make(map[string][]byte, len(tree.Entries))
@@ -909,12 +909,19 @@ func sameTaskReviewPublication(a, b taskReviewPublication) bool {
 	return a.proposal == b.proposal && a.destination == b.destination && a.taskPath == b.taskPath && a.specPath == b.specPath && a.taskSHA256 == b.taskSHA256 && a.specSHA256 == b.specSHA256 && bytes.Equal(a.proposalFile, b.proposalFile) && bytes.Equal(a.config, b.config) && bytes.Equal(a.task, b.task) && bytes.Equal(a.spec, b.spec) && sameReviewPromptSnapshots([]reviewPromptSnapshot{a.prompt}, []reviewPromptSnapshot{b.prompt})
 }
 
+// files lists one schema-2 history bundle: every declared round's lens
+// observations in declaration order, then the manifest that binds them.
 func (p specReviewPublication) files() []reviewdir.File {
-	files := make([]reviewdir.File, 0, 5)
-	for _, name := range []string{"consistency.json", "gaps.json", "additions.json", "adversarial.json", "manifest.json"} {
-		files = append(files, reviewdir.File{Name: name, Content: p.bundle.Raw[name]})
+	if p.bundle.Manifest.SchemaVersion != 2 {
+		return nil
 	}
-	return files
+	files := make([]reviewdir.File, 0, len(p.bundle.Raw))
+	for _, round := range p.bundle.Manifest.Rounds {
+		for _, entry := range round.Lenses {
+			files = append(files, reviewdir.File{Name: entry.Path, Content: p.bundle.Raw[entry.Path]})
+		}
+	}
+	return append(files, reviewdir.File{Name: "manifest.json", Content: p.bundle.Raw["manifest.json"]})
 }
 
 func (p specReviewPublication) result(applied bool) ReviewPublishResult {

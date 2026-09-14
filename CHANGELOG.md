@@ -362,6 +362,25 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ### Changed
 
+- New spec-review sessions now publish a schema-2 history manifest instead of
+  the legacy single-round schema-1 bundle. The schema-2 manifest declares its
+  ordered round history — every retained round keeps its four immutable lens
+  observations, their exact file digests, and the digest of the spec bytes that
+  round reviewed — and labels its dispositions
+  `unverified-caller-recorded-claims`, so an agent-recorded `rejected`/`accepted`
+  set or a self-authored `approved_at` can no longer pass as human approval.
+  Any round repeating an earlier spec digest must be visibly labeled
+  `repeats_earlier_spec`; an unlabeled declared repeat, an invented repeat
+  label, an unlisted file, or a missing disposition for a retained finding
+  occurrence refuses publication and decomposition, and a high or medium
+  finding can no longer be deferred. Lens observations now stage as
+  `round-<n>-<lens>.json`. Already-published schema-1 bundles remain readable
+  as history but no longer publish or substitute for schema-2 evidence. The
+  packaged `taskrail-spec-review` skill stops for human dispositions instead of
+  authoring them, and the spec-review evaluation cases now compare the actual
+  agent transcript with the published bundle's declared round history and
+  disposition claims. These checks cannot detect undeclared external rounds or
+  authenticate the person behind a recorded decision.
 - Retired the hand-produced v0.5 bootstrap spec-review directory after publishing
   the current digest-bound schema-v1 review at
   `planning/reviews/spec/v0.5.0/20260826-v05-final-review-r3/`. The superseded

@@ -1,11 +1,16 @@
 ---
 id: T-407-spec-review-disposition-authority
 title: Keep spec-review agents from authoring dispositions or rerunning lenses
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#post-spec-review-lenses
 dependencies: []
-updated_at: "2026-09-11T16:28:48Z"
+updated_at: "2026-09-14T18:23:13Z"
+completion_id: "61ea2251870cb8c223513c3362d60739"
+last_verification_id: "f91a011d479bbd63f87a37808bfde379"
+last_verification_result: pass
+last_verified_at: "2026-09-14T18:23:13Z"
+last_verified_completion_id: "61ea2251870cb8c223513c3362d60739"
 ---
 
 # T-407-spec-review-disposition-authority Keep spec-review agents from authoring dispositions or rerunning lenses
@@ -43,3 +48,7 @@ preferred result without that being refused or visible in the published bundle.
   assertions.
 
 ## Implementation Notes
+
+- 2026-09-14T12:15:32Z: verification fail id e8c1c56b9492d2869d6839d50882629e previous none completion none
+- 2026-09-14T18:23:13Z: Publish declared spec-review round history with explicitly unverified dispositions; require schema-2 evidence for new decomposition while retaining historical reads. Independent review findings fixed and sandbox CLI checks pass.
+- 2026-09-14T18:23:13Z: verification pass id f91a011d479bbd63f87a37808bfde379 previous none completion 61ea2251870cb8c223513c3362d60739

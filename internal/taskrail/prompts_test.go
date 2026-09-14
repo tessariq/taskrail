@@ -137,6 +137,8 @@ func TestDecompositionPromptsDefineReviewedOutcomeContract(t *testing.T) {
 func TestDecompositionPromptsDefineCompleteReviewedSession(t *testing.T) {
 	author := strings.Join(strings.Fields(string(builtinPromptTemplate(t, "task-decomposition"))), " ")
 	for _, want := range []string{
+		"schema-2 declared-round history",
+		"Schema-1 post-spec bundles remain readable as historical records",
 		"final post-spec `manifest.json`",
 		"active spec, use `coverage --json`",
 		"inactive spec, enumerate live anchors",

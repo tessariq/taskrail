@@ -20,7 +20,8 @@ func TestPublishTypedBundlesPreservesExactBytesAndReportsDeterministicFiles(t *t
 		files []File
 	}{
 		{TypeTask, files("review.json")},
-		{TypeSpec, files("adversarial.json", "manifest.json", "gaps.json", "consistency.json", "additions.json")},
+		{TypeSpec, files("round-1-adversarial.json", "manifest.json", "round-1-gaps.json", "round-1-consistency.json", "round-1-additions.json")},
+		{TypeSpec, files("round-1-consistency.json", "round-2-gaps.json", "manifest.json", "round-1-additions.json", "round-2-adversarial.json", "round-2-consistency.json", "round-1-gaps.json", "round-2-additions.json", "round-1-adversarial.json")},
 		{TypeDecomposition, files("trace.json", "review-1.json", "manifest.json", "draft.json")},
 		{TypeDecomposition, files("review-2.json", "trace.json", "review-1.json", "manifest.json", "draft.json")},
 	} {
@@ -50,7 +51,10 @@ func TestPublishTypedBundlesPreservesExactBytesAndReportsDeterministicFiles(t *t
 			if !validated || result.Type != test.type_ {
 				t.Fatalf("validated=%t result type=%q", validated, result.Type)
 			}
-			wantNames := expectedNames(test.type_, len(test.files) == 5 && test.type_ == TypeDecomposition)
+			wantNames, wantErr := expectedBundleNames(test.type_, fileNames(test.files))
+			if wantErr != nil {
+				t.Fatal(wantErr)
+			}
 			if len(result.Files) != len(wantNames) {
 				t.Fatalf("result files = %+v", result.Files)
 			}
@@ -80,6 +84,8 @@ func TestPublishRefusesInvalidBundlesBeforeCreatingDestination(t *testing.T) {
 		{name: "nested member", req: request("reviews", TypeTask, typedDestination(TypeTask), files("nested/review.json"))},
 		{name: "duplicate member", req: request("reviews", TypeTask, typedDestination(TypeTask), append(files("review.json"), files("review.json")...))},
 		{name: "cross type inventory", req: request("reviews", TypeSpec, typedDestination(TypeSpec), files("review.json"))},
+		{name: "legacy five-file spec inventory", req: request("reviews", TypeSpec, typedDestination(TypeSpec), files("consistency.json", "gaps.json", "additions.json", "adversarial.json", "manifest.json"))},
+		{name: "incomplete spec round", req: request("reviews", TypeSpec, typedDestination(TypeSpec), files("round-1-consistency.json", "manifest.json"))},
 		{name: "cross type destination", req: request("reviews", TypeTask, typedDestination(TypeSpec), files("review.json"))},
 		{name: "missing validation", req: Request{Type: TypeTask, ReviewsRoot: "reviews", Destination: typedDestination(TypeTask), Files: files("review.json")}},
 		{name: "validation", req: Request{Type: TypeTask, ReviewsRoot: "reviews", Destination: typedDestination(TypeTask), Files: files("review.json"), Validate: func(Type, []File) error { return errors.New("invalid bundle") }}},

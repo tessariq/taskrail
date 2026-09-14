@@ -65,7 +65,7 @@ func TestDecodeTaskReviewRejectsStrictMutations(t *testing.T) {
 
 func TestDecodeSpecReviewBundleValidatesLensesAndManifest(t *testing.T) {
 	files := specReviewGolden()
-	bundle, err := decodeSpecReviewProposalBundle(files)
+	bundle, err := DecodeSpecReviewBundle(files)
 	if err != nil {
 		t.Fatalf("DecodeSpecReviewBundle: %v", err)
 	}
@@ -89,8 +89,10 @@ func TestDecodeSpecReviewBundlePreservesHistoricalFindingIDs(t *testing.T) {
 	if _, err := DecodeSpecReviewBundle(files); err != nil {
 		t.Fatalf("historical bundle: %v", err)
 	}
-	if _, err := decodeSpecReviewProposalBundle(files); err == nil || !strings.Contains(err.Error(), "ADDS- namespace") {
-		t.Fatalf("new proposal error = %v, want ADDS- namespace refusal", err)
+	// The legacy shape no longer publishes at all, so a pre-namespace bundle
+	// cannot smuggle unnamespaced findings into a new session either.
+	if _, err := decodeSpecReviewProposalBundle(files); err == nil || !strings.Contains(err.Error(), "legacy schema-1") {
+		t.Fatalf("new proposal error = %v, want legacy schema-1 refusal", err)
 	}
 }
 
@@ -133,14 +135,6 @@ func TestDecodeSpecReviewBundleRejectsBindingAndDispositionMutations(t *testing.
 			f["gaps.json"] = []byte(strings.Replace(string(f["gaps.json"]), `"session_id":"spec-review-1"`, `"session_id":"spec-review-2"`, 1))
 			refreshManifestDigest(f, "gaps.json")
 		}, "session_id does not match"},
-		{"cross-lens finding", func(f map[string][]byte) {
-			f["gaps.json"] = []byte(strings.Replace(string(f["gaps.json"]), `"finding_id":"GAPS-001"`, `"finding_id":"CONS-999"`, 1))
-			refreshManifestDigest(f, "gaps.json")
-		}, `finding_id "CONS-999" does not use the GAPS- namespace`},
-		{"bare finding namespace", func(f map[string][]byte) {
-			f["gaps.json"] = []byte(strings.Replace(string(f["gaps.json"]), `"finding_id":"GAPS-001"`, `"finding_id":"GAPS-"`, 1))
-			refreshManifestDigest(f, "gaps.json")
-		}, `finding_id "GAPS-" does not use the GAPS- namespace`},
 		{"lens order", func(f map[string][]byte) {
 			f["manifest.json"] = []byte(strings.Replace(string(f["manifest.json"]), `"lens":"consistency"`, `"lens":"gaps"`, 1))
 		}, "fixed lens order"},
@@ -177,7 +171,7 @@ func TestDecodeSpecReviewBundleRejectsBindingAndDispositionMutations(t *testing.
 		t.Run(tc.name, func(t *testing.T) {
 			files := specReviewGolden()
 			tc.mutate(files)
-			_, err := decodeSpecReviewProposalBundle(files)
+			_, err := DecodeSpecReviewBundle(files)
 			if err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Fatalf("error = %v, want containing %q", err, tc.want)
 			}

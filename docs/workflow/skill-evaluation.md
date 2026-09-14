@@ -69,7 +69,12 @@ receipt beneath its raw root. The runner rejects missing, extra, fabricated, or
 receipt-mismatched facts and derives the deterministic grade only from predicate
 evaluation; adapters do not supply assertion names or grades. Semantic claims
 such as ambiguity handling, authority, or safe repair belong only in
-`human_review_questions`. Case and registry fixture digests use
+`human_review_questions`. Spec-review cases must additionally direct their runs
+at disposition authority and unchanged-byte repeat visibility and ask the human
+to compare the actual agent transcript with the published bundle's declared
+round history and disposition claims, because mechanical predicates certify only
+supplied-bundle consistency, never transcript completeness or decision
+identity. Case and registry fixture digests use
 the domain-separated tree framing in
 `specs/v0.5.0.md#maintainer-skill-release-evaluations`. These assets define the
 complete deterministic input set. They contain no provider runner, credentials,

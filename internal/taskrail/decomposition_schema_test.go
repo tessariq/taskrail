@@ -24,6 +24,18 @@ func TestDecodeDecompositionBundlePreservesCompleteValidBundle(t *testing.T) {
 	}
 }
 
+func TestDecodeDecompositionBundleRejectsLegacySpecReviewSubject(t *testing.T) {
+	files, subjects := decompositionGolden()
+	previousDigest := digestRaw(subjects.SpecReviewFiles["manifest.json"])
+	subjects.SpecReviewFiles = legacySpecReviewForDecomposition(subjects.Spec)
+	replaceDecomposition(files, "manifest.json", previousDigest, digestRaw(subjects.SpecReviewFiles["manifest.json"]))
+
+	_, err := DecodeDecompositionBundle(files, subjects)
+	if err == nil || !strings.Contains(err.Error(), "schema_version 2") {
+		t.Fatalf("error = %v, want schema_version 2 refusal", err)
+	}
+}
+
 func TestDecodeDecompositionBundleRejectsStrictMutations(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -64,15 +76,19 @@ func TestDecodeDecompositionBundleRejectsStrictMutations(t *testing.T) {
 		}, "anchor does not exist"},
 		{"repeated quote", func(f map[string][]byte, s *DecompositionSubjects) {
 			oldDigest := digestRaw(s.Spec)
+			oldReviewDigest := digestRaw(s.SpecReviewFiles["manifest.json"])
 			s.Spec = append(s.Spec, []byte("\nUnique requirement text.\n")...)
 			newDigest := digestRaw(s.Spec)
 			replaceDecomposition(f, "trace.json", oldDigest, newDigest)
 			for name, raw := range s.SpecReviewFiles {
 				s.SpecReviewFiles[name] = []byte(strings.ReplaceAll(string(raw), oldDigest, newDigest))
 			}
-			for _, lens := range specReviewLensOrder {
-				refreshManifestDigest(s.SpecReviewFiles, lens+".json")
+			for round := 1; round <= 2; round++ {
+				for _, lens := range specReviewLensOrder {
+					refreshRoundLensDigest(s.SpecReviewFiles, specReview2LensPath(round, lens))
+				}
 			}
+			replaceDecomposition(f, "manifest.json", oldReviewDigest, digestRaw(s.SpecReviewFiles["manifest.json"]))
 		}, "occur exactly once"},
 		{"line range", func(f map[string][]byte, _ *DecompositionSubjects) {
 			replaceDecomposition(f, "trace.json", `"start":7,"end":9`, `"start":7,"end":99`)
@@ -292,12 +308,14 @@ func TestDecodeDecompositionBundleRejectsUnseparatedATXHeadingAsUnrelatedH2(t *t
 func decompositionGolden() (map[string][]byte, DecompositionSubjects) {
 	spec := []byte("# Spec\n\n### First Area\n\nUnique requirement text.\n\n### Second Area\n\nAnother requirement.\n")
 	specSum := digestRaw(spec)
-	specReviewFiles := specReviewGolden()
+	specReviewFiles := specReview2Golden()
 	for name, raw := range specReviewFiles {
-		specReviewFiles[name] = []byte(strings.ReplaceAll(string(raw), reviewDigestA, specSum))
+		specReviewFiles[name] = []byte(strings.ReplaceAll(string(raw), reviewDigestC, specSum))
 	}
-	for _, lens := range specReviewLensOrder {
-		refreshManifestDigest(specReviewFiles, lens+".json")
+	for round := 1; round <= 2; round++ {
+		for _, lens := range specReviewLensOrder {
+			refreshRoundLensDigest(specReviewFiles, specReview2LensPath(round, lens))
+		}
 	}
 	specReviewSum := digestRaw(specReviewFiles["manifest.json"])
 	body := "## Description\\n\\nDeliver one outcome.\\n\\n## Acceptance\\n\\n- Works.\\n\\n## Verification Notes\\n\\n- Test it."
@@ -311,6 +329,18 @@ func decompositionGolden() (map[string][]byte, DecompositionSubjects) {
 		SpecReviewManifestPath: "planning/reviews/spec/v0.5.0/spec-review-1/manifest.json", SpecReviewFiles: specReviewFiles,
 		TaskIDs: map[string]struct{}{"T-240-implement-the-normative-review-schema-decoders": {}},
 	}
+}
+
+func legacySpecReviewForDecomposition(spec []byte) map[string][]byte {
+	files := specReviewGolden()
+	specDigest := digestRaw(spec)
+	for name, raw := range files {
+		files[name] = []byte(strings.ReplaceAll(string(raw), reviewDigestA, specDigest))
+	}
+	for _, lens := range specReviewLensOrder {
+		refreshManifestDigest(files, lens+".json")
+	}
+	return files
 }
 
 func replaceManifestDigest(files map[string][]byte, field, digest string, occurrence int) {

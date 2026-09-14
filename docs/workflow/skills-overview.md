@@ -37,9 +37,11 @@ Tracked-work and spec skills (each bullet notes how it creates tasks, if at all)
 - `taskrail-repair`
 - `taskrail-spec` — inspect and author specs, anchoring tracked work to real
   `spec_ref` headings via the `spec` command family (shipped in T-064).
-- `taskrail-spec-review` — stage four independent advisory post-spec lenses and
-  publish their human-dispositioned digest-bound bundle before decomposition
-  (shipped in T-162).
+- `taskrail-spec-review` — stage four independent advisory post-spec lenses per
+  round and publish their human-dispositioned digest-bound history bundle, whose
+  manifest declares its round history and labels dispositions as unverified
+  caller-recorded claims rather than authenticated human approval, before
+  decomposition (shipped in T-162; provenance and round history in T-407).
 - `taskrail-decompose` — author strict spec-anchored ImportDraft v2 bodies, run at
   most two fresh-context adversarial passes, publish an immutable manifest-bound
   bundle, and apply its exact digests (shipped in T-098; reviewed flow in T-304).

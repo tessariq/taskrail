@@ -171,6 +171,10 @@ allowed. Decoding and apply preserve exact body bytes, including CRLF and
 whitespace. V2 task objects also forbid loop-policy members and remain implicitly
 held.
 
+The selected post-spec review subject must use its schema-2 declared-round
+manifest. Schema-1 post-spec bundles remain readable as historical records, but
+the decomposition boundary refuses them as new evidence.
+
 The existing decomposition validators continue to own schema membership, real
 spec anchors, dependencies, requirement trace coverage, review pass count,
 fresh-context and exact-digest bindings, manifest dispositions, and source

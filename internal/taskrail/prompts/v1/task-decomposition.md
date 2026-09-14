@@ -5,9 +5,11 @@ Write the strict ImportDraft v2 to {{DRAFT_PATH}} and its requirement trace to
 
 Author in fresh context and bind every conclusion to the exact input snapshot.
 
-Before authoring, validate the final post-spec `manifest.json`: it must bind the
-selected exact spec, include its final lenses and dispositions, and leave no
-unresolved high or medium finding. Inspect the selected spec exact bytes, its
+Before authoring, validate the final post-spec `manifest.json`: it must be a
+schema-2 declared-round history that binds the selected exact spec, includes its
+final lenses and dispositions, and leaves no unresolved high or medium finding.
+Schema-1 post-spec bundles remain readable as historical records but cannot
+serve as decomposition evidence. Inspect the selected spec exact bytes, its
 approved post-spec review, existing tasks, and real heading anchors. For an
 active spec, use `coverage --json` to identify uncovered areas. For an inactive
 spec, enumerate live anchors and inspect existing tasks for duplicate or

@@ -776,6 +776,45 @@ func TestApplyImportDraftV2PublishesExactReviewedBodies(t *testing.T) {
 	}
 }
 
+func TestApplyImportDraftV2RejectsLegacySpecReviewBundle(t *testing.T) {
+	svc := applyFixture(t)
+	writeFile(t, filepath.Join(svc.paths.RepoRoot, ".taskrail", "config.yml"), layout2Marker("committed", "specs", "planning"))
+	upgradeStateFixtureToSchema2(t, svc.paths.StateFile)
+	svc = newTestService(t, svc.paths.RepoRoot, time.Date(2026, 7, 5, 12, 0, 0, 0, time.UTC))
+	files, subjects := decompositionGolden()
+	previousDigest := digestRaw(subjects.SpecReviewFiles["manifest.json"])
+	legacy := legacySpecReviewForDecomposition(subjects.Spec)
+	files["manifest.json"] = []byte(strings.Replace(string(files["manifest.json"]), previousDigest, digestRaw(legacy["manifest.json"]), 1))
+	writeTask(t, svc.paths.RepoRoot, "T-240-implement-the-normative-review-schema-decoders", "Existing dependency", "completed", "medium", "specs/v0.1.0.md#summary", nil)
+	writeFile(t, filepath.Join(svc.paths.RepoRoot, "specs", "v0.5.0.md"), string(subjects.Spec))
+	statePath := filepath.Join(svc.paths.RepoRoot, "planning", "STATE.md")
+	state := strings.Replace(readBytes(t, statePath), "active_spec_version: v0.1.0\nactive_spec_path: specs/v0.1.0.md", "active_spec_version: v0.5.0\nactive_spec_path: specs/v0.5.0.md", 1)
+	writeFile(t, statePath, state)
+
+	specReviewDir := filepath.Join(svc.paths.RepoRoot, filepath.FromSlash("planning/reviews/spec/v0.5.0/spec-review-1"))
+	for name, data := range legacy {
+		writeFile(t, filepath.Join(specReviewDir, name), string(data))
+	}
+	bundleDir := filepath.Join(svc.paths.RepoRoot, filepath.FromSlash("planning/reviews/decomposition/v0.5.0/decomposition-1"))
+	for name, data := range files {
+		writeFile(t, filepath.Join(bundleDir, name), string(data))
+	}
+
+	before := snapshotTree(t, svc.paths.RepoRoot)
+	_, err := svc.ApplyImportDraft(ApplyDraftInput{
+		DraftPath:          "planning/reviews/decomposition/v0.5.0/decomposition-1/draft.json",
+		ExpectSHA256:       digestRaw(files["draft.json"]),
+		ReviewManifestPath: "planning/reviews/decomposition/v0.5.0/decomposition-1/manifest.json",
+		ExpectReviewSHA256: digestRaw(files["manifest.json"]),
+	})
+	if err == nil || MachineFailureFor(err).Code != MachineCodeInvalidProposal || !strings.Contains(err.Error(), "schema_version 2") {
+		t.Fatalf("apply reviewed draft error = %v, want schema_version 2 invalid_proposal refusal", err)
+	}
+	if after := snapshotTree(t, svc.paths.RepoRoot); !maps.Equal(before, after) {
+		t.Fatal("legacy post-spec review refusal changed the repository")
+	}
+}
+
 func filesBody(t *testing.T, draft []byte, index int) string {
 	t.Helper()
 	decoded, err := decodeReviewedDraft(draft)

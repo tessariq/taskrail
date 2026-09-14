@@ -20,6 +20,46 @@ func TestSkillEvalRegistryCoversEveryShippedSkill(t *testing.T) {
 	}
 }
 
+// TestSpecReviewCasesAssertDispositionAuthorityAndRepeatVisibility pins the
+// T-407 failure modes into the spec-review evaluation. Mechanical predicates
+// certify only supplied-bundle consistency, so each case must direct its run at
+// both refusals and ask the human to compare the actual agent transcript with
+// the published bundle's declared round history and disposition claims
+// (specs/v0.5.0.md#post-spec-review-lenses).
+func TestSpecReviewCasesAssertDispositionAuthorityAndRepeatVisibility(t *testing.T) {
+	registry, err := loadSkillEvalRegistry(filepath.Join("testdata", "skill-evals", "v1", "cases"), shippableSkills)
+	if err != nil {
+		t.Fatalf("loadSkillEvalRegistry: %v", err)
+	}
+	seen := 0
+	for _, evaluation := range registry {
+		if evaluation.Skill != "taskrail-spec-review" {
+			continue
+		}
+		seen++
+		if !strings.Contains(evaluation.Prompt, "disposition") || !strings.Contains(evaluation.Prompt, "unchanged spec bytes") {
+			t.Errorf("case %s prompt must exercise agent-authored dispositions and an unchanged-spec-byte lens rerun", evaluation.CaseID)
+		}
+		observation := strings.ToLower(evaluation.ExpectedObservation)
+		if !strings.Contains(observation, "unverified caller/agent-recorded claims") {
+			t.Errorf("case %s expected observation must state the disposition provenance label", evaluation.CaseID)
+		}
+		if !strings.Contains(observation, "repeat") || !strings.Contains(observation, "visibly labeled") {
+			t.Errorf("case %s expected observation must state unchanged-byte repeat visibility", evaluation.CaseID)
+		}
+		questions := strings.Join(evaluation.HumanReviewQuestions, "\n")
+		if !strings.Contains(questions, "transcript") || !strings.Contains(questions, "disposition") {
+			t.Errorf("case %s must ask the human to compare the transcript with the bundle's disposition claims", evaluation.CaseID)
+		}
+		if !strings.Contains(questions, "unchanged-spec-byte") || !strings.Contains(questions, "declared round history") {
+			t.Errorf("case %s must ask the human to compare the transcript with the declared round history's repeats", evaluation.CaseID)
+		}
+	}
+	if seen != 2 {
+		t.Fatalf("spec-review cases = %d, want the committed and local pair", seen)
+	}
+}
+
 func TestParseSkillEvalCaseRejectsStrictMutations(t *testing.T) {
 	base := `{"schema_version":1,"case_id":"autonomous-task-committed","skill":"autonomous-task","storage_mode":"committed","baseline_required":true,"prompt":"run the documented workflow","expected_observation":"it remains valid","assertions":["uses JSON"],"scenario":{"fixture":"fixture","sandbox":"autonomous-task-committed","setup":[{"id":"initialize-git","operation":"git-command","command":["git","init"]}],"actions":[{"id":"uses-json","operation":"taskrail-command","command":["taskrail","validate","--json"]}]},"oracle":{"assertions":[{"assertion":"uses JSON","action":"uses-json","predicate":"command-exit-zero"}]},"human_review_questions":["was it safe?"]}`
 	for _, tc := range []struct {

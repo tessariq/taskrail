@@ -229,6 +229,11 @@ the active development specification is `v0.5.0`.
 - `v0.4.0` — active-spec selection and authoring, slugged creation with atomic rename/repoint, mechanical spec/gap review, version-skew detection.
 - `v0.5.0` *(in development)* — uniform agent results, lifecycle-complete skills, human-owned repository notes, configurable review, safe review publication, a bounded external-process loop.
 
+New v0.5 spec reviews publish schema-2 manifests retaining declared review
+rounds and explicitly unverified disposition claims. Decomposition requires
+that evidence; schema-1 spec reviews remain readable as history only. See the
+[reviewed import contract](docs/import-contract.md) for the boundary.
+
 Roadmap beyond that is tracked in [`specs/README.md`](specs/README.md). The
 versioned specs in `specs/` are the normative source of truth for release scope
 and behavior.
