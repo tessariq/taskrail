@@ -203,7 +203,7 @@ func (s *Service) buildLocalPromotionCandidate(transactionID string, withSkills 
 		return localPromotionCandidate{}, WithMachineErrorCode(MachineCodeWriteConflict,
 			fmt.Errorf("local promotion refuses a shared Git exclusion scope with linked worktrees"))
 	}
-	skills, err := s.planLocalSkills()
+	skills, err := s.planGitAwarePromotionSkills()
 	if err != nil {
 		return localPromotionCandidate{}, err
 	}
@@ -268,7 +268,7 @@ func (s *Service) buildPendingSkillPromotionCandidate(_ string) (localPromotionC
 		return localPromotionCandidate{}, WithMachineErrorCode(MachineCodeWriteConflict,
 			fmt.Errorf("local promotion refuses a shared Git exclusion scope with linked worktrees"))
 	}
-	skills, err := s.planPromotionSkills()
+	skills, err := s.planGitAwarePromotionSkills()
 	if err != nil {
 		return localPromotionCandidate{}, err
 	}
@@ -658,7 +658,7 @@ func (s *Service) validateLocalPromotionSource(candidate localPromotionCandidate
 	if err := s.validatePromotionMarkerDestination(); err != nil {
 		return err
 	}
-	plan, err := s.planLocalSkills()
+	plan, err := s.planGitAwarePromotionSkills()
 	if err != nil {
 		return err
 	}
@@ -694,7 +694,7 @@ func (s *Service) validatePendingSkillPromotionSource(candidate localPromotionCa
 	if validation, err := s.Validate(); err != nil || !validation.Valid {
 		return fmt.Errorf("pending skill source changed or became invalid: %v %v", validation.Violations, err)
 	}
-	plan, err := s.planPromotionSkills()
+	plan, err := s.planGitAwarePromotionSkills()
 	if err != nil {
 		return err
 	}
@@ -725,7 +725,7 @@ func (s *Service) validatePendingSkillPromotionRecovery(snapshots []durabletx.Ev
 	for _, snapshot := range snapshots {
 		byPath[string(snapshot.Kind)+"\x00"+snapshot.Reported] = snapshot
 	}
-	plan, err := s.planPromotionSkills()
+	plan, err := s.planGitAwarePromotionSkills()
 	if err != nil {
 		return err
 	}

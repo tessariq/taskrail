@@ -296,7 +296,7 @@ func (s *Service) validateLocalPromotionRecovery(transactionID string, snapshots
 		return err
 	}
 	if hasSkill && skillsVisible {
-		plan, err := s.planPromotionSkills()
+		plan, err := s.planGitAwarePromotionSkills()
 		if err != nil {
 			return err
 		}

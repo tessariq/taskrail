@@ -79,6 +79,64 @@ func (s *Service) planLocalSkills() (localSkillPlan, error) {
 	return s.planPromotionSkills()
 }
 
+// planGitAwarePromotionSkills narrows the promotion plan to skill copies
+// Taskrail still manages: a subtree tracked by Git belongs to the adopter, so
+// promotion neither rewrites it nor reports it and never treats its exclusion
+// as managed. Skill installation keeps the full plan, because installing over
+// adopter-owned destinations must refuse instead of silently skipping them.
+func (s *Service) planGitAwarePromotionSkills() (localSkillPlan, error) {
+	plan, err := s.planPromotionSkills()
+	if err != nil {
+		return localSkillPlan{}, err
+	}
+	adopted := make(map[string]bool, len(plan.Exclusions))
+	for _, exclusion := range plan.Exclusions {
+		tracked, err := skillAdoptedByGit(s.paths.WorktreeRoot, exclusion.Path)
+		if err != nil {
+			return localSkillPlan{}, err
+		}
+		if tracked {
+			adopted[exclusion.Path] = true
+		}
+	}
+	if len(adopted) == 0 {
+		return plan, nil
+	}
+	narrowed := localSkillPlan{
+		Destinations: make([]localSkillDestination, 0, len(plan.Destinations)),
+		Exclusions:   make([]localSkillExclusion, 0, len(plan.Exclusions)),
+		Unexpected:   make([]localSkillUnexpected, 0, len(plan.Unexpected)),
+	}
+	for _, destination := range plan.Destinations {
+		if !adoptedSkillDestination(adopted, destination.Path) {
+			narrowed.Destinations = append(narrowed.Destinations, destination)
+		}
+	}
+	for _, exclusion := range plan.Exclusions {
+		if !adopted[exclusion.Path] {
+			narrowed.Exclusions = append(narrowed.Exclusions, exclusion)
+		}
+	}
+	for _, unexpected := range plan.Unexpected {
+		if !adoptedSkillDestination(adopted, unexpected.Path) {
+			narrowed.Unexpected = append(narrowed.Unexpected, unexpected)
+		}
+	}
+	return narrowed, nil
+}
+
+// adoptedSkillDestination reports whether a packaged skill path sits inside a
+// subtree Git already tracks. Containment, not exact parenthood, because a
+// skill may carry nested files beneath its top-level SKILL.md.
+func adoptedSkillDestination(adopted map[string]bool, skillPath string) bool {
+	for subtree := range adopted {
+		if strings.HasPrefix(skillPath, subtree+"/") {
+			return true
+		}
+	}
+	return false
+}
+
 // planPromotionSkills classifies installed skill ownership in either storage
 // mode. Deferred promotion needs the same snapshot after semantic state is
 // already committed.
@@ -447,6 +505,16 @@ func gitTracks(root, path string) (bool, error) {
 		return false, nil
 	}
 	return false, fmt.Errorf("inspect Git tracking for %s: %w", path, err)
+}
+
+// skillAdoptedByGit reports whether Git tracks a skill subtree, which makes the
+// copy the adopter's instead of a managed local path.
+func skillAdoptedByGit(root, dir string) (bool, error) {
+	tracked, err := gitTracks(root, dir)
+	if err != nil {
+		return false, WithMachineErrorCode(MachineCodeRepositoryInvalid, fmt.Errorf("classify Git ownership of skill %s: %w", dir, err))
+	}
+	return tracked, nil
 }
 
 func gitStaged(root, path string) (bool, error) {

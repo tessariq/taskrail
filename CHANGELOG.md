@@ -527,6 +527,13 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 - Read-only Git probes now suppress Git's optional locks and index refreshes, so
   loop dry-runs cannot change `.git/index` merely by checking repository status.
+- `taskrail local status` no longer reports a packaged skill copy the adopter
+  committed as `local_exclusion_invalid`: a Git-tracked copy belongs to the
+  adopter, is absent from the managed exclusion rows, and does not clear
+  `promotion_ready`, while untracked copies keep the managed exclusion
+  requirement. `local promote --with-skills` agrees: it leaves a tracked copy
+  untouched — neither rewriting nor reporting it — and removes only the managed
+  exclusions of untracked copies.
 
 ## v0.4.0 - 2026-07-30
 

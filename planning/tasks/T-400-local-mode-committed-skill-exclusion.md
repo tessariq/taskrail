@@ -1,11 +1,16 @@
 ---
 id: T-400-local-mode-committed-skill-exclusion
 title: Resolve local_exclusion_invalid on committed skill copies in local mode
-status: todo
+status: completed
 priority: medium
 spec_ref: specs/v0.5.0.md#local-planning-mode
 dependencies: []
-updated_at: "2026-09-11T16:28:44Z"
+updated_at: "2026-09-15T15:41:57Z"
+completion_id: "3857bc06319efa7aa81e1e68af4ef388"
+last_verification_id: "4a456694279d63086a3d1a9fb8668a54"
+last_verification_result: pass
+last_verified_at: "2026-09-15T15:41:57Z"
+last_verified_completion_id: "3857bc06319efa7aa81e1e68af4ef388"
 ---
 
 # T-400-local-mode-committed-skill-exclusion Resolve local_exclusion_invalid on committed skill copies in local mode
@@ -76,3 +81,6 @@ excluded.
   tracked and one untracked copy, since this alters visible workflow behavior.
 
 ## Implementation Notes
+
+- 2026-09-15T15:41:48Z: Tracked packaged skill copies are adopter-owned: local status reports no violation or managed row and keeps promotion_ready; promote drops tracked subtrees (incl. nested files) from the plan, leaving them untouched and unreported while removing only untracked exclusions; install preflight still refuses adopter content; untracked behavior unchanged.
+- 2026-09-15T15:41:57Z: verification pass id 4a456694279d63086a3d1a9fb8668a54 previous none completion 3857bc06319efa7aa81e1e68af4ef388

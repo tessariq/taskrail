@@ -216,7 +216,17 @@ func (s *Service) localExclusions(exclude string) ([]LocalExclusion, []LocalViol
 	}
 	for _, skill := range installed {
 		if skill.Version != "" || skill.MatchesPackage {
-			managed = append(managed, filepath.ToSlash(filepath.Dir(skill.Path)))
+			dir := filepath.ToSlash(filepath.Dir(skill.Path))
+			tracked, err := skillAdoptedByGit(s.paths.WorktreeRoot, dir)
+			if err != nil {
+				return nil, nil, err
+			}
+			// A copy tracked by Git belongs to the adopter, and a tracked path
+			// can never be effectively excluded, so requiring it would be an
+			// unsatisfiable violation.
+			if !tracked {
+				managed = append(managed, dir)
+			}
 		}
 	}
 	slices.Sort(managed)
