@@ -190,7 +190,12 @@ All notable user-visible changes to Taskrail will be documented in this file.
   or unsupported, fails the run loudly, and stage resume re-checks that
   confinement; adopted facts grade through the same predicates as executed
   facts, candidate arms are never adoptable, and the strict report schema,
-  digest preimages, and outcome precedence are unchanged. A release-gate
+  digest preimages, and outcome precedence are unchanged. Executed arms are
+  confinement-checked too: an arm whose raw-root path from the artifact root
+  traverses a symlinked or non-directory ancestor component is refused, with
+  the arm named, before the adapter is invoked or any evidence is written,
+  so an unconfined root can no longer direct an executed arm's raw evidence
+  outside the session's artifact tree at execution time. A release-gate
   re-run no longer spends roughly a quarter of its provider time reproducing
   byte-identical baseline evidence.
 - Taskrail's repository layout is now `2`, and every v0.5 semantic writer

@@ -347,6 +347,9 @@ func adoptSkillEvalBaselineArm(input SkillEvalRunInput, evaluation SkillEvalCase
 
 func runSkillEvalArm(ctx context.Context, input SkillEvalRunInput, evaluation SkillEvalCase, arm string) (*SkillEvalRun, error) {
 	rawRoot := skillEvalRawRoot(input, evaluation, arm)
+	if err := skillEvalConfinedRawRoot(input.ArtifactRoot, rawRoot); err != nil {
+		return nil, fmt.Errorf("%s arm: %w", arm, err)
+	}
 	if err := os.MkdirAll(rawRoot, 0o700); err != nil {
 		return nil, fmt.Errorf("create raw root: %w", err)
 	}

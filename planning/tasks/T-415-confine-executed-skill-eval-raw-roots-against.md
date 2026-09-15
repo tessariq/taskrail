@@ -1,12 +1,17 @@
 ---
 id: T-415-confine-executed-skill-eval-raw-roots-against
 title: Confine executed skill-eval raw roots against symlinked ancestors
-status: todo
+status: completed
 priority: medium
 spec_ref: specs/v0.5.0.md#maintainer-skill-release-evaluations
 dependencies:
     - T-413-adopt-pre-staged-baseline-arms
-updated_at: "2026-09-14T23:58:35Z"
+updated_at: "2026-09-15T21:20:13Z"
+completion_id: "e14936823b8f00c149cdb2cbd9a5ab44"
+last_verification_id: "8922bfd131bac3ef8cf49d86633efb70"
+last_verification_result: pass
+last_verified_at: "2026-09-15T21:20:13Z"
+last_verified_completion_id: "e14936823b8f00c149cdb2cbd9a5ab44"
 ---
 
 # T-415-confine-executed-skill-eval-raw-roots-against Confine executed skill-eval raw roots against symlinked ancestors
@@ -51,3 +56,6 @@ trees under the artifacts directory and refuses outside-root files.
 - Record later evidence paths after verification.
 
 ## Implementation Notes
+
+- 2026-09-15T21:20:07Z: Executed skill-eval arms are confinement-checked at Execute time: runSkillEvalArm refuses a raw root whose path from the artifact root traverses a symlinked or non-directory ancestor before the adapter is invoked, with wording consistent with the adoption and stage-resume refusals. Evidence: focused and full Go tests, gofmt, vet, and taskrail validate pass; one bounded review wave (General, Go, Security lanes) with candidate validation and fresh disposition verification.
+- 2026-09-15T21:20:13Z: verification pass id 8922bfd131bac3ef8cf49d86633efb70 previous none completion e14936823b8f00c149cdb2cbd9a5ab44
