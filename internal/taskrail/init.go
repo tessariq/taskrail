@@ -235,6 +235,10 @@ func (s *Service) reportInit(plan initPlan) (InitResult, error) {
 		return InitResult{}, err
 	}
 	continuation := s.continuationNotes()
+	writes, err := s.initWrites(plan, notesPresent)
+	if err != nil {
+		return InitResult{}, err
+	}
 	return InitResult{
 		Outcome:     plan.outcome,
 		FromVersion: plan.fromVersion,
@@ -246,7 +250,7 @@ func (s *Service) reportInit(plan initPlan) (InitResult, error) {
 			Action:          plan.configAction,
 			CandidateSHA256: digest,
 		},
-		Writes:            s.initWrites(plan, notesPresent),
+		Writes:            writes,
 		Notes:             s.initNotes(plan.createsLayout, notesPresent, continuation),
 		Skills:            []InitSkill{},
 		SkillExclusions:   []InitSkillExclusion{},
@@ -311,7 +315,9 @@ func (s *Service) layoutFiles() []layoutFile {
 // left out: init reports what it does, not what some other outcome would do.
 // The sidecar's presence is passed in because classifying it can fail, and that
 // refusal belongs at the top of the report rather than inside one entry.
-func (s *Service) initWrites(plan initPlan, notesPresent bool) []WriteEntry {
+// Layout-creating outcomes also manage the worktree-root .gitignore so the
+// gitignored artifacts contract holds without hand configuration.
+func (s *Service) initWrites(plan initPlan, notesPresent bool) ([]WriteEntry, error) {
 	writes := []WriteEntry{{
 		Path:   markerRelPath(),
 		Kind:   writeKindConfig,
@@ -328,8 +334,17 @@ func (s *Service) initWrites(plan initPlan, notesPresent bool) []WriteEntry {
 		}
 		writes = append(writes, WriteEntry{Path: file.logical, Kind: file.kind, Action: action})
 	}
+	if plan.createsLayout {
+		ignore, err := s.planArtifactIgnore()
+		if err != nil {
+			return nil, err
+		}
+		if ignore.action != "" {
+			writes = append(writes, WriteEntry{Path: gitignoreFile, Kind: writeKindConfig, Action: ignore.action})
+		}
+	}
 	slices.SortFunc(writes, func(a, b WriteEntry) int { return strings.Compare(a.Path, b.Path) })
-	return writes
+	return writes, nil
 }
 
 // logicalNotesPath is the sidecar's managed logical path, which is where every

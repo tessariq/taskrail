@@ -4,6 +4,12 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- `taskrail init` — inside a Git worktree, adds a marked `.gitignore` block
+  keeping generated `planning/artifacts/` output out of Git status; existing
+  user rules are preserved byte-for-byte and re-runs add nothing.
+
 ### Fixed
 
 - Maintainer skill evaluations no longer manufacture a paired comparison the

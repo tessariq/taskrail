@@ -58,3 +58,6 @@ go.work.sum
 
 # Amp orb portal runtime metadata
 /.amp/portals/*
+# taskrail artifacts begin
+/planning/artifacts/
+# taskrail artifacts end

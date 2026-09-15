@@ -193,6 +193,23 @@ func (s *Service) buildInitTransaction(plan initPlan, in InitInput, markerOrigin
 			return tx, err
 		}
 	}
+	// The artifacts ignore block joins the same candidate set as the layout
+	// content it serves, so one locked transaction publishes both or neither.
+	// An unbindable file (a linked .gitignore that already manages the rule)
+	// only ever reaches the preserve decision, which writes nothing.
+	if plan.createsLayout {
+		ignore, err := s.planArtifactIgnore()
+		if err != nil {
+			return tx, err
+		}
+		if ignore.action != "" && ignore.bindable {
+			publish := ignore.action == writeActionCreate || ignore.action == writeActionRefresh
+			if err := add(repotx.Worktree, gitignoreFile, filepath.Join(s.paths.WorktreeRoot, gitignoreFile),
+				ignore.original, ignore.candidate, publish, 0); err != nil {
+				return tx, err
+			}
+		}
+	}
 	if in.WithSkills {
 		if err := s.addSkillCandidates(&tx, in.SkillVersion, in.ForceSkills, add); err != nil {
 			return tx, err

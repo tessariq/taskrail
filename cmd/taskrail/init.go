@@ -27,6 +27,9 @@ func newInitCmd() *cobra.Command {
 			"Taskrail layout without moving existing content. Pass --with-skills to " +
 			"install the embedded repo-agnostic tracked-work skills; installing " +
 			"agent-tool directories is opt-in and never happens on a default init. " +
+			"Inside a Git worktree, init keeps generated planning artifacts out of " +
+			"Git status by adding a marked Taskrail block to the worktree-root " +
+			".gitignore, preserving existing user rules byte-for-byte. " +
 			"A repository at layout 1 previews the read-only layout 2 upgrade: the " +
 			"preview resolves every operator decision before apply, and apply " +
 			"requires --confirm-quiescent plus the note and skill decisions the " +
@@ -116,7 +119,8 @@ func initSummary(result taskrail.InitResult) string {
 	case result.Outcome == taskrail.InitAdopted:
 		return fmt.Sprintf("adopted existing layout; wrote marker (layout_version %d)", result.ToVersion)
 	case result.Outcome == taskrail.InitCurrent:
-		return fmt.Sprintf("taskrail structure already current (layout_version %d)", result.ToVersion)
+		return fmt.Sprintf("taskrail structure already current (layout_version %d)\n%s",
+			result.ToVersion, writeLines(result))
 	case result.Outcome == taskrail.InitMigrationPreview:
 		return fmt.Sprintf("migration available %d -> %d (dry run)\n%sre-run with --apply to migrate",
 			result.FromVersion, result.ToVersion, writeLines(result))
@@ -130,7 +134,7 @@ func initSummary(result taskrail.InitResult) string {
 		return fmt.Sprintf("retrofit applied (existing content was not moved)\n%s%svalidation: %s",
 			mappingLines(result.Mapping), writeLines(result), validationLabel(result.Validation))
 	default:
-		return "initialized taskrail structure"
+		return "initialized taskrail structure\n" + writeLines(result)
 	}
 }
 
@@ -226,14 +230,20 @@ func flagNames(choices []string) []string {
 
 // writeLines lists the paths the outcome creates or rewrites. Paths it leaves
 // exactly as they are stay out: the diff answers "what changes here?", and
-// listing untouched files would bury that answer.
+// listing untouched files would bury that answer. The .gitignore entry names
+// the Taskrail artifacts ignore rather than a layout-version move, which is
+// the only refresh it can be.
 func writeLines(result taskrail.InitResult) string {
 	var changes []string
 	for _, write := range result.Writes {
-		switch write.Action {
-		case "create":
+		switch {
+		case write.Path == ".gitignore" && write.Action == "create":
+			changes = append(changes, "create .gitignore (Taskrail artifacts ignore)")
+		case write.Path == ".gitignore" && write.Action == "refresh":
+			changes = append(changes, "add Taskrail artifacts ignore to .gitignore")
+		case write.Action == "create":
 			changes = append(changes, "create "+write.Path)
-		case "refresh":
+		case write.Action == "refresh":
 			changes = append(changes, fmt.Sprintf("update %s layout_version %d -> %d",
 				write.Path, result.FromVersion, result.ToVersion))
 		}

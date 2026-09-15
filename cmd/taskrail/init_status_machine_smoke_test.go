@@ -48,7 +48,7 @@ func TestInitJSONPublishesTheContractedResult(t *testing.T) {
 	if result.StorageMode != "committed" {
 		t.Fatalf("storage_mode = %q, want committed", result.StorageMode)
 	}
-	if len(result.Writes) != 5 || result.Writes[0].Path != ".taskrail/config.yml" {
+	if len(result.Writes) != 6 || result.Writes[0].Path != ".gitignore" || result.Writes[1].Path != ".taskrail/config.yml" {
 		t.Fatalf("writes = %+v", result.Writes)
 	}
 	if len(result.Notes) != 1 || result.Notes[0].FileAction != "create_template" ||

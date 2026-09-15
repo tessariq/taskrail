@@ -131,7 +131,24 @@ func (s *Service) pendingLayoutChanges() ([]string, error) {
 			changes = append(changes, "create "+relPath(s.paths.RepoRoot, file.physical))
 		}
 	}
+	ignore, err := s.planArtifactIgnore()
+	if err != nil {
+		return nil, err
+	}
+	if ignore.action == writeActionCreate || ignore.action == writeActionRefresh {
+		changes = append(changes, artifactsIgnoreChange(ignore.action))
+	}
 	return changes, nil
+}
+
+// artifactsIgnoreChange describes the worktree-root .gitignore step in the
+// retrofit dry-run vocabulary, so the preview names the same write the apply
+// performs.
+func artifactsIgnoreChange(action string) string {
+	if action == writeActionCreate {
+		return "create " + gitignoreFile + " (Taskrail artifacts ignore)"
+	}
+	return "update " + gitignoreFile + " (Taskrail artifacts ignore)"
 }
 
 // retrofitBootstrap imports the optional notes file into a planning bootstrap

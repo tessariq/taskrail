@@ -1,13 +1,18 @@
 ---
 id: T-398-ignore-artifacts-on-committed-init
 title: Ignore artifact output in committed-mode init
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#safe-review-artifact-publication
 dependencies:
     - T-413-adopt-pre-staged-baseline-arms
     - T-414-publish-skill-eval-report
-updated_at: "2026-09-11T16:21:42Z"
+updated_at: "2026-09-15T14:32:48Z"
+completion_id: "c971f4017466a85429fa3bd88371d4be"
+last_verification_id: "927113dc04ac1b3a1b652982b6eddad2"
+last_verification_result: pass
+last_verified_at: "2026-09-15T14:32:48Z"
+last_verified_completion_id: "c971f4017466a85429fa3bd88371d4be"
 ---
 
 # T-398-ignore-artifacts-on-committed-init Ignore artifact output in committed-mode init
@@ -54,3 +59,6 @@ maintainer before implementation.
   idempotence; manual sandbox run of init → verify → git status.
 
 ## Implementation Notes
+
+- 2026-09-15T14:32:38Z: Committed-mode init now appends a marked .gitignore block keeping planning/artifacts/ out of Git status; idempotent, preserves user rules, refuses symlinked .gitignore, stays out of local mode, and retrofit preview/apply agree with init.
+- 2026-09-15T14:32:48Z: verification pass id 927113dc04ac1b3a1b652982b6eddad2 previous none completion c971f4017466a85429fa3bd88371d4be

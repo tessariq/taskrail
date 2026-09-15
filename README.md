@@ -90,8 +90,10 @@ taskrail verify T-001 \
 
 Each run leaves plain files under
 `planning/artifacts/verify/<task-id>/<timestamp>-<verification-id>/` —
-`plan.md`, `report.json`, `report.md`. That tree is gitignored, reproducible
-local output: committed state never depends on it surviving a Git round-trip.
+`plan.md`, `report.json`, `report.md`. That tree is gitignored (a fresh
+`taskrail init` inside a Git worktree writes the `.gitignore` rule for you),
+reproducible local output: committed state never depends on it surviving a Git
+round-trip.
 
 ### 4. See where the work actually stands
 

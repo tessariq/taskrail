@@ -54,6 +54,7 @@ func TestInitFreshResultMatchesTheContract(t *testing.T) {
 		`"storage_mode":"committed",` +
 		`"config":{"path":".taskrail/config.yml","action":"create","candidate_sha256":"` + markerDigestOnDisk(t, repo) + `"},` +
 		`"writes":[` +
+		`{"path":".gitignore","kind":"config","action":"create"},` +
 		`{"path":".taskrail/config.yml","kind":"config","action":"create"},` +
 		`{"path":"planning/NOTES.md","kind":"note","action":"create"},` +
 		`{"path":"planning/STATE.md","kind":"state","action":"create"},` +
