@@ -115,6 +115,10 @@ All notable user-visible changes to Taskrail will be documented in this file.
 - Post-spec review findings now use disjoint `CONS-`, `GAPS-`, `ADDS-`, and
   `ADV-` lens namespaces, so independently produced observations cannot collide
   when their bundle is published.
+- The skill-evaluation `git-managed-paths-only` predicate now requires a
+  changed path to clean to the managed planning directory or beneath it
+  instead of merely carrying its prefix, so lexically prefixed escapes like
+  `planning/../README.md` grade `fail` for both executed and adopted arms.
 - Imported tasks now consistently use the outcome-focused scaffold and remain
   implicitly held. Reviewed decomposition enforces ordered exact body sections,
   preserves body bytes, and ships complete author/reviewer and digest-bound skill
@@ -136,6 +140,28 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ### Added
 
+- Maintainer skill-evaluation baseline arms can now be adopted from evidence a
+  prior session already staged. `SkillEvalRunInput` carries an explicitly
+  enumerated list of baseline-required case IDs; for those cases `Execute`
+  skips the adapter, re-derives the deterministic grade from the staged tree's
+  canonical facts receipt through the case's own assertion-to-action
+  predicates, and recomputes `raw_sha256` over that tree, producing a run
+  record indistinguishable in the report from an executed arm. Every executed
+  arm now also records its adapter-declared outcome in a canonical
+  runner-written `outcome.json` receipt inside its raw tree, covered by the
+  arm's raw digest, and adoption preserves the outcome that receipt records:
+  reuse never upgrades a result just because the saved checks pass, so an
+  originally incomplete or failed baseline arm stays that way. Adoption is
+  opt-in and verified, never trusted: an unregistered, non-baseline, duplicate,
+  missing, empty, noncanonical, or unconfined staged tree (one whose path from
+  the artifact root traverses a symlinked or non-directory ancestor
+  component), or a staged tree whose outcome receipt is missing, noncanonical,
+  or unsupported, fails the run loudly, and stage resume re-checks that
+  confinement; adopted facts grade through the same predicates as executed
+  facts, candidate arms are never adoptable, and the strict report schema,
+  digest preimages, and outcome precedence are unchanged. A release-gate
+  re-run no longer spends roughly a quarter of its provider time reproducing
+  byte-identical baseline evidence.
 - Taskrail's repository layout is now `2`, and every v0.5 semantic writer
   requires it. Lifecycle (`next`, `start`, `complete`, `block`, `unblock`,
   `verify`, `task release`), task mutation (`task new|author|rename|repoint`,

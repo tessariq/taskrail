@@ -1,6 +1,6 @@
 ---
 schema_version: 2
-updated_at: "2026-09-14T18:23:13Z"
+updated_at: "2026-09-15T11:25:46Z"
 active_spec_version: v0.5.0
 active_spec_path: specs/v0.5.0.md
 current_task: ""
@@ -8,9 +8,10 @@ current_task_title: ""
 status_summary: idle
 blockers: []
 next_action: Select the next eligible task
-last_verification_result: pass for T-407-spec-review-disposition-authority at 2026-09-14T18:23:13Z id f91a011d479bbd63f87a37808bfde379
-last_verification_id: f91a011d479bbd63f87a37808bfde379
-last_verified_completion_id: 61ea2251870cb8c223513c3362d60739
+last_verification_result: pass for T-413-adopt-pre-staged-baseline-arms at 2026-09-15T11:25:46Z id 7099cc410c7e2b574bb56c5c26843537
+last_verification_id: 7099cc410c7e2b574bb56c5c26843537
+last_verification_previous_id: 326e55932f6655c22b36ea1cdbacc7aa
+last_verified_completion_id: 45311c3827271fbb3a179a81a50a5a1f
 relevant_artifacts: []
 ---
 
@@ -34,7 +35,7 @@ relevant_artifacts: []
 
 ## Last Verification
 
-- pass for T-407-spec-review-disposition-authority at 2026-09-14T18:23:13Z id f91a011d479bbd63f87a37808bfde379
+- pass for T-413-adopt-pre-staged-baseline-arms at 2026-09-15T11:25:46Z id 7099cc410c7e2b574bb56c5c26843537
 
 ## Next Action
 
@@ -48,6 +49,6 @@ relevant_artifacts: []
 
 - todo: 68
 - in_progress: 0
-- completed: 345
+- completed: 346
 - blocked: 0
 - cancelled: 0

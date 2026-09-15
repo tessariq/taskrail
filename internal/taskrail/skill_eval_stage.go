@@ -83,6 +83,20 @@ func validateSkillEvalRunInput(input SkillEvalRunInput, requireReviews bool) err
 			return fmt.Errorf("skill evaluation case %q has no baseline skill digest", item.CaseID)
 		}
 	}
+	seenAdopted := make(map[string]bool, len(input.AdoptedBaselineCases))
+	for _, caseID := range input.AdoptedBaselineCases {
+		index := slices.IndexFunc(input.Registry, func(item SkillEvalCase) bool { return item.CaseID == caseID })
+		if index < 0 {
+			return fmt.Errorf("skill evaluation adopts unregistered case %q", caseID)
+		}
+		if !input.Registry[index].BaselineRequired {
+			return fmt.Errorf("skill evaluation adopts case %q without a required baseline arm", caseID)
+		}
+		if seenAdopted[caseID] {
+			return fmt.Errorf("skill evaluation adopts case %q more than once", caseID)
+		}
+		seenAdopted[caseID] = true
+	}
 	return nil
 }
 
@@ -152,6 +166,9 @@ func validateSkillEvalStage(stage SkillEvalStage, input SkillEvalRunInput) error
 				continue
 			}
 			root := skillEvalRawRoot(input, SkillEvalCase{Skill: item.Skill, CaseID: item.CaseID}, arm.name)
+			if err := skillEvalConfinedRawRoot(input.ArtifactRoot, root); err != nil {
+				return fmt.Errorf("skill evaluation staged %s arm %q raw evidence left the artifact root: %w", arm.name, item.CaseID, err)
+			}
 			digest, err := nonEmptySkillEvalRawDigest(root)
 			if err != nil || digest != arm.run.RawSHA256 {
 				return fmt.Errorf("skill evaluation staged %s arm %q raw evidence changed", arm.name, item.CaseID)

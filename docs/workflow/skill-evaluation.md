@@ -115,7 +115,27 @@ candidate and baseline evidence bindings. Each adapter request receives the
 case's resolved fixture directory, sandbox name, setup, and action vectors.
 `Execute` invokes every required arm
 once, accepts an adapter error as a missing arm, rejects unsafe, empty, or
-receipt-mismatched raw evidence, and returns sealed staged evidence.
+receipt-mismatched raw evidence, and returns sealed staged evidence. Every
+executed arm also records its adapter-declared outcome in a canonical
+runner-written `outcome.json` receipt inside its raw tree, covered by the
+arm's raw digest, because that declaration exists nowhere else once the
+adapter call returns. A
+baseline-required case may instead be enumerated in the input's adopted list:
+its baseline arm is adopted from the raw tree a prior session already staged
+beneath the current session's baseline raw root, re-deriving the grade from the
+staged facts receipt through the case's own predicates and recomputing the raw
+digest without invoking the adapter. Reuse preserves the original outcome:
+adoption reads the staged tree's outcome receipt and keeps the outcome the
+original execution recorded, so an originally incomplete or failed baseline arm
+stays that way no matter what the re-derived grade says. Adoption is opt-in and
+verified exactly
+like execution — an unregistered, non-baseline, duplicate, missing, empty,
+noncanonical, or unconfined staged tree (one whose path from the artifact
+root traverses a symlinked or non-directory ancestor component), or a staged
+tree whose outcome receipt is missing, noncanonical, or unsupported fails the
+run, and stage resume re-checks that confinement — candidate arms are never
+adoptable, and the report schema is unchanged; disclose adopted arms in the
+report's human review summary.
 `RenderSkillEvalStage` and `DecodeSkillEvalStage` make the stop/resume boundary
 durable without serializing producer-local roots. `Resume` accepts exact human
 reviews plus a freshly recomputed caller snapshot, rechecks its seal, bindings,

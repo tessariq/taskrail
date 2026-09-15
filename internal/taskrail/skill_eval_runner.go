@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -154,12 +155,17 @@ type SkillEvalRunInput struct {
 	FixturesSHA256            string
 	ArtifactRoot              string
 	Registry                  []SkillEvalCase
-	Adapter                   SkillEvalAdapter
-	AdapterIdentity           SkillEvalIdentity
-	ModelIdentity             SkillEvalIdentity
-	DeterministicChecks       SkillEvalDeterministicChecks
-	HumanReview               string
-	CaseReviews               map[string]SkillEvalCaseReview
+	// AdoptedBaselineCases explicitly enumerates baseline-required case IDs
+	// whose baseline arm is adopted from the raw tree a prior session already
+	// staged beneath this session's baseline raw root instead of invoking the
+	// adapter again. Every other case, and every candidate arm, always executes.
+	AdoptedBaselineCases []string
+	Adapter              SkillEvalAdapter
+	AdapterIdentity      SkillEvalIdentity
+	ModelIdentity        SkillEvalIdentity
+	DeterministicChecks  SkillEvalDeterministicChecks
+	HumanReview          string
+	CaseReviews          map[string]SkillEvalCaseReview
 }
 
 type SkillEvalRun struct {
@@ -235,8 +241,10 @@ func (SkillEvalRunner) Run(ctx context.Context, input SkillEvalRunInput) (SkillE
 	return (SkillEvalRunner{}).Resume(stage, input, input.HumanReview, input.CaseReviews)
 }
 
-// Execute invokes every candidate and required baseline arm exactly once, then
-// returns an unrenderable staged record with only inconclusive comparisons.
+// Execute invokes every candidate and required baseline arm exactly once, or
+// adopts an explicitly enumerated baseline arm from its pre-staged raw evidence
+// without invoking the adapter, then returns an unrenderable staged record with
+// only inconclusive comparisons.
 func (SkillEvalRunner) Execute(ctx context.Context, input SkillEvalRunInput) (SkillEvalStage, error) {
 	if err := validateSkillEvalRunInput(input, false); err != nil {
 		return SkillEvalStage{}, err
@@ -274,7 +282,11 @@ func (SkillEvalRunner) Execute(ctx context.Context, input SkillEvalRunInput) (Sk
 			return SkillEvalStage{}, fmt.Errorf("candidate %s: %w", evaluation.CaseID, err)
 		}
 		if evaluation.BaselineRequired {
-			item.Baseline, err = runSkillEvalArm(ctx, input, evaluation, skillEvalBaselineArm)
+			if slices.Contains(input.AdoptedBaselineCases, evaluation.CaseID) {
+				item.Baseline, err = adoptSkillEvalBaselineArm(input, evaluation)
+			} else {
+				item.Baseline, err = runSkillEvalArm(ctx, input, evaluation, skillEvalBaselineArm)
+			}
 			if err != nil {
 				return SkillEvalStage{}, fmt.Errorf("baseline %s: %w", evaluation.CaseID, err)
 			}
@@ -299,6 +311,40 @@ func (SkillEvalRunner) Execute(ctx context.Context, input SkillEvalRunInput) (Sk
 	return stage, nil
 }
 
+// adoptSkillEvalBaselineArm re-derives a baseline run record from the raw tree a
+// prior session staged beneath this session's baseline raw root, without
+// invoking the adapter. Adoption is verified like execution: the canonical facts
+// receipt is decoded, graded through the case's own assertion-to-action
+// predicates, and the raw digest is recomputed, so a missing, empty, unsafe, or
+// noncanonical tree refuses loudly instead of degrading the run. Reuse
+// preserves the original outcome: the staged tree's runner-written outcome
+// receipt is the recorded adapter declaration, so an originally incomplete or
+// failed arm keeps that outcome no matter what the re-derived grade says, and
+// a missing or unsupported receipt refuses rather than inferring a pass.
+func adoptSkillEvalBaselineArm(input SkillEvalRunInput, evaluation SkillEvalCase) (*SkillEvalRun, error) {
+	rawRoot := skillEvalRawRoot(input, evaluation, skillEvalBaselineArm)
+	if err := skillEvalConfinedRawRoot(input.ArtifactRoot, rawRoot); err != nil {
+		return nil, fmt.Errorf("adopt baseline evidence: %w", err)
+	}
+	outcome, err := decodeSkillEvalOutcome(rawRoot)
+	if err != nil {
+		return nil, fmt.Errorf("adopt baseline evidence: %w", err)
+	}
+	facts, err := decodeSkillEvalFacts(rawRoot)
+	if err != nil {
+		return nil, fmt.Errorf("adopt baseline evidence: %w", err)
+	}
+	grade, err := skillEvalDeterministicGrade(evaluation, rawRoot, facts)
+	if err != nil {
+		return nil, fmt.Errorf("adopt baseline evidence: %w", err)
+	}
+	digest, err := nonEmptySkillEvalRawDigest(rawRoot)
+	if err != nil {
+		return nil, fmt.Errorf("adopt baseline evidence: %w", err)
+	}
+	return &SkillEvalRun{Outcome: outcome, SkillSHA256: input.BaselineSkillSHA256[evaluation.Skill], ExecutableSHA256: input.BaselineExecutableSHA256, DeterministicGrade: grade, RawSHA256: digest}, nil
+}
+
 func runSkillEvalArm(ctx context.Context, input SkillEvalRunInput, evaluation SkillEvalCase, arm string) (*SkillEvalRun, error) {
 	rawRoot := skillEvalRawRoot(input, evaluation, arm)
 	if err := os.MkdirAll(rawRoot, 0o700); err != nil {
@@ -321,6 +367,9 @@ func runSkillEvalArm(ctx context.Context, input SkillEvalRunInput, evaluation Sk
 	if !validSkillEvalRunOutcome(result.Outcome) {
 		return nil, nil
 	}
+	if err := writeSkillEvalOutcomeReceipt(rawRoot, result.Outcome); err != nil {
+		return nil, fmt.Errorf("record declared outcome: %w", err)
+	}
 	grade, err := skillEvalDeterministicGrade(evaluation, rawRoot, result.Facts)
 	if err != nil {
 		return nil, fmt.Errorf("evaluate deterministic oracle: %w", err)
@@ -338,6 +387,33 @@ func runSkillEvalArm(ctx context.Context, input SkillEvalRunInput, evaluation Sk
 
 func skillEvalRawRoot(input SkillEvalRunInput, evaluation SkillEvalCase, arm string) string {
 	return filepath.Join(input.ArtifactRoot, "skill-evals", "v0.5.0", input.SessionID, "raw", evaluation.Skill, evaluation.CaseID, arm)
+}
+
+// skillEvalConfinedRawRoot rejects a raw root whose path from the artifact
+// root traverses a symlink or non-directory component. The raw-tree walk
+// refuses symlinked entries beneath the root but cannot see a symlinked
+// ancestor, which resolves to a directory outside the artifact tree the
+// evidence is pinned to, so staged evidence must be re-anchored there.
+func skillEvalConfinedRawRoot(artifactRoot, rawRoot string) error {
+	rel, err := filepath.Rel(artifactRoot, rawRoot)
+	if err != nil || rel == "." || filepath.IsAbs(rel) || strings.HasPrefix(filepath.ToSlash(filepath.Clean(rel)), "../") {
+		return fmt.Errorf("raw root %s is not beneath the artifact root", rawRoot)
+	}
+	current := artifactRoot
+	for _, part := range strings.Split(filepath.ToSlash(filepath.Clean(rel)), "/") {
+		current = filepath.Join(current, part)
+		info, err := os.Lstat(current)
+		if os.IsNotExist(err) {
+			continue
+		}
+		if err != nil {
+			return fmt.Errorf("inspect raw root component: %w", err)
+		}
+		if !info.IsDir() {
+			return fmt.Errorf("raw root component %s is not a real directory beneath the artifact root", current)
+		}
+	}
+	return nil
 }
 
 func skillEvalDeterministicGrade(evaluation SkillEvalCase, rawRoot string, facts []SkillEvalObservedFact) (string, error) {
@@ -384,6 +460,19 @@ func skillEvalDeterministicGrade(evaluation SkillEvalCase, rawRoot string, facts
 	return "pass", nil
 }
 
+// skillEvalUnderManagedPath reports whether one changed path lies under the
+// managed planning directory. Lexical containment is not enough: a prefix like
+// `planning/../README.md` names a repository-root file, so the path must clean
+// to the managed directory or beneath it. Escapes, absolute paths, and empty
+// paths are outside.
+func skillEvalUnderManagedPath(changed string) bool {
+	cleaned := path.Clean(filepath.ToSlash(changed))
+	if cleaned == "." || cleaned == ".." || strings.HasPrefix(cleaned, "../") || path.IsAbs(cleaned) {
+		return false
+	}
+	return cleaned == "planning" || strings.HasPrefix(cleaned, skillEvalManagedPathPrefix)
+}
+
 func skillEvalSameFact(a, b SkillEvalObservedFact) bool {
 	return a.Action == b.Action && a.Operation == b.Operation && slices.Equal(a.Command, b.Command) && a.ExitCode == b.ExitCode && a.StdoutSHA256 == b.StdoutSHA256 && a.StderrSHA256 == b.StderrSHA256 && a.BeforeSHA256 == b.BeforeSHA256 && a.AfterSHA256 == b.AfterSHA256 && a.GitBeforeSHA256 == b.GitBeforeSHA256 && a.GitAfterSHA256 == b.GitAfterSHA256 &&
 		a.GitTrackedBeforeSHA256 == b.GitTrackedBeforeSHA256 && a.GitTrackedAfterSHA256 == b.GitTrackedAfterSHA256 &&
@@ -408,7 +497,7 @@ func skillEvalPredicatePasses(predicate string, fact SkillEvalObservedFact) bool
 			return false
 		}
 		for _, path := range fact.GitChangedPaths {
-			if !strings.HasPrefix(path, skillEvalManagedPathPrefix) {
+			if !skillEvalUnderManagedPath(path) {
 				return false
 			}
 		}
@@ -572,6 +661,65 @@ func writeSkillEvalFacts(root string, facts []SkillEvalObservedFact) error {
 		return err
 	}
 	return os.WriteFile(filepath.Join(root, "facts.json"), append(data, '\n'), 0o600)
+}
+
+type skillEvalOutcomeReceipt struct {
+	Outcome string `json:"outcome"`
+}
+
+func skillEvalOutcomeReceiptBytes(outcome string) []byte {
+	data, err := json.MarshalIndent(skillEvalOutcomeReceipt{Outcome: outcome}, "", "  ")
+	if err != nil {
+		return nil
+	}
+	return append(data, '\n')
+}
+
+// writeSkillEvalOutcomeReceipt records the adapter-declared outcome in the
+// arm's raw tree, covered by the recomputed raw digest. It is the only
+// durable record of that declaration — the adapter returns it in memory — so
+// a later session adopting this tree can preserve the original outcome
+// instead of inferring one from the re-derived grade. A pre-existing
+// different receipt refuses rather than clobbering provider evidence.
+func writeSkillEvalOutcomeReceipt(root, outcome string) error {
+	data := skillEvalOutcomeReceiptBytes(outcome)
+	if data == nil {
+		return fmt.Errorf("encode outcome receipt")
+	}
+	path := filepath.Join(root, "outcome.json")
+	if existing, err := os.ReadFile(path); err == nil {
+		if bytes.Equal(existing, data) {
+			return nil
+		}
+		return fmt.Errorf("outcome receipt already exists with different bytes")
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+	return os.WriteFile(path, data, 0o600)
+}
+
+// decodeSkillEvalOutcome reads the runner-written canonical outcome receipt.
+// A missing, noncanonical, or unsupported receipt is missing evidence, never
+// an inferred pass.
+func decodeSkillEvalOutcome(root string) (string, error) {
+	data, err := os.ReadFile(filepath.Join(root, "outcome.json"))
+	if err != nil {
+		return "", fmt.Errorf("read raw outcome receipt: %w", err)
+	}
+	if err := checkDocumentFraming(data); err != nil {
+		return "", fmt.Errorf("decode raw outcome receipt: %w", err)
+	}
+	var receipt skillEvalOutcomeReceipt
+	if err := json.Unmarshal(data, &receipt); err != nil {
+		return "", fmt.Errorf("decode raw outcome receipt: invalid outcome")
+	}
+	if !validSkillEvalRunOutcome(receipt.Outcome) {
+		return "", fmt.Errorf("raw outcome receipt is not a supported outcome")
+	}
+	if canonical := skillEvalOutcomeReceiptBytes(receipt.Outcome); canonical == nil || !bytes.Equal(data, canonical) {
+		return "", fmt.Errorf("raw outcome receipt is not canonical")
+	}
+	return receipt.Outcome, nil
 }
 
 func skillEvalManifest(cases []SkillEvalCase, input SkillEvalRunInput) skillEvalReportManifest {

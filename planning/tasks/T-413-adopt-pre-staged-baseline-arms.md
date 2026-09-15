@@ -1,11 +1,17 @@
 ---
 id: T-413-adopt-pre-staged-baseline-arms
 title: Adopt pre-staged baseline arms in skill evaluations
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#maintainer-skill-release-evaluations
 dependencies: []
-updated_at: "2026-09-12T07:08:16Z"
+updated_at: "2026-09-15T11:25:46Z"
+completion_id: "45311c3827271fbb3a179a81a50a5a1f"
+last_verification_id: "7099cc410c7e2b574bb56c5c26843537"
+last_verification_result: pass
+last_verified_at: "2026-09-15T11:25:46Z"
+last_verification_previous_id: "326e55932f6655c22b36ea1cdbacc7aa"
+last_verified_completion_id: "45311c3827271fbb3a179a81a50a5a1f"
 ---
 
 # T-413-adopt-pre-staged-baseline-arms Adopt pre-staged baseline arms in skill evaluations
@@ -58,3 +64,8 @@ adoption is disclosed as human evaluation evidence in the report's
 - TODO: record later evidence paths after verification.
 
 ## Implementation Notes
+
+- 2026-09-14T23:58:30Z: Enumerated pre-staged baseline arms are adopted with verified re-derivation: enumerated case IDs validated up front, grade re-derived through the case's own predicates, raw digest recomputed, adopted records shaped exactly like executed ones. Review dispositions applied in this run: adoption and stage resume now refuse raw roots reachable through symlinked or non-directory ancestor components beneath the artifact root, and executed-vs-adopted outcome parity is pinned by regression coverage. Deferred owner decisions (adopted-outcome binding, sealed provenance binding) and deferred hardening (executed-arm ancestor confinement follow-up, canonical managed-path validation) are recorded in the verification summary.
+- 2026-09-14T23:58:35Z: verification pass id 920c5f381f261b49c776b90cf8c609e8 previous none completion 45311c3827271fbb3a179a81a50a5a1f
+- 2026-09-15T10:53:22Z: verification fail id 326e55932f6655c22b36ea1cdbacc7aa previous 920c5f381f261b49c776b90cf8c609e8 completion none
+- 2026-09-15T11:25:46Z: verification pass id 7099cc410c7e2b574bb56c5c26843537 previous 326e55932f6655c22b36ea1cdbacc7aa completion 45311c3827271fbb3a179a81a50a5a1f

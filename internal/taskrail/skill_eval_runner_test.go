@@ -992,6 +992,39 @@ func TestSkillEvalRunnerRefusesContradictoryCaseBeforeInvokingProvider(t *testin
 	}
 }
 
+// TestSkillEvalRunnerRecordsDeclaredOutcomeReceipt pins the executed-arm
+// evidence a later adoption preserves: every executed arm's raw tree carries
+// a canonical runner-written receipt of the adapter-declared outcome, covered
+// by the recomputed raw digest, so adoption never has to infer one.
+func TestSkillEvalRunnerRecordsDeclaredOutcomeReceipt(t *testing.T) {
+	in := skillEvalTestInput(t, skillEvalResultAdapter{candidate: "pass", baseline: "incomplete"})
+	stage, err := (SkillEvalRunner{}).Execute(context.Background(), in)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	for _, arm := range []struct {
+		name string
+		want string
+		run  *SkillEvalRun
+	}{{skillEvalCandidateArm, "pass", stage.Report.Cases[0].Candidate}, {skillEvalBaselineArm, "incomplete", stage.Report.Cases[0].Baseline}} {
+		root := skillEvalRawRoot(in, in.Registry[0], arm.name)
+		outcome, err := decodeSkillEvalOutcome(root)
+		if err != nil {
+			t.Fatalf("%s arm outcome receipt: %v", arm.name, err)
+		}
+		if outcome != arm.want {
+			t.Fatalf("%s arm outcome receipt = %q, want %q", arm.name, outcome, arm.want)
+		}
+		digest, err := nonEmptySkillEvalRawDigest(root)
+		if err != nil {
+			t.Fatalf("%s arm digest: %v", arm.name, err)
+		}
+		if arm.run == nil || arm.run.RawSHA256 != digest {
+			t.Fatalf("%s arm digest does not cover the outcome receipt", arm.name)
+		}
+	}
+}
+
 type skillEvalRecordingAdapter struct{ calls int }
 
 func (adapter *skillEvalRecordingAdapter) Run(ctx context.Context, request SkillEvalAdapterRequest) (SkillEvalAdapterResult, error) {
@@ -1056,6 +1089,12 @@ func TestSkillEvalManagedPathsPredicateAdmitsTrackedWorkWrites(t *testing.T) {
 		{"edited product source", base("internal/taskrail/service.go"), false},
 		{"edited a managed path and a product file", base("planning/STATE.md", "README.md"), false},
 		{"escaped the managed directory by prefix", base("planning-other/STATE.md"), false},
+		// A lexically prefixed path that resolves outside the managed
+		// directory is not a managed write; accepting it would let a skill
+		// touch repository roots behind a planning/ prefix.
+		{"escaped the managed directory lexically", base("planning/../README.md"), false},
+		{"escaped the managed directory from depth", base("planning/tasks/../../cmd/taskrail/main.go"), false},
+		{"targeted the planning directory itself", base("planning"), true},
 		{"committed its work", func() SkillEvalObservedFact {
 			f := base("planning/STATE.md")
 			f.GitHeadAfter = "0000000000000000000000000000000000000000"
