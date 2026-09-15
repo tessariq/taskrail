@@ -144,6 +144,9 @@ func TestDecodeSpecReviewSchema2BundleRejectsMutations(t *testing.T) {
 		{"wrong round path", func(f map[string][]byte) {
 			f["manifest.json"] = []byte(strings.Replace(string(f["manifest.json"]), `"path":"round-2-consistency.json"`, `"path":"consistency.json"`, 1))
 		}, `must be "round-2-consistency.json"`},
+		{"renamed path member", func(f map[string][]byte) {
+			f["manifest.json"] = []byte(strings.Replace(string(f["manifest.json"]), `{"lens":"consistency","path":"round-1-consistency.json"`, `{"lens":"consistency","filename":"round-1-consistency.json"`, 1))
+		}, `missing member "path"`},
 		{"round lens order", func(f map[string][]byte) {
 			f["manifest.json"] = []byte(strings.Replace(string(f["manifest.json"]), `{"lens":"consistency","path":"round-1-consistency.json"`, `{"lens":"gaps","path":"round-1-consistency.json"`, 1))
 		}, "fixed lens order"},

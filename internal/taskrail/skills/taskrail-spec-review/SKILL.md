@@ -95,12 +95,14 @@ do not contain the source helper and skip this source-only guard.
    `unverified-caller-recorded-claims` provenance label, an ordered declared
    round history, and all dispositions. Each round entry has exactly `round`,
    `spec_sha256`, `repeats_earlier_spec`, and four ordered lens entries
-   (consistency, gaps, additions, adversarial); each lens entry binds its fixed
-   round-scoped filename (`round-<n>-<lens>.json`), exact SHA-256, and that
-   round's spec SHA-256. The last declared round is final and its digest equals
-   the manifest's final spec digest. The manifest does not repeat prompt
-   bindings: lens file digests bind those transitively. Reject unknown, null,
-   duplicate, missing, or malformed data rather than repairing it.
+   (consistency, gaps, additions, adversarial); each lens entry has exactly
+   `lens`, `path`, `sha256`, `spec_sha256`: `path` is the fixed round-scoped
+   filename (`round-<n>-<lens>.json`), `sha256` the exact SHA-256 of that lens
+   file's bytes, and `spec_sha256` that round's spec SHA-256. The last declared
+   round is final and its digest equals the manifest's final spec digest. The
+   manifest does not repeat prompt bindings: lens file digests bind those
+   transitively. Reject unknown, null, duplicate, missing, or malformed data
+   rather than repairing it.
 6. **Publish the complete bundle.** After rechecking the final spec digest,
    immediately before the non-dry-run publisher, apply the source-checkout guard.
    Then use the only publication boundary:

@@ -37,6 +37,12 @@ func specReview2LensPath(round int, lens string) string {
 	return fmt.Sprintf("round-%d-%s.json", round, lens)
 }
 
+// specReview2RoundLensMembers are the exact members one schema-2 manifest
+// round lens entry carries, in decode order. The packaged skill documents the
+// same list so agents do not have to guess member names the strict decoder
+// refuses to accept alternatives for.
+var specReview2RoundLensMembers = []string{"lens", "path", "sha256", "spec_sha256"}
+
 // decodeSpecReview2Bundle decodes and cross-validates one schema-2 history
 // bundle: every declared round keeps its four immutable lens observations with
 // exact file and spec-digest bindings, every repeat of an earlier spec digest
@@ -196,7 +202,7 @@ func decodeSpecReview2RoundLenses(raw json.RawMessage, round int) ([]SpecReviewM
 		if err != nil {
 			return nil, err
 		}
-		if err := exactMembers(obj, what, []string{"lens", "path", "sha256", "spec_sha256"}); err != nil {
+		if err := exactMembers(obj, what, specReview2RoundLensMembers); err != nil {
 			return nil, err
 		}
 		var lens SpecReviewManifestLens
