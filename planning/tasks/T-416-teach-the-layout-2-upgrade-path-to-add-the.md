@@ -1,12 +1,15 @@
 ---
 id: T-416-teach-the-layout-2-upgrade-path-to-add-the
 title: Teach the layout-2 upgrade path to add the artifacts ignore rule
-status: todo
+status: blocked
 priority: medium
 spec_ref: specs/v0.5.0.md#safe-review-artifact-publication
 dependencies:
     - T-398-ignore-artifacts-on-committed-init
-updated_at: "2026-09-15T14:32:48Z"
+updated_at: "2026-09-15T21:29:15Z"
+last_verification_id: "3669bbd9e7b531e427514fd2caefc6c8"
+last_verification_result: fail
+last_verified_at: "2026-09-15T21:29:15Z"
 ---
 
 # T-416-teach-the-layout-2-upgrade-path-to-add-the Teach the layout-2 upgrade path to add the artifacts ignore rule
@@ -29,3 +32,6 @@ TODO: state one independently meaningful outcome. Do not bundle independently va
 - TODO: record later evidence paths after verification.
 
 ## Implementation Notes
+
+- 2026-09-15T21:29:12Z: Pre-start sizing gate: unauthored placeholder follow-up - outcome, acceptance, and verification sections retain unedited TODO scaffold lines, so a verified result cannot be reached without unresolved scope and improvised criteria cannot support a pass. Needs human-approved task author body authoring or reviewed decomposition before execution.
+- 2026-09-15T21:29:15Z: verification fail id 3669bbd9e7b531e427514fd2caefc6c8 previous none completion none
