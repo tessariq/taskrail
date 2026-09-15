@@ -159,6 +159,68 @@ func TestInitEmptyRepoDoesNotSeedContinuationNotes(t *testing.T) {
 	}
 }
 
+// TestInitStarterSpecAnchorsAgreeWithCoverage pins the starter-spec agreement:
+// the anchors `spec show --anchors` advertises and `task new` accepts must
+// include the area coverage scores, so a fresh repository's `--area summary`
+// works instead of being rejected while its rejection message points back at
+// the advertised anchor. A re-init must leave the already-written starter
+// spec bytes unchanged.
+func TestInitStarterSpecAnchorsAgreeWithCoverage(t *testing.T) {
+	t.Parallel()
+
+	repo := initGitRepo(t)
+	svc := newTestService(t, repo, time.Date(2026, 3, 31, 12, 0, 0, 0, time.UTC))
+	if _, err := svc.Init(InitInput{}); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+
+	shown, err := svc.SpecShow("v0.1.0", true)
+	if err != nil {
+		t.Fatalf("spec show anchors: %v", err)
+	}
+	advertised := make(map[string]bool, len(shown.Anchors))
+	for _, anchor := range shown.Anchors {
+		advertised[anchor.Anchor] = true
+	}
+
+	report, err := svc.Coverage()
+	if err != nil {
+		t.Fatalf("coverage: %v", err)
+	}
+	if report.CoverableAreas == 0 {
+		t.Fatal("fresh starter spec exposes no coverable area")
+	}
+	for _, area := range report.Areas {
+		if !advertised[area.Anchor] {
+			t.Errorf("coverage area %q is not advertised by spec show --anchors", area.Anchor)
+		}
+	}
+
+	narrowed, err := svc.CoverageForArea("summary")
+	if err != nil {
+		t.Fatalf("coverage --area summary: %v", err)
+	}
+	if narrowed.CoverableAreas != 1 || len(narrowed.Areas) != 1 || narrowed.Areas[0].Anchor != "summary" {
+		t.Fatalf("narrowed coverage = %+v, want the single summary area", narrowed)
+	}
+
+	specPath := filepath.Join(repo, "specs", "v0.1.0.md")
+	before, err := os.ReadFile(specPath)
+	if err != nil {
+		t.Fatalf("read starter spec: %v", err)
+	}
+	if _, err := svc.Init(InitInput{}); err != nil {
+		t.Fatalf("re-init: %v", err)
+	}
+	after, err := os.ReadFile(specPath)
+	if err != nil {
+		t.Fatalf("reread starter spec: %v", err)
+	}
+	if !bytes.Equal(after, before) {
+		t.Fatal("re-init rewrote the existing starter spec bytes")
+	}
+}
+
 func TestInitAdoptsLegacyLayoutNonDestructively(t *testing.T) {
 	t.Parallel()
 

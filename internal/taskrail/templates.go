@@ -44,13 +44,28 @@ func starterSpecsReadme() string {
 	`) + "\n"
 }
 
+// starterSpecV010 renders the starter specs/v0.1.0.md a fresh init writes. Its
+// lines are flush left so the markdown a new repository receives carries no
+// raw-string indentation artifact, and its `### Summary` area under
+// `## Potential Features` makes the `summary` anchor — the one `spec show
+// --anchors` advertises and `task new --spec-ref specs/v0.1.0.md#summary`
+// accepts — a coverable area, so anchor listing and coverage agree from the
+// first command in a fresh repository.
 func starterSpecV010() string {
-	return strings.TrimSpace(`# Taskrail v0.1.0
+	return `# Taskrail v0.1.0
 
-	## Summary
+## Summary
 
-	Starter Taskrail spec created by `+"`taskrail init`"+`.
-	`) + "\n"
+Starter Taskrail spec created by ` + "`taskrail init`" + `.
+
+## Potential Features
+
+### Summary
+
+Starter coverable area for a fresh repository's first tracked work; link
+tasks with ` + "`--spec-ref specs/v0.1.0.md#summary`" + ` until real areas
+are authored.
+`
 }
 
 // scaffoldSpec renders the standard section skeleton for a spec authored by

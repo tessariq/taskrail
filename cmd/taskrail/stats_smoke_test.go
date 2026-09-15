@@ -165,7 +165,12 @@ func TestStatsJSONMirrorsMetricsOnSeededDAG(t *testing.T) {
 }
 
 func TestStatsCoverageNAWhenNoCoverableAreas(t *testing.T) {
-	setupRepo(t) // starter spec has only a Summary section → no coverable areas
+	root := setupRepo(t)
+	// The starter spec now carries a coverable starter area (T-399), so the
+	// N/A path needs an authored spec without `###` feature areas.
+	if err := os.WriteFile(filepath.Join(root, "specs", "v0.1.0.md"), []byte(naSpec), 0o644); err != nil {
+		t.Fatalf("write spec: %v", err)
+	}
 
 	out, err := runRoot(t, "stats")
 	if err != nil {

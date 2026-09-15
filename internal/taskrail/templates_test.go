@@ -1,6 +1,35 @@
 package taskrail
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
+
+// TestStarterSpecV010HasNoIndentedLines pins the starter spec's flush-left
+// markdown: the bytes a fresh repository receives must be ordinary markdown,
+// not a Go raw-string indentation artifact.
+func TestStarterSpecV010HasNoIndentedLines(t *testing.T) {
+	for i, line := range strings.Split(starterSpecV010(), "\n") {
+		if line == "" {
+			continue
+		}
+		if c := line[0]; c == ' ' || c == '\t' {
+			t.Fatalf("line %d %q starts with %q; starter spec lines must be flush left", i+1, line, string(c))
+		}
+	}
+}
+
+// TestStarterSpecV010HasCoverableSummaryArea pins that the starter spec's
+// summary anchor — the one `spec show --anchors` advertises and `task new
+// --spec-ref specs/v0.1.0.md#summary` accepts — is a coverable `###` area, so
+// a fresh repository starts with one usable coverage area instead of the
+// anchors-versus-coverage disagreement.
+func TestStarterSpecV010HasCoverableSummaryArea(t *testing.T) {
+	areas := parseCoverableAreas(starterSpecV010())
+	if len(areas) != 1 || areas[0].anchor != "summary" {
+		t.Fatalf("coverable areas = %+v, want exactly one summary area", areas)
+	}
+}
 
 func TestNativeTaskBodyRenderersHaveGoldenOutputs(t *testing.T) {
 	const guidance = "TODO: state one independently meaningful outcome. Do not bundle independently valuable outcomes or create a fragment without independent value."

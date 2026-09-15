@@ -1,11 +1,16 @@
 ---
 id: T-399-unindent-starter-spec-heading
 title: Unindent the starter spec heading so fresh repos have a coverable area
-status: todo
+status: completed
 priority: medium
 spec_ref: specs/v0.1.0.md#taskrail-init
 dependencies: []
-updated_at: "2026-09-11T16:21:21Z"
+updated_at: "2026-09-15T22:17:44Z"
+completion_id: "44902482e0d4fc762da8927216502fc8"
+last_verification_id: "ea2fc4317663015ba243a9ffee4ea31b"
+last_verification_result: pass
+last_verified_at: "2026-09-15T22:17:44Z"
+last_verified_completion_id: "44902482e0d4fc762da8927216502fc8"
 ---
 
 # T-399-unindent-starter-spec-heading Unindent the starter spec heading so fresh repos have a coverable area
@@ -47,3 +52,6 @@ Markdown, so anchor listing and coverage agree about its headings.
   `coverage --area summary`.
 
 ## Implementation Notes
+
+- 2026-09-15T22:17:39Z: Fresh init starter spec is flush-left and carries a Potential Features summary area, so spec show --anchors and coverage agree and coverage --area summary is accepted; existing starter specs are preserved on re-init. Verified by new unit and init integration tests, full go test/vet/gofmt/validate suite, sandbox manual evidence (flush-left bytes, anchors/coverage agreement, seeded #summary task coverage, re-init sha unchanged), one bounded two-lane review wave with its single validated finding fixed (changelog entry).
+- 2026-09-15T22:17:44Z: verification pass id ea2fc4317663015ba243a9ffee4ea31b previous none completion 44902482e0d4fc762da8927216502fc8

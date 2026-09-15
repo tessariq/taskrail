@@ -12,6 +12,11 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ### Fixed
 
+- `taskrail init` — the starter `specs/v0.1.0.md` is written flush-left and
+  now exposes a coverable `summary` area, so a fresh repository's
+  `spec show --anchors` listing and `coverage` agree and
+  `coverage --area summary` is accepted instead of rejected while its error
+  points back at the advertised anchor; existing specs are left unchanged.
 - Maintainer skill evaluations no longer manufacture a paired comparison the
   evidence cannot support. A baseline arm is required only when both the skill
   and the case's storage mode existed in v0.4.0, and a baseline-required scenario
