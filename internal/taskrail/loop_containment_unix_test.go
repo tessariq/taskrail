@@ -108,7 +108,12 @@ func TestLoopLaunchChildCleansUpAfterContainmentVerificationFailure(t *testing.T
 	unixGetpgid = func(int) (int, error) {
 		deadline := time.Now().Add(time.Second)
 		for {
-			if _, err := os.Stat(record + ".descendant"); err == nil || time.Now().After(deadline) {
+			if data, err := os.ReadFile(record + ".descendant"); err == nil {
+				if _, err := strconv.Atoi(string(data)); err == nil {
+					return 0, errors.New("forced containment verification failure")
+				}
+			}
+			if time.Now().After(deadline) {
 				return 0, errors.New("forced containment verification failure")
 			}
 			time.Sleep(time.Millisecond)
