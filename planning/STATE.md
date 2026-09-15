@@ -1,6 +1,6 @@
 ---
 schema_version: 2
-updated_at: "2026-09-15T16:36:33Z"
+updated_at: "2026-09-15T17:14:07Z"
 active_spec_version: v0.5.0
 active_spec_path: specs/v0.5.0.md
 current_task: ""
@@ -8,9 +8,9 @@ current_task_title: ""
 status_summary: idle
 blockers: []
 next_action: Select the next eligible task
-last_verification_result: pass for T-402-document-lens-manifest-path-member at 2026-09-15T16:36:33Z id f67320b78ffb82ca0b4b8786174f73b2
-last_verification_id: f67320b78ffb82ca0b4b8786174f73b2
-last_verified_completion_id: 8f29687f9026715178ba9a5f448def4e
+last_verification_result: pass for T-404-clarify-pre-start-cannot-proceed-branch at 2026-09-15T17:14:07Z id 739effec0afc14b2937d7ad10e39f930
+last_verification_id: 739effec0afc14b2937d7ad10e39f930
+last_verified_completion_id: c4bd14664c65070993d7c2141b4bfd6c
 relevant_artifacts: []
 ---
 
@@ -34,7 +34,7 @@ relevant_artifacts: []
 
 ## Last Verification
 
-- pass for T-402-document-lens-manifest-path-member at 2026-09-15T16:36:33Z id f67320b78ffb82ca0b4b8786174f73b2
+- pass for T-404-clarify-pre-start-cannot-proceed-branch at 2026-09-15T17:14:07Z id 739effec0afc14b2937d7ad10e39f930
 
 ## Next Action
 
@@ -46,8 +46,8 @@ relevant_artifacts: []
 
 ## Task Counts
 
-- todo: 65
+- todo: 64
 - in_progress: 0
-- completed: 351
+- completed: 352
 - blocked: 0
 - cancelled: 0

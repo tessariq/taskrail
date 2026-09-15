@@ -32,10 +32,14 @@ do not contain the source helper and skip this source-only guard.
    affected invariants, acceptance boundaries, and intended evidence.
 3. Apply the outcome-focused sizing rubric before `start`: require a bounded
    result, explicit dependencies and operator gates, and clear integrated
-   behavior ownership. Stop for reviewed decomposition or clarification when the
-   task bundles independent outcomes, is a non-valuable fragment, or cannot
-   reach a verified result without unresolved scope. Do not rewrite scope after
-   lifecycle work begins.
+   behavior ownership. The gate runs before any `start` regardless of request
+   wording, so a request for a positive workflow cannot push a gate-failing
+   task into execution. When the task bundles independent outcomes, is a
+   non-valuable fragment, or cannot reach a verified result without unresolved
+   scope, never start it: run `${TASKRAIL:-taskrail} block <task-id> --reason "..." --json`,
+   check its exit, then `${TASKRAIL:-taskrail} verify <task-id> --result fail --summary "..." --json`,
+   check its exit, and stop for reviewed decomposition or clarification. Do
+   not rewrite scope after lifecycle work begins.
 4. Run `${TASKRAIL:-taskrail} start <task-id> --json` and check its exit before
    implementation. Consume every command result, ID, path, warning, storage mode,
    lifecycle outcome, or failure detail as JSON and check every writer exit.

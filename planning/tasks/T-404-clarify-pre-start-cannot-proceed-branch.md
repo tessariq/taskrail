@@ -1,11 +1,16 @@
 ---
 id: T-404-clarify-pre-start-cannot-proceed-branch
 title: Clarify the cannot-proceed branch before start in autonomous skills
-status: todo
+status: completed
 priority: medium
 spec_ref: specs/v0.5.0.md#lifecycle-complete-skill-flows
 dependencies: []
-updated_at: "2026-09-11T16:28:46Z"
+updated_at: "2026-09-15T17:14:07Z"
+completion_id: "c4bd14664c65070993d7c2141b4bfd6c"
+last_verification_id: "739effec0afc14b2937d7ad10e39f930"
+last_verification_result: pass
+last_verified_at: "2026-09-15T17:14:07Z"
+last_verified_completion_id: "c4bd14664c65070993d7c2141b4bfd6c"
 ---
 
 # T-404-clarify-pre-start-cannot-proceed-branch Clarify the cannot-proceed branch before start in autonomous skills
@@ -36,3 +41,6 @@ gate, which a request's phrasing cannot override.
 - Skill contract test plus the matching eval case expectation.
 
 ## Implementation Notes
+
+- 2026-09-15T17:14:02Z: Both autonomous skills now state one unambiguous pre-start sizing-gate action: never start a gate-failing todo task; block with a reason, record a failing verify, and stop, regardless of request wording. Contract test TestFullTaskSkillsShareOnePreStartGateBranch pins identical gate-branch text in both skills; four autonomous skill-eval case expectations updated to match; committed skill copies regenerated with parity verified.
+- 2026-09-15T17:14:07Z: verification pass id 739effec0afc14b2937d7ad10e39f930 previous none completion c4bd14664c65070993d7c2141b4bfd6c

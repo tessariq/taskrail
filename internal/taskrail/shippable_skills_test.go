@@ -281,6 +281,50 @@ func TestFullTaskSkillsFollowCanonicalLifecycle(t *testing.T) {
 	}
 }
 
+// T-404: both full-task skills must state one unambiguous action for a todo task
+// that fails the pre-start sizing gate, so request wording such as asking for a
+// positive workflow can never push a gate-failing task into `start`.
+func TestFullTaskSkillsShareOnePreStartGateBranch(t *testing.T) {
+	const (
+		gateOpen  = "Apply the outcome-focused sizing rubric"
+		gateClose = "Run `${TASKRAIL:-taskrail} start <task-id> --json`"
+	)
+	regions := map[string]string{}
+	for _, name := range []string{"autonomous-backlog", "autonomous-task"} {
+		t.Run(name, func(t *testing.T) {
+			body := strings.Join(strings.Fields(readShippableSkill(t, name)), " ")
+			open := strings.Index(body, gateOpen)
+			closed := strings.Index(body, gateClose)
+			if open < 0 || closed < 0 || open > closed {
+				t.Fatalf("%s skill must state the sizing gate before the start instruction", name)
+			}
+			region := body[open:closed]
+			regions[name] = region
+
+			if !strings.Contains(region, "before any `start`") {
+				t.Errorf("%s skill must state the gate precedes any start", name)
+			}
+			if !strings.Contains(region, "regardless of request wording") {
+				t.Errorf("%s skill must state request wording cannot override the gate", name)
+			}
+			if !strings.Contains(region, "never start it") {
+				t.Errorf("%s skill must forbid starting a gate-failing todo task", name)
+			}
+			block := strings.Index(region, "block <task-id> --reason \"...\" --json")
+			fail := strings.Index(region, "verify <task-id> --result fail --summary \"...\" --json")
+			if block < 0 || fail < 0 || block > fail {
+				t.Errorf("%s skill must block with a reason before failing verification in its pre-start gate branch", name)
+			}
+			if strings.Contains(region, "start <task-id> --json") {
+				t.Errorf("%s skill pre-start gate branch must not contain the start writer", name)
+			}
+		})
+	}
+	if len(regions) == 2 && regions["autonomous-backlog"] != regions["autonomous-task"] {
+		t.Error("autonomous-backlog and autonomous-task must state the identical pre-start gate branch")
+	}
+}
+
 // The loop skill is the interactive parent supervisor, not another coordinator.
 // Its instructions must bind every mutating launch to a reviewed dry-run and
 // leave selection, lifecycle, integration, delivery, and recovery writes to the
