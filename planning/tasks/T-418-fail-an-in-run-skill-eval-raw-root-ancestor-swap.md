@@ -1,12 +1,15 @@
 ---
 id: T-418-fail-an-in-run-skill-eval-raw-root-ancestor-swap
 title: Fail an in-run skill-eval raw-root ancestor swap loudly
-status: todo
+status: blocked
 priority: medium
 spec_ref: specs/v0.5.0.md#maintainer-skill-release-evaluations
 dependencies:
     - T-415-confine-executed-skill-eval-raw-roots-against
-updated_at: "2026-09-15T21:20:13Z"
+updated_at: "2026-09-15T21:36:16Z"
+last_verification_id: "1eac8e1ce823607df2cefc270381e773"
+last_verification_result: fail
+last_verified_at: "2026-09-15T21:36:16Z"
 ---
 
 # T-418-fail-an-in-run-skill-eval-raw-root-ancestor-swap Fail an in-run skill-eval raw-root ancestor swap loudly
@@ -29,3 +32,6 @@ TODO: state one independently meaningful outcome. Do not bundle independently va
 - TODO: record later evidence paths after verification.
 
 ## Implementation Notes
+
+- 2026-09-15T21:36:13Z: Pre-start sizing gate: unauthored placeholder follow-up - outcome, acceptance, and verification sections retain unedited TODO scaffold lines, so a verified result cannot be reached without unresolved scope and improvised criteria cannot support a pass. Needs human-approved task author body authoring or reviewed decomposition before execution.
+- 2026-09-15T21:36:16Z: verification fail id 1eac8e1ce823607df2cefc270381e773 previous none completion none
