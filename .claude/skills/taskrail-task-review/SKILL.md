@@ -43,13 +43,15 @@ do not contain the source helper and skip this source-only guard.
 3. **Stage one proposal.** Choose a portable lowercase session key and an absent
    destination `<planning-dir>/reviews/task/<task-id>/<session-id>/`. Obtain the
    current transient artifacts root from `${TASKRAIL:-taskrail} status --json`;
-   stage only `<proposal>/review.json` beneath its ignored
-   `review-proposals/task/<session-id>/` directory. Render the role-mandated
-   instructions with `${TASKRAIL:-taskrail} prompt render task-review --task
-   <task-id> --review <proposal>/review.json --json`. Use the resolved prompt's
-   `source` and `template_sha256`, task/spec paths and SHA-256 values, and the
-   rendered instructions to produce exactly one `review.json`. Do not add a
-   summary file, transcript, manifest, or any other proposal member.
+   create the ignored `review-proposals/task/<session-id>/` directory before
+   rendering (rendering refuses a missing proposal directory, so it must already
+   exist), then stage only `<proposal>/review.json` beneath it. Render the
+   role-mandated instructions with `${TASKRAIL:-taskrail} prompt render
+   task-review --task <task-id> --review <proposal>/review.json --json`. Use
+   the resolved prompt's `source` and `template_sha256`, task/spec paths and
+   SHA-256 values, and the rendered instructions to produce exactly one
+   `review.json`. Do not add a summary file, transcript, manifest, or any other
+   proposal member.
 4. **Judge the boundary.** Check outcome/spec alignment, T-251 semantic sizing,
    overlap, dependency direction, integration ownership, acceptance, negative
    boundaries, evidence/oracles, operator gates, and unnecessary implementation

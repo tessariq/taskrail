@@ -29,11 +29,13 @@ do not contain the source helper and skip this source-only guard.
    and consume its `path`, exact content, and reported `sha256`; do not reopen or
    re-hash the logical or local-overlay path. Run `${TASKRAIL:-taskrail} status --json`
    and consume its exact `storage.artifacts_dir`. Choose one portable lowercase
-   `<session-id>` and one absent proposal directory `<proposal-dir>` beneath that
-   reported transient directory at
-   `<artifacts-dir>/review-proposals/spec/<session-id>`. Do not start this
-   flow while the specification is still incoherent or while an operator has not
-   selected the version and session.
+   `<session-id>` and create its effectively ignored proposal directory
+   `<proposal-dir>` beneath that reported transient directory at
+   `<artifacts-dir>/review-proposals/spec/<session-id>`: rendering refuses a
+   missing proposal directory, so it must already exist before the first
+   `prompt render`, while the round files inside it stay absent until each lens
+   writes them. Do not start this flow while the specification is still
+   incoherent or while an operator has not selected the version and session.
 2. **Render and hand off four isolated lenses per round.** Rounds number
    consecutively from 1; round `<n>` stages each lens at
    `<proposal-dir>/round-<n>-<lens>.json`. For each lens, render its own prompt

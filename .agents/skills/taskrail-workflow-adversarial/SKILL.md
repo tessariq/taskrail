@@ -54,9 +54,11 @@ do not contain the source helper and skip this source-only guard.
    cleanup, and cases where tests pass while users fail. Do not imply broad
    coverage from this bounded review.
 4. **Authorize one proposal.** Choose a globally unique portable `<review-id>` and
-   an absent effectively ignored `<proposal>` beneath the reported
-   `<artifacts_dir>/review-proposals/workflow-adversarial/<review-id>`. Its sole
-   eventual file is `report.json`. Run
+   create its effectively ignored `<proposal>` beneath the reported
+   `<artifacts_dir>/review-proposals/workflow-adversarial/<review-id>`:
+   rendering refuses a missing proposal directory, so it must already exist
+   before `prompt render`, while its sole eventual file `report.json` stays
+   absent until this review stages it. Run
    `${TASKRAIL:-taskrail} prompt render workflow-adversarial --spec <version> --memory <memory> --review <proposal>/report.json --json`.
    Consume the rendered content, source, contract version, and template SHA-256.
    The absent canonical memory path is valid only for the exact first-run case.
