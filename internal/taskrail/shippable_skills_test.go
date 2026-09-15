@@ -325,6 +325,20 @@ func TestFullTaskSkillsShareOnePreStartGateBranch(t *testing.T) {
 	}
 }
 
+// T-405: autonomous-manual-test derives its steps from the target task's
+// acceptance criteria, so it must define what happens when those criteria are
+// missing or placeholder scaffold text. The paired evaluation showed a run
+// could otherwise adopt the request's expected observation as improvised
+// criteria and report pass; the skill contract has to make that impossible.
+func TestManualTestSkillDefinesPlaceholderAcceptanceOutcome(t *testing.T) {
+	assertSkillReferences(t, "autonomous-manual-test",
+		"missing or placeholder acceptance criteria",
+		"stated non-pass outcome (fail or stop)",
+		"write the report with verdict fail, or stop the run before report writing",
+		"improvised criteria never support a pass",
+	)
+}
+
 // The loop skill is the interactive parent supervisor, not another coordinator.
 // Its instructions must bind every mutating launch to a reviewed dry-run and
 // leave selection, lifecycle, integration, delivery, and recovery writes to the

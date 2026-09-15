@@ -19,7 +19,12 @@ Requires the installed `taskrail` binary on `PATH`.
 3. Run `${TASKRAIL:-taskrail} status --json` and use its exact
    `storage.artifacts_dir` as the transient root. Create a manual test plan at
    `<artifacts-dir>/manual-test/<task-id>/<timestamp>/plan.md`.
-4. Derive numbered test steps from the acceptance criteria.
+4. Derive numbered test steps from the acceptance criteria. If the task has
+   missing or placeholder acceptance criteria (for example `TODO:` scaffold
+   lines), do not derive steps from any other material: record the criteria as
+   untestable, skip step execution, and choose a stated non-pass outcome (fail
+   or stop): write the report with verdict fail, or stop the run before report
+   writing. A stop writes no report and states its reason where it stops.
 5. Execute each test step in order.
 6. If a step fails, decide whether a code fix is needed, apply the smallest fix,
    and re-run only the affected step.
@@ -60,6 +65,10 @@ Prefer a sandbox for most manual testing.
   gitignored evidence; never commit them
 - never substitute ordinary automated tests for manual test evidence when the
   change needs end-to-end judgment
+- missing or placeholder acceptance criteria yield a stated non-pass outcome
+  (fail or stop), and improvised criteria never support a pass; criteria
+  invented by the run, including a request's expected observation, are
+  improvised criteria
 - re-run only the affected test step after a fix
 - do not auto-select another task after manual testing completes
 - keep manual-test narrative in the ephemeral report, never in `planning/STATE.md`

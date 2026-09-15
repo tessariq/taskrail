@@ -1,6 +1,6 @@
 ---
 schema_version: 2
-updated_at: "2026-09-15T17:14:07Z"
+updated_at: "2026-09-15T20:17:22Z"
 active_spec_version: v0.5.0
 active_spec_path: specs/v0.5.0.md
 current_task: ""
@@ -8,9 +8,9 @@ current_task_title: ""
 status_summary: idle
 blockers: []
 next_action: Select the next eligible task
-last_verification_result: pass for T-404-clarify-pre-start-cannot-proceed-branch at 2026-09-15T17:14:07Z id 739effec0afc14b2937d7ad10e39f930
-last_verification_id: 739effec0afc14b2937d7ad10e39f930
-last_verified_completion_id: c4bd14664c65070993d7c2141b4bfd6c
+last_verification_result: pass for T-405-manual-test-placeholder-acceptance at 2026-09-15T20:17:22Z id 160d9f06034af761bfa00ecf7c19fe18
+last_verification_id: 160d9f06034af761bfa00ecf7c19fe18
+last_verified_completion_id: 14db8bd3f8d890c2b904710fc5bd3346
 relevant_artifacts: []
 ---
 
@@ -34,7 +34,7 @@ relevant_artifacts: []
 
 ## Last Verification
 
-- pass for T-404-clarify-pre-start-cannot-proceed-branch at 2026-09-15T17:14:07Z id 739effec0afc14b2937d7ad10e39f930
+- pass for T-405-manual-test-placeholder-acceptance at 2026-09-15T20:17:22Z id 160d9f06034af761bfa00ecf7c19fe18
 
 ## Next Action
 
@@ -46,8 +46,8 @@ relevant_artifacts: []
 
 ## Task Counts
 
-- todo: 64
+- todo: 63
 - in_progress: 0
-- completed: 352
+- completed: 353
 - blocked: 0
 - cancelled: 0
