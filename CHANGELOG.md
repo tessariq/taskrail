@@ -140,6 +140,31 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ### Added
 
+- Maintainer skill evaluations can now publish the committed release report
+  through resume. `PublishSkillEvalReport` reads a sealed `stage.json` plus an
+  answers file holding the overall `human_review` and each case's `comparison`
+  and `human_review`, reconstructs the staging run's input from explicitly
+  caller-supplied current bindings — the tested head, the product snapshot,
+  the two bound executables, and the current candidate and baseline skill
+  digests — plus the current registry and the current raw trees, and writes
+  the canonical report to
+  `<planning-dir>/reviews/skill-evals/v0.5.0/<session-id>/report.json`. The
+  driver re-reads the current executable bytes and recomputes the fixtures
+  digest itself, so no binding is echoed back from the stage under validation;
+  only staging-run records a current tree cannot recompute (session,
+  timestamp, identities, deterministic checks) come from the seal. No adapter
+  arm is invoked, so a maintainer stages once, answers the worksheet across
+  any number of sittings, and resumes without re-running a single arm; a stage
+  whose bindings no longer match the current snapshot, executables, skills,
+  fixtures, registry, or raw trees is refused and nothing is written. The
+  driver validates the answers itself before any write: an answers file that
+  omits a staged case, names an unregistered one, or supplies a comparison the
+  case's staged completeness does not permit fails loudly — `Resume` alone
+  would silently override such a comparison with `inconclusive`. Republishing
+  the same stage and answers writes byte-identical output. The caller must
+  supply current per-skill digests covering every registry skill; a binding
+  set that does not cover every registry skill is refused rather than
+  inferred from the stage.
 - Maintainer skill-evaluation baseline arms can now be adopted from evidence a
   prior session already staged. `SkillEvalRunInput` carries an explicitly
   enumerated list of baseline-required case IDs; for those cases `Execute`

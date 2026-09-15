@@ -1,11 +1,17 @@
 ---
 id: T-414-publish-skill-eval-report
 title: Publish the skill evaluation report through resume
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#maintainer-skill-release-evaluations
 dependencies: []
-updated_at: "2026-09-12T07:08:16Z"
+updated_at: "2026-09-15T13:11:36Z"
+completion_id: "bb16763589ea48649d971ceab859aac8"
+last_verification_id: "54f5ca1a1c3ddbd06ea6edc4a3e5dba9"
+last_verification_result: pass
+last_verified_at: "2026-09-15T13:11:36Z"
+last_verification_previous_id: "e42714528f8a649e98389b7f00edbdab"
+last_verified_completion_id: "bb16763589ea48649d971ceab859aac8"
 ---
 
 # T-414-publish-skill-eval-report Publish the skill evaluation report through resume
@@ -51,3 +57,8 @@ call `Resume`, and write the rendered report.
 - TODO: record later evidence paths after verification.
 
 ## Implementation Notes
+
+- 2026-09-15T12:16:40Z: Published the skill evaluation release report through resume: PublishSkillEvalReport reads a sealed stage.json plus a strict answers file, reconstructs the staging run input and bindings from the sealed stage, the current registry, and the current raw trees, and writes the canonical report to <planning-dir>/reviews/skill-evals/v0.5.0/<session-id>/report.json without invoking any adapter arm; answers that omit or duplicate a case, name an unregistered case, or supply a comparison the staged completeness does not permit fail before any write, and republishing the same stage and answers is byte-identical.
+- 2026-09-15T12:16:47Z: verification pass id d892b62813be7eda99b7a6cc3a375b8b previous none completion bb16763589ea48649d971ceab859aac8
+- 2026-09-15T12:39:49Z: verification fail id e42714528f8a649e98389b7f00edbdab previous d892b62813be7eda99b7a6cc3a375b8b completion none
+- 2026-09-15T13:11:36Z: verification pass id 54f5ca1a1c3ddbd06ea6edc4a3e5dba9 previous e42714528f8a649e98389b7f00edbdab completion bb16763589ea48649d971ceab859aac8

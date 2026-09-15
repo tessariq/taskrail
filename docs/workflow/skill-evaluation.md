@@ -97,7 +97,21 @@ execution and report construction.
    evidence, then stop for a human worksheet. The stage contains no producer-local paths;
    resume reconstructs them from current input and refuses a changed receipt or
    raw tree. Do not render a final report or invent a comparison here.
-4. Decode and resume from that exact staged evidence after human review. A completed paired
+ 4. Decode and resume from that exact staged evidence after human review, or run the
+   publication driver over it: `PublishSkillEvalReport` reads the sealed
+   `stage.json` plus an answers file (the overall `human_review` and each case's
+   `comparison` and `human_review`), reconstructs the staging run's input from
+   explicitly caller-supplied current bindings — the tested head, the product
+   snapshot, the two bound executables, and the current candidate and baseline
+   skill digests — plus the current registry and the current raw trees, and
+   writes the committed report to
+   `<planning-dir>/reviews/skill-evals/v0.5.0/<session-id>/report.json`. The
+   driver re-reads the current executable bytes and recomputes the fixtures
+   digest itself; no binding is echoed back from the stage under validation.
+   No adapter arm runs; answers that omit a staged case, name an unregistered
+   one, or supply a comparison the case's staged completeness does not permit
+   fail before anything is written, and republishing the same stage and
+   answers writes byte-identical output. A completed paired
    case is `same`, `better`, or `worse`; a completed skill without a v0.4.0 arm is
    exactly `candidate-only`; missing or incomplete required evidence is
    `inconclusive`.
@@ -142,7 +156,14 @@ reviews plus a freshly recomputed caller snapshot, rechecks its seal, bindings,
 and reconstructed raw trees, and produces the unpersisted schema-v1
 safe summary without invoking the adapter. `RenderSkillEvalReport` produces
 canonical JSON; it never writes a durable review, alters skills or fixtures, or
-applies a proposal.
+applies a proposal. `PublishSkillEvalReport` is the maintainer-facing driver
+that closes the loop: it answers the worksheet across any number of sittings,
+feeds the sealed stage and the answers through `Resume` together with the
+caller's freshly recomputed current bindings, and writes the rendered report
+as the one committed release artifact, refusing any current snapshot,
+executable, skill, fixture, registry, or raw-tree drift before a write, so
+the human comparison boundary is a real stopping point rather than a
+single-call convenience.
 
 ## Waived Evidence
 
