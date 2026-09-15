@@ -573,6 +573,19 @@ func TestTaskReviewSkillPreservesAdvisoryDigestBoundBoundary(t *testing.T) {
 	)
 }
 
+// T-406: the v0.5.0 paired evaluation published an empty findings array for a
+// scaffold whose description, acceptance, and verification were all TODO, so a
+// clean review of unauthored work was possible. The skill contract must force
+// a finding, or an explicit refusal, whenever the reviewed task's outcome,
+// acceptance, or verification is placeholder text.
+func TestTaskReviewSkillRequiresFindingForPlaceholderTaskBodies(t *testing.T) {
+	assertSkillReferences(t, "taskrail-task-review",
+		"placeholder text",
+		"at least one finding",
+		"never publish an empty findings array",
+	)
+}
+
 func TestWorkflowAdversarialSkillPreservesSandboxedReportOnlyBoundary(t *testing.T) {
 	assertSkillReferences(t, "taskrail-workflow-adversarial",
 		"exact `review_not_found`",

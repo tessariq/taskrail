@@ -58,6 +58,12 @@ do not contain the source helper and skip this source-only guard.
    prescription. Apply both split and do-not-split tests. A sizing finding must
    name whether body clarification, an edge correction, a reviewed split/merge,
    or a new outcome is appropriate, and which task owns integrated delivery.
+   Placeholder sections are reviewable material, not invisible: when the task's
+   outcome, acceptance, or verification is placeholder text (for example
+   unedited `TODO:` scaffold lines), the task is unauthored and cannot review
+   clean. Stage at least one finding that covers the placeholder sections, or
+   refuse explicitly by stating the refusal and stopping without staging or
+   publishing a review.
 5. **Preview and publish.** Run `${TASKRAIL:-taskrail} review publish --type task
    --proposal <proposal> --destination <destination> --task <task-id>
    --expect-task-sha256 <digest> --expect-spec-sha256 <digest> --dry-run --json`.
@@ -110,6 +116,9 @@ unchanged bytes or confidence-seeking alone, do not start another review session
   fields
 - stage untrusted proposal bytes only under the ignored artifacts root; final
   evidence is published only by `review publish`
+- never publish an empty findings array for a task whose outcome, acceptance,
+  or verification is placeholder text; publish at least one finding or an
+  explicit refusal instead
 - do not claim that prompt binding proves reviewer identity, delivery, or
   independence
 - do not clone the post-spec consistency, gaps, additions, or adversarial lenses

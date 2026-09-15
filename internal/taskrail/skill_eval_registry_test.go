@@ -60,6 +60,37 @@ func TestSpecReviewCasesAssertDispositionAuthorityAndRepeatVisibility(t *testing
 	}
 }
 
+// TestTaskReviewCasesAssertUnauthoredScaffoldFindings pins the T-406 failure
+// mode into the task-review evaluation. Mechanical predicates certify only
+// repository consistency, so both arms of the pair must state that a
+// TODO-placeholder scaffold cannot review clean and must ask the human to
+// confirm the run avoided an empty findings array
+// (specs/v0.5.0.md#existing-task-review).
+func TestTaskReviewCasesAssertUnauthoredScaffoldFindings(t *testing.T) {
+	registry, err := loadSkillEvalRegistry(filepath.Join("testdata", "skill-evals", "v1", "cases"), shippableSkills)
+	if err != nil {
+		t.Fatalf("loadSkillEvalRegistry: %v", err)
+	}
+	seen := 0
+	for _, evaluation := range registry {
+		if evaluation.Skill != "taskrail-task-review" {
+			continue
+		}
+		seen++
+		observation := strings.ToLower(evaluation.ExpectedObservation)
+		if !strings.Contains(observation, "cannot conclude clean") || !strings.Contains(observation, "at least one finding") {
+			t.Errorf("case %s expected observation must state the unauthored-scaffold findings-or-refusal outcome", evaluation.CaseID)
+		}
+		questions := strings.Join(evaluation.HumanReviewQuestions, "\n")
+		if !strings.Contains(questions, "empty findings array") {
+			t.Errorf("case %s must ask the human to confirm the unauthored scaffold did not yield an empty findings array", evaluation.CaseID)
+		}
+	}
+	if seen != 2 {
+		t.Fatalf("task-review cases = %d, want the committed and local pair", seen)
+	}
+}
+
 func TestParseSkillEvalCaseRejectsStrictMutations(t *testing.T) {
 	base := `{"schema_version":1,"case_id":"autonomous-task-committed","skill":"autonomous-task","storage_mode":"committed","baseline_required":true,"prompt":"run the documented workflow","expected_observation":"it remains valid","assertions":["uses JSON"],"scenario":{"fixture":"fixture","sandbox":"autonomous-task-committed","setup":[{"id":"initialize-git","operation":"git-command","command":["git","init"]}],"actions":[{"id":"uses-json","operation":"taskrail-command","command":["taskrail","validate","--json"]}]},"oracle":{"assertions":[{"assertion":"uses JSON","action":"uses-json","predicate":"command-exit-zero"}]},"human_review_questions":["was it safe?"]}`
 	for _, tc := range []struct {
