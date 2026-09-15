@@ -1,12 +1,15 @@
 ---
 id: T-417-keep-local-mode-usable-after-a-rolled-back-local
 title: Keep local mode usable after a rolled-back local promote leaves empty committed dirs
-status: todo
+status: blocked
 priority: medium
 spec_ref: specs/v0.5.0.md#local-planning-mode
 dependencies:
     - T-400-local-mode-committed-skill-exclusion
-updated_at: "2026-09-15T15:41:57Z"
+updated_at: "2026-09-15T21:33:08Z"
+last_verification_id: "19a1f31a97e3d90cb1f68b7bbee1a497"
+last_verification_result: fail
+last_verified_at: "2026-09-15T21:33:08Z"
 ---
 
 # T-417-keep-local-mode-usable-after-a-rolled-back-local Keep local mode usable after a rolled-back local promote leaves empty committed dirs
@@ -29,3 +32,6 @@ TODO: state one independently meaningful outcome. Do not bundle independently va
 - TODO: record later evidence paths after verification.
 
 ## Implementation Notes
+
+- 2026-09-15T21:33:02Z: Pre-start sizing gate: unauthored placeholder follow-up - outcome, acceptance, and verification sections retain unedited TODO scaffold lines, so a verified result cannot be reached without unresolved scope and improvised criteria cannot support a pass. Needs human-approved task author body authoring or reviewed decomposition before execution.
+- 2026-09-15T21:33:08Z: verification fail id 19a1f31a97e3d90cb1f68b7bbee1a497 previous none completion none
