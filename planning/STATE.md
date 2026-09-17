@@ -1,6 +1,6 @@
 ---
 schema_version: 2
-updated_at: "2026-09-17T20:25:00Z"
+updated_at: "2026-09-17T21:46:09Z"
 active_spec_version: v0.5.0
 active_spec_path: specs/v0.5.0.md
 current_task: ""
@@ -8,9 +8,9 @@ current_task_title: ""
 status_summary: idle
 blockers: []
 next_action: Select the next eligible task
-last_verification_result: pass for T-399-unindent-starter-spec-heading at 2026-09-15T22:17:44Z id ea2fc4317663015ba243a9ffee4ea31b
-last_verification_id: ea2fc4317663015ba243a9ffee4ea31b
-last_verified_completion_id: 44902482e0d4fc762da8927216502fc8
+last_verification_result: pass for T-418-fail-an-in-run-skill-eval-raw-root-ancestor-swap at 2026-09-17T21:46:09Z id 5715346000d394cf4c84980da5b63615
+last_verification_id: 5715346000d394cf4c84980da5b63615
+last_verified_completion_id: 329b577728becb8215654d132a6bb855
 relevant_artifacts: []
 ---
 
@@ -34,7 +34,7 @@ relevant_artifacts: []
 
 ## Last Verification
 
-- pass for T-399-unindent-starter-spec-heading at 2026-09-15T22:17:44Z id ea2fc4317663015ba243a9ffee4ea31b
+- pass for T-418-fail-an-in-run-skill-eval-raw-root-ancestor-swap at 2026-09-17T21:46:09Z id 5715346000d394cf4c84980da5b63615
 
 ## Next Action
 
@@ -48,6 +48,6 @@ relevant_artifacts: []
 
 - todo: 61
 - in_progress: 0
-- completed: 356
+- completed: 357
 - blocked: 0
 - cancelled: 0

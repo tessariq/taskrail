@@ -353,11 +353,38 @@ func runSkillEvalArm(ctx context.Context, input SkillEvalRunInput, evaluation Sk
 	if err := os.MkdirAll(rawRoot, 0o700); err != nil {
 		return nil, fmt.Errorf("create raw root: %w", err)
 	}
+	// The artifact root and every ancestor above it are the trust anchor the
+	// path-based confinement checks resolve through, so their observable
+	// identity is pinned before the untrusted adapter runs. Caller-chosen
+	// symlinked ancestors keep working: pinning follows links and only rejects
+	// an identity or type that changes mid-run, which is what a relocation by
+	// copy, remove, or inode-preserving rename looks like from the path.
+	pins, err := skillEvalPinRawRootAncestors(input.ArtifactRoot)
+	if err != nil {
+		return nil, fmt.Errorf("%s arm: %w", arm, err)
+	}
 	fixtureRoot := ""
 	if evaluation.fixtureRoot != "" {
 		fixtureRoot = filepath.Join(evaluation.fixtureRoot, evaluation.Scenario.Fixture)
 	}
 	result, err := input.Adapter.Run(ctx, SkillEvalAdapterRequest{Case: evaluation, Arm: arm, FixtureRoot: fixtureRoot, RawRoot: rawRoot})
+	// The adapter ran between the pre-flight confinement check and every
+	// downstream consumer of the raw root, so confinement is re-checked before
+	// anything is recorded or accepted from it: an untrusted adapter that
+	// replaced a raw-root ancestor during Run must not yield a runner-written
+	// outcome receipt, grade, or digest read from the relocated namespace.
+	// The component walk cannot see the artifact root or any ancestor above
+	// it being replaced, because every component Lstat resolves through them,
+	// so the pinned ancestor identities are re-verified too. This is post-run
+	// detection — it cannot prevent or roll back bytes the adapter already
+	// wrote after the swap; only a handle-bound write boundary could
+	// establish that stronger prevention claim.
+	if confErr := skillEvalConfinedRawRoot(input.ArtifactRoot, rawRoot); confErr != nil {
+		return nil, fmt.Errorf("%s arm: raw root confinement changed during adapter run: %w", arm, confErr)
+	}
+	if confErr := skillEvalConfinedRawRootAncestors(pins); confErr != nil {
+		return nil, fmt.Errorf("%s arm: raw root confinement changed during adapter run: %w", arm, confErr)
+	}
 	if err != nil {
 		// Only a caller-declared unavailable arm is a reportable gap that leaves
 		// the run incomplete. Any other adapter failure is a defect in this run
@@ -414,6 +441,68 @@ func skillEvalConfinedRawRoot(artifactRoot, rawRoot string) error {
 		}
 		if !info.IsDir() {
 			return fmt.Errorf("raw root component %s is not a real directory beneath the artifact root", current)
+		}
+	}
+	return nil
+}
+
+// skillEvalPathPin snapshots one ancestor of the artifact root: the path's
+// own type from Lstat plus the identity Stat resolves to, so a replacement
+// that changes either is detectable after the untrusted adapter ran.
+type skillEvalPathPin struct {
+	path  string
+	lstat os.FileInfo
+	stat  os.FileInfo
+}
+
+// skillEvalPinRawRootAncestors pins the artifact root and every ancestor
+// above it, up to the filesystem root, before an adapter runs. Relocations
+// that preserve the inode (a rename) still change the type at the planted
+// path, and replacements that keep the type (a copied directory) change the
+// identity, so both facets of every ancestor are recorded.
+func skillEvalPinRawRootAncestors(artifactRoot string) ([]skillEvalPathPin, error) {
+	absolute, err := filepath.Abs(artifactRoot)
+	if err != nil {
+		return nil, fmt.Errorf("resolve artifact root: %w", err)
+	}
+	var pins []skillEvalPathPin
+	for current := absolute; ; current = filepath.Dir(current) {
+		lstat, err := os.Lstat(current)
+		if err != nil {
+			return nil, fmt.Errorf("inspect artifact root ancestor: %w", err)
+		}
+		stat, err := os.Stat(current)
+		if err != nil {
+			return nil, fmt.Errorf("inspect artifact root ancestor: %w", err)
+		}
+		pins = append(pins, skillEvalPathPin{path: current, lstat: lstat, stat: stat})
+		if parent := filepath.Dir(current); parent == current {
+			return pins, nil
+		}
+	}
+}
+
+// skillEvalConfinedRawRootAncestors refuses when any pinned ancestor of the
+// artifact root changed between the pin and the check: a missing ancestor,
+// a type change such as a directory replaced by a symlink or file, or an
+// identity change from a same-type replacement. Like the component walk it
+// detects relocations after the fact; it cannot undo bytes written through
+// a relocated path while the adapter ran.
+func skillEvalConfinedRawRootAncestors(pins []skillEvalPathPin) error {
+	for _, pin := range pins {
+		lstat, err := os.Lstat(pin.path)
+		if err != nil {
+			return fmt.Errorf("artifact root ancestor %s changed during the adapter run: %w", pin.path, err)
+		}
+		if lstat.Mode().Type() != pin.lstat.Mode().Type() {
+			return fmt.Errorf("artifact root ancestor %s was replaced during the adapter run", pin.path)
+		}
+		stat, err := os.Stat(pin.path)
+		if err != nil {
+			return fmt.Errorf("artifact root ancestor %s changed during the adapter run: %w", pin.path, err)
+		}
+		if !os.SameFile(pin.stat, stat) {
+			return fmt.Errorf("artifact root ancestor %s was replaced during the adapter run", pin.path)
 		}
 	}
 	return nil

@@ -148,6 +148,18 @@ All notable user-visible changes to Taskrail will be documented in this file.
   task-scoped grant before narrowing to each command's exact task fields and
   transaction paths. One child token can therefore safely cover `start`,
   `complete`, `block`, and verification with a runtime-generated destination.
+- Maintainer skill-evaluation executed arms now fail closed when an untrusted
+  adapter relocates the raw root during its own run. After the adapter returns,
+  confinement is re-verified before any outcome receipt, grade, or digest is
+  recorded: a raw-root ancestor component replaced with a symlink or
+  non-directory, and a replaced artifact root or any ancestor above it (whether
+  swapped by copy or by an inode-preserving rename), is refused with the arm
+  named, so evidence from a relocated namespace is never accepted, sealed, or
+  published. The refusal is detection, not prevention: bytes an adapter already
+  wrote after a swap are neither stopped nor rolled back, and the refusal
+  wording and tests state that boundary. Legitimate roots with real, missing, or
+  caller-stable symlinked ancestors, and the existing adoption, resume, report,
+  and digest shapes, are unchanged.
 
 ### Added
 

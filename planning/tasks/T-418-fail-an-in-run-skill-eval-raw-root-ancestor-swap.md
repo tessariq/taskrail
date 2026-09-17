@@ -1,15 +1,17 @@
 ---
 id: T-418-fail-an-in-run-skill-eval-raw-root-ancestor-swap
 title: Fail an in-run skill-eval raw-root ancestor swap loudly
-status: todo
+status: completed
 priority: medium
 spec_ref: specs/v0.5.0.md#maintainer-skill-release-evaluations
 dependencies:
     - T-415-confine-executed-skill-eval-raw-roots-against
-updated_at: "2026-09-17T20:25:00Z"
-last_verification_id: "1eac8e1ce823607df2cefc270381e773"
-last_verification_result: fail
-last_verified_at: "2026-09-15T21:36:16Z"
+updated_at: "2026-09-17T21:46:09Z"
+completion_id: "329b577728becb8215654d132a6bb855"
+last_verification_id: "5715346000d394cf4c84980da5b63615"
+last_verification_result: pass
+last_verified_at: "2026-09-17T21:46:09Z"
+last_verified_completion_id: "329b577728becb8215654d132a6bb855"
 ---
 
 # T-418-fail-an-in-run-skill-eval-raw-root-ancestor-swap Fail an in-run skill-eval raw-root ancestor swap loudly
@@ -84,3 +86,5 @@ T-174 dependency changes are out of scope.
 - 2026-09-15T21:36:13Z: Pre-start sizing gate: unauthored placeholder follow-up - outcome, acceptance, and verification sections retain unedited TODO scaffold lines, so a verified result cannot be reached without unresolved scope and improvised criteria cannot support a pass. Needs human-approved task author body authoring or reviewed decomposition before execution.
 - 2026-09-15T21:36:16Z: verification fail id 1eac8e1ce823607df2cefc270381e773 previous none completion none
 - 2026-09-17T20:25:00Z: Authoring approved: replace the placeholder body with a bounded outcome, acceptance, and verification plan; implementation and verification remain outstanding.
+- 2026-09-17T21:45:56Z: Post-run confinement re-check in runSkillEvalArm: after Adapter.Run and before any outcome receipt, grade, or digest, the raw-root component walk is repeated and the artifact root plus every ancestor above it is verified against type and identity pins taken before the run, refusing loudly with the arm named when an in-run ancestor swap relocated the namespace by symlink, non-directory, copy, or inode-preserving rename. Detection only, never presented as write prevention. Review finding S1 (anchor-swap bypass) fixed with strict TDD; disposition verified RESOLVED.
+- 2026-09-17T21:46:09Z: verification pass id 5715346000d394cf4c84980da5b63615 previous none completion 329b577728becb8215654d132a6bb855
