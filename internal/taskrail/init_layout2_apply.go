@@ -148,7 +148,23 @@ func (s *Service) migrationTransaction(in InitInput, candidate *Layout2Migration
 		members = append(members, skill)
 		expected[skill.Reported] = digestBytes(skill.Content)
 	}
+	// The artifact-ignore candidate joins the migration's one durable write
+	// set, so it publishes, rolls back, and recovers with the layout it serves
+	// and never lands beside an unfenced layout-2 marker (T-416). A preserving
+	// decision is still byte-bound as consumed, so an external edit to an
+	// already-managing .gitignore between preview and apply is refused rather
+	// than silently overwritten.
 	var consumed []durabletx.Path
+	if ignore := candidate.Ignore; ignore != nil && ignore.bindable {
+		if ignore.action == writeActionCreate || ignore.action == writeActionRefresh {
+			members = append(members, durabletx.Member{
+				Kind: durabletx.Worktree, Reported: gitignoreFile, Path: gitignoreFile, Content: ignore.candidate,
+			})
+			expected[gitignoreFile] = digestBytes(ignore.candidate)
+		} else {
+			consumed = append(consumed, durabletx.Path{Kind: durabletx.Worktree, Reported: gitignoreFile, Path: gitignoreFile})
+		}
+	}
 	for logical := range candidate.TaskBytes {
 		consumed = append(consumed, durabletx.Path{Kind: durabletx.Managed, Reported: logical, Path: logical})
 	}
@@ -195,9 +211,24 @@ func migrationValidator(expected map[string]string, fenceDigest, notesPath strin
 					"notes sidecar %s appeared since the preview; merge it manually or remove it, then re-run the apply", notesPath))
 			}
 		}
+		if testHookMigrationCandidateValidated != nil {
+			return testHookMigrationCandidateValidated()
+		}
 		return nil
 	}
 }
+
+// testHookMigrationCandidateValidated runs at the end of the migration
+// transaction's validator, after every recorded candidate digest is confirmed.
+// The engine invokes that validator once per pass, and a Run invokes it
+// exactly twice: once over the preparation evidence (before any byte is
+// published) and once after the candidate bytes — including the artifacts
+// ignore — have published but before the fenced marker's final bytes replace
+// the fence. Recovery never fires this closure: it runs the command's
+// registered recovery validator instead. Tests must therefore gate on Run's
+// invocation order/count, not assume a single call, to target the
+// post-publication window.
+var testHookMigrationCandidateValidated func() error
 
 // migrationSkillMembers stamps the embedded package bytes for every
 // refresh-classified destination, normalizing legacy and dual markers to the

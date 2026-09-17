@@ -9,6 +9,13 @@ All notable user-visible changes to Taskrail will be documented in this file.
 - `taskrail init` — inside a Git worktree, adds a marked `.gitignore` block
   keeping generated `planning/artifacts/` output out of Git status; existing
   user rules are preserved byte-for-byte and re-runs add nothing.
+- `taskrail init` — the gated layout 1 → layout 2 upgrade now establishes the
+  same artifact-ignore invariant: the write-free preview reports the
+  `.gitignore` candidate, and the apply publishes it inside the one durable
+  migration transaction, so a rolled-back upgrade restores the original bytes,
+  a recovered one keeps the rule with the final layout 2, and an equivalent
+  user rule, existing Taskrail block, or deliberate negation is never
+  overridden or duplicated.
 
 ### Fixed
 

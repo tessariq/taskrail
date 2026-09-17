@@ -12,6 +12,10 @@ the upgrade resolves before anything can apply:
 
 - the complete candidate paths (marker, schema-2 state, preserved task files,
   notes sidecar),
+- the worktree-root `.gitignore` candidate — the same marked artifacts-ignore
+  block a fresh committed init writes, appended after unrelated user rules and
+  skipped entirely when an equivalent user rule, the Taskrail block, or a
+  deliberate negation already manages the artifacts directory,
 - committed storage and the default broad review-round maximum,
 - decoded continuation notes with their applicable `extract`/`drop` choices,
 - each installed skill's classification — parity mirrors stay marker-free;
@@ -36,16 +40,19 @@ destination, or a divergent or conflicting skill copy.
 
 A fully gated apply publishes the exact previewed candidate through one
 recoverable transaction: the marker is fenced as layout 2 with a
-`migration_fence` transaction id **before** any task, state, note, or skill byte
-changes, the complete candidate publishes and post-validates, and the strict
-final marker replaces the fence as the transaction's last operation.
+`migration_fence` transaction id **before** any task, state, note, skill, or
+`.gitignore` byte changes, the complete candidate — including the artifacts
+ignore rule — publishes and post-validates, and the strict final marker
+replaces the fence as the transaction's last operation.
 
 A handled failure rolls every candidate-written byte back before the original
-marker. An interruption leaves the fence plus the retained transaction: every
-other command refuses (`recovery_pending` with the transaction, or
-`migration_in_progress` when only the fenced marker remains), and
-`taskrail recover <transaction-id>` derives the single safe restore, accept, or
-clear action — see
+marker, `.gitignore` included, so an aborted upgrade never pairs a new ignore
+rule with the pre-upgrade layout. An interruption leaves the fence plus the
+retained transaction: every other command refuses (`recovery_pending` with the
+transaction, or `migration_in_progress` when only the fenced marker remains),
+and `taskrail recover <transaction-id>` derives the single safe restore,
+accept, or clear action — accepting completes the layout 2 upgrade with the
+ignore rule in place — see
 [commands.md](commands.md#recovering-retained-transactions).
 
 ## Compatibility and downgrade

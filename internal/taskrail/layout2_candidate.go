@@ -71,6 +71,11 @@ type Layout2MigrationCandidate struct {
 	NotesTemplateBytes   []byte
 	NotesExtractionBytes []byte
 	Skills               []MigrationSkillCandidate
+	// Ignore is the worktree-root .gitignore decision the migration publishes
+	// alongside the layout it serves, computed through the same committed-mode
+	// policy boundary a fresh init uses (T-398/T-416). It is nil outside a
+	// committed Git worktree, where there is no ignore state to manage.
+	Ignore *artifactIgnorePlan
 }
 
 type stateV2Frontmatter struct {
@@ -347,7 +352,17 @@ func buildLayout2MigrationCandidate(root string) (*Layout2MigrationCandidate, er
 			return nil, err
 		}
 	}
-	paths := pathsFromLayout(root, LayoutConfig{LayoutVersion: 1, SpecsDir: sourceMarker.SpecsDir, PlanningDir: sourceMarker.PlanningDir}, committedStorage())
+	// The migration manages the worktree-root .gitignore exactly like a fresh
+	// committed init (T-416). Discovery from the marker root resolves the same
+	// worktree the service discovered: a valid managed root either equals the
+	// worktree root or has no Git worktree at all. The discovered context
+	// flows through pathsFromDiscovery whole so the candidate's Paths stays as
+	// internally consistent as the invoking service's.
+	git, err := discoverGitWorktree(root)
+	if err != nil {
+		return nil, err
+	}
+	paths := pathsFromDiscovery(root, LayoutConfig{LayoutVersion: 1, SpecsDir: sourceMarker.SpecsDir, PlanningDir: sourceMarker.PlanningDir}, committedStorage(), git)
 	if err := refuseLegacyPolicyPath(root, paths.PlanningDir); err != nil {
 		return nil, err
 	}
@@ -412,6 +427,13 @@ func buildLayout2MigrationCandidate(root string) (*Layout2MigrationCandidate, er
 	}
 	if candidate.Skills, err = classifyMigrationSkills(root); err != nil {
 		return nil, err
+	}
+	ignore, err := service.planArtifactIgnore()
+	if err != nil {
+		return nil, err
+	}
+	if ignore.action != "" {
+		candidate.Ignore = &ignore
 	}
 	if candidate.MarkerBytes, err = yaml.Marshal(candidate.Marker); err != nil {
 		return nil, fmt.Errorf("marshal layout 2 marker: %w", err)

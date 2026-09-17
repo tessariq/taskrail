@@ -118,9 +118,11 @@ func layout2UpgradeResult(candidate *Layout2MigrationCandidate) InitResult {
 
 // layout2UpgradeWrites inventories the candidate's complete path set in path
 // order: the rewritten marker, the schema-2 state, the notes destination the
-// outcome creates or preserves, and every task file the migration preserves
-// byte-for-byte. Skills stay out of this list: they are reported through their
-// own classification inventory.
+// outcome creates or preserves, every task file the migration preserves
+// byte-for-byte, and the worktree-root .gitignore the migration manages
+// through the same committed-mode ignore policy a fresh init uses. Skills stay
+// out of this list: they are reported through their own classification
+// inventory.
 func layout2UpgradeWrites(candidate *Layout2MigrationCandidate) []WriteEntry {
 	noteAction := writeActionCreate
 	if candidate.NotesPresent {
@@ -130,6 +132,9 @@ func layout2UpgradeWrites(candidate *Layout2MigrationCandidate) []WriteEntry {
 		{Path: candidate.MarkerPath, Kind: writeKindConfig, Action: writeActionRefresh},
 		{Path: candidate.NotesPath, Kind: writeKindNote, Action: noteAction},
 		{Path: candidate.StatePath, Kind: writeKindState, Action: writeActionRefresh},
+	}
+	if candidate.Ignore != nil {
+		writes = append(writes, WriteEntry{Path: gitignoreFile, Kind: writeKindConfig, Action: candidate.Ignore.action})
 	}
 	for logical := range candidate.TaskBytes {
 		writes = append(writes, WriteEntry{Path: logical, Kind: writeKindTask, Action: writeActionPreserve})

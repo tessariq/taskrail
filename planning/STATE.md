@@ -1,6 +1,6 @@
 ---
 schema_version: 2
-updated_at: "2026-09-17T21:46:09Z"
+updated_at: "2026-09-17T22:53:21Z"
 active_spec_version: v0.5.0
 active_spec_path: specs/v0.5.0.md
 current_task: ""
@@ -8,9 +8,9 @@ current_task_title: ""
 status_summary: idle
 blockers: []
 next_action: Select the next eligible task
-last_verification_result: pass for T-418-fail-an-in-run-skill-eval-raw-root-ancestor-swap at 2026-09-17T21:46:09Z id 5715346000d394cf4c84980da5b63615
-last_verification_id: 5715346000d394cf4c84980da5b63615
-last_verified_completion_id: 329b577728becb8215654d132a6bb855
+last_verification_result: pass for T-416-teach-the-layout-2-upgrade-path-to-add-the at 2026-09-17T22:53:21Z id b7dd20f4f546dc14a6dfa413a43fcf8b
+last_verification_id: b7dd20f4f546dc14a6dfa413a43fcf8b
+last_verified_completion_id: 93473f0d21000a2d5f9e620b5a733c13
 relevant_artifacts: []
 ---
 
@@ -34,7 +34,7 @@ relevant_artifacts: []
 
 ## Last Verification
 
-- pass for T-418-fail-an-in-run-skill-eval-raw-root-ancestor-swap at 2026-09-17T21:46:09Z id 5715346000d394cf4c84980da5b63615
+- pass for T-416-teach-the-layout-2-upgrade-path-to-add-the at 2026-09-17T22:53:21Z id b7dd20f4f546dc14a6dfa413a43fcf8b
 
 ## Next Action
 
@@ -46,8 +46,8 @@ relevant_artifacts: []
 
 ## Task Counts
 
-- todo: 61
+- todo: 60
 - in_progress: 0
-- completed: 357
+- completed: 358
 - blocked: 0
 - cancelled: 0

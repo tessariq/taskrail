@@ -122,7 +122,16 @@ func fabricateRetained(t *testing.T, repo repolock.Repository, id, command, phas
 	for i, member := range sorted {
 		base := recoverRootOf(member.kind, repo)
 		parent := path.Dir(member.path)
-		tree, err := durablefs.ObserveTree(base, parent)
+		// The engine resolves a member directly beneath its kind root through
+		// the root observer; the fabrication must record the same ancestors a
+		// worktree-root file (the .gitignore) would have produced.
+		var tree durablefs.TreeSnapshot
+		var err error
+		if parent == "." {
+			tree, err = durablefs.ObserveRoot(base)
+		} else {
+			tree, err = durablefs.ObserveTree(base, parent)
+		}
 		if err != nil {
 			t.Fatalf("observe %s: %v", parent, err)
 		}

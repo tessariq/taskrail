@@ -23,6 +23,12 @@ func (s *Service) snapshotInitPreview(notesSource string) (initPreviewSnapshot, 
 		filepath.Join(s.paths.RepoRoot, shippableSkillTargets[0]),
 		filepath.Join(s.paths.RepoRoot, shippableSkillTargets[1]),
 	}
+	// Every outcome this snapshot serves consults the worktree-root .gitignore
+	// through the committed-mode ignore policy, so its bytes belong to the one
+	// stable observation a write-free preview reports.
+	if s.paths.WorktreeRoot != "" {
+		roots = append(roots, filepath.Join(s.paths.WorktreeRoot, gitignoreFile))
+	}
 	if notesSource != "" {
 		if filepath.IsAbs(notesSource) {
 			roots = append(roots, notesSource)

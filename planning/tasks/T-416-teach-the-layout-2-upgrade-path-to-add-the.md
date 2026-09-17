@@ -1,15 +1,17 @@
 ---
 id: T-416-teach-the-layout-2-upgrade-path-to-add-the
 title: Teach the layout-2 upgrade path to add the artifacts ignore rule
-status: todo
+status: completed
 priority: medium
 spec_ref: specs/v0.5.0.md#safe-review-artifact-publication
 dependencies:
     - T-398-ignore-artifacts-on-committed-init
-updated_at: "2026-09-17T20:24:47Z"
-last_verification_id: "3669bbd9e7b531e427514fd2caefc6c8"
-last_verification_result: fail
-last_verified_at: "2026-09-15T21:29:15Z"
+updated_at: "2026-09-17T22:53:21Z"
+completion_id: "93473f0d21000a2d5f9e620b5a733c13"
+last_verification_id: "b7dd20f4f546dc14a6dfa413a43fcf8b"
+last_verification_result: pass
+last_verified_at: "2026-09-17T22:53:21Z"
+last_verified_completion_id: "93473f0d21000a2d5f9e620b5a733c13"
 ---
 
 # T-416-teach-the-layout-2-upgrade-path-to-add-the Teach the layout-2 upgrade path to add the artifacts ignore rule
@@ -80,3 +82,5 @@ scope.
 - 2026-09-15T21:29:12Z: Pre-start sizing gate: unauthored placeholder follow-up - outcome, acceptance, and verification sections retain unedited TODO scaffold lines, so a verified result cannot be reached without unresolved scope and improvised criteria cannot support a pass. Needs human-approved task author body authoring or reviewed decomposition before execution.
 - 2026-09-15T21:29:15Z: verification fail id 3669bbd9e7b531e427514fd2caefc6c8 previous none completion none
 - 2026-09-17T20:24:47Z: Authoring approved: replace the placeholder body with a bounded outcome, acceptance, and verification plan; implementation and verification remain outstanding.
+- 2026-09-17T22:53:16Z: The layout-2 upgrade path now plans and publishes the worktree-root .gitignore artifacts-ignore rule through the same committed-mode policy boundary as fresh init (T-398): the write-free preview reports the .gitignore candidate (create/refresh/preserve) and binds its bytes into the preview stability snapshot; the gated apply publishes it inside the one durable migration transaction as a worktree member (byte-bound as consumed when preserving), so rollback restores the original bytes and recovery acceptance keeps the rule with the final layout-2 state. Unrelated user bytes, equivalent rules, the existing Taskrail block, and deliberate negations are preserved byte-for-byte across the upgrade and later idempotent inits; symlinked .gitignore targets are refused (path_blocked) or preserved unbound exactly as init does; local mode and non-Git repositories manage no worktree .gitignore. Verified by focused tests (preview/apply/gitignore matrix/late-failure rollback/recovery accept/symlink pair/non-Git) plus full go test, go vet, gofmt, taskrail validate, skill parity and task-body checks, one General+Go review round with all findings dispositioned and verified, and a sandboxed CLI manual probe recorded under the ignored manual-test artifacts tree.
+- 2026-09-17T22:53:21Z: verification pass id b7dd20f4f546dc14a6dfa413a43fcf8b previous none completion 93473f0d21000a2d5f9e620b5a733c13

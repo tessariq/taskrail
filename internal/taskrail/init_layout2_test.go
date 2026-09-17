@@ -139,6 +139,7 @@ func TestInitLayout2UpgradePreviewReportsCompleteDecisions(t *testing.T) {
 	}
 
 	wantWrites := []WriteEntry{
+		{Path: ".gitignore", Kind: writeKindConfig, Action: writeActionCreate},
 		{Path: ".taskrail/config.yml", Kind: writeKindConfig, Action: writeActionRefresh},
 		{Path: "planning/NOTES.md", Kind: writeKindNote, Action: writeActionCreate},
 		{Path: "planning/STATE.md", Kind: writeKindState, Action: writeActionRefresh},
@@ -640,6 +641,7 @@ func TestInitLayout2PreviewFollowsConfiguredDirectories(t *testing.T) {
 		t.Fatal("preview changed repository bytes")
 	}
 	want := []WriteEntry{
+		{Path: ".gitignore", Kind: writeKindConfig, Action: writeActionCreate},
 		{Path: ".taskrail/config.yml", Kind: writeKindConfig, Action: writeActionRefresh},
 		{Path: "work/NOTES.md", Kind: writeKindNote, Action: writeActionCreate},
 		{Path: "work/STATE.md", Kind: writeKindState, Action: writeActionRefresh},
@@ -669,7 +671,7 @@ func TestInitLayout2PreviewAndApplyIdentifyTheSameCandidate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("candidate: %v", err)
 	}
-	paths := map[string]bool{candidate.MarkerPath: true, candidate.StatePath: true, candidate.NotesPath: true}
+	paths := map[string]bool{candidate.MarkerPath: true, candidate.StatePath: true, candidate.NotesPath: true, gitignoreFile: true}
 	for logical := range candidate.TaskBytes {
 		paths[logical] = true
 	}
