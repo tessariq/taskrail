@@ -505,7 +505,13 @@ func validateDiscoveredPathsForRecovery(paths Paths, admitFencedCandidate bool) 
 				return err
 			}
 			if exists(committed) && !admitFencedCandidate {
-				return fmt.Errorf("mixed committed/local Taskrail state at %s", committed)
+				holds, err := treeHoldsEntries(committed)
+				if err != nil {
+					return err
+				}
+				if holds {
+					return fmt.Errorf("mixed committed/local Taskrail state at %s", committed)
+				}
 			}
 		}
 	} else {
@@ -530,6 +536,28 @@ func validateDiscoveredPathsForRecovery(paths Paths, admitFencedCandidate bool) 
 		}
 	}
 	return nil
+}
+
+// treeHoldsEntries reports whether any non-directory entry exists at or
+// beneath root. Committed roots a rolled-back local promotion left hold only
+// empty structure and are harmless scaffolding, while any file, symlink, or
+// special entry is committed Taskrail content and stays a mixed-state refusal.
+func treeHoldsEntries(root string) (bool, error) {
+	found := false
+	err := filepath.WalkDir(root, func(_ string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if !entry.IsDir() {
+			found = true
+			return fs.SkipAll
+		}
+		return nil
+	})
+	if err != nil {
+		return false, fmt.Errorf("inspect committed root %s: %w", root, fsCause(err))
+	}
+	return found, nil
 }
 
 func isEmptyLocalInitScaffold(root, specsDir, planningDir string) bool {

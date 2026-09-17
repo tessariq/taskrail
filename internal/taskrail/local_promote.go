@@ -118,6 +118,11 @@ func (s *Service) localPromoteSemantic(in LocalPromoteInput) (LocalPromoteResult
 	}
 	validate := func(evidence []durabletx.Evidence) error {
 		if localPromotionPublished(evidence) {
+			if testHookLocalPromotionValidated != nil {
+				if err := testHookLocalPromotionValidated(); err != nil {
+					return err
+				}
+			}
 			return s.validateLocalPromotionCandidate(candidate)
 		}
 		return s.validateLocalPromotionSource(candidate)
@@ -133,6 +138,14 @@ func (s *Service) localPromoteSemantic(in LocalPromoteInput) (LocalPromoteResult
 	candidate.result.Applied = true
 	return candidate.result, nil
 }
+
+// testHookLocalPromotionValidated runs at the start of the semantic promotion
+// transaction's post-publication validation, after every committed destination
+// byte exists and before the fenced members publish their final bytes. Run
+// invokes the validator once over preparation evidence and once after
+// publication; only the second invocation fires this hook. Recovery never
+// fires it: recovery runs the command's registered recovery validator instead.
+var testHookLocalPromotionValidated func() error
 
 func (s *Service) localPromotePendingSkills(in LocalPromoteInput) (LocalPromoteResult, error) {
 	if !in.Apply {

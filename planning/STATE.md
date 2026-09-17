@@ -1,6 +1,6 @@
 ---
 schema_version: 2
-updated_at: "2026-09-17T22:53:21Z"
+updated_at: "2026-09-17T23:38:06Z"
 active_spec_version: v0.5.0
 active_spec_path: specs/v0.5.0.md
 current_task: ""
@@ -8,9 +8,9 @@ current_task_title: ""
 status_summary: idle
 blockers: []
 next_action: Select the next eligible task
-last_verification_result: pass for T-416-teach-the-layout-2-upgrade-path-to-add-the at 2026-09-17T22:53:21Z id b7dd20f4f546dc14a6dfa413a43fcf8b
-last_verification_id: b7dd20f4f546dc14a6dfa413a43fcf8b
-last_verified_completion_id: 93473f0d21000a2d5f9e620b5a733c13
+last_verification_result: pass for T-417-keep-local-mode-usable-after-a-rolled-back-local at 2026-09-17T23:38:06Z id f3796dd67a7fb96bff695be1fa498b86
+last_verification_id: f3796dd67a7fb96bff695be1fa498b86
+last_verified_completion_id: eccb45dad184bc3c66a60a07716a161c
 relevant_artifacts: []
 ---
 
@@ -34,7 +34,7 @@ relevant_artifacts: []
 
 ## Last Verification
 
-- pass for T-416-teach-the-layout-2-upgrade-path-to-add-the at 2026-09-17T22:53:21Z id b7dd20f4f546dc14a6dfa413a43fcf8b
+- pass for T-417-keep-local-mode-usable-after-a-rolled-back-local at 2026-09-17T23:38:06Z id f3796dd67a7fb96bff695be1fa498b86
 
 ## Next Action
 
@@ -46,8 +46,8 @@ relevant_artifacts: []
 
 ## Task Counts
 
-- todo: 60
+- todo: 59
 - in_progress: 0
-- completed: 358
+- completed: 359
 - blocked: 0
 - cancelled: 0

@@ -1,15 +1,17 @@
 ---
 id: T-417-keep-local-mode-usable-after-a-rolled-back-local
 title: Keep local mode usable after a rolled-back local promote leaves empty committed dirs
-status: todo
+status: completed
 priority: medium
 spec_ref: specs/v0.5.0.md#local-planning-mode
 dependencies:
     - T-400-local-mode-committed-skill-exclusion
-updated_at: "2026-09-17T20:24:54Z"
-last_verification_id: "19a1f31a97e3d90cb1f68b7bbee1a497"
-last_verification_result: fail
-last_verified_at: "2026-09-15T21:33:08Z"
+updated_at: "2026-09-17T23:38:06Z"
+completion_id: "eccb45dad184bc3c66a60a07716a161c"
+last_verification_id: "f3796dd67a7fb96bff695be1fa498b86"
+last_verification_result: pass
+last_verified_at: "2026-09-17T23:38:06Z"
+last_verified_completion_id: "eccb45dad184bc3c66a60a07716a161c"
 ---
 
 # T-417-keep-local-mode-usable-after-a-rolled-back-local Keep local mode usable after a rolled-back local promote leaves empty committed dirs
@@ -78,3 +80,5 @@ promotion protocol, or change T-174's dependency graph.
 - 2026-09-15T21:33:02Z: Pre-start sizing gate: unauthored placeholder follow-up - outcome, acceptance, and verification sections retain unedited TODO scaffold lines, so a verified result cannot be reached without unresolved scope and improvised criteria cannot support a pass. Needs human-approved task author body authoring or reviewed decomposition before execution.
 - 2026-09-15T21:33:08Z: verification fail id 19a1f31a97e3d90cb1f68b7bbee1a497 previous none completion none
 - 2026-09-17T20:24:54Z: Authoring approved: replace the placeholder body with a bounded outcome, acceptance, and verification plan; implementation and verification remain outstanding.
+- 2026-09-17T23:38:01Z: Local-mode discovery treats committed specs/, planning/, and .taskrail/prompts/ roots that hold no file, symlink, or special entry as harmless scaffolding instead of mixed committed/local state, so a completed rollback of local promote --apply (which restores every local byte but cannot remove the transaction-created empty destination roots) leaves local status, local path, fresh discovery, and promotion usable. Non-empty committed roots still refuse with the unchanged mixed-state error. Focused tests: internal/taskrail/local_promote_rollback_test.go (TestLocalPromoteRollbackKeepsLocalModeUsable drives a real post-publication failure to completed rollback through the new deterministic validate-closure seam and proves byte-identical local/user/exclusion restoration plus usable local status; TestLocalDiscoveryRefusesNonEmptyCommittedRootsAfterRollbackShape pins the non-empty refusal, including a nested committed file). Manual CLI evidence: sandboxed probe under the ignored planning/artifacts tree (init --local, task new, replicated rollback residue, post-rollback local status --json mode=local promotion_ready=true violations=[], local path, promote preview, validate, and the real mixed-state refusal with unchanged bytes). One General+Go review round; the single validated low finding (early-exit plus contextualized walk error in the emptiness predicate) was fixed with a deliberate regression proving the strengthened refusal test fails, and the fresh disposition-verification context returned RESOLVED with no new issues.
+- 2026-09-17T23:38:06Z: verification pass id f3796dd67a7fb96bff695be1fa498b86 previous none completion eccb45dad184bc3c66a60a07716a161c

@@ -19,6 +19,15 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ### Fixed
 
+- `taskrail local status` (and every other local-mode command) no longer
+  refuses a repository whose committed `specs/`, `planning/`, or
+  `.taskrail/prompts/` roots exist only as empty directories left by a
+  rolled-back `local promote --apply`. The rollback restores the local
+  semantic, artifact, and runtime bytes and the managed exclusions, and the
+  empty scaffolding directories the failed transaction created are no longer
+  mistaken for committed Taskrail content; a committed root that holds any
+  file, symlink, or special entry still refuses local discovery with the
+  existing mixed-state error.
 - `taskrail init` — the starter `specs/v0.1.0.md` is written flush-left and
   now exposes a coverable `summary` area, so a fresh repository's
   `spec show --anchors` listing and `coverage` agree and
