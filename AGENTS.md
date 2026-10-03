@@ -48,8 +48,8 @@ Guidance for coding agents working in the Taskrail repository.
   binary onto the mise PATH — run `mise run setup` so `taskrail` on PATH is the
   working-tree build (T-074); no `TASKRAIL` env override is required. The trap this
   prevents: without the mise-built binary, `${TASKRAIL:-taskrail}` falls back to the
-  *installed* `taskrail`, which is the shipped v0.2.0 binary and lacks the new
-  v0.3.0 commands (`status`, `stats`, `coverage`, `spec ...`). The T-074 freshness
+  *installed* `taskrail`, a shipped release that can lag the working tree and
+  lack its newest commands and flags. The T-074 freshness
   guard (`task taskrail:check`) turns that staleness into a loud failure rather than
   a silent one.
 - **The wrong-binary trap: a state-writing command (`verify`, `complete`, `start`,
@@ -136,7 +136,7 @@ Guidance for coding agents working in the Taskrail repository.
   apply its named remedy before writing; `go run ./cmd/taskrail ...` builds the
   current source directly and does not need this guard.
 - Use `taskrail start`, `complete`, `block`, and `verify` for tracked status transitions.
-- Never hand-edit task statuses or machine-managed state fields. The pre-v0.1.0 "Taskrail bootstrapping before the CLI is available" exception is retired — the CLI has shipped since v0.1.0 and owns every tracked-work transition. If no command expresses the change you need, that is a missing capability: file a task and say so. Do not hand-edit, and do not treat an unimplemented *active-spec* surface as reviving the old exception.
+- Never hand-edit task statuses or machine-managed state fields. The CLI owns every tracked-work transition. If no command expresses the change you need, that is a missing capability: file a task and say so. Do not hand-edit, including when the active spec describes a surface that is not implemented yet.
 - Mechanical `STATE.md` drift is re-projected by `taskrail repair --apply`, never by hand — including when a merge or rebase conflicts on it.
 - Verification artifacts belong under `planning/artifacts/verify/`.
 - Follow-up work discovered during verification should become new task files.
@@ -167,7 +167,7 @@ Guidance for coding agents working in the Taskrail repository.
 - Always run `gofmt` on changed Go files.
 - Prefer focused functions and explicit data structs.
 - Keep functions focused with early returns; aim well under ~50 lines.
-- Keep files 200–400 lines as a norm, 800 as a hard ceiling; extract when a file does too much. (`internal/taskrail/service.go` at ~640 lines is acceptable but on the larger side and a candidate to split.)
+- Keep files 200–400 lines as a norm, 800 as a hard ceiling; extract when a file does too much.
 - Avoid nesting deeper than ~3–4 levels; prefer early returns over deep branches.
 - Comments (and godoc) explain *why*, not *what*: do not restate the code or a signature; reserve them for non-obvious rationale, invariants, and contracts.
 - Prefer the standard library first.
@@ -220,7 +220,6 @@ those:
 
 Intentional, non-obvious decisions — do not "fix" these:
 
-- `planning/STATE.md` still carries a stale `continuation_notes` entry naming Taskrail v0.1.0. It is byte-preserved on purpose: T-200 stopped *seeding* such notes but requires existing ones to survive until the state schema-v2 migration (T-157) exposes and explicitly drops them. No migration silently discards authored text, so do not hand-clear it.
 - Read-only commands (`validate`, `status`, `stats`, `coverage`, `spec list/show/diff`) never write `planning/STATE.md` or task files, so they need no post-run `git status`/staging follow-up, and their signals never make `validate` fail. `coverage` reports advisory spec-coverage/orphan/drift signals; `status` computes the next eligible task without persisting `next_action`/`updated_at` (unlike `next`, it leaves the working tree clean); `spec diff` is a reporting aid, not a migrator — it never creates tasks, re-points `spec_ref`, or advances status, and its rename candidates are labeled best-effort, never asserted. See the [command effects table](docs/commands.md#command-effects).
 - `coverage --gaps` is read-only and advisory by default (side-effect-free like `coverage`): it emits mechanical structural-gap candidates (`missing-verification`, `dependency-anomaly`, `under-decomposed-area`) over covered active-spec areas and never writes `planning/STATE.md` or task files. `--fail-on <category>` opts into a repository-selected exit code policy without changing the report, and gap findings never make `validate` fail. Every signal is a candidate to promote into a real task, never auto-created state; it composes with `--area`, while coverage-only `--min` is rejected with `--gaps`. It stays mechanical — counts and graph edges only, no semantic inference.
 - `start`, `next`, `verify`, `complete`, and `block` rewrite `planning/STATE.md` (and sometimes task files). Even a `next` selection probe updates `next_action`/`updated_at`, so it dirties the working tree — check `git status` after running it.
@@ -253,6 +252,6 @@ Intentional, non-obvious decisions — do not "fix" these:
 
 - Hand-edit `planning/STATE.md` or task status fields.
 - Commit anything under `planning/artifacts/`, or add `.gitkeep` placeholders.
-- Add built-in LLM-provider integration in `v0.1.0`.
+- Add built-in LLM-provider integration or direct model calls to Taskrail core (`specs/v0.5.0.md#recommendation-about-llm-support`).
 - Turn Taskrail into a sandbox/runtime manager or add container-orchestration semantics.
 - Bypass hooks or CI-equivalent checks with `--no-verify`.
