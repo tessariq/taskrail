@@ -31,11 +31,12 @@ func TestLoopExecuteParallelConflictBoundary(t *testing.T) {
 				t.Fatal(err)
 			}
 			workspaceRoot := t.TempDir()
-			if err := os.Chmod(workspaceRoot, 0o700); err != nil {
-				t.Fatal(err)
+			// Windows Chmod cannot satisfy the explicit workspace's Unix mode guard.
+			// Use the default workspace path, but retain test-owned cleanup.
+			for _, name := range []string{"TMPDIR", "TMP", "TEMP"} {
+				t.Setenv(name, workspaceRoot)
 			}
 			report, err := svc.LoopExecute(context.Background(), LoopInvocation{MaxIterations: 3, Parallel: 3, CloneDepth: "full", KeepWorkspaces: "always",
-				WorkspaceRoot: workspaceRoot, WorkspaceRootSet: true,
 				Child: []string{helper, "-test.run=^TestLoopLaunchChildHelper$", "--", "parallel-conflict-worker", mode}})
 			if err != nil {
 				t.Fatal(err)
