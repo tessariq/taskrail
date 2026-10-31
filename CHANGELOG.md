@@ -19,6 +19,8 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ### Fixed
 
+- Parallel `taskrail loop` integration commits now stage the reprojected
+  `STATE.md`, keeping published task counts current after each accepted worker.
 - `taskrail loop` accepts canonical selected-task start, complete, and block
   writes without verification metadata. A committed unverified completion now
   reaches `completed_unverified` instead of an integrity refusal; protected task

@@ -422,6 +422,10 @@ func (s *Service) integrateParallelCandidate(ctx context.Context, invocation Loo
 		parallelResetIntegration(root)
 		return nil, fmt.Errorf("reproject integration state: %w", err)
 	}
+	if output, err := exec.Command("git", "--literal-pathspecs", "-C", root, "add", "--", service.paths.StateFile).CombinedOutput(); err != nil {
+		parallelResetIntegration(root)
+		return nil, fmt.Errorf("stage reprojected integration state: %w: %s", err, strings.TrimSpace(string(output)))
+	}
 	commitEnvironment, err := parallelCandidateCommitEnvironment(root)
 	if err != nil {
 		parallelResetIntegration(root)

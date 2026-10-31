@@ -58,6 +58,8 @@ leaves HEAD unchanged reports `child_failed`; repository integrity violations
 still take precedence as `invalid_postflight`. Canonical lifecycle writes without
 verification are accepted: a clean committed completion reports
 `completed_unverified`, while start or block alone has candidate `no_progress`.
+Parallel integration commits include reprojected `STATE.md` counts for all work
+accepted so far, rather than the last worker's isolated counts.
 
 ### 2. Adopt it in a repository that already has work in flight
 

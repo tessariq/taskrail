@@ -178,6 +178,32 @@ func TestLoopExecuteDeliversParallelCloneBatch(t *testing.T) {
 	if report.LastIteration != nil || report.Parallel.Integration.Head == nil {
 		t.Fatalf("parallel diagnostic shape = %+v", report)
 	}
+	repair, err := svc.Repair(RepairInput{})
+	if err != nil || len(repair.BodyDiff) != 0 {
+		t.Fatalf("published state needs reprojection: %+v, %v", repair, err)
+	}
+	if validation, err := svc.Validate(); err != nil || !validation.Valid {
+		t.Fatalf("published validation = %+v, %v", validation, err)
+	}
+	for _, worker := range report.Parallel.Workers {
+		if worker.IntegratedCommit == nil {
+			t.Fatalf("worker has no integration commit: %+v", worker)
+		}
+		clone := filepath.Join(t.TempDir(), "integrated")
+		runGit(t, repo, "clone", "--no-local", repo, clone)
+		runGit(t, clone, "checkout", "--detach", *worker.IntegratedCommit)
+		integrated, err := NewService(clone)
+		if err != nil {
+			t.Fatal(err)
+		}
+		repair, err := integrated.Repair(RepairInput{})
+		if err != nil || len(repair.BodyDiff) != 0 {
+			t.Fatalf("integration commit %s needs reprojection: %+v, %v", *worker.IntegratedCommit, repair, err)
+		}
+		if status, err := gitCommand(clone, "status", "--porcelain"); err != nil || status != "" {
+			t.Fatalf("integration commit inspection dirtied clone: %s, %v", status, err)
+		}
+	}
 	children := report.Parallel.Integration.Children
 	if len(children) != 1 || children[0].Role != "aggregate_gate" || children[0].Outcome != "pass" ||
 		children[0].BoundHead != *report.Parallel.Integration.Head || children[0].TaskID != nil ||
