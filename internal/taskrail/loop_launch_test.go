@@ -434,6 +434,9 @@ func TestLoopLaunchChildHelper(t *testing.T) {
 		}
 		os.Exit(0)
 	case "delegate-unverified":
+		if _, err := io.Copy(io.Discard, os.Stdin); err != nil {
+			os.Exit(98)
+		}
 		cwd, err := os.Getwd()
 		if err != nil || len(args) < separator+4 {
 			os.Exit(97)

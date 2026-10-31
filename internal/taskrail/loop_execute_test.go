@@ -156,16 +156,18 @@ func TestLoopExecuteAcceptsUnverifiedLifecycle(t *testing.T) {
 			if _, err := svc.Repair(RepairInput{Apply: true}); err != nil {
 				t.Fatal(err)
 			}
+			template := []byte("Implement {{TASK_ID}}.\n" + strings.Repeat("Lifecycle child must consume its prompt.\n", 4096))
+			writeFile(t, filepath.Join(repo, ".taskrail", "prompts", "v1", "task-implementation.md"), string(template))
 			runGit(t, repo, "add", ".")
 			runGit(t, repo, "commit", "-m", "allow task")
 			head := strings.TrimSpace(gitOutput(t, repo, "rev-parse", "HEAD"))
 			child := []string{os.Args[0], "-test.run=^TestLoopLaunchChildHelper$", "--", "delegate-unverified", filepath.Join(t.TempDir(), "record"), test.action}
-			report, err := svc.LoopExecute(context.Background(), LoopInvocation{MaxIterations: 1, Child: child})
+			report, err := svc.LoopExecute(context.Background(), LoopInvocation{MaxIterations: 1, Child: child, AllowPromptOverrideSHA256: promptDigest(template)})
 			if err != nil {
 				t.Fatal(err)
 			}
 			if report.Outcome != test.outcome || report.LastIteration == nil || report.LastIteration.LifecycleCandidate == nil || *report.LastIteration.LifecycleCandidate != test.outcome || len(report.MutationViolations) != 0 {
-				t.Fatalf("report = %+v, want %s without integrity violations", report, test.outcome)
+				t.Fatalf("report = %+v, child = %+v, want %s without integrity violations", report, report.LastIteration, test.outcome)
 			}
 			if !report.Git.Clean || report.Git.HeadBefore != head || report.Git.HeadAfter == head || len(report.Git.Commits) != 1 {
 				t.Fatalf("Git = %+v, want one clean lifecycle commit", report.Git)
