@@ -60,6 +60,9 @@ verification are accepted: a clean committed completion reports
 `completed_unverified`, while start or block alone has candidate `no_progress`.
 Parallel integration commits include reprojected `STATE.md` counts for all work
 accepted so far, rather than the last worker's isolated counts.
+Conflict-resolution children must leave HEAD unchanged and resolve every unmerged
+path. Otherwise that candidate is rejected and rolled back to the prior
+integration head; earlier and later independent successes can still publish.
 
 ### 2. Adopt it in a repository that already has work in flight
 

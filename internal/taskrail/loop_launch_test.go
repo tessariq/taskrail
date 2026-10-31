@@ -319,7 +319,10 @@ func TestLoopLaunchChildHelper(t *testing.T) {
 	}
 	mode, record := args[separator+1], args[separator+2]
 	if mode == "parallel-worker" {
-		os.Exit(runParallelLoopChild())
+		os.Exit(runParallelLoopChild(""))
+	}
+	if mode == "parallel-conflict-worker" {
+		os.Exit(runParallelLoopChild(record))
 	}
 	count := 0
 	if previous, err := os.ReadFile(record + ".launches"); err == nil {

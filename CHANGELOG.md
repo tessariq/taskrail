@@ -19,6 +19,10 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ### Fixed
 
+- Parallel `taskrail loop` rejects conflict children that move HEAD or leave
+  unmerged paths, restores the prior integration head, and retains each conflict
+  child's truthful outcome. Failed candidate bytes and task status stay
+  unpublished without discarding independent successes.
 - Parallel `taskrail loop` integration commits now stage the reprojected
   `STATE.md`, keeping published task counts current after each accepted worker.
 - `taskrail loop` accepts canonical selected-task start, complete, and block

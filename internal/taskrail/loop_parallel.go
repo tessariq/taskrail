@@ -379,10 +379,23 @@ func (s *Service) integrateParallelWorkers(ctx context.Context, invocation LoopI
 	return violations
 }
 
-func (s *Service) integrateParallelCandidate(ctx context.Context, invocation LoopInvocation, snapshot LoopPreflightSnapshot, root string, worker *ParallelWorker, stdout, stderr io.Writer) (*ParallelIntegrationChild, error) {
+func (s *Service) integrateParallelCandidate(ctx context.Context, invocation LoopInvocation, snapshot LoopPreflightSnapshot, root string, worker *ParallelWorker, stdout, stderr io.Writer) (child *ParallelIntegrationChild, resultErr error) {
 	if worker.Workspace == nil || worker.CandidateCommit == nil {
 		return nil, fmt.Errorf("parallel candidate binding is incomplete")
 	}
+	head, err := gitCommand(root, "rev-parse", "HEAD")
+	if err != nil {
+		return nil, err
+	}
+	head = strings.TrimSpace(head)
+	defer func() {
+		if resultErr != nil {
+			parallelResetIntegration(root, head)
+			if child != nil {
+				child.Outcome = "fail"
+			}
+		}
+	}()
 	commit := *worker.CandidateCommit
 	if output, err := exec.Command("git", "-C", root, "fetch", "--no-tags", parallelFileURL(*worker.Workspace), commit).CombinedOutput(); err != nil {
 		return nil, fmt.Errorf("fetch candidate: %w: %s", err, strings.TrimSpace(string(output)))
@@ -394,50 +407,47 @@ func (s *Service) integrateParallelCandidate(ctx context.Context, invocation Loo
 	if output, err := exec.Command("git", "-C", root, "cherry-pick", "--no-commit", "FETCH_HEAD").CombinedOutput(); err != nil {
 		if repairErr := repairParallelStateConflict(root); repairErr != nil {
 			if prepareErr := prepareParallelSemanticConflict(root); prepareErr != nil {
-				_ = exec.Command("git", "-C", root, "cherry-pick", "--abort").Run()
 				return nil, fmt.Errorf("prepare semantic replay conflict: %w", prepareErr)
 			}
 			binding, bindingErr := parallelConflictBinding(root, worker)
 			if bindingErr != nil {
 				return nil, bindingErr
 			}
-			child, childErr := s.runParallelIntegrationChild(ctx, invocation, snapshot, root, worker, binding, stdout, stderr)
+			resolution, childErr := s.runParallelIntegrationChild(ctx, invocation, snapshot, root, worker, binding, stdout, stderr)
+			child = &resolution
 			if childErr != nil {
-				_ = exec.Command("git", "-C", root, "cherry-pick", "--abort").Run()
-				return &child, childErr
+				return child, childErr
+			}
+			currentHead, headErr := gitCommand(root, "rev-parse", "HEAD")
+			if headErr != nil || strings.TrimSpace(currentHead) != head {
+				return child, fmt.Errorf("conflict child changed bound integration head %s", head)
 			}
 			if child.Outcome != "pass" || parallelUnmerged(root) {
-				_ = exec.Command("git", "-C", root, "cherry-pick", "--abort").Run()
-				return &child, fmt.Errorf("replay candidate %s: %w: %s", commit, err, strings.TrimSpace(string(output)))
+				return child, fmt.Errorf("replay candidate %s: %w: %s", commit, err, strings.TrimSpace(string(output)))
 			}
 			_ = exec.Command("git", "-C", root, "cherry-pick", "--quit").Run()
 		}
 	}
 	service, err := NewService(root)
 	if err != nil {
-		parallelResetIntegration(root)
-		return nil, fmt.Errorf("open integration repository: %w", err)
+		return child, fmt.Errorf("open integration repository: %w", err)
 	}
 	if _, err := service.Repair(RepairInput{Apply: true}); err != nil {
-		parallelResetIntegration(root)
-		return nil, fmt.Errorf("reproject integration state: %w", err)
+		return child, fmt.Errorf("reproject integration state: %w", err)
 	}
 	if output, err := exec.Command("git", "--literal-pathspecs", "-C", root, "add", "--", service.paths.StateFile).CombinedOutput(); err != nil {
-		parallelResetIntegration(root)
-		return nil, fmt.Errorf("stage reprojected integration state: %w: %s", err, strings.TrimSpace(string(output)))
+		return child, fmt.Errorf("stage reprojected integration state: %w: %s", err, strings.TrimSpace(string(output)))
 	}
 	commitEnvironment, err := parallelCandidateCommitEnvironment(root)
 	if err != nil {
-		parallelResetIntegration(root)
-		return nil, err
+		return child, err
 	}
 	command := exec.Command("git", "-C", root, "commit", "-C", "FETCH_HEAD")
 	command.Env = append(os.Environ(), commitEnvironment...)
 	if output, err := command.CombinedOutput(); err != nil {
-		parallelResetIntegration(root)
-		return nil, fmt.Errorf("commit integrated candidate: %w: %s", err, strings.TrimSpace(string(output)))
+		return child, fmt.Errorf("commit integrated candidate: %w: %s", err, strings.TrimSpace(string(output)))
 	}
-	return nil, nil
+	return child, nil
 }
 
 func parallelCandidateCommitEnvironment(root string) ([]string, error) {
@@ -731,9 +741,9 @@ func prepareParallelSemanticConflict(root string) error {
 	return nil
 }
 
-func parallelResetIntegration(root string) {
+func parallelResetIntegration(root, head string) {
 	_ = exec.Command("git", "-C", root, "cherry-pick", "--abort").Run()
-	_ = exec.Command("git", "-C", root, "reset", "--hard", "HEAD").Run()
+	_ = exec.Command("git", "-C", root, "reset", "--hard", head).Run()
 }
 
 // repairParallelStateConflict accepts only the generated aggregate projection;

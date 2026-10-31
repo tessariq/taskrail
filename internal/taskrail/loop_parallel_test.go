@@ -720,13 +720,34 @@ func buildTaskrailExecutable(t *testing.T) string {
 	return binary
 }
 
-func runParallelLoopChild() int {
+func runParallelLoopChild(conflictMode string) int {
 	prompt, err := io.ReadAll(os.Stdin)
 	if err != nil {
 		return 98
 	}
 	first := strings.SplitN(string(prompt), "\n", 2)[0]
 	if strings.HasPrefix(first, "Use this coordinator-owned parallel integration prompt") {
+		if conflictMode == "" || conflictMode == "unmerged" || strings.Contains(first, "aggregate_gate") {
+			return 0
+		}
+		commands := [][]string{{"git", "checkout", "--theirs", "--", "shared.txt"}, {"git", "add", "shared.txt"}}
+		switch conflictMode {
+		case "commit":
+			commands = append(commands, []string{"git", "-c", "user.name=Resolver", "-c", "user.email=resolver@example.com", "commit", "-m", "child resolution"})
+		case "move-head":
+			commands = append(commands, []string{"git", "reset", "--hard", "HEAD^"})
+		}
+		for _, args := range commands {
+			if output, err := exec.Command(args[0], args[1:]...).CombinedOutput(); err != nil {
+				_, _ = fmt.Fprintf(os.Stderr, "%v: %v\n%s", args, err, output)
+				return 95
+			}
+		}
+		if conflictMode == "missing-fetch-head" {
+			if err := os.Remove(filepath.Join(".git", "FETCH_HEAD")); err != nil {
+				return 95
+			}
+		}
 		return 0
 	}
 	if strings.HasPrefix(first, "Run the repository's full aggregate validation") {
@@ -740,6 +761,18 @@ func runParallelLoopChild() int {
 		return 97
 	}
 	taskID := strings.TrimSuffix(fields[4], ".")
+	if conflictMode != "" {
+		product := "shared.txt"
+		if taskID == "T-003-ready" {
+			product = "independent.txt"
+		}
+		if err := os.WriteFile(product, []byte(taskID+"\n"), 0o600); err != nil {
+			return 94
+		}
+		if err := exec.Command("git", "add", product).Run(); err != nil {
+			return 94
+		}
+	}
 	commands := [][]string{
 		{os.Getenv("TASKRAIL"), "start", taskID},
 		{os.Getenv("TASKRAIL"), "complete", taskID, "--note", "parallel test"},

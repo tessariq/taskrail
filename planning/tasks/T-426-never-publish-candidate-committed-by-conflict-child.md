@@ -1,11 +1,16 @@
 ---
 id: T-426-never-publish-candidate-committed-by-conflict-child
 title: Never publish a candidate whose conflict child committed
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#parallel-isolated-clone-batches
 dependencies: []
-updated_at: "2026-10-31T11:39:09Z"
+updated_at: "2026-10-31T16:04:15Z"
+completion_id: "b398cef0712ce92a042943683068124e"
+last_verification_id: "bc06b4f281d2ab0b160c2039682b9f23"
+last_verification_result: pass
+last_verified_at: "2026-10-31T16:04:15Z"
+last_verified_completion_id: "b398cef0712ce92a042943683068124e"
 ---
 
 # T-426-never-publish-candidate-committed-by-conflict-child Never publish a candidate whose conflict child committed
@@ -43,3 +48,6 @@ conflict child runs `git checkout --theirs`, `git add`, `git commit`. Result:
 - Integration test: conflict child that commits; assert the source HEAD tree lacks the candidate's bytes and the child record is present with outcome fail.
 
 ## Implementation Notes
+
+- 2026-10-31T16:04:05Z: Bind conflict replay rollback to the prior evolving head; reject HEAD-moving or unresolved children and retain truthful candidate child evidence. Public parallel regression, independent review, and nine sandbox CLI journeys passed.
+- 2026-10-31T16:04:15Z: verification pass id bc06b4f281d2ab0b160c2039682b9f23 previous none completion b398cef0712ce92a042943683068124e
