@@ -152,7 +152,13 @@ func stageLoopExecutable(gitCommonDir, source string) (loopStagedExecutable, err
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return loopStagedExecutable{}, fmt.Errorf("create loop executable directory: %w", err)
 	}
-	path := stagedLoopExecutablePath(dir, expected, resolved, runtime.GOOS)
+	// A killed coordinator cannot clean its copy. Never reuse that path or
+	// remove it on behalf of another invocation, even for identical bytes.
+	stageID, err := randomLoopInvocationID()
+	if err != nil {
+		return loopStagedExecutable{}, err
+	}
+	path := stagedLoopExecutablePath(dir, expected+"-"+stageID, resolved, runtime.GOOS)
 	output, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o700)
 	if err != nil {
 		return loopStagedExecutable{}, fmt.Errorf("stage loop executable %s: %w", path, err)

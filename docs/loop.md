@@ -83,6 +83,44 @@ one terminal schema-1 envelope. The target must be absent in an existing,
 non-symlinked directory outside the worktree and Git metadata; Taskrail rechecks
 that directory and creates the file without replacement after postflight.
 
+## Recovering an abruptly killed coordinator
+
+Each invocation stages its executable under the canonical Git common directory's
+`taskrail/executables/` directory. The filename is the binary's SHA-256 plus a
+random staging ID (and the executable suffix on Windows). A matching
+`.owner-<random-id>` hard link guards its file identity. Normal cleanup validates
+the digest and both identities before removing only that invocation's pair.
+Abrupt termination can leave either or both entries; later invocations use fresh
+paths and do not reuse, overwrite, or automatically delete these leftovers.
+
+1. Stop new writers and loop launches across **all linked worktrees** for the
+   duration of recovery. Establish that the old coordinator and its descendants
+   have exited; clearing a lock does not terminate or revoke an orphan child.
+   Inspect and reconcile any task or Git changes before rerunning the loop.
+2. Use `taskrail lock status --json` to inspect the recorded PID, host, lock ID,
+   raw-file digest, and delegated executable digest when present. Clear only
+   the abandoned lock with `taskrail lock clear <lock-id> --expect-sha256 <digest>`.
+   A live same-host owner or changed lock refuses; do not bypass that refusal.
+   [Transaction recovery](commands.md#recovering-retained-transactions) takes
+   precedence if a recovery fence exists.
+3. A new run with the same binary can now stage and launch even if the abandoned
+   files remain. File removal is optional, not a prerequisite for rerunning.
+4. To reclaim disk space, keep the repository quiescent as in step 1. Resolve the
+   absolute common directory with `git rev-parse --path-format=absolute
+   --git-common-dir`, then inspect its `taskrail/executables/` entries without
+   following symlinks. Select only exact abandoned paths, never a wildcard or
+   the whole directory. Check that the files are regular, their SHA-256 matches
+   the filename's digest, and any owner link has the same file identity. Legacy
+   versions used the digest alone as filename. Recheck identities and bytes
+   immediately before removing only those inspected entries and their matching
+   owner links with OS file tools. Refuse unexpected paths, links, changed bytes,
+   uncertain ownership, or an inability to exclude concurrent launches; leave
+   them for investigation. On Windows, also wait for executable handles to close.
+
+`lock clear` removes only the lock record, never executable files or transaction
+data. It is not a staged-file garbage collector. Taskrail does not infer that a
+staged file is abandoned from its age or from lock absence.
+
 ## The `taskrail-loop` skill
 
 Use the packaged `taskrail-loop` skill when an operator needs one interactive,

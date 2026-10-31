@@ -67,6 +67,10 @@ Conflict-resolution children must leave HEAD unchanged and resolve every unmerge
 path. Otherwise that candidate is rejected and rolled back to the prior
 integration head; earlier and later independent successes can still publish.
 
+An abruptly killed coordinator's staged binary no longer blocks later runs with
+the same executable. See [guarded loop recovery](docs/loop.md#recovering-an-abruptly-killed-coordinator)
+before clearing an abandoned lock or removing leftover staged copies.
+
 ### 2. Adopt it in a repository that already has work in flight
 
 Nothing is rewritten and nothing is generated behind your back.

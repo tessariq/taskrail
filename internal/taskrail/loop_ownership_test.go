@@ -146,7 +146,35 @@ func TestLoopOwnershipDelegatesFrozenFollowupSequence(t *testing.T) {
 	}
 }
 
-func TestStageLoopExecutableRefusesCollisionAndReplacementCleanup(t *testing.T) {
+func TestStageLoopExecutableIsolatesInvocations(t *testing.T) {
+	common := t.TempDir()
+	source := filepath.Join(t.TempDir(), "taskrail")
+	if err := os.WriteFile(source, []byte("source executable"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	first, err := stageLoopExecutable(common, source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := stageLoopExecutable(common, source)
+	if err != nil {
+		t.Fatalf("stage again without cleaning abandoned copy: %v", err)
+	}
+	if first.Path == second.Path || first.SHA256 != second.SHA256 {
+		t.Fatalf("stages must have distinct paths and matching digests: %+v, %+v", first, second)
+	}
+	if err := second.remove(); err != nil {
+		t.Fatal(err)
+	}
+	if err := first.validate(); err != nil {
+		t.Fatalf("second invocation cleanup changed first copy: %v", err)
+	}
+	if err := first.remove(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestStageLoopExecutablePreservesLeftoversAndRefusesReplacementCleanup(t *testing.T) {
 	common := t.TempDir()
 	source := filepath.Join(t.TempDir(), "taskrail")
 	if err := os.WriteFile(source, []byte("source executable"), 0o755); err != nil {
@@ -164,19 +192,12 @@ func TestStageLoopExecutableRefusesCollisionAndReplacementCleanup(t *testing.T) 
 	if err := os.WriteFile(collision, []byte("someone else's executable"), 0o700); err != nil {
 		t.Fatalf("write collision: %v", err)
 	}
-	if _, err := stageLoopExecutable(common, source); err == nil {
-		t.Fatal("staging replaced an existing hash-named file")
+	staged, err := stageLoopExecutable(common, source)
+	if err != nil {
+		t.Fatalf("stage executable beside legacy leftover: %v", err)
 	}
 	if got := string(readBytes(t, collision)); got != "someone else's executable" {
 		t.Fatalf("collision bytes = %q", got)
-	}
-	if err := os.Remove(collision); err != nil {
-		t.Fatalf("remove collision: %v", err)
-	}
-
-	staged, err := stageLoopExecutable(common, source)
-	if err != nil {
-		t.Fatalf("stage executable: %v", err)
 	}
 	if err := os.Remove(staged.Path); err != nil {
 		t.Fatalf("replace staged executable: %v", err)

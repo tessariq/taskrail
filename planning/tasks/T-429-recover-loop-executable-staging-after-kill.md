@@ -1,11 +1,16 @@
 ---
 id: T-429-recover-loop-executable-staging-after-kill
 title: Recover loop executable staging after a killed coordinator
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#cross-platform-autonomous-loop
 dependencies: []
-updated_at: "2026-10-31T11:39:10Z"
+updated_at: "2026-10-31T17:35:05Z"
+completion_id: "d4d3d511be9a6e734d6d5c3a97613f63"
+last_verification_id: "9ebca2d047ba79190e198984ce5c08d4"
+last_verification_result: pass
+last_verified_at: "2026-10-31T17:35:05Z"
+last_verified_completion_id: "d4d3d511be9a6e734d6d5c3a97613f63"
 ---
 
 # T-429-recover-loop-executable-staging-after-kill Recover loop executable staging after a killed coordinator
@@ -34,3 +39,6 @@ shutdown removes it. Found in the 2026-10-31 critical review of the loop family 
 - Manual: kill -9 a running loop, `lock clear`, rerun.
 
 ## Implementation Notes
+
+- 2026-10-31T17:34:55Z: Use a unique digest-prefixed executable stage per invocation; preserve exclusive creation and identity-checked cleanup. Document quiescent exact-path leftover recovery. Focused regression, full tests, vet, independent high-risk review and Linux process-kill QA passed; native Windows recovery not exercised.
+- 2026-10-31T17:35:05Z: verification pass id 9ebca2d047ba79190e198984ce5c08d4 previous none completion d4d3d511be9a6e734d6d5c3a97613f63
