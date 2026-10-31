@@ -65,6 +65,7 @@ dependencies:
     - T-442-report-task-not-found-before-active-conflict
     - T-443-gate-sequential-loop-runs-on-caller-owned-check
     - T-444-require-loop-check-for-parallel-candidates
+    - T-445-give-sequential-loop-children-fresh-verification
 updated_at: "2026-09-09T14:07:00Z"
 last_verification_id: "525eef8e0e6f39b6ce2558ed2536b5cd"
 last_verification_result: fail
