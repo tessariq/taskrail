@@ -19,6 +19,9 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ### Fixed
 
+- Parallel `taskrail loop` retains aggregate-passed but unpublished integration
+  workspaces under `failure` and `always`, reports unpublished tasks as pending,
+  and warns about lost work when `never` removes the workspaces.
 - Parallel `taskrail loop` rejects conflict children that move HEAD or leave
   unmerged paths, restores the prior integration head, and retains each conflict
   child's truthful outcome. Failed candidate bytes and task status stay

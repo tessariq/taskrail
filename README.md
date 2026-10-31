@@ -60,6 +60,9 @@ verification are accepted: a clean committed completion reports
 `completed_unverified`, while start or block alone has candidate `no_progress`.
 Parallel integration commits include reprojected `STATE.md` counts for all work
 accepted so far, rather than the last worker's isolated counts.
+If publication refuses after integration passes, the default `failure` retention
+keeps the integration workspace and reports unpublished tasks as pending.
+`--keep-workspaces never` removes it and warns that unpublished work may be lost.
 Conflict-resolution children must leave HEAD unchanged and resolve every unmerged
 path. Otherwise that candidate is rejected and rolled back to the prior
 integration head; earlier and later independent successes can still publish.

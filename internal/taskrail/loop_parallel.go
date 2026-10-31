@@ -15,6 +15,7 @@ import (
 	"path"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -248,6 +249,8 @@ func (s *Service) loopParallelExecute(ctx context.Context, invocation LoopInvoca
 		diagnostic.MutationViolations = append(diagnostic.MutationViolations, cleanup...)
 		diagnostic.Outcome = "batch_partial"
 		diagnostic.NextAction = "Inspect retained workspaces because parallel cleanup failed."
+	} else if invocation.KeepWorkspaces == "never" && len(batch.Delivery.PendingTasks) != 0 {
+		diagnostic.NextAction += " Unpublished workspaces were removed by --keep-workspaces never; unpublished work may be lost."
 	}
 	diagnostic.Parallel = &batch
 	return diagnostic, nil
@@ -771,11 +774,13 @@ func repairParallelStateConflict(root string) error {
 }
 
 func (s *Service) finishParallelDelivery(snapshot LoopPreflightSnapshot, diagnostic *LoopDiagnostic, batch *ParallelBatch) {
-	for _, worker := range batch.Workers {
-		if !worker.Integrated {
-			batch.Delivery.PendingTasks = append(batch.Delivery.PendingTasks, worker.Task.TaskID)
+	defer func() {
+		for _, worker := range batch.Workers {
+			if !slices.Contains(batch.Delivery.PublishedTasks, worker.Task.TaskID) {
+				batch.Delivery.PendingTasks = append(batch.Delivery.PendingTasks, worker.Task.TaskID)
+			}
 		}
-	}
+	}()
 	if !batch.Integration.AggregatePass || batch.Integration.Head == nil {
 		parallelOutcome(diagnostic, batch)
 		return
@@ -998,7 +1003,7 @@ func (s *Service) cleanupParallelWorkspaces(owner parallelWorkspaceOwner, retent
 		}
 		worker.Workspace = nil
 	}
-	if batch.Integration.Workspace != nil && retention != "always" && (retention == "never" || batch.Integration.AggregatePass) {
+	if batch.Integration.Workspace != nil && retention != "always" && (retention == "never" || (batch.Integration.AggregatePass && batch.Delivery.HeadAfter != nil)) {
 		if err := removeParallelWorkspace(owner, *batch.Integration.Workspace); err == nil {
 			batch.Integration.Workspace = nil
 		} else {

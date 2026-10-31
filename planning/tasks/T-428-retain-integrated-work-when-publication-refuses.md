@@ -1,11 +1,16 @@
 ---
 id: T-428-retain-integrated-work-when-publication-refuses
 title: Retain integrated work when parallel publication refuses
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#parallel-isolated-clone-batches
 dependencies: []
-updated_at: "2026-10-31T11:39:10Z"
+updated_at: "2026-10-31T16:29:24Z"
+completion_id: "a266206345ef2ad542a0dd70c893f178"
+last_verification_id: "d37bde54e62ab7f5b7b24d0017749361"
+last_verification_result: pass
+last_verified_at: "2026-10-31T16:29:24Z"
+last_verified_completion_id: "a266206345ef2ad542a0dd70c893f178"
 ---
 
 # T-428-retain-integrated-work-when-publication-refuses Retain integrated work when parallel publication refuses
@@ -34,3 +39,6 @@ non-integrated workers (internal/taskrail/loop_parallel.go). Found in the 2026-1
 - Integration test using the publish-after-fetch hook to inject drift; assert retained integration path and pending tasks.
 
 ## Implementation Notes
+
+- 2026-10-31T16:29:09Z: Retain aggregate-passed unpublished integration until publication is proven; report unpublished tasks pending and warn on never retention. Focused red/green regression, full tests, vet, simplification, independent high-risk review and fifteen disposable acceptance scenarios passed.
+- 2026-10-31T16:29:24Z: verification pass id d37bde54e62ab7f5b7b24d0017749361 previous none completion a266206345ef2ad542a0dd70c893f178
