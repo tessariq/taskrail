@@ -1,8 +1,5 @@
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="assets/logo/lockup-horizontal-mono-dark.svg">
-  <source media="(prefers-color-scheme: light)" srcset="assets/logo/lockup-horizontal-mono-light.svg">
-  <img alt="Taskrail" src="assets/logo/lockup-horizontal-mono-dark.svg" height="56">
-</picture>
+<img alt="Taskrail" src="assets/logo/lockup-horizontal-mono-dark.svg#gh-dark-mode-only" height="56">
+<img alt="Taskrail" src="assets/logo/lockup-horizontal-mono-light.svg#gh-light-mode-only" height="56">
 
 [![CI](https://github.com/tessariq/taskrail/actions/workflows/ci.yml/badge.svg)](https://github.com/tessariq/taskrail/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/tessariq/taskrail)](https://github.com/tessariq/taskrail/releases)
