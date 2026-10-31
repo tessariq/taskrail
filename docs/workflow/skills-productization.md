@@ -21,6 +21,26 @@ this repository adopts the packaged set like any adopter, invoking the binary vi
 the configurable entry point `${TASKRAIL:-taskrail}` (T-051). The dogfooding-vs-
 shipped portability split no longer exists.
 
+### Adopter examples in packaged text
+
+Packaged skills must not depend on Taskrail's development task IDs or product
+spec paths. State the guidance inline or cite a reference shipped with the skill.
+Placeholders such as `T-<id>` and `specs/<version>.md` need no annotation.
+
+Numeric examples are allowed when the text clearly frames them as the adopter's
+own content. The package guard cannot infer ownership from arbitrary prose, so
+mark each such identifier immediately after its numeric task key or versioned
+spec filename with `<!-- taskrail:adopter-example -->`. The marker exempts only
+that identifier, not its line, paragraph, file, or neighboring citations. It is
+an explicit author assertion, not evidence that an unmarked citation is safe.
+Do not mark real Taskrail development citations to bypass the guard.
+
+For example, this illustrative adopter-owned content is allowed:
+
+```text
+In the adopting repository (not Taskrail development history), its own task T-123<!-- taskrail:adopter-example --> implements the adopter requirement in its own specs/v1.0.0.md<!-- taskrail:adopter-example -->#checkout. These are illustrative adopter-owned content, not Taskrail product citations.
+```
+
 ## Decision 2: Distribution Mechanism
 
 Exactly one initial path: **embedded skill files via `embed.FS`, written only on

@@ -471,9 +471,18 @@ func TestSDDHandoffSkillRefusesAmbiguousEvidence(t *testing.T) {
 	const name = "taskrail-sdd-handoff"
 	assertSkillReferences(t, name,
 		"filename that suggests approval",
-		"Stop for operator review when approval, ownership, conflicting requirements or requirement meaning, semantic sizing under the T-251 rubric (including whether to split or merge), integration ownership, dependencies, or target anchors are ambiguous, or when incomplete task evidence prevents a decision. Do not guess task boundaries",
+		"Stop for operator review when approval, ownership, conflicting requirements or requirement meaning, semantic sizing (including whether to split or merge), integration ownership, dependencies, or target anchors are ambiguous, or when incomplete task evidence prevents a decision. Do not guess task boundaries",
 		"Do not create specs or tasks, invoke `import --apply`, change lifecycle state, or publish review evidence",
 	)
+	for _, skill := range []string{name, "taskrail-task-review"} {
+		assertSkillReferences(t, skill,
+			"one independently meaningful user, operator, or system outcome",
+			"Split when parts deliver independently useful outcomes with separate acceptance or oracles",
+			"one task must own any required integrated behavior",
+			"Keep work together when its code, tests, documentation, migration, or cross-layer changes only establish value as one observable result",
+			"Never split by file, layer, component, implementation phase, discipline, or an arbitrary estimate",
+		)
+	}
 
 	embedded := embeddedSkillFiles(t)
 	for _, path := range []string{

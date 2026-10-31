@@ -3,9 +3,58 @@ package taskrail
 import (
 	"os"
 	"path/filepath"
+	"regexp"
+	"slices"
 	"strings"
 	"testing"
 )
+
+func repositoryInternalSkillReferences(content string) []string {
+	internalReference := regexp.MustCompile(`\bT-[0-9]+\b|\bspecs/v[0-9]+(?:\.[0-9]+)*\.md\b`)
+	// An explicit adopter example exempts exactly the preceding identifier,
+	// never its enclosing line, paragraph, or file.
+	adopterExample := regexp.MustCompile(`(?:` + internalReference.String() + `)<!-- taskrail:adopter-example -->`)
+	content = adopterExample.ReplaceAllString(content, " ")
+	return internalReference.FindAllString(content, -1)
+}
+
+func TestRepositoryInternalSkillReferences(t *testing.T) {
+	const example = "In the adopting repository (not Taskrail development history), its own task T-123 implements the adopter requirement in its own specs/v1.0.0.md#checkout. These are illustrative adopter-owned content, not Taskrail product citations."
+	const marker = "<!-- taskrail:adopter-example -->"
+	markedExample := strings.ReplaceAll(example, "T-123", "T-123"+marker)
+	markedExample = strings.ReplaceAll(markedExample, "specs/v1.0.0.md", "specs/v1.0.0.md"+marker)
+	tests := []struct {
+		name, content string
+		want          []string
+	}{
+		{"task citation", "Apply the T-251 rubric", []string{"T-251"}},
+		{"spec citation", "See specs/v0.4.0.md#recommendation-about-llm-support", []string{"specs/v0.4.0.md"}},
+		{"placeholders", "Use T-<id> and specs/<version>.md", nil},
+		{"unmarked prose needs explicit scope", example, []string{"T-123", "specs/v1.0.0.md"}},
+		{"adopter example with per-citation scope", markedExample, nil},
+		{"mixed same line", markedExample + " Apply T-251 and specs/v0.4.0.md.", []string{"T-251", "specs/v0.4.0.md"}},
+		{"mixed next line", markedExample + "\nApply T-251.", []string{"T-251"}},
+		{"marker alone cannot exempt next citation", marker + "T-251", []string{"T-251"}},
+		{"marker cannot exempt multiple citations", "T-251 specs/v1.0.0.md" + marker, []string{"T-251"}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := repositoryInternalSkillReferences(tc.content); !slices.Equal(got, tc.want) {
+				t.Fatalf("references = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestPackagedSkillsHaveNoRepositoryInternalReferences(t *testing.T) {
+	// Scan every shipped file, including references and scripts. Placeholders
+	// such as T-<id> and specs/<version>.md are adopter-owned, not citations.
+	for rel, content := range embeddedSkillFiles(t) {
+		for _, citation := range repositoryInternalSkillReferences(content) {
+			t.Errorf("%s: repository-internal reference %q; state the guidance inline or use a shipped reference", rel, citation)
+		}
+	}
+}
 
 func skillDocument(frontmatter string) []byte {
 	return []byte("---\n" + frontmatter + "---\n\n# Body\n")

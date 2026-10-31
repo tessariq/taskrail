@@ -1,11 +1,17 @@
 ---
 id: T-420-packaged-skills-no-repo-internal-refs
 title: Keep repository-internal task and spec references out of packaged skills
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#storage-neutral-packaged-skills
 dependencies: []
-updated_at: "2026-10-03T14:07:08Z"
+updated_at: "2026-10-31T13:43:59Z"
+completion_id: "23cc2ae0840acbd139710567223e52e2"
+last_verification_id: "f1d52cbbaea21a610223b3c8e7a85105"
+last_verification_result: pass
+last_verified_at: "2026-10-31T13:43:59Z"
+last_verification_previous_id: "034b491e56036945d243daaa2c890e50"
+last_verified_completion_id: "23cc2ae0840acbd139710567223e52e2"
 ---
 
 # T-420-packaged-skills-no-repo-internal-refs Keep repository-internal task and spec references out of packaged skills
@@ -65,3 +71,8 @@ behavior, command surfaces, or the sizing rules themselves.
 - Must land before v0.5.0 is released.
 
 ## Implementation Notes
+
+- 2026-10-31T13:26:34Z: Packaged skills are adopter-self-contained with inline unchanged sizing criteria and semantic-gap rationale. All-file citation guard and SDD wording contracts pass; deliberate scratch task/spec citations failed before restoration. Regenerated copies pass parity; full tests, vet, sandbox install, simplification and independent low-risk review passed with no findings.
+- 2026-10-31T13:26:43Z: verification pass id 22b8157c72b8ee4b745b466262bc0634 previous none completion 23cc2ae0840acbd139710567223e52e2
+- 2026-10-31T13:35:46Z: verification fail id 034b491e56036945d243daaa2c890e50 previous 22b8157c72b8ee4b745b466262bc0634 completion none
+- 2026-10-31T13:43:59Z: verification pass id f1d52cbbaea21a610223b3c8e7a85105 previous 034b491e56036945d243daaa2c890e50 completion 23cc2ae0840acbd139710567223e52e2

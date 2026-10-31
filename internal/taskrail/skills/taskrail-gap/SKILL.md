@@ -8,7 +8,7 @@ description: Review structural gap signals and add agent semantic gap judgement 
 Find likely missing work — verification tasks, dependency fixes, decomposition, edge
 cases, cleanup, rollout — over the active spec and task graph. The split below is the
 whole point: the binary supplies the structural half deterministically, you supply the
-semantic half. This composes the shipped `coverage --gaps` primitive (T-100) and adds
+semantic half. This composes the shipped `coverage --gaps` primitive and adds
 no new binary surface.
 
 Requires the installed `taskrail` binary on `PATH`. Run it from the managed
@@ -20,8 +20,9 @@ repository's root.
   active-spec areas — `missing-verification`, `dependency-anomaly`,
   `under-decomposed-area` — from counts and graph edges only. No inference, no model
   call. These are inspectable and reproducible.
-- **Semantic (agent).** Deep gap inference is deliberately excluded from the binary
-  (`specs/v0.4.0.md#recommendation-about-llm-support`). That judgement — which edge
+- **Semantic (agent).** Deep gap inference stays outside the binary so Taskrail
+  remains deterministic and provider-independent, without built-in model calls.
+  That judgement — which edge
   cases matter, what cleanup or rollout the spec implies, whether a structural signal
   is a real gap — is your job, done in this skill between deterministic binary steps.
 

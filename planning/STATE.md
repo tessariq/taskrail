@@ -1,6 +1,6 @@
 ---
 schema_version: 2
-updated_at: "2026-10-31T13:06:24Z"
+updated_at: "2026-10-31T13:43:59Z"
 active_spec_version: v0.5.0
 active_spec_path: specs/v0.5.0.md
 current_task: ""
@@ -8,9 +8,10 @@ current_task_title: ""
 status_summary: idle
 blockers: []
 next_action: Select the next eligible task
-last_verification_result: pass for T-419-refuse-skill-eval-adoption-and-resume-on-artifact at 2026-10-31T13:06:24Z id f81767afcc537d431022077c14002c74
-last_verification_id: f81767afcc537d431022077c14002c74
-last_verified_completion_id: c275b9f2a2cc88756b2c65954ef0731f
+last_verification_result: pass for T-420-packaged-skills-no-repo-internal-refs at 2026-10-31T13:43:59Z id f1d52cbbaea21a610223b3c8e7a85105
+last_verification_id: f1d52cbbaea21a610223b3c8e7a85105
+last_verification_previous_id: 034b491e56036945d243daaa2c890e50
+last_verified_completion_id: 23cc2ae0840acbd139710567223e52e2
 relevant_artifacts: []
 ---
 
@@ -34,7 +35,7 @@ relevant_artifacts: []
 
 ## Last Verification
 
-- pass for T-419-refuse-skill-eval-adoption-and-resume-on-artifact at 2026-10-31T13:06:24Z id f81767afcc537d431022077c14002c74
+- pass for T-420-packaged-skills-no-repo-internal-refs at 2026-10-31T13:43:59Z id f1d52cbbaea21a610223b3c8e7a85105
 
 ## Next Action
 
@@ -46,8 +47,8 @@ relevant_artifacts: []
 
 ## Task Counts
 
-- todo: 83
+- todo: 82
 - in_progress: 0
-- completed: 360
+- completed: 361
 - blocked: 0
 - cancelled: 0

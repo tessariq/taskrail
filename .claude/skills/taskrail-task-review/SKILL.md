@@ -52,7 +52,7 @@ do not contain the source helper and skip this source-only guard.
    SHA-256 values, and the rendered instructions to produce exactly one
    `review.json`. Do not add a summary file, transcript, manifest, or any other
    proposal member.
-4. **Judge the boundary.** Check outcome/spec alignment, T-251 semantic sizing,
+4. **Judge the boundary.** Check outcome/spec alignment, semantic sizing,
    overlap, dependency direction, integration ownership, acceptance, negative
    boundaries, evidence/oracles, operator gates, and unnecessary implementation
    prescription. Apply both split and do-not-split tests. A sizing finding must
@@ -75,6 +75,24 @@ do not contain the source helper and skip this source-only guard.
    bytes under its writer lock; source drift requires a new observation, never
    metadata repair. Then inspect the durable bytes with `${TASKRAIL:-taskrail}
    review show <destination>/review.json --json`.
+
+## Semantic sizing criteria
+
+A task states one independently meaningful user, operator, or system outcome
+and the invariant it establishes. It must be one coherent implementation,
+review, and verification unit with a bounded observable result, explicit
+dependencies and operator gates, and no hidden independently valuable outcome.
+
+- Split when parts deliver independently useful outcomes with separate acceptance
+  or oracles, require materially different dependencies or operator decisions, or
+  one part can be completed and verified while another remains legitimately
+  deferred. Each resulting task must still establish a meaningful outcome, and
+  one task must own any required integrated behavior.
+- Keep work together when its code, tests, documentation, migration, or cross-layer
+  changes only establish value as one observable result. Never split by file,
+  layer, component, implementation phase, discipline, or an arbitrary estimate.
+  Do not create coordination-only fragments whose sole acceptance is that another
+  task exists or passes.
 
 ## Strict Proposal Shape
 

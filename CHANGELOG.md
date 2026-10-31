@@ -19,6 +19,8 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ### Fixed
 
+- Packaged skills state task-sizing criteria and the semantic gap-analysis
+  rationale without requiring Taskrail's development tasks or product specs.
 - Maintainer skill-evaluation stages now seal artifact-root and ancestor
   identities. Resume and optional stage-pinned baseline adoption refuse replaced
   namespaces, including byte-identical copies and renamed trees. Executed arms
