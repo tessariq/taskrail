@@ -23,6 +23,8 @@ func TestLoopExecuteParallelConflictBoundary(t *testing.T) {
 				writeTask(t, repo, id, id, "todo", "high", "specs/v0.1.0.md#summary", nil)
 				setLoopPolicy(t, repo, id, "allow", "independent work")
 			}
+			// Preserve exact fixture bytes regardless of the host's checkout conversion.
+			writeFile(t, filepath.Join(repo, ".gitattributes"), "shared.txt text eol=lf\nindependent.txt text eol=lf\n")
 			writeFile(t, filepath.Join(repo, "shared.txt"), "base\n")
 			runGit(t, repo, "add", ".")
 			runGit(t, repo, "commit", "-m", "prepare conflict batch")
