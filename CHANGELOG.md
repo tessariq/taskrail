@@ -19,6 +19,12 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ### Fixed
 
+- Maintainer skill-evaluation stages now seal artifact-root and ancestor
+  identities. Resume and optional stage-pinned baseline adoption refuse replaced
+  namespaces, including byte-identical copies and renamed trees. Executed arms
+  use pinned absolute paths and refuse relative-root rebasing after an adapter
+  changes directory. Legacy stages and IDs-only raw-copy adoption retain their
+  documented, weaker historical-identity guarantees without silent re-pinning.
 - `taskrail local status` (and every other local-mode command) no longer
   refuses a repository whose committed `specs/`, `planning/`, or
   `.taskrail/prompts/` roots exist only as empty directories left by a

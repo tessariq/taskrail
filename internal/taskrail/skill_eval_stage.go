@@ -13,10 +13,11 @@ import (
 // SkillEvalStage is portable frozen evidence between provider execution and
 // maintainer comparison. Raw roots are always reconstructed from current input.
 type SkillEvalStage struct {
-	SchemaVersion int                      `json:"schema_version"`
-	Report        SkillEvalReport          `json:"report"`
-	Worksheet     []SkillEvalWorksheetCase `json:"worksheet"`
-	Seal          string                   `json:"seal"`
+	SchemaVersion  int                      `json:"schema_version"`
+	Report         SkillEvalReport          `json:"report"`
+	Worksheet      []SkillEvalWorksheetCase `json:"worksheet"`
+	ArtifactAnchor *SkillEvalArtifactAnchor `json:"artifact_anchor,omitempty"`
+	Seal           string                   `json:"seal"`
 }
 
 // SkillEvalWorksheetCase gives the maintainer the frozen arm outcomes and the
@@ -138,10 +139,11 @@ func (SkillEvalRunner) Resume(stage SkillEvalStage, input SkillEvalRunInput, hum
 
 func skillEvalStageSeal(stage SkillEvalStage) string {
 	payload, _ := json.Marshal(struct {
-		SchemaVersion int                      `json:"schema_version"`
-		Report        SkillEvalReport          `json:"report"`
-		Worksheet     []SkillEvalWorksheetCase `json:"worksheet"`
-	}{SchemaVersion: stage.SchemaVersion, Report: stage.Report, Worksheet: stage.Worksheet})
+		SchemaVersion  int                      `json:"schema_version"`
+		Report         SkillEvalReport          `json:"report"`
+		Worksheet      []SkillEvalWorksheetCase `json:"worksheet"`
+		ArtifactAnchor *SkillEvalArtifactAnchor `json:"artifact_anchor,omitempty"`
+	}{SchemaVersion: stage.SchemaVersion, Report: stage.Report, Worksheet: stage.Worksheet, ArtifactAnchor: stage.ArtifactAnchor})
 	digest := sha256.Sum256(append([]byte("taskrail-skill-eval-stage-v1\x00"), payload...))
 	return hex.EncodeToString(digest[:])
 }
@@ -149,6 +151,9 @@ func skillEvalStageSeal(stage SkillEvalStage) string {
 func validateSkillEvalStage(stage SkillEvalStage, input SkillEvalRunInput) error {
 	if stage.SchemaVersion != 1 || !skillEvalDigestPattern.MatchString(stage.Seal) || stage.Seal != skillEvalStageSeal(stage) {
 		return fmt.Errorf("skill evaluation staged evidence was modified")
+	}
+	if err := skillEvalValidateArtifactAnchor(input.ArtifactRoot, stage.ArtifactAnchor); err != nil {
+		return err
 	}
 	if len(stage.Worksheet) != len(stage.Report.Cases) {
 		return fmt.Errorf("skill evaluation staged worksheet is incomplete")

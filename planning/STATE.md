@@ -1,6 +1,6 @@
 ---
 schema_version: 2
-updated_at: "2026-10-31T12:25:50Z"
+updated_at: "2026-10-31T13:06:24Z"
 active_spec_version: v0.5.0
 active_spec_path: specs/v0.5.0.md
 current_task: ""
@@ -8,9 +8,9 @@ current_task_title: ""
 status_summary: idle
 blockers: []
 next_action: Select the next eligible task
-last_verification_result: pass for T-417-keep-local-mode-usable-after-a-rolled-back-local at 2026-09-17T23:38:06Z id f3796dd67a7fb96bff695be1fa498b86
-last_verification_id: f3796dd67a7fb96bff695be1fa498b86
-last_verified_completion_id: eccb45dad184bc3c66a60a07716a161c
+last_verification_result: pass for T-419-refuse-skill-eval-adoption-and-resume-on-artifact at 2026-10-31T13:06:24Z id f81767afcc537d431022077c14002c74
+last_verification_id: f81767afcc537d431022077c14002c74
+last_verified_completion_id: c275b9f2a2cc88756b2c65954ef0731f
 relevant_artifacts: []
 ---
 
@@ -34,7 +34,7 @@ relevant_artifacts: []
 
 ## Last Verification
 
-- pass for T-417-keep-local-mode-usable-after-a-rolled-back-local at 2026-09-17T23:38:06Z id f3796dd67a7fb96bff695be1fa498b86
+- pass for T-419-refuse-skill-eval-adoption-and-resume-on-artifact at 2026-10-31T13:06:24Z id f81767afcc537d431022077c14002c74
 
 ## Next Action
 
@@ -46,8 +46,8 @@ relevant_artifacts: []
 
 ## Task Counts
 
-- todo: 84
+- todo: 83
 - in_progress: 0
-- completed: 359
+- completed: 360
 - blocked: 0
 - cancelled: 0

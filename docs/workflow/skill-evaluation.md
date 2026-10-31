@@ -95,8 +95,10 @@ execution and report construction.
    transcript as raw evidence, and record only actual command facts.
 3. Render and retain the canonical sealed stage beside the producer-local raw
    evidence, then stop for a human worksheet. The stage contains no producer-local paths;
-   resume reconstructs them from current input and refuses a changed receipt or
-   raw tree. Do not render a final report or invent a comparison here.
+   it seals the absolute artifact namespace's path digest and ancestor type and
+   filesystem identity facts. Resume reconstructs paths from current input and
+   refuses a replaced namespace, changed receipt, or raw tree before returning a
+   report. Do not render a final report or invent a comparison here.
  4. Decode and resume from that exact staged evidence after human review, or run the
    publication driver over it: `PublishSkillEvalReport` reads the sealed
    `stage.json` plus an answers file (the overall `human_review` and each case's
@@ -150,6 +152,25 @@ tree whose outcome receipt is missing, noncanonical, or unsupported fails the
 run, and stage resume re-checks that confinement — candidate arms are never
 adoptable, and the report schema is unchanged; disclose adopted arms in the
 report's human review summary.
+
+For historically pinned adoption, also set
+`SkillEvalRunInput.AdoptedBaselineStage` to the original sealed stage. The runner
+requires its seal and non-legacy anchor facts, the same artifact and session
+namespace, and matching selected baseline case, fixture, skill, and executable
+bindings. Before any adapter runs it validates the namespace, then the baseline
+outcome receipt, re-derived grade, and digest against that stage. A supplied
+invalid, unpinned, relocated, or mismatched stage refuses; it never falls back to
+raw-copy adoption. Restoring the original tree's type and identities restores
+eligibility, and stable caller-chosen symlinked anchors remain supported.
+
+IDs-only `AdoptedBaselineCases` remains the explicit legacy raw-copy API,
+including deliberate copying into a different root or session. It verifies
+receipts and in-run confinement but cannot detect a namespace substitution that
+happened before this execution. The new stage seals only the current namespace;
+it does not retroactively certify where copied evidence originated. Use a
+supplied stage when historical namespace protection is required; intentional
+relocation is not accepted in that mode.
+
 `RenderSkillEvalStage` and `DecodeSkillEvalStage` make the stop/resume boundary
 durable without serializing producer-local roots. `Resume` accepts exact human
 reviews plus a freshly recomputed caller snapshot, rechecks its seal, bindings,
@@ -164,6 +185,14 @@ as the one committed release artifact, refusing any current snapshot,
 executable, skill, fixture, registry, or raw-tree drift before a write, so
 the human comparison boundary is a real stopping point rather than a
 single-call convenience.
+
+Legacy already-sealed stages without `artifact_anchor` still decode and resume
+using the prior component and digest checks. Their canonical bytes and seal stay
+unchanged; they are never silently re-pinned and do not gain historical
+namespace protection. A legacy stage cannot be supplied for pinned adoption.
+New stages include the anchor in the seal, so stripping it without updating the
+seal is tampering. Namespace checks are post-run detection, not prevention or
+rollback of writes an adapter already made through a swapped path.
 
 ## Waived Evidence
 

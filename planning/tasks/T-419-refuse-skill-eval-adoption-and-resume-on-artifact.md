@@ -1,12 +1,17 @@
 ---
 id: T-419-refuse-skill-eval-adoption-and-resume-on-artifact
 title: Refuse skill-eval adoption and resume on artifact-root ancestor swaps
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#maintainer-skill-release-evaluations
 dependencies:
     - T-418-fail-an-in-run-skill-eval-raw-root-ancestor-swap
-updated_at: "2026-09-17T21:46:09Z"
+updated_at: "2026-10-31T13:06:24Z"
+completion_id: "c275b9f2a2cc88756b2c65954ef0731f"
+last_verification_id: "f81767afcc537d431022077c14002c74"
+last_verification_result: pass
+last_verified_at: "2026-10-31T13:06:24Z"
+last_verified_completion_id: "c275b9f2a2cc88756b2c65954ef0731f"
 ---
 
 # T-419-refuse-skill-eval-adoption-and-resume-on-artifact Refuse skill-eval adoption and resume on artifact-root ancestor swaps
@@ -81,3 +86,6 @@ This task owns integrated delivery of the deferred outcome and its invariant aft
   out of scope.
 
 ## Implementation Notes
+
+- 2026-10-31T13:06:24Z: Seal artifact-root and ancestor type/identity facts with absolute path binding; refuse namespace swaps during resume and supplied-stage baseline adoption. Preserve documented legacy stage and IDs-only raw-copy guarantees without repinning. Credential-free public-API regression and sandbox evidence passed; independent simplification and high-risk review findings resolved. Windows long-root runtime remains unexecuted here; Windows test compilation passed.
+- 2026-10-31T13:06:24Z: verification pass id f81767afcc537d431022077c14002c74 previous none completion c275b9f2a2cc88756b2c65954ef0731f

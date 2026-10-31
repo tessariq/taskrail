@@ -159,13 +159,20 @@ type SkillEvalRunInput struct {
 	// whose baseline arm is adopted from the raw tree a prior session already
 	// staged beneath this session's baseline raw root instead of invoking the
 	// adapter again. Every other case, and every candidate arm, always executes.
+	// Without AdoptedBaselineStage this is legacy raw-copy adoption: it has no
+	// historical namespace identity guarantee.
 	AdoptedBaselineCases []string
+	// A supplied stage opts into historically pinned adoption. Invalid or legacy
+	// unpinned stages refuse rather than falling back to raw-copy adoption.
+	AdoptedBaselineStage *SkillEvalStage
 	Adapter              SkillEvalAdapter
 	AdapterIdentity      SkillEvalIdentity
 	ModelIdentity        SkillEvalIdentity
 	DeterministicChecks  SkillEvalDeterministicChecks
 	HumanReview          string
 	CaseReviews          map[string]SkillEvalCaseReview
+	artifactRootInput    string
+	artifactAnchor       *SkillEvalArtifactAnchor
 }
 
 type SkillEvalRun struct {
@@ -249,6 +256,22 @@ func (SkillEvalRunner) Execute(ctx context.Context, input SkillEvalRunInput) (Sk
 	if err := validateSkillEvalRunInput(input, false); err != nil {
 		return SkillEvalStage{}, err
 	}
+	input.artifactRootInput = input.ArtifactRoot
+	absolute, err := filepath.Abs(input.ArtifactRoot)
+	if err != nil {
+		return SkillEvalStage{}, fmt.Errorf("resolve artifact root: %w", err)
+	}
+	input.ArtifactRoot = absolute
+	if err := validateSkillEvalPinnedAdoption(input); err != nil {
+		return SkillEvalStage{}, err
+	}
+	if err := os.MkdirAll(input.ArtifactRoot, 0o700); err != nil {
+		return SkillEvalStage{}, fmt.Errorf("create artifact root: %w", err)
+	}
+	input.artifactAnchor, err = skillEvalCaptureArtifactAnchor(input.ArtifactRoot)
+	if err != nil {
+		return SkillEvalStage{}, err
+	}
 	cases := slices.Clone(input.Registry)
 	slices.SortFunc(cases, compareSkillEvalCases)
 	manifest := skillEvalManifest(cases, input)
@@ -299,7 +322,7 @@ func (SkillEvalRunner) Execute(ctx context.Context, input SkillEvalRunInput) (Sk
 	}
 	report.Adapter.Observed = observed
 	report.Model.Observed = observed
-	stage := SkillEvalStage{SchemaVersion: 1, Report: report}
+	stage := SkillEvalStage{SchemaVersion: 1, Report: report, ArtifactAnchor: input.artifactAnchor}
 	for _, item := range cases {
 		reportCase := report.Cases[len(stage.Worksheet)]
 		stage.Worksheet = append(stage.Worksheet, SkillEvalWorksheetCase{
@@ -322,6 +345,9 @@ func (SkillEvalRunner) Execute(ctx context.Context, input SkillEvalRunInput) (Sk
 // failed arm keeps that outcome no matter what the re-derived grade says, and
 // a missing or unsupported receipt refuses rather than inferring a pass.
 func adoptSkillEvalBaselineArm(input SkillEvalRunInput, evaluation SkillEvalCase) (*SkillEvalRun, error) {
+	if err := skillEvalValidateExecutionAnchor(input); err != nil {
+		return nil, fmt.Errorf("adopt baseline evidence: %w", err)
+	}
 	rawRoot := skillEvalRawRoot(input, evaluation, skillEvalBaselineArm)
 	if err := skillEvalConfinedRawRoot(input.ArtifactRoot, rawRoot); err != nil {
 		return nil, fmt.Errorf("adopt baseline evidence: %w", err)
@@ -342,26 +368,25 @@ func adoptSkillEvalBaselineArm(input SkillEvalRunInput, evaluation SkillEvalCase
 	if err != nil {
 		return nil, fmt.Errorf("adopt baseline evidence: %w", err)
 	}
+	if input.AdoptedBaselineStage != nil {
+		prior := skillEvalPinnedCase(*input.AdoptedBaselineStage, evaluation.CaseID).Baseline
+		if prior.Outcome != outcome || prior.DeterministicGrade != grade || prior.RawSHA256 != digest {
+			return nil, fmt.Errorf("adopt baseline evidence: sealed baseline outcome, grade, or raw digest changed for %q", evaluation.CaseID)
+		}
+	}
 	return &SkillEvalRun{Outcome: outcome, SkillSHA256: input.BaselineSkillSHA256[evaluation.Skill], ExecutableSHA256: input.BaselineExecutableSHA256, DeterministicGrade: grade, RawSHA256: digest}, nil
 }
 
 func runSkillEvalArm(ctx context.Context, input SkillEvalRunInput, evaluation SkillEvalCase, arm string) (*SkillEvalRun, error) {
+	if err := skillEvalValidateExecutionAnchor(input); err != nil {
+		return nil, fmt.Errorf("%s arm: %w", arm, err)
+	}
 	rawRoot := skillEvalRawRoot(input, evaluation, arm)
 	if err := skillEvalConfinedRawRoot(input.ArtifactRoot, rawRoot); err != nil {
 		return nil, fmt.Errorf("%s arm: %w", arm, err)
 	}
 	if err := os.MkdirAll(rawRoot, 0o700); err != nil {
 		return nil, fmt.Errorf("create raw root: %w", err)
-	}
-	// The artifact root and every ancestor above it are the trust anchor the
-	// path-based confinement checks resolve through, so their observable
-	// identity is pinned before the untrusted adapter runs. Caller-chosen
-	// symlinked ancestors keep working: pinning follows links and only rejects
-	// an identity or type that changes mid-run, which is what a relocation by
-	// copy, remove, or inode-preserving rename looks like from the path.
-	pins, err := skillEvalPinRawRootAncestors(input.ArtifactRoot)
-	if err != nil {
-		return nil, fmt.Errorf("%s arm: %w", arm, err)
 	}
 	fixtureRoot := ""
 	if evaluation.fixtureRoot != "" {
@@ -382,7 +407,7 @@ func runSkillEvalArm(ctx context.Context, input SkillEvalRunInput, evaluation Sk
 	if confErr := skillEvalConfinedRawRoot(input.ArtifactRoot, rawRoot); confErr != nil {
 		return nil, fmt.Errorf("%s arm: raw root confinement changed during adapter run: %w", arm, confErr)
 	}
-	if confErr := skillEvalConfinedRawRootAncestors(pins); confErr != nil {
+	if confErr := skillEvalValidateExecutionAnchor(input); confErr != nil {
 		return nil, fmt.Errorf("%s arm: raw root confinement changed during adapter run: %w", arm, confErr)
 	}
 	if err != nil {
@@ -441,68 +466,6 @@ func skillEvalConfinedRawRoot(artifactRoot, rawRoot string) error {
 		}
 		if !info.IsDir() {
 			return fmt.Errorf("raw root component %s is not a real directory beneath the artifact root", current)
-		}
-	}
-	return nil
-}
-
-// skillEvalPathPin snapshots one ancestor of the artifact root: the path's
-// own type from Lstat plus the identity Stat resolves to, so a replacement
-// that changes either is detectable after the untrusted adapter ran.
-type skillEvalPathPin struct {
-	path  string
-	lstat os.FileInfo
-	stat  os.FileInfo
-}
-
-// skillEvalPinRawRootAncestors pins the artifact root and every ancestor
-// above it, up to the filesystem root, before an adapter runs. Relocations
-// that preserve the inode (a rename) still change the type at the planted
-// path, and replacements that keep the type (a copied directory) change the
-// identity, so both facets of every ancestor are recorded.
-func skillEvalPinRawRootAncestors(artifactRoot string) ([]skillEvalPathPin, error) {
-	absolute, err := filepath.Abs(artifactRoot)
-	if err != nil {
-		return nil, fmt.Errorf("resolve artifact root: %w", err)
-	}
-	var pins []skillEvalPathPin
-	for current := absolute; ; current = filepath.Dir(current) {
-		lstat, err := os.Lstat(current)
-		if err != nil {
-			return nil, fmt.Errorf("inspect artifact root ancestor: %w", err)
-		}
-		stat, err := os.Stat(current)
-		if err != nil {
-			return nil, fmt.Errorf("inspect artifact root ancestor: %w", err)
-		}
-		pins = append(pins, skillEvalPathPin{path: current, lstat: lstat, stat: stat})
-		if parent := filepath.Dir(current); parent == current {
-			return pins, nil
-		}
-	}
-}
-
-// skillEvalConfinedRawRootAncestors refuses when any pinned ancestor of the
-// artifact root changed between the pin and the check: a missing ancestor,
-// a type change such as a directory replaced by a symlink or file, or an
-// identity change from a same-type replacement. Like the component walk it
-// detects relocations after the fact; it cannot undo bytes written through
-// a relocated path while the adapter ran.
-func skillEvalConfinedRawRootAncestors(pins []skillEvalPathPin) error {
-	for _, pin := range pins {
-		lstat, err := os.Lstat(pin.path)
-		if err != nil {
-			return fmt.Errorf("artifact root ancestor %s changed during the adapter run: %w", pin.path, err)
-		}
-		if lstat.Mode().Type() != pin.lstat.Mode().Type() {
-			return fmt.Errorf("artifact root ancestor %s was replaced during the adapter run", pin.path)
-		}
-		stat, err := os.Stat(pin.path)
-		if err != nil {
-			return fmt.Errorf("artifact root ancestor %s changed during the adapter run: %w", pin.path, err)
-		}
-		if !os.SameFile(pin.stat, stat) {
-			return fmt.Errorf("artifact root ancestor %s was replaced during the adapter run", pin.path)
 		}
 	}
 	return nil

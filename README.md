@@ -217,6 +217,11 @@ contribution policy, and
 [AGENTS.md](AGENTS.md#toolchain-and-environment) for the binary-freshness
 contract that matters when hacking on Taskrail itself.
 
+Maintainer [skill evaluations](docs/workflow/skill-evaluation.md) seal artifact
+namespace identities for resume and optional pinned baseline adoption. Legacy
+stages and explicitly enumerated raw-copy adoption remain compatible, without
+claiming historical namespace protection.
+
 ## Status
 
 Taskrail is an in-progress open-source project. The current release is `v0.4.0`;
