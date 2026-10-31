@@ -13,6 +13,7 @@ type LoopIteration struct {
 	Outcome                       string              `json:"outcome"`
 	LifecycleCandidate            *string             `json:"lifecycle_candidate"`
 	Child                         LoopIterationChild  `json:"child"`
+	Check                         *LoopCheckEvidence  `json:"check"`
 	StatusBefore                  *string             `json:"status_before"`
 	StatusAfter                   *string             `json:"status_after"`
 	CompletionIDBefore            *string             `json:"completion_id_before"`

@@ -761,6 +761,10 @@ func runParallelLoopChild(conflictMode string) int {
 		return 97
 	}
 	taskID := strings.TrimSuffix(fields[4], ".")
+	if taskID == os.Getenv("LOOP_CHILD_STOP_TASK") {
+		_ = os.WriteFile(os.Getenv("LOOP_CHILD_STOP_RECORD"), []byte(taskID), 0o600)
+		return 7
+	}
 	if conflictMode != "" {
 		product := "shared.txt"
 		if taskID == "T-003-ready" {
@@ -792,5 +796,5 @@ func runParallelLoopChild(conflictMode string) int {
 			return 96
 		}
 	}
-	return 0
+	return loopCheckChildOutcome()
 }

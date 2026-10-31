@@ -945,7 +945,7 @@ func parallelWorktreeDigest(root string) (string, error) {
 		}
 		hash.Write([]byte(filepath.ToSlash(rel)))
 		hash.Write([]byte{0})
-		hash.Write([]byte(strconv.FormatUint(uint64(info.Mode().Perm()), 8)))
+		hash.Write([]byte(strconv.FormatUint(uint64(info.Mode()), 8)))
 		hash.Write([]byte{0})
 		hash.Write([]byte(strconv.Itoa(len(data))))
 		hash.Write([]byte{0})

@@ -58,6 +58,10 @@ leaves HEAD unchanged reports `child_failed`; repository integrity violations
 still take precedence as `invalid_postflight`. Canonical lifecycle writes without
 verification are accepted: a clean committed completion reports
 `completed_unverified`, while start or block alone has candidate `no_progress`.
+Sequential runs optionally accept a caller-owned `--check <path>`: a read-only
+executable gate after each delivered completed pass. Failure stops with
+`check_failed` and retains the delivered commit and result-file evidence;
+parallel check support is deferred.
 Parallel integration commits include reprojected `STATE.md` counts for all work
 accepted so far, rather than the last worker's isolated counts.
 If publication refuses after integration passes, the default `failure` retention

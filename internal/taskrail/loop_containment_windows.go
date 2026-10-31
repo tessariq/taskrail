@@ -69,6 +69,9 @@ func (c *windowsLoopChildContainment) verify(pid int) (loopChildContainmentEvide
 }
 
 func (c *windowsLoopChildContainment) exited(int) (bool, int, string, error) {
+	if c.leaderReaped {
+		return true, c.leaderExit, "", nil
+	}
 	if c.process == 0 {
 		return false, 0, "", nil
 	}
@@ -96,13 +99,25 @@ func (*windowsLoopChildContainment) signal(error) string { return "" }
 func (c *windowsLoopChildContainment) cleanup() (evidence loopChildContainmentEvidence, result error) {
 	evidence = c.evidence()
 	defer func() {
-		if c.process != 0 {
-			result = errors.Join(result, windows.CloseHandle(c.process))
-			c.process = 0
-		}
 		if c.job != 0 {
 			result = errors.Join(result, windows.CloseHandle(c.job))
 			c.job = 0
+		}
+		if c.process != 0 {
+			if c.assigned && !c.leaderReaped {
+				// Closing the job also requests termination on cleanup error paths.
+				// Keep the process handle until that bounded exit observation finishes.
+				status, err := windows.WaitForSingleObject(c.process, windowsContainmentGraceMilliseconds)
+				if err != nil || status != windows.WAIT_OBJECT_0 {
+					result = errors.Join(result, fmt.Errorf("wait for contained leader exit: status %#x: %v", status, err))
+				} else if _, _, _, err := c.exited(0); err != nil {
+					result = errors.Join(result, fmt.Errorf("observe contained leader exit: %w", err))
+				}
+			}
+			evidence.leaderReaped = c.leaderReaped
+			evidence.leaderExitCode = c.leaderExit
+			result = errors.Join(result, windows.CloseHandle(c.process))
+			c.process = 0
 		}
 	}()
 	if !c.assigned {

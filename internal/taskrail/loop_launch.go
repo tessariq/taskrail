@@ -24,6 +24,7 @@ type loopChildLaunch struct {
 	Prompt         []byte
 	RepositoryRoot string
 	Identity       loopChildIdentity
+	Environment    []string
 	Stdout         io.Writer
 	Stderr         io.Writer
 }
@@ -71,7 +72,10 @@ func launchLoopChild(input loopChildLaunch) (loopChildExecution, error) {
 
 	child := exec.Command(command[0], command[1:]...)
 	child.Dir = input.RepositoryRoot
-	child.Env = loopChildEnvironment(input.Identity)
+	child.Env = input.Environment
+	if child.Env == nil {
+		child.Env = loopChildEnvironment(input.Identity)
+	}
 	containment, err := newLoopChildContainment()
 	if err != nil {
 		return loopChildExecution{}, err
@@ -152,9 +156,13 @@ func launchLoopChild(input loopChildLaunch) (loopChildExecution, error) {
 		}
 		if execution.Containment.leaderReaped {
 			releaseLeader(execution.Containment.leaderExitCode, execution.Containment.leaderSignal)
+		} else if !leaderExited {
+			execution.ContainmentError = errors.Join(execution.ContainmentError,
+				errors.New("leader termination was not observed during containment cleanup"), child.Process.Release())
+			closeLoopChildTransport(stdin, childStdout, childStderr)
 		}
 	}
-	for stdinResult != nil || stdoutResult != nil || stderrResult != nil {
+	for !leaderExited && !cleanupDone || stdinResult != nil || stdoutResult != nil || stderrResult != nil {
 		select {
 		case err := <-stdinResult:
 			stdinResult = nil
@@ -193,15 +201,6 @@ func launchLoopChild(input loopChildLaunch) (loopChildExecution, error) {
 				cleanup()
 			}
 		}
-	}
-	if !leaderExited {
-		execution.WaitError = child.Wait()
-		execution.Signal = containment.signal(execution.WaitError)
-		cleanup()
-	}
-	if execution.ExitCode == nil && child.ProcessState != nil {
-		exitCode := child.ProcessState.ExitCode()
-		execution.ExitCode = &exitCode
 	}
 	return execution, nil
 }

@@ -27,6 +27,7 @@ type LoopDryRunResult struct {
 	Execution    LoopExecutionBudget  `json:"execution"`
 	Delivery     *LoopDryRunDelivery  `json:"delivery"`
 	Parallel     *ParallelPlan        `json:"parallel"`
+	Check        *LoopCheck           `json:"check"`
 }
 
 type ParallelWorkspace struct {
@@ -113,6 +114,7 @@ func (s *Service) LoopDryRun(invocation LoopInvocation) (LoopDryRunResult, error
 		return LoopDryRunResult{}, err
 	}
 	report := loopDryRunReport(snapshot, selection)
+	report.Check = snapshot.check
 	if invocation.Parallel > 1 {
 		plan, err := s.loopParallelPlan(snapshot, selection.Tasks)
 		if err != nil {

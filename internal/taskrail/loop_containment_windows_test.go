@@ -60,12 +60,23 @@ func TestWindowsLoopContainmentTerminatesOnContextCancellation(t *testing.T) {
 	defer cancel()
 	input := loopHelperLaunch(t, "linger-output", nil)
 	input.Context = ctx
-	execution, err := launchLoopChild(input)
-	if err != nil || execution.CancellationError != context.DeadlineExceeded {
-		t.Fatalf("launchLoopChild = %+v, %v", execution, err)
-	}
-	if !execution.Containment.TerminationRequested || execution.Containment.Survivors || !execution.Failed() {
-		t.Fatalf("execution = %+v, want contained cancellation failure", execution)
+	result := make(chan loopChildExecution, 1)
+	go func() {
+		execution, err := launchLoopChild(input)
+		if err != nil {
+			execution.ContainmentError = err
+		}
+		result <- execution
+	}()
+	select {
+	case execution := <-result:
+		if execution.CancellationError != context.DeadlineExceeded || execution.ContainmentError != nil ||
+			!execution.Containment.TerminationRequested || execution.Containment.Survivors ||
+			!execution.Containment.leaderReaped || execution.ExitCode == nil || *execution.ExitCode != 1 || !execution.Failed() {
+			t.Fatalf("execution = %+v, want observed contained cancellation failure", execution)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("launcher did not return after contained cancellation")
 	}
 }
 

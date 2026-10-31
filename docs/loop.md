@@ -41,6 +41,44 @@ Dry run publishes the highest-ranked explicitly allowed task, its frozen
 implementation prompt, and the delivery/review limits — without launching a
 child process.
 
+## Caller-owned sequential check
+
+Optionally supply `--check <path>` with `--parallel 1` to gate each delivered
+completed pass before Taskrail selects another task:
+
+```sh
+taskrail loop --dry-run --check ./read-only-check --json
+taskrail loop --check ./read-only-check --timeout 10m \
+  --result-file /outside/repository/new-result.json -- child-command arg
+```
+
+Choose the executable yourself; Taskrail does not choose a tool or interpret its
+output. Bare names resolve through caller `PATH`; paths containing a separator
+resolve from the caller's original working directory. Missing or non-executable
+checks refuse before a child launches. Dry-run resolves and hashes without
+running the check. Parallel checks are deferred; `--parallel >1 --check ...`
+currently refuses even when only one task is eligible.
+
+After a final per-child `completed_pass`, the check runs once at the repository
+root, with no arguments, no shell, empty stdin, the caller environment without
+added delegation credentials, and the same independent `--timeout` budget. Both
+check streams go to Taskrail's stderr. Exit zero without timeout, signal,
+transport/containment failure, or repository mutation passes. Taskrail compares
+managed inputs, worktree content including ignored files, Git index/refs/root-ref
+candidates, and repository-owned Git configuration before and after the check.
+
+A failed check stops with `check_failed` and non-zero exit; it is never retried.
+Taskrail preserves the delivered commit, completion, and verification. It does
+not undo mutations made by the check. The result file retains the pre-check Git
+delivery observations and records absolute path, executable SHA-256, nullable
+exit code/signal, timeout, elapsed integer milliseconds through process drain,
+stream SHA-256 digests, and ordered mutation/process violations under
+`last_iteration.check` (inside `error.details` on failure). Absent or unattempted
+checks use null; empty streams use the empty-byte digest. A setup/spawn failure
+has null exit and signal with a process violation. Inspect this evidence and the
+current repository before deciding on any recovery. Without `--check`, the
+sequential workflow is unchanged apart from the nullable evidence member.
+
 ## Parallel clone frontier
 
 `--parallel <n>` previews one ranked, dependency-ready clone frontier without

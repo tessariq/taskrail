@@ -3,6 +3,8 @@ package main
 import (
 	"strings"
 	"testing"
+
+	"github.com/tessariq/taskrail/internal/taskrail"
 )
 
 // TestLoopHelpDescribesExecution guards against the help surface drifting back
@@ -33,6 +35,9 @@ func TestLoopHelpDescribesExecution(t *testing.T) {
 	for _, want := range []string{
 		"--dry-run",
 		"external",
+		"--check",
+		"caller-owned read-only executable gate",
+		"no arguments or shell",
 	} {
 		if !strings.Contains(summary, want) {
 			t.Fatalf("loop help description missing %q: %q", want, summary)
@@ -49,5 +54,17 @@ func TestLoopHelpDescribesExecution(t *testing.T) {
 	}
 	if !strings.Contains(flags, "--dry-run") {
 		t.Fatalf("loop help lost the --dry-run flag: %q", flags)
+	}
+}
+
+func TestRenderLoopDryRunIncludesResolvedCheck(t *testing.T) {
+	for _, selected := range []*taskrail.TaskLoopRow{nil, {TaskID: "T-001-ready"}} {
+		report := taskrail.LoopDryRunResult{Action: "run", Reason: "ready", SelectedTask: selected}
+		before := renderLoopDryRun(report)
+		report.Check = &taskrail.LoopCheck{Path: "/caller/check", SHA256: strings.Repeat("a", 64)}
+		after := renderLoopDryRun(report)
+		if !strings.HasPrefix(after, before) || !strings.Contains(after, "check:/caller/check") || !strings.Contains(after, "sha256:"+strings.Repeat("a", 64)) {
+			t.Fatalf("dry-run text lost resolved check: %q", after)
+		}
 	}
 }

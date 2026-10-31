@@ -37,6 +37,8 @@ before asking:
   caller explicitly needs `1` or `2`.
 - No Taskrail deadline: omit `--timeout` unless the caller selects a positive
   duration.
+- No caller-owned check: omit `--check` unless the caller supplies a read-only
+  executable for a sequential run. Never infer or substitute a check command.
 - Parallel clone depth `1` and workspace retention `failure`.
 - Local delivery: `--delivery local`; remote CI is `not_checked` unless the
   caller supplies a separate read-only CI observer.
@@ -45,6 +47,15 @@ Ask for an opaque child argv after `--`, not a shell command string. It must nam
 a real caller-owned executable and arguments. Stop if a missing provider command,
 model option, credential decision, review adapter, or required destructive
 authorization is missing. Do not guess or substitute one.
+
+For sequential execution, offer the optional `--check <path>` gate as a
+caller-owned choice. It runs once after each final `completed_pass`, before
+reselection, at the repository root with no arguments or shell, empty stdin,
+the caller environment without added delegation credentials, and `--timeout`
+applied independently. Missing/non-executable paths refuse before launch.
+Dry-run resolves and hashes without running it. Reject `--check` with
+`--parallel >1`; parallel checks are not implemented yet. Never replace this
+deterministic executable gate with an agent's own claim that checks passed.
 
 For parallel execution, ask for a positive width, an optional existing private
 workspace root outside the repository, clone depth, and retention policy. For
@@ -75,6 +86,8 @@ ${TASKRAIL:-taskrail} loop --dry-run --json \
 Omit flags whose safe default remains selected. If a replacement prompt is in
 use, require the caller to supply its exact `--allow-prompt-override-sha256`
 authorization; never compute or invent the digest.
+For a sequential check, add the same `--check <path>` to preview and execution,
+and include its reported absolute path and SHA-256 in the confirmed plan.
 
 Only `action: run` permits confirmation. Report `action:none` as a no-work,
 non-launching terminal outcome, and stop on `action:invalid`; neither permits a
@@ -188,3 +201,13 @@ remote CI, result file, and recovery. Claim overall success only when the
 operator's confirmed delivery and CI policy are satisfied. Otherwise report the
 safe next action from the terminal envelope and the remaining risk without
 performing another mutation.
+
+For sequential checks, report `last_iteration.check`, including the executable
+and stream digests, exit/signal/timeout, elapsed milliseconds through process
+drain, and mutation/process violations. Null means absent or not attempted, not
+a passing check. `check_failed` stops without retry or reset, retains the
+delivered commit and completed-pass lifecycle candidate, and does not revoke
+the persisted completion or verification. Taskrail compares managed inputs,
+worktree content including ignored files, Git state, and repository-owned Git
+configuration. Its Git delivery observations precede the check; warn that a
+mutating check may have left drift that requires explicit operator inspection.

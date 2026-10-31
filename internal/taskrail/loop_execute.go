@@ -113,7 +113,16 @@ func (s *Service) loopExecute(ctx context.Context, invocation LoopInvocation, pr
 		diagnostic.MutationViolations = mutation
 		diagnostic.ProcessViolations = process
 		diagnostic.Validation = loopValidation(iteration.Outcome == "invalid_postflight", s.loopPostflightValidation())
+		// Capture delivery before the read-only gate, which may move refs or
+		// dirty the tree. A failed check must not replace these observations.
 		diagnostic.Git = s.loopPostflightDelivery(snapshot, iteration, mutation)
+		if iteration.Outcome == "completed_pass" && snapshot.check != nil {
+			evidence, passed := s.runLoopCheck(ctx, snapshot)
+			iteration.Check = &evidence
+			if !passed {
+				iteration.Outcome = "check_failed"
+			}
+		}
 		if iteration.Outcome != "completed_pass" {
 			diagnostic.Outcome = iteration.Outcome
 			diagnostic.NextAction = loopNextAction(iteration.Outcome, iteration.TaskID)
@@ -292,7 +301,7 @@ func (s *Service) nextLoopIterationSnapshot(previous LoopPreflightSnapshot) (Loo
 		return LoopPreflightSnapshot{}, err
 	}
 	return LoopPreflightSnapshot{invocation: previous.Invocation(), inputs: inputs, git: git,
-		storage: previous.Storage(), review: previous.Review(), lock: previous.Lock(), rootRefs: rootRefs, gitConfig: gitConfig}, nil
+		storage: previous.Storage(), review: previous.Review(), lock: previous.Lock(), rootRefs: rootRefs, gitConfig: gitConfig, check: previous.check}, nil
 }
 
 func (s *Service) authorizeLoopExecutionPrompts(snapshot LoopPreflightSnapshot, ids ...string) error {

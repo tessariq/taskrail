@@ -33,6 +33,8 @@ type LoopInvocation struct {
 	DeliverySet               bool
 	ReviewAdapter             string
 	ReviewAdapterSet          bool
+	Check                     string
+	CheckSet                  bool
 	MaxReviewRounds           *int
 	Timeout                   *time.Duration
 	AllowPromptOverrideSHA256 string
@@ -51,6 +53,7 @@ type LoopPreflightSnapshot struct {
 	lock       LoopLockSnapshot
 	rootRefs   map[string][]byte
 	gitConfig  map[string]loopGitConfigFile
+	check      *LoopCheck
 }
 
 type LoopGitSnapshot struct {
@@ -151,7 +154,7 @@ func ParseLoopInvocation(args []string) (LoopInvocation, error) {
 			if name == "--dry-run" {
 				invocation.DryRun = true
 			}
-		case "--max-iterations", "--parallel", "--workspace-root", "--clone-depth", "--keep-workspaces", "--delivery", "--review-adapter", "--max-review-rounds", "--timeout", "--allow-prompt-override-sha256", "--result-file":
+		case "--max-iterations", "--parallel", "--workspace-root", "--clone-depth", "--keep-workspaces", "--delivery", "--review-adapter", "--check", "--max-review-rounds", "--timeout", "--allow-prompt-override-sha256", "--result-file":
 			if !inline {
 				i++
 				if i == len(args) {
@@ -193,6 +196,8 @@ func ParseLoopInvocation(args []string) (LoopInvocation, error) {
 				invocation.Delivery, invocation.DeliverySet = value, true
 			case "--review-adapter":
 				invocation.ReviewAdapter, invocation.ReviewAdapterSet = value, true
+			case "--check":
+				invocation.Check, invocation.CheckSet = value, true
 			case "--max-review-rounds":
 				n, err := positiveLoopInt(name, value)
 				if err != nil {
@@ -254,6 +259,10 @@ func positiveLoopInt(name, value string) (int, error) {
 func (s *Service) LoopPreflight(invocation LoopInvocation) (LoopPreflightSnapshot, error) {
 	invocation = normalizeLoopInvocation(invocation)
 	if err := ValidateLoopInvocation(invocation); err != nil {
+		return LoopPreflightSnapshot{}, err
+	}
+	check, err := resolveLoopCheck(invocation)
+	if err != nil {
 		return LoopPreflightSnapshot{}, err
 	}
 	if s.paths.WorktreeRoot == "" || s.paths.GitDir == "" || s.paths.GitCommonDir == "" {
@@ -319,7 +328,7 @@ func (s *Service) LoopPreflight(invocation LoopInvocation) (LoopPreflightSnapsho
 	}
 	return LoopPreflightSnapshot{invocation: cloneLoopInvocation(invocation), inputs: cloneLoopBytes(inputs), git: cloneLoopGit(git),
 		storage: LoopStorageSnapshot{Mode: string(s.paths.Storage.Mode), Root: s.paths.Storage.Root},
-		review:  review, lock: LoopLockSnapshot{Available: true}, rootRefs: cloneLoopBytes(rootRefs), gitConfig: cloneLoopGitConfig(gitConfig)}, nil
+		review:  review, lock: LoopLockSnapshot{Available: true}, rootRefs: cloneLoopBytes(rootRefs), gitConfig: cloneLoopGitConfig(gitConfig), check: check}, nil
 }
 
 func normalizeLoopInvocation(invocation LoopInvocation) LoopInvocation {
@@ -362,6 +371,12 @@ func ValidateLoopInvocation(invocation LoopInvocation) error {
 func validateParallelInvocation(invocation LoopInvocation) error {
 	if invocation.Parallel <= 0 {
 		return invalidArgumentsf("--parallel must be a positive integer")
+	}
+	if invocation.CheckSet && invocation.Check == "" {
+		return invalidArgumentsf("--check requires an executable path")
+	}
+	if invocation.Parallel > 1 && (invocation.CheckSet || invocation.Check != "") {
+		return invalidArgumentsf("--check currently requires --parallel 1")
 	}
 	if invocation.CloneDepth == "" || (invocation.CloneDepth != "full" && !isPositiveLoopInt(invocation.CloneDepth)) {
 		return invalidArgumentsf("--clone-depth must be a positive integer or full")

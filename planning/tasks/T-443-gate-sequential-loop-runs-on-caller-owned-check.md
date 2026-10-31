@@ -1,11 +1,16 @@
 ---
 id: T-443-gate-sequential-loop-runs-on-caller-owned-check
 title: Gate sequential loop runs on a caller-owned check
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#cross-platform-autonomous-loop
 dependencies: []
-updated_at: "2026-10-31T11:51:51Z"
+updated_at: "2026-10-31T18:56:45Z"
+completion_id: "200e729c0d594267b906b7c72b928de1"
+last_verification_id: "798d05d02b6a1f6680f98c2f0e491306"
+last_verification_result: pass
+last_verified_at: "2026-10-31T18:56:45Z"
+last_verified_completion_id: "200e729c0d594267b906b7c72b928de1"
 ---
 
 # T-443-gate-sequential-loop-runs-on-caller-owned-check Gate sequential loop runs on a caller-owned check
@@ -44,3 +49,6 @@ T-444.
 - Manual CLI run in a temp repo with a stub child and a shell-script check.
 
 ## Implementation Notes
+
+- 2026-10-31T18:56:33Z: Implemented optional sequential caller-owned checks with frozen executable evidence, read-only enforcement, timeout containment, preserved delivery diagnostics, and matching help, docs and packaged skill guidance. Bounded independent review and disposable integrated QA passed.
+- 2026-10-31T18:56:45Z: verification pass id 798d05d02b6a1f6680f98c2f0e491306 previous none completion 200e729c0d594267b906b7c72b928de1

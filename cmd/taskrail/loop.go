@@ -19,6 +19,7 @@ func newLoopCmd() *cobra.Command {
 	keepWorkspaces := loopStringFlag{target: &input.KeepWorkspaces}
 	delivery := loopStringFlag{target: &input.Delivery}
 	reviewAdapter := loopStringFlag{target: &input.ReviewAdapter}
+	check := loopStringFlag{target: &input.Check}
 	cmd := &cobra.Command{
 		Use:   "loop [flags] -- <command> <args...>",
 		Short: "Run deterministic unattended task execution",
@@ -29,6 +30,10 @@ func newLoopCmd() *cobra.Command {
 			"mode, which accepts no child command and reports the selected task and " +
 			"rendered prompt without launching one. Execution inside the Taskrail " +
 			"source checkout is unsupported.\n\n" +
+			"--check names an optional caller-owned read-only executable gate " +
+			"for sequential runs: after each delivered completed pass it runs " +
+			"once with no arguments or shell, using --timeout and the caller " +
+			"environment. Failure stops without resetting the delivered commit.\n\n" +
 			"--parallel greater than one runs that many isolated workers " +
 			"concurrently in private repository clones, and requires committed " +
 			"storage in a clean, attached worktree. Under the default " +
@@ -88,6 +93,7 @@ func newLoopCmd() *cobra.Command {
 	cmd.Flags().Var(&keepWorkspaces, "keep-workspaces", "parallel workspace retention")
 	cmd.Flags().Var(&delivery, "delivery", "parallel delivery mode")
 	cmd.Flags().Var(&reviewAdapter, "review-adapter", "caller-owned review delivery adapter")
+	cmd.Flags().Var(&check, "check", "optional caller-owned read-only gate executable (sequential only)")
 	cmd.Flags().StringVar(&input.AllowPromptOverrideSHA256, "allow-prompt-override-sha256", "", "authorize an exact replacement prompt template")
 	cmd.Flags().IntVar(&maxReviewRounds, "max-review-rounds", 0, "override implementation review rounds (1-2)")
 	cmd.Flags().DurationVar(&timeout, "timeout", 0, "per-child timeout")
@@ -97,7 +103,7 @@ func newLoopCmd() *cobra.Command {
 		for _, flag := range []struct {
 			name  string
 			count int
-		}{{"--parallel", parallel.count}, {"--workspace-root", workspaceRoot.count}, {"--clone-depth", cloneDepth.count}, {"--keep-workspaces", keepWorkspaces.count}, {"--delivery", delivery.count}, {"--review-adapter", reviewAdapter.count}} {
+		}{{"--parallel", parallel.count}, {"--workspace-root", workspaceRoot.count}, {"--clone-depth", cloneDepth.count}, {"--keep-workspaces", keepWorkspaces.count}, {"--delivery", delivery.count}, {"--review-adapter", reviewAdapter.count}, {"--check", check.count}} {
 			if flag.count > 1 {
 				return publishSelectionError(cmd, invalidArgumentsf("loop flag %s is repeated", flag.name))
 			}
@@ -120,6 +126,7 @@ func captureLoopInput(cmd *cobra.Command, input *taskrail.LoopInvocation, maxRev
 	input.KeepWorkspacesSet = cmd.Flags().Changed("keep-workspaces")
 	input.DeliverySet = cmd.Flags().Changed("delivery")
 	input.ReviewAdapterSet = cmd.Flags().Changed("review-adapter")
+	input.CheckSet = cmd.Flags().Changed("check")
 }
 
 func runLoopWithResultFile(cmd *cobra.Command, input taskrail.LoopInvocation) error {
@@ -239,8 +246,12 @@ func loopDryRunGate(report taskrail.LoopDryRunResult) error {
 }
 
 func renderLoopDryRun(report taskrail.LoopDryRunResult) string {
-	if report.SelectedTask == nil {
-		return fmt.Sprintf("action:%s reason:%s", report.Action, report.Reason)
+	text := fmt.Sprintf("action:%s reason:%s", report.Action, report.Reason)
+	if report.SelectedTask != nil {
+		text = fmt.Sprintf("action:%s task:%s reason:%s", report.Action, report.SelectedTask.TaskID, report.Reason)
 	}
-	return fmt.Sprintf("action:%s task:%s reason:%s", report.Action, report.SelectedTask.TaskID, report.Reason)
+	if report.Check != nil {
+		text += fmt.Sprintf(" check:%s sha256:%s", report.Check.Path, report.Check.SHA256)
+	}
+	return text
 }
