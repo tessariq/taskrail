@@ -33,6 +33,38 @@ dependencies:
     - T-406-task-review-unauthored-task-findings
     - T-407-spec-review-disposition-authority
     - T-400-local-mode-committed-skill-exclusion
+    - T-403-name-non-portable-review-id-refusals
+    - T-408-reword-eval-transcript-question
+    - T-409-reachable-skill-eval-scenarios
+    - T-410-plant-local-eval-decoys
+    - T-411-isolate-eval-sandbox-metadata
+    - T-412-observe-ignored-eval-writes
+    - T-419-refuse-skill-eval-adoption-and-resume-on-artifact
+    - T-420-packaged-skills-no-repo-internal-refs
+    - T-421-warn-when-v1-import-discards-supplied-task-body
+    - T-422-clarify-exact-existing-dependency-ids-in-import
+    - T-423-report-clean-failed-loop-child-as-child-failed
+    - T-424-accept-lifecycle-only-selected-task-writes
+    - T-425-commit-reprojected-state-in-parallel-integration
+    - T-426-never-publish-candidate-committed-by-conflict-child
+    - T-427-validate-each-replayed-parallel-candidate
+    - T-428-retain-integrated-work-when-publication-refuses
+    - T-429-recover-loop-executable-staging-after-kill
+    - T-430-revoke-delegated-writes-of-orphaned-loop-child
+    - T-431-bound-loop-child-timeout-when-descendant-holds-output
+    - T-432-make-loop-result-file-diagnostics-match-schema
+    - T-433-refuse-result-files-aliasing-repository-by-identity
+    - T-434-emit-machine-envelopes-for-early-argument-errors
+    - T-435-order-equal-priority-tasks-by-numeric-key
+    - T-436-document-executing-and-recovering-a-loop-run
+    - T-437-align-readme-non-goals-with-parallel-loop
+    - T-438-state-plainly-what-verify-records
+    - T-439-detect-state-projection-drift-in-checks
+    - T-440-bound-review-delivery-adapter-calls
+    - T-441-clarify-one-frontier-per-parallel-invocation
+    - T-442-report-task-not-found-before-active-conflict
+    - T-443-gate-sequential-loop-runs-on-caller-owned-check
+    - T-444-require-loop-check-for-parallel-candidates
 updated_at: "2026-09-09T14:07:00Z"
 last_verification_id: "525eef8e0e6f39b6ce2558ed2536b5cd"
 last_verification_result: fail

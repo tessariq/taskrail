@@ -4,8 +4,7 @@ title: Keep harness metadata and the candidate binary out of eval sandboxes
 status: todo
 priority: medium
 spec_ref: specs/v0.5.0.md#maintainer-skill-release-evaluations
-dependencies:
-    - T-174-run-the-v0-5-0-gap-and-drift-release-gate
+dependencies: []
 updated_at: "2026-09-11T16:28:50Z"
 ---
 
