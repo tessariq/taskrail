@@ -93,7 +93,7 @@ var (
 		"write_conflict", "recovery_pending", "partial_write", "rollback_failed",
 		"unsupported", "result_file_publish_failed", "blocked_fail", "rework_fail",
 		"completed_unverified", "completed_audit_fail", "child_failed",
-		"no_progress", "invalid_postflight", "batch_partial", "batch_failed",
+		"check_failed", "no_progress", "invalid_postflight", "batch_partial", "batch_failed",
 		"integration_failed", "adapter_failed",
 	}
 )
@@ -147,8 +147,8 @@ var (
 	loopExecutionPreflightErrors = mergeCodes(loopDryRunErrors, []string{"destination_exists", "path_blocked"})
 	loopPostflightErrors         = []string{
 		"blocked_fail", "rework_fail", "completed_unverified",
-		"completed_audit_fail", "child_failed", "no_progress", "invalid_postflight",
-		"batch_partial", "batch_failed", "integration_failed", "adapter_failed",
+		"completed_audit_fail", "child_failed", "check_failed", "no_progress",
+		"invalid_postflight", "batch_partial", "batch_failed", "integration_failed", "adapter_failed",
 	}
 )
 

@@ -17,8 +17,9 @@ without committing anything is reported as `invalid_postflight` with
 `delivery_commit_shape` instead of `child_failed`. The outcome precedence
 makes a non-zero or signalled child `child_failed`, the quota section calls
 that the ordinary case for a generic non-zero child, and a handled interrupt
-must publish `child_failed`. Operators are told the repository is invalid when
-the child simply failed.
+must publish `child_failed`. The spec now states it directly: a non-zero or
+signalled child that leaves HEAD unchanged delivered nothing, so delivery
+commit-shape requirements do not apply to it.
 
 Cause: `validateLoopDelivery` (internal/taskrail/loop_delivery.go) skips the
 commit-shape check for a failed child only when the tree is dirty and HEAD is

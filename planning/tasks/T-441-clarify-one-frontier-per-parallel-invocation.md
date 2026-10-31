@@ -12,18 +12,21 @@ updated_at: "2026-10-31T11:39:14Z"
 
 ## Description
 
-Spec gap. `loopParallelExecute` runs exactly one frontier per invocation, and
-`--max-iterations` above `--parallel` is silently ignored, while the spec's
-"remaining iteration budget" and "no new frontier" wording suggests successive
-frontiers. The result reports no remaining task or `iteration_limit`. Found in the 2026-10-31 critical review of the loop family at 5672a13.
+The spec now states that one parallel invocation runs exactly one frontier:
+`--max-iterations` greater than `--parallel` is `invalid_arguments`, and
+remaining eligible work is reported, never launched. Today
+`loopParallelExecute` runs one frontier while silently ignoring a larger
+`--max-iterations`, and the result reports no remaining work. Found in the
+2026-10-31 critical review of the loop family at 5672a13.
 
 ## Acceptance
 
-- The spec and docs say whether a parallel invocation runs one frontier or several.
-- If one: `--max-iterations` greater than `--parallel` in parallel mode is refused or reported as a dry-run warning, and the result names remaining eligible work.
+- Parallel dry-run and execution with `--max-iterations` greater than `--parallel` return `invalid_arguments` before any workspace is created.
+- A batch that leaves eligible allowed work reports it as remaining work in the parallel diagnostic.
+- docs/loop.md describes the one-frontier rule.
 
 ## Verification Notes
 
-- Dry-run and execution with `--parallel 2 --max-iterations 4` and four eligible tasks.
+- Smoke tests for the refusal; integration test with three eligible tasks and width two asserting the remaining task.
 
 ## Implementation Notes
