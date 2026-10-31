@@ -39,7 +39,11 @@ func TestLoopParallelRetainsUnpublishedIntegration(t *testing.T) {
 				if err != nil || len(matches) != 1 {
 					t.Fatalf("integration paths = %v, %v", matches, err)
 				}
-				integrationPath = matches[0]
+				// Reports retain canonical paths, not temporary-directory aliases.
+				integrationPath, err = filepath.EvalSymlinks(matches[0])
+				if err != nil {
+					t.Fatalf("resolve integration path: %v", err)
+				}
 				writeFile(t, filepath.Join(repo, "source-drift.txt"), "caller-owned drift\n")
 			}
 			t.Cleanup(func() { testHookParallelPublishAfterFetch = nil })
