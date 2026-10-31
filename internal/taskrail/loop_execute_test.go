@@ -102,8 +102,11 @@ func TestLoopExecuteStopsAfterFailedChild(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoopExecute: %v", err)
 	}
-	if report.Outcome != "invalid_postflight" || report.LastIteration == nil || report.LastIteration.TaskID != "T-001-ready" || report.IterationsCompleted != 1 {
-		t.Fatalf("report = %+v, want one failed child and invalid delivery", report)
+	if report.Outcome != "child_failed" || report.LastIteration == nil || report.LastIteration.TaskID != "T-001-ready" || report.IterationsCompleted != 1 {
+		t.Fatalf("report = %+v, want one failed child", report)
+	}
+	if report.LastIteration.Outcome != "child_failed" || report.LastIteration.Child.ExitCode == nil || *report.LastIteration.Child.ExitCode == 0 || len(report.MutationViolations) != 0 {
+		t.Fatalf("report = %+v, want nonzero child exit without mutation violations", report)
 	}
 	if report.RemainingTask != nil || report.NextAction == "" {
 		t.Fatalf("report recovery shape = %+v", report)

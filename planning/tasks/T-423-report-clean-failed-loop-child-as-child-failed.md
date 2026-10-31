@@ -1,11 +1,16 @@
 ---
 id: T-423-report-clean-failed-loop-child-as-child-failed
 title: Report a clean failed loop child as child_failed
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#cross-platform-autonomous-loop
 dependencies: []
-updated_at: "2026-10-31T11:36:49Z"
+updated_at: "2026-10-31T14:05:14Z"
+completion_id: "fee9330a717e42b55f9580a6a7243337"
+last_verification_id: "a25347e33960c3a6756abc6033679e7c"
+last_verification_result: pass
+last_verified_at: "2026-10-31T14:05:14Z"
+last_verified_completion_id: "fee9330a717e42b55f9580a6a7243337"
 ---
 
 # T-423-report-clean-failed-loop-child-as-child-failed Report a clean failed loop child as child_failed
@@ -45,3 +50,6 @@ gives `outcome: invalid_postflight`, `mutation_violations: [delivery_commit_shap
 - Manual: rerun the CLI repro and an interrupted run in a temp repo and inspect the result file.
 
 ## Implementation Notes
+
+- 2026-10-31T14:05:05Z: Failed children with unchanged HEAD no longer require delivery commits. Integrity precedence is preserved; public regression, full suite, independent review, and committed/local CLI signal checks pass.
+- 2026-10-31T14:05:14Z: verification pass id a25347e33960c3a6756abc6033679e7c previous none completion fee9330a717e42b55f9580a6a7243337

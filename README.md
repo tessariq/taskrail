@@ -53,7 +53,9 @@ one would. Every `--json` command emits one versioned envelope
 `error`), so an agent parses one shape.
 
 For unattended runs, `loop` executes explicitly allowed tasks inside operator-set
-bounds — see [docs/loop.md](docs/loop.md).
+bounds — see [docs/loop.md](docs/loop.md). A failed or interrupted child that
+leaves HEAD unchanged reports `child_failed`; repository integrity violations
+still take precedence as `invalid_postflight`.
 
 ### 2. Adopt it in a repository that already has work in flight
 

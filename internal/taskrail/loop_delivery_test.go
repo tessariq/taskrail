@@ -185,14 +185,14 @@ func TestValidateLoopDeliveryChecksChildFailureIntegrityAndRef(t *testing.T) {
 	}
 }
 
-func TestValidateLoopDeliveryChecksCleanChildFailureCommitShape(t *testing.T) {
+func TestValidateLoopDeliveryAllowsCleanChildFailureWithoutCommit(t *testing.T) {
 	root, evidence := loopDeliveryFixture(t, "committed")
 	evidence.ChildFailed = true
 	evidence.Postflight = loopDeliverySnapshot(t, root)
 
 	_, violations := validateLoopDelivery(evidence)
-	if !hasLoopIntegrityCode(violations, "delivery_commit_shape") {
-		t.Fatalf("violations = %+v, want clean child-failure delivery refusal", violations)
+	if len(violations) != 0 {
+		t.Fatalf("violations = %+v, want no delivery required for unchanged HEAD after child failure", violations)
 	}
 }
 

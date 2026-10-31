@@ -62,7 +62,7 @@ func validateLoopDelivery(evidence loopDeliveryEvidence) (LoopDelivery, []Machin
 	if !delivery.Descendant {
 		violations = append(violations, loopDeliveryViolation("delivery_not_descendant", "postflight HEAD is not descended from preflight HEAD"))
 	}
-	if evidence.ChildFailed && !after.Clean && before.Head == after.Head {
+	if evidence.ChildFailed && before.Head == after.Head {
 		sortLoopDeliveryViolations(violations)
 		return delivery, violations
 	}

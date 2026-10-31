@@ -19,6 +19,9 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ### Fixed
 
+- `taskrail loop` reports a failed or interrupted child with unchanged HEAD as
+  `child_failed`, even when the tree is clean. Integrity violations still take
+  precedence as `invalid_postflight`.
 - Packaged skills state task-sizing criteria and the semantic gap-analysis
   rationale without requiring Taskrail's development tasks or product specs.
 - Maintainer skill-evaluation stages now seal artifact-root and ancestor

@@ -312,7 +312,7 @@ func TestLoopExecutionPublishesPostflightFailureOutOfBand(t *testing.T) {
 	if err := json.Unmarshal(document, &envelope); err != nil {
 		t.Fatalf("decode postflight result: %v", err)
 	}
-	if envelope.Command != "loop" || envelope.Error.Code != "invalid_postflight" || envelope.Error.Code != envelope.Error.Details.Outcome {
+	if envelope.Command != "loop" || envelope.Error.Code != "child_failed" || envelope.Error.Code != envelope.Error.Details.Outcome {
 		t.Fatalf("postflight result = %+v", envelope)
 	}
 }

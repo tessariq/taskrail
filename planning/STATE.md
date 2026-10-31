@@ -1,6 +1,6 @@
 ---
 schema_version: 2
-updated_at: "2026-10-31T13:43:59Z"
+updated_at: "2026-10-31T14:05:14Z"
 active_spec_version: v0.5.0
 active_spec_path: specs/v0.5.0.md
 current_task: ""
@@ -8,10 +8,9 @@ current_task_title: ""
 status_summary: idle
 blockers: []
 next_action: Select the next eligible task
-last_verification_result: pass for T-420-packaged-skills-no-repo-internal-refs at 2026-10-31T13:43:59Z id f1d52cbbaea21a610223b3c8e7a85105
-last_verification_id: f1d52cbbaea21a610223b3c8e7a85105
-last_verification_previous_id: 034b491e56036945d243daaa2c890e50
-last_verified_completion_id: 23cc2ae0840acbd139710567223e52e2
+last_verification_result: pass for T-423-report-clean-failed-loop-child-as-child-failed at 2026-10-31T14:05:14Z id a25347e33960c3a6756abc6033679e7c
+last_verification_id: a25347e33960c3a6756abc6033679e7c
+last_verified_completion_id: fee9330a717e42b55f9580a6a7243337
 relevant_artifacts: []
 ---
 
@@ -35,7 +34,7 @@ relevant_artifacts: []
 
 ## Last Verification
 
-- pass for T-420-packaged-skills-no-repo-internal-refs at 2026-10-31T13:43:59Z id f1d52cbbaea21a610223b3c8e7a85105
+- pass for T-423-report-clean-failed-loop-child-as-child-failed at 2026-10-31T14:05:14Z id a25347e33960c3a6756abc6033679e7c
 
 ## Next Action
 
@@ -47,8 +46,8 @@ relevant_artifacts: []
 
 ## Task Counts
 
-- todo: 82
+- todo: 81
 - in_progress: 0
-- completed: 361
+- completed: 362
 - blocked: 0
 - cancelled: 0
