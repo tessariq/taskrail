@@ -135,6 +135,45 @@ func TestLoopExecuteRejectsGitConfigurationMutation(t *testing.T) {
 	}
 }
 
+func TestLoopExecuteAcceptsUnverifiedLifecycle(t *testing.T) {
+	clearLoopChildEnvironment(t)
+	t.Setenv("GO_WANT_LOOP_CHILD", "1")
+	binary := buildTaskrailExecutable(t)
+	previous := loopExecutablePath
+	loopExecutablePath = func() (string, error) { return binary, nil }
+	t.Cleanup(func() { loopExecutablePath = previous })
+	for _, test := range []struct{ action, outcome string }{
+		{"start", "no_progress"},
+		{"block", "no_progress"},
+		{"complete", "completed_unverified"},
+	} {
+		t.Run(test.action, func(t *testing.T) {
+			repo, svc := loopFixture(t)
+			writeTask(t, repo, "T-001-ready", "Ready", "todo", "high", "specs/v0.1.0.md#summary", nil)
+			if _, err := svc.MutateTaskLoopPolicy(LoopPolicyMutationInput{TaskID: "T-001-ready", Operation: LoopPolicyAllow, Reason: "exercise lifecycle"}); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := svc.Repair(RepairInput{Apply: true}); err != nil {
+				t.Fatal(err)
+			}
+			runGit(t, repo, "add", ".")
+			runGit(t, repo, "commit", "-m", "allow task")
+			head := strings.TrimSpace(gitOutput(t, repo, "rev-parse", "HEAD"))
+			child := []string{os.Args[0], "-test.run=^TestLoopLaunchChildHelper$", "--", "delegate-unverified", filepath.Join(t.TempDir(), "record"), test.action}
+			report, err := svc.LoopExecute(context.Background(), LoopInvocation{MaxIterations: 1, Child: child})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if report.Outcome != test.outcome || report.LastIteration == nil || report.LastIteration.LifecycleCandidate == nil || *report.LastIteration.LifecycleCandidate != test.outcome || len(report.MutationViolations) != 0 {
+				t.Fatalf("report = %+v, want %s without integrity violations", report, test.outcome)
+			}
+			if !report.Git.Clean || report.Git.HeadBefore != head || report.Git.HeadAfter == head || len(report.Git.Commits) != 1 {
+				t.Fatalf("Git = %+v, want one clean lifecycle commit", report.Git)
+			}
+		})
+	}
+}
+
 func TestLoopExecuteDeliversLocalLifecycleWithOneProductCommit(t *testing.T) {
 	clearLoopChildEnvironment(t)
 	t.Setenv("GO_WANT_LOOP_CHILD", "1")

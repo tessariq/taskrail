@@ -1,6 +1,6 @@
 ---
 schema_version: 2
-updated_at: "2026-10-31T14:05:14Z"
+updated_at: "2026-10-31T14:34:19Z"
 active_spec_version: v0.5.0
 active_spec_path: specs/v0.5.0.md
 current_task: ""
@@ -8,9 +8,9 @@ current_task_title: ""
 status_summary: idle
 blockers: []
 next_action: Select the next eligible task
-last_verification_result: pass for T-423-report-clean-failed-loop-child-as-child-failed at 2026-10-31T14:05:14Z id a25347e33960c3a6756abc6033679e7c
-last_verification_id: a25347e33960c3a6756abc6033679e7c
-last_verified_completion_id: fee9330a717e42b55f9580a6a7243337
+last_verification_result: pass for T-424-accept-lifecycle-only-selected-task-writes at 2026-10-31T14:34:19Z id 37390f58d4b4a64b2b120b51f2dcc9fb
+last_verification_id: 37390f58d4b4a64b2b120b51f2dcc9fb
+last_verified_completion_id: dbd15d70aadef1720687e2f1b6f6f7e5
 relevant_artifacts: []
 ---
 
@@ -34,7 +34,7 @@ relevant_artifacts: []
 
 ## Last Verification
 
-- pass for T-423-report-clean-failed-loop-child-as-child-failed at 2026-10-31T14:05:14Z id a25347e33960c3a6756abc6033679e7c
+- pass for T-424-accept-lifecycle-only-selected-task-writes at 2026-10-31T14:34:19Z id 37390f58d4b4a64b2b120b51f2dcc9fb
 
 ## Next Action
 
@@ -46,8 +46,8 @@ relevant_artifacts: []
 
 ## Task Counts
 
-- todo: 81
+- todo: 80
 - in_progress: 0
-- completed: 362
+- completed: 363
 - blocked: 0
 - cancelled: 0

@@ -1,11 +1,16 @@
 ---
 id: T-424-accept-lifecycle-only-selected-task-writes
 title: Accept lifecycle-only selected-task writes in loop postflight
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#cross-platform-autonomous-loop
 dependencies: []
-updated_at: "2026-10-31T11:39:08Z"
+updated_at: "2026-10-31T14:34:19Z"
+completion_id: "dbd15d70aadef1720687e2f1b6f6f7e5"
+last_verification_id: "37390f58d4b4a64b2b120b51f2dcc9fb"
+last_verification_result: pass
+last_verified_at: "2026-10-31T14:34:19Z"
+last_verified_completion_id: "dbd15d70aadef1720687e2f1b6f6f7e5"
 ---
 
 # T-424-accept-lifecycle-only-selected-task-writes Accept lifecycle-only selected-task writes in loop postflight
@@ -40,3 +45,6 @@ Repro: child `sh -c 'cat >/dev/null; "$TASKRAIL" start <id>; exit 1'` gives
 - Integration: a helper child that completes without verify and commits; assert `completed_unverified`.
 
 ## Implementation Notes
+
+- 2026-10-31T14:34:11Z: Accept canonical unverified lifecycle writes while preserving protected task contracts; public regression, full deterministic tests, sandbox CLI evidence, simplifier and independent integrity review passed.
+- 2026-10-31T14:34:19Z: verification pass id 37390f58d4b4a64b2b120b51f2dcc9fb previous none completion dbd15d70aadef1720687e2f1b6f6f7e5

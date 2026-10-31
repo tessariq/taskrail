@@ -239,6 +239,10 @@ func validSelectedTaskMutation(before, after []byte) bool {
 	if err != nil {
 		return false
 	}
+	_, originalBody, err := parseFrontmatter[TaskFrontmatter](before)
+	if err != nil || loopTaskContractBody(originalBody) != loopTaskContractBody(body) {
+		return false
+	}
 	task := &Task{Frontmatter: final, Body: body}
 	expected, err := patchLifecycleTaskBytes(before, task, map[string]string{
 		"status":     final.Status,
@@ -247,8 +251,33 @@ func validSelectedTaskMutation(before, after []byte) bool {
 	if err != nil {
 		return false
 	}
-	expected, err = patchVerificationMetadata(expected, task)
+	if final.LastVerificationID != "" {
+		expected, err = patchVerificationMetadata(expected, task)
+	} else if final.CompletionID != "" {
+		expected, err = patchCompletionMetadata(expected, task)
+	}
 	return err == nil && bytes.Equal(expected, after)
+}
+
+// Only a terminal Implementation Notes section may grow during lifecycle writes.
+func loopTaskContractBody(body string) string {
+	lines := strings.Split(body, "\n")
+	safeLines := markdownLinesWithoutFencedContent(body)
+	boundary, offset := len(body), 0
+	for i, line := range safeLines {
+		level, heading := markdownATXHeading(line)
+		if i > 0 && markdownSetextTextCandidate(safeLines[i-1]) && (markdownSetextH1Underline(line) || markdownSetextH2Underline(line)) {
+			boundary = len(body)
+		}
+		if level == 1 || level == 2 {
+			boundary = len(body)
+			if level == 2 && heading == "Implementation Notes" {
+				boundary = offset
+			}
+		}
+		offset += len(lines[i]) + 1
+	}
+	return strings.TrimRight(body[:boundary], "\n")
 }
 
 func validLoopFollowup(data []byte, selected string, proven map[string]bool) bool {

@@ -3,10 +3,80 @@ package taskrail
 import (
 	"encoding/json"
 	"path"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
 )
+
+func TestLoopIntegrityProtectsTaskContractAfterCanonicalLifecycle(t *testing.T) {
+	for _, action := range []string{"start", "complete", "block"} {
+		t.Run(action, func(t *testing.T) {
+			repo, svc := loopFixture(t)
+			writeTask(t, repo, "T-001-selected", "Selected", "todo", "high", "specs/v0.1.0.md#summary", nil)
+			taskPath := filepath.Join(repo, "planning", "tasks", "T-001-selected.md")
+			writeFile(t, taskPath, string(readBytes(t, taskPath))+"\n## Acceptance\n\nOriginal acceptance.\n\n## Verification Notes\n\nOriginal verification.\n")
+			before := []byte(readBytes(t, taskPath))
+			if _, err := svc.Start("T-001-selected"); err != nil {
+				t.Fatal(err)
+			}
+			switch action {
+			case "complete":
+				if _, err := svc.Complete("T-001-selected", "delivered without verification"); err != nil {
+					t.Fatal(err)
+				}
+			case "block":
+				if _, err := svc.Block("T-001-selected", "operator decision"); err != nil {
+					t.Fatal(err)
+				}
+			}
+			after := []byte(readBytes(t, taskPath))
+			if !validSelectedTaskMutation(before, after) {
+				t.Fatal("canonical lifecycle rejected")
+			}
+			paragraph := append(append([]byte{}, after...), "\nAdditional paragraph.\n"...)
+			if got := validSelectedTaskMutation(before, paragraph); got != (action != "start") {
+				t.Fatalf("paragraph acceptance = %v, want notes-only additions", got)
+			}
+			for _, suffix := range []string{
+				"\n## Verification Notes\n\nReplaced contract.\n",
+				"\n## Implementation Notes\n\nAllowed notes.\n\n## Acceptance\n\nInjected contract.\n",
+				"\nVerification Notes\n------------------\n\nInjected contract.\n",
+				"\nNew task\n========\n\nInjected contract.\n",
+			} {
+				if validSelectedTaskMutation(before, append(append([]byte{}, after...), suffix...)) {
+					t.Fatalf("protected body suffix accepted: %q", suffix)
+				}
+			}
+			if action != "start" {
+				fenced := append(append([]byte{}, after...), "\n```markdown\n## Acceptance\nVerification Notes\n------------------\nNew task\n========\n```\n"...)
+				if !validSelectedTaskMutation(before, fenced) {
+					t.Fatal("fenced example in Implementation Notes rejected")
+				}
+			}
+			for _, change := range []struct{ name, old, new string }{
+				{"title", "title: Selected", "title: Different"},
+				{"priority", "priority: high", "priority: low"},
+				{"spec", "specs/v0.1.0.md#summary", "specs/v0.1.0.md#goals"},
+				{"dependencies", "dependencies: []", "dependencies: [T-009-other]"},
+				{"loop policy", "priority: high", "priority: high\nloop_policy: exclude\nloop_reason: escape"},
+				{"description", "Fixture task.", "Changed description."},
+				{"acceptance", "Original acceptance.", "Changed acceptance."},
+				{"verification notes", "Original verification.", "Changed verification."},
+			} {
+				t.Run(change.name, func(t *testing.T) {
+					if !strings.Contains(string(after), change.old) {
+						t.Fatal("mutation target missing")
+					}
+					mutated := []byte(strings.Replace(string(after), change.old, change.new, 1))
+					if validSelectedTaskMutation(before, mutated) {
+						t.Fatal("protected contract mutation accepted")
+					}
+				})
+			}
+		})
+	}
+}
 
 func TestLoopIntegrityAllowsCanonicalLifecycleAndProvenFollowup(t *testing.T) {
 	before := loopIntegrityFixtureInputs(t)

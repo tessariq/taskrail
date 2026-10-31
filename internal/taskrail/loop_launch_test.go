@@ -433,6 +433,21 @@ func TestLoopLaunchChildHelper(t *testing.T) {
 			os.Exit(95)
 		}
 		os.Exit(0)
+	case "delegate-unverified":
+		cwd, err := os.Getwd()
+		if err != nil || len(args) < separator+4 {
+			os.Exit(97)
+		}
+		runLoopHelperCommand(cwd, os.Getenv("TASKRAIL"), "start", "T-001-ready")
+		switch args[separator+3] {
+		case "complete":
+			runLoopHelperCommand(cwd, os.Getenv("TASKRAIL"), "complete", "T-001-ready", "--note", "unverified delivery")
+		case "block":
+			runLoopHelperCommand(cwd, os.Getenv("TASKRAIL"), "block", "T-001-ready", "--reason", "operator needed")
+		}
+		runLoopHelperCommand(cwd, "git", "add", ".")
+		runLoopHelperCommand(cwd, "git", "commit", "-m", "record lifecycle")
+		os.Exit(0)
 	case "delegate-local-lifecycle":
 		if len(args) < separator+4 {
 			os.Exit(82)

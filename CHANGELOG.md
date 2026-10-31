@@ -19,6 +19,10 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ### Fixed
 
+- `taskrail loop` accepts canonical selected-task start, complete, and block
+  writes without verification metadata. A committed unverified completion now
+  reaches `completed_unverified` instead of an integrity refusal; protected task
+  metadata and body contracts remain frozen.
 - `taskrail loop` reports a failed or interrupted child with unchanged HEAD as
   `child_failed`, even when the tree is clean. Integrity violations still take
   precedence as `invalid_postflight`.

@@ -55,7 +55,9 @@ one would. Every `--json` command emits one versioned envelope
 For unattended runs, `loop` executes explicitly allowed tasks inside operator-set
 bounds — see [docs/loop.md](docs/loop.md). A failed or interrupted child that
 leaves HEAD unchanged reports `child_failed`; repository integrity violations
-still take precedence as `invalid_postflight`.
+still take precedence as `invalid_postflight`. Canonical lifecycle writes without
+verification are accepted: a clean committed completion reports
+`completed_unverified`, while start or block alone has candidate `no_progress`.
 
 ### 2. Adopt it in a repository that already has work in flight
 
