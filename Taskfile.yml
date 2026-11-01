@@ -78,7 +78,7 @@ tasks:
     desc: Run all tests
     deps: [taskrail:install]
     cmds:
-      - go test ./...
+      - go test -timeout 15m ./...
 
   test:short:
     desc: Run the tests minus the long working-binary suites (local hook lane; CI runs `test`)
