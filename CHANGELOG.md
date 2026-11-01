@@ -36,6 +36,8 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ### Fixed
 
+- Skill-eval human review questions refer to the actual agent transcript,
+  rather than a stubbed transcript, including the spec-review comparisons.
 - Sequential `taskrail loop` children can each complete and verify a task in one
   invocation without colliding on the prior child's verification identity.
 - `taskrail loop` gives each staged executable a unique hash-prefixed path, so

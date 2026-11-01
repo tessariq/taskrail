@@ -20,6 +20,20 @@ func TestSkillEvalRegistryCoversEveryShippedSkill(t *testing.T) {
 	}
 }
 
+func TestSkillEvalRegistryQuestionsReferToActualTranscript(t *testing.T) {
+	registry, err := loadSkillEvalRegistry(filepath.Join("testdata", "skill-evals", "v1", "cases"), shippableSkills)
+	if err != nil {
+		t.Fatalf("loadSkillEvalRegistry: %v", err)
+	}
+	for _, evaluation := range registry {
+		for _, question := range evaluation.HumanReviewQuestions {
+			if strings.Contains(strings.ToLower(question), "stubbed") {
+				t.Errorf("case %s question must describe the actual transcript: %q", evaluation.CaseID, question)
+			}
+		}
+	}
+}
+
 // TestSpecReviewCasesAssertDispositionAuthorityAndRepeatVisibility pins the
 // T-407 failure modes into the spec-review evaluation. Mechanical predicates
 // certify only supplied-bundle consistency, so each case must direct its run at
