@@ -68,6 +68,14 @@ func TestSpecReviewCasesAssertDispositionAuthorityAndRepeatVisibility(t *testing
 		if !strings.Contains(questions, "unchanged-spec-byte") || !strings.Contains(questions, "declared round history") {
 			t.Errorf("case %s must ask the human to compare the transcript with the declared round history's repeats", evaluation.CaseID)
 		}
+		if !strings.Contains(questions, "without publishing") {
+			t.Errorf("case %s must check the missing-disposition stop without publication", evaluation.CaseID)
+		}
+		for _, question := range evaluation.HumanReviewQuestions {
+			if strings.Contains(question, "published bundle") && !strings.HasPrefix(question, "If publication proceeds") {
+				t.Errorf("case %s must condition bundle inspection on publication: %q", evaluation.CaseID, question)
+			}
+		}
 	}
 	if seen != 2 {
 		t.Fatalf("spec-review cases = %d, want the committed and local pair", seen)
@@ -94,6 +102,9 @@ func TestTaskReviewCasesAssertUnauthoredScaffoldFindings(t *testing.T) {
 		observation := strings.ToLower(evaluation.ExpectedObservation)
 		if !strings.Contains(observation, "cannot conclude clean") || !strings.Contains(observation, "at least one finding") {
 			t.Errorf("case %s expected observation must state the unauthored-scaffold findings-or-refusal outcome", evaluation.CaseID)
+		}
+		if !strings.Contains(observation, "if a review is published") {
+			t.Errorf("case %s must make review-bundle output conditional on publication", evaluation.CaseID)
 		}
 		questions := strings.Join(evaluation.HumanReviewQuestions, "\n")
 		if !strings.Contains(questions, "empty findings array") {

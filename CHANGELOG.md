@@ -36,6 +36,10 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ### Fixed
 
+- Skill-eval prompts name the conditions their fixtures actually establish,
+  including missing-input and no-op boundaries, rather than requesting
+  unsupported positive or recovery flows. Loop fixtures explicitly allow their
+  dry-run subject; disposable setup tests check every registered case.
 - Skill-eval human review questions refer to the actual agent transcript,
   rather than a stubbed transcript, including the spec-review comparisons.
 - Sequential `taskrail loop` children can each complete and verify a task in one
