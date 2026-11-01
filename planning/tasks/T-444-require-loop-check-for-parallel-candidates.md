@@ -1,12 +1,17 @@
 ---
 id: T-444-require-loop-check-for-parallel-candidates
 title: Require the loop check for parallel candidates
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#parallel-isolated-clone-batches
 dependencies:
     - T-443-gate-sequential-loop-runs-on-caller-owned-check
-updated_at: "2026-10-31T11:51:51Z"
+updated_at: "2026-11-01T00:37:22Z"
+completion_id: "5b16de81853cbbbfbc63bee76d65b7e3"
+last_verification_id: "af670805ec75fd60ccd2fc8d53ab8491"
+last_verification_result: pass
+last_verified_at: "2026-11-01T00:37:22Z"
+last_verified_completion_id: "5b16de81853cbbbfbc63bee76d65b7e3"
 ---
 
 # T-444-require-loop-check-for-parallel-candidates Require the loop check for parallel candidates
@@ -37,3 +42,6 @@ final integration head after the aggregate child, before the fast-forward.
 - Smoke test for the missing-check refusal in parallel dry-run and execution.
 
 ## Implementation Notes
+
+- 2026-11-01T00:37:14Z: Implemented required local parallel candidate and final same-head checks with retained evidence, safe rollback and mutation refusal, plus preflight refusal of unsafe checked review delivery. Bounded independent review, full deterministic checks and frozen-candidate disposable integrated QA passed.
+- 2026-11-01T00:37:22Z: verification pass id af670805ec75fd60ccd2fc8d53ab8491 previous none completion 5b16de81853cbbbfbc63bee76d65b7e3

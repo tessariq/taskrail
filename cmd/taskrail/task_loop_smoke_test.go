@@ -130,8 +130,8 @@ func TestLoopDryRunPublishesRunAndInvalidReportsWithoutMutation(t *testing.T) {
 		t.Fatal("loop dry run changed the sandbox")
 	}
 	stdout, _, err = runRootSplit(t, "loop", "--dry-run", "--parallel", "2", "--max-iterations", "2", "--json")
-	if err != nil {
-		t.Fatalf("parallel loop dry run: %v (stdout %q)", err, stdout)
+	if err == nil {
+		t.Fatalf("unchecked parallel loop accepted (stdout %q)", stdout)
 	}
 	var parallel struct {
 		Action       string                        `json:"action"`
@@ -140,7 +140,7 @@ func TestLoopDryRunPublishesRunAndInvalidReportsWithoutMutation(t *testing.T) {
 		Parallel     *taskrail.ParallelPlan        `json:"parallel"`
 	}
 	decodeMachineResult(t, stdout, &parallel)
-	if parallel.Action != "run" || parallel.SelectedTask != nil || parallel.Prompt != nil || parallel.Parallel == nil || parallel.Parallel.RequestedWidth != 2 || parallel.Parallel.EffectiveWidth != 2 || len(parallel.Parallel.Frontier) != 1 || parallel.Parallel.Frontier[0].Task.TaskID != "T-001-ready" {
+	if parallel.Action != "invalid" || parallel.SelectedTask != nil || parallel.Prompt != nil || parallel.Parallel == nil || parallel.Parallel.RequestedWidth != 2 || parallel.Parallel.EffectiveWidth != 2 || len(parallel.Parallel.Frontier) != 1 || parallel.Parallel.Frontier[0].Task.TaskID != "T-001-ready" {
 		t.Fatalf("parallel dry-run report = %+v", parallel)
 	}
 	if after := readAllFiles(t, root); !reflect.DeepEqual(after, before) || loopGitOutput(t, root, "status", "--porcelain=v1") != statusBefore || loopGitOutput(t, root, "for-each-ref", "--format=%(refname):%(objectname)") != refsBefore {

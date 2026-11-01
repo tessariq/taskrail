@@ -38,7 +38,8 @@ before asking:
 - No Taskrail deadline: omit `--timeout` unless the caller selects a positive
   duration.
 - No caller-owned check: omit `--check` unless the caller supplies a read-only
-  executable for a sequential run. Never infer or substitute a check command.
+  executable for a sequential run. Effective parallel widths above one require
+  a caller-supplied check; stop if it is missing. Never infer a check command.
 - Parallel clone depth `1` and workspace retention `failure`.
 - Local delivery: `--delivery local`; remote CI is `not_checked` unless the
   caller supplies a separate read-only CI observer.
@@ -53,9 +54,17 @@ caller-owned choice. It runs once after each final `completed_pass`, before
 reselection, at the repository root with no arguments or shell, empty stdin,
 the caller environment without added delegation credentials, and `--timeout`
 applied independently. Missing/non-executable paths refuse before launch.
-Dry-run resolves and hashes without running it. Reject `--check` with
-`--parallel >1`; parallel checks are not implemented yet. Never replace this
-deterministic executable gate with an agent's own claim that checks passed.
+Dry-run resolves and hashes without running it. For effective parallel widths
+above one, require `--check`: Taskrail checks each replayed integration commit,
+then checks the final unchanged aggregate-child head before local publication.
+Failed candidates roll back while later independent work can proceed; mutation
+stops the batch fail-closed. Diagnostics retain checked-head and process evidence.
+Never replace this deterministic executable gate with an agent's own claim that
+checks passed. Effective width is `min(--parallel, --max-iterations)`, not frontier
+size. Parallel `--delivery review` with a check refuses `unsupported` before
+workspaces, workers, or adapter calls; missing-check refusals take precedence.
+Stop on this restriction: safe review publication needs a separate adapter
+protocol change, and no remote rollback is implied.
 
 For parallel execution, ask for a positive width, an optional existing private
 workspace root outside the repository, clone depth, and retention policy. For
@@ -86,7 +95,7 @@ ${TASKRAIL:-taskrail} loop --dry-run --json \
 Omit flags whose safe default remains selected. If a replacement prompt is in
 use, require the caller to supply its exact `--allow-prompt-override-sha256`
 authorization; never compute or invent the digest.
-For a sequential check, add the same `--check <path>` to preview and execution,
+For a check, add the same `--check <path>` to preview and execution,
 and include its reported absolute path and SHA-256 in the confirmed plan.
 
 Only `action: run` permits confirmation. Report `action:none` as a no-work,

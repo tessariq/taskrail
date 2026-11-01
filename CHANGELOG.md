@@ -9,8 +9,16 @@ All notable user-visible changes to Taskrail will be documented in this file.
 - Sequential `taskrail loop --check <path>` runs one caller-owned read-only
   executable after each delivered completed pass, with timeout and hashed
   process evidence. Failure stops with `check_failed` without resetting the
-  delivered commit. Dry-run reports its resolved path and SHA-256; parallel
-  checks remain unsupported.
+  delivered commit. Dry-run reports its resolved path and SHA-256.
+- Parallel loops require `--check` at effective widths above one. Local replay
+  checks reject failing candidates while later independent candidates proceed;
+  a final check follows the aggregate child on the same head before publication.
+  Diagnostics preserve checked-head and process evidence after rollback, and
+  mutating checks stop the batch fail-closed.
+  Parallel review delivery with a supplied check now refuses `unsupported`
+  before workspaces, workers, or adapter calls until the adapter protocol can
+  verify the exact combined head before publication. Missing-check refusals
+  take precedence.
 - `taskrail init` — inside a Git worktree, adds a marked `.gitignore` block
   keeping generated `planning/artifacts/` output out of Git status; existing
   user rules are preserved byte-for-byte and re-runs add nothing.

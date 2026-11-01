@@ -48,7 +48,7 @@ func TestLoopParallelRetainsUnpublishedIntegration(t *testing.T) {
 			}
 			t.Cleanup(func() { testHookParallelPublishAfterFetch = nil })
 			child := []string{helper, "-test.run=^TestLoopLaunchChildHelper$", "--", "parallel-worker", filepath.Join(t.TempDir(), "unused")}
-			report, err := svc.LoopExecute(context.Background(), LoopInvocation{MaxIterations: 2, Parallel: 2,
+			report, err := svc.LoopExecute(context.Background(), LoopInvocation{MaxIterations: 2, Parallel: 2, Check: passingLoopCheck(t),
 				KeepWorkspaces: retention, Child: child})
 			if err != nil {
 				t.Fatal(err)

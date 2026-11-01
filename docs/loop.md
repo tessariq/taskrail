@@ -56,8 +56,23 @@ Choose the executable yourself; Taskrail does not choose a tool or interpret its
 output. Bare names resolve through caller `PATH`; paths containing a separator
 resolve from the caller's original working directory. Missing or non-executable
 checks refuse before a child launches. Dry-run resolves and hashes without
-running the check. Parallel checks are deferred; `--parallel >1 --check ...`
-currently refuses even when only one task is eligible.
+running the check. Effective parallel widths above one require `--check`, even
+when only one task is eligible. Each replayed integration commit is checked;
+failure rejects and rolls back that candidate while later independent candidates
+can proceed. A mutating check stops the batch without publication rather than
+trusting reset to restore arbitrary files, refs, or configuration. After the
+aggregate child passes, the final check must pass on the same unchanged head
+before local fast-forward publication. Candidate and final diagnostics retain
+the checked head and process evidence, including after rollback.
+
+Effective width is `min(--parallel, --max-iterations)`, not frontier size.
+Parallel review delivery is temporarily unavailable: with a supplied check,
+`--delivery review` refuses `unsupported` before workspaces, workers, or adapter
+calls. Without a check, the missing-check refusal takes precedence. The existing
+adapter protocol merges before aggregate validation and cannot yet provide the
+required pre-publication guarantee; Taskrail does not claim remote rollback.
+The review-adapter description below documents that protocol, not an enabled
+safe-delivery mode. Width-one parallel-only flag refusals are unchanged.
 
 After a final per-child `completed_pass`, the check runs once at the repository
 root, with no arguments, no shell, empty stdin, the caller environment without

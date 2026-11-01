@@ -19,6 +19,7 @@ func TestParseLoopCheck(t *testing.T) {
 	for _, args := range [][]string{
 		{"--check", "gate", "--", "child"},
 		{"--dry-run", "--check=gate"},
+		{"--max-iterations=2", "--parallel=2", "--check=gate", "--", "child"},
 	} {
 		if _, err := ParseLoopInvocation(args); err != nil {
 			t.Fatalf("ParseLoopInvocation(%v): %v", args, err)
@@ -27,7 +28,6 @@ func TestParseLoopCheck(t *testing.T) {
 	for _, args := range [][]string{
 		{"--check=", "--", "child"},
 		{"--check=gate", "--check=other", "--", "child"},
-		{"--parallel=2", "--check=gate", "--", "child"},
 	} {
 		if _, err := ParseLoopInvocation(args); MachineFailureFor(err).Code != MachineCodeInvalidArguments {
 			t.Fatalf("ParseLoopInvocation(%v): %v, want invalid_arguments", args, err)
@@ -213,6 +213,13 @@ func TestLoopCheckExecution(t *testing.T) {
 	}
 }
 
+func passingLoopCheck(t *testing.T) string {
+	t.Helper()
+	t.Setenv("LOOP_CHECK_MODE", "pass")
+	t.Setenv("LOOP_CHECK_RECORD", filepath.Join(t.TempDir(), "heads"))
+	return buildLoopCheck(t)
+}
+
 func buildLoopCheck(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
@@ -226,6 +233,8 @@ func main() {
  fmt.Fprint(os.Stdout, "gate stdout\n"); fmt.Fprint(os.Stderr, "gate stderr\n")
  switch os.Getenv("LOOP_CHECK_MODE") {
  case "fail": os.Exit(7)
+ case "build": c := exec.Command("go", "test", "./..."); c.Stdout = os.Stdout; c.Stderr = os.Stderr; if c.Run() != nil { os.Exit(7) }
+ case "final-fail": data, _ := os.ReadFile(os.Getenv("LOOP_CHECK_RECORD")); n := 0; for _, b := range data { if b == '\n' { n++ } }; if n == 4 { os.Exit(7) }
  case "timeout": time.Sleep(30*time.Second)
  case "close-output": os.Stdout.Close(); os.Stderr.Close(); time.Sleep(6*time.Second)
  case "signal": p, _ := os.FindProcess(os.Getpid()); p.Signal(os.Interrupt); time.Sleep(time.Second); os.Exit(90)

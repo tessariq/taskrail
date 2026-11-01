@@ -799,14 +799,15 @@ func TestParallelLoopPromptAuthorizationBindsIntegrationReplacement(t *testing.T
 	runGit(t, repo, "add", ".")
 	runGit(t, repo, "commit", "-m", "replace integration prompt")
 
-	snapshot, err := svc.LoopPreflight(LoopInvocation{MaxIterations: 1, Parallel: 2, Child: []string{"child"}})
+	check := passingLoopCheck(t)
+	snapshot, err := svc.LoopPreflight(LoopInvocation{MaxIterations: 2, Parallel: 2, Check: check, Child: []string{"child"}})
 	if err != nil {
 		t.Fatalf("preflight: %v", err)
 	}
 	if err := svc.authorizeLoopExecutionPrompts(snapshot, "task-implementation", "loop-integration"); err == nil {
 		t.Fatal("parallel prompt authorization accepted an unsigned replacement")
 	}
-	dryRun, err := svc.LoopDryRun(LoopInvocation{DryRun: true, MaxIterations: 1, Parallel: 2})
+	dryRun, err := svc.LoopDryRun(LoopInvocation{DryRun: true, MaxIterations: 2, Parallel: 2, Check: check})
 	if err != nil || dryRun.Action != "invalid" {
 		t.Fatalf("parallel dry-run = %+v, %v; want unauthorized replacement refusal", dryRun, err)
 	}
@@ -814,7 +815,7 @@ func TestParallelLoopPromptAuthorizationBindsIntegrationReplacement(t *testing.T
 	if err := svc.authorizeLoopExecutionPrompts(snapshot, "task-implementation", "loop-integration"); err != nil {
 		t.Fatalf("parallel prompt authorization: %v", err)
 	}
-	dryRun, err = svc.LoopDryRun(LoopInvocation{DryRun: true, MaxIterations: 1, Parallel: 2, AllowPromptOverrideSHA256: promptDigest(builtin)})
+	dryRun, err = svc.LoopDryRun(LoopInvocation{DryRun: true, MaxIterations: 2, Parallel: 2, Check: check, AllowPromptOverrideSHA256: promptDigest(builtin)})
 	if err != nil || dryRun.Action == "invalid" {
 		t.Fatalf("authorized parallel dry-run = %+v, %v", dryRun, err)
 	}

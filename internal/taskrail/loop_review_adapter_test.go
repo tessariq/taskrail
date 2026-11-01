@@ -3,7 +3,6 @@ package taskrail
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -61,7 +60,7 @@ func TestValidateReviewAdapterResultRejectsUntrustedResponses(t *testing.T) {
 	}
 }
 
-func TestLoopExecuteDeliversParallelReviewBatchThroughAdapter(t *testing.T) {
+func TestLoopExecuteRefusesParallelReviewBatchBeforeAdapter(t *testing.T) {
 	clearLoopChildEnvironment(t)
 	repo, svc := loopFixture(t)
 	writeTask(t, repo, "T-001-ready", "First", "todo", "high", "specs/v0.1.0.md#summary", nil)
@@ -71,38 +70,15 @@ func TestLoopExecuteDeliversParallelReviewBatchThroughAdapter(t *testing.T) {
 	runGit(t, repo, "add", ".")
 	runGit(t, repo, "commit", "-m", "allow parallel tasks")
 
-	binary := buildTaskrailExecutable(t)
-	previous := loopExecutablePath
-	loopExecutablePath = func() (string, error) { return binary, nil }
-	t.Cleanup(func() { loopExecutablePath = previous })
-	t.Setenv("GO_WANT_LOOP_CHILD", "1")
-	helper, err := os.Executable()
-	if err != nil {
-		t.Fatalf("resolve test helper: %v", err)
-	}
-	child := []string{helper, "-test.run=^TestLoopLaunchChildHelper$", "--", "parallel-worker", filepath.Join(t.TempDir(), "unused")}
-
 	result, err := PrepareLoopResultFile(filepath.Join(t.TempDir(), "loop-result.json"))
 	if err != nil {
 		t.Fatalf("prepare result file: %v", err)
 	}
-	report, err := svc.LoopExecuteWithPreparedResultFile(context.Background(), LoopInvocation{MaxIterations: 2, Parallel: 2,
-		Delivery: "review", DeliverySet: true, ReviewAdapter: buildReviewAdapter(t), ReviewAdapterSet: true,
-		ResultFile: filepath.Join(t.TempDir(), "loop-result.json"), Child: child}, result)
-	if err != nil {
-		t.Fatalf("LoopExecute: %v", err)
-	}
-	if report.Outcome != "batch_pass" || report.Remote != "not_checked" || report.Parallel == nil || report.Parallel.Delivery.Remote != "adapter_reported" || len(report.Parallel.Delivery.PublishedTasks) != 2 {
-		encoded, _ := json.MarshalIndent(report, "", "  ")
-		t.Fatalf("review delivery report = %s", encoded)
-	}
-	children := report.Parallel.Integration.Children
-	if len(children) != 2 || children[0].Role != "conflict_resolution" || children[0].Outcome != "pass" ||
-		children[0].TaskID == nil || children[0].CandidateHead == nil || children[0].WorkerEvidenceSHA256 == nil ||
-		children[0].Prompt.ID != "loop-integration" || children[1].Role != "aggregate_gate" || children[1].Outcome != "pass" ||
-		children[1].BoundHead != *report.Parallel.Integration.Head || children[1].Prompt.ID != "loop-integration" {
-		encoded, _ := json.MarshalIndent(report.Parallel.Integration, "", "  ")
-		t.Fatalf("review integration evidence = %s", encoded)
+	_, err = svc.LoopExecuteWithPreparedResultFile(context.Background(), LoopInvocation{MaxIterations: 2, Parallel: 2, Check: passingLoopCheck(t),
+		Delivery: "review", DeliverySet: true, ReviewAdapter: "must-not-resolve", ReviewAdapterSet: true,
+		ResultFile: filepath.Join(t.TempDir(), "loop-result.json"), Child: []string{"must-not-launch"}}, result)
+	if MachineFailureFor(err).Code != MachineCodeUnsupported {
+		t.Fatalf("review delivery refusal: %v", err)
 	}
 	for _, taskID := range []string{"T-001-ready", "T-002-ready"} {
 		tasks, err := svc.loadTasks()

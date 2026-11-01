@@ -55,6 +55,10 @@ func TestLoopHelpDescribesExecution(t *testing.T) {
 	if !strings.Contains(flags, "--dry-run") {
 		t.Fatalf("loop help lost the --dry-run flag: %q", flags)
 	}
+	usage := newLoopCmd().Flags().Lookup("check").Usage
+	if !strings.Contains(usage, "required for effective parallel width >1") || strings.Contains(usage, "sequential only") {
+		t.Fatalf("check flag help contradicts parallel requirement: %q", usage)
+	}
 }
 
 func TestRenderLoopDryRunIncludesResolvedCheck(t *testing.T) {

@@ -38,7 +38,7 @@ func TestLoopExecuteParallelConflictBoundary(t *testing.T) {
 			for _, name := range []string{"TMPDIR", "TMP", "TEMP"} {
 				t.Setenv(name, workspaceRoot)
 			}
-			report, err := svc.LoopExecute(context.Background(), LoopInvocation{MaxIterations: 3, Parallel: 3, CloneDepth: "full", KeepWorkspaces: "always",
+			report, err := svc.LoopExecute(context.Background(), LoopInvocation{MaxIterations: 3, Parallel: 3, Check: passingLoopCheck(t), CloneDepth: "full", KeepWorkspaces: "always",
 				Child: []string{helper, "-test.run=^TestLoopLaunchChildHelper$", "--", "parallel-conflict-worker", mode}})
 			if err != nil {
 				t.Fatal(err)

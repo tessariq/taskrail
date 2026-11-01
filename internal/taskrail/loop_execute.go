@@ -80,7 +80,7 @@ func (s *Service) loopExecute(ctx context.Context, invocation LoopInvocation, pr
 		return LoopDiagnostic{}, err
 	}
 	invocation = snapshot.Invocation()
-	if invocation.Parallel > 1 {
+	if min(invocation.Parallel, invocation.MaxIterations) > 1 {
 		return s.loopParallelExecute(ctx, invocation, snapshot)
 	}
 	if err := s.authorizeLoopExecutionPrompts(snapshot, "task-implementation"); err != nil {

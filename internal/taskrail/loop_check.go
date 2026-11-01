@@ -94,9 +94,12 @@ func (s *Service) runLoopCheck(ctx context.Context, snapshot LoopPreflightSnapsh
 	}
 	evidence.MutationViolations = sortedByContractKey(evidence.MutationViolations, violationOrderKey)
 	evidence.ProcessViolations = sortedByContractKey(evidence.ProcessViolations, violationOrderKey)
-	passed := evidence.ExitCode != nil && *evidence.ExitCode == 0 && evidence.Signal == nil && !evidence.TimedOut &&
+	return evidence, loopCheckPassed(evidence)
+}
+
+func loopCheckPassed(evidence LoopCheckEvidence) bool {
+	return evidence.ExitCode != nil && *evidence.ExitCode == 0 && evidence.Signal == nil && !evidence.TimedOut &&
 		len(evidence.MutationViolations) == 0 && len(evidence.ProcessViolations) == 0
-	return evidence, passed
 }
 
 type loopCheckSnapshot struct {

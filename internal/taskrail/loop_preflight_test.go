@@ -431,7 +431,7 @@ func TestLoopDryRunBuildsParallelFrontierWithoutMutation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("snapshot Git config before dry run: %v", err)
 	}
-	report, err := svc.LoopDryRun(LoopInvocation{DryRun: true, MaxIterations: 3, Parallel: 2})
+	report, err := svc.LoopDryRun(LoopInvocation{DryRun: true, MaxIterations: 3, Parallel: 2, Check: passingLoopCheck(t)})
 	if err != nil {
 		t.Fatalf("LoopDryRun: %v", err)
 	}

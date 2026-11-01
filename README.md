@@ -60,8 +60,14 @@ verification are accepted: a clean committed completion reports
 `completed_unverified`, while start or block alone has candidate `no_progress`.
 Sequential runs optionally accept a caller-owned `--check <path>`: a read-only
 executable gate after each delivered completed pass. Failure stops with
-`check_failed` and retains the delivered commit and result-file evidence;
-parallel check support is deferred.
+`check_failed` and retains the delivered commit and result-file evidence.
+Effective parallel widths above one require `--check`: each replayed integration
+commit must pass, and the aggregate child is followed by a final check on the
+same head before local publication. Failed candidate checks roll back without
+blocking later independent work; mutation stops publication fail-closed.
+Parallel `--delivery review` currently refuses `unsupported` before any adapter
+call when a check is supplied; safe pre-publication adapter gating is follow-up
+work, not a release-acceptance waiver.
 Parallel integration commits include reprojected `STATE.md` counts for all work
 accepted so far, rather than the last worker's isolated counts.
 If publication refuses after integration passes, the default `failure` retention

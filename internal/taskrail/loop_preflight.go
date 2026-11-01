@@ -265,6 +265,9 @@ func (s *Service) LoopPreflight(invocation LoopInvocation) (LoopPreflightSnapsho
 	if err != nil {
 		return LoopPreflightSnapshot{}, err
 	}
+	if min(invocation.Parallel, invocation.MaxIterations) > 1 && invocation.Delivery == "review" && check != nil {
+		return LoopPreflightSnapshot{}, WithMachineErrorCode(MachineCodeUnsupported, errors.New("parallel review delivery with --check is unsupported until the adapter can verify the combined head before publication"))
+	}
 	if s.paths.WorktreeRoot == "" || s.paths.GitDir == "" || s.paths.GitCommonDir == "" {
 		return LoopPreflightSnapshot{}, WithMachineErrorCode(MachineCodeGitState, errors.New("loop requires a Git worktree"))
 	}
@@ -375,8 +378,8 @@ func validateParallelInvocation(invocation LoopInvocation) error {
 	if invocation.CheckSet && invocation.Check == "" {
 		return invalidArgumentsf("--check requires an executable path")
 	}
-	if invocation.Parallel > 1 && (invocation.CheckSet || invocation.Check != "") {
-		return invalidArgumentsf("--check currently requires --parallel 1")
+	if !invocation.DryRun && min(invocation.Parallel, invocation.MaxIterations) > 1 && invocation.Check == "" {
+		return invalidArgumentsf("effective parallel width greater than 1 requires --check")
 	}
 	if invocation.CloneDepth == "" || (invocation.CloneDepth != "full" && !isPositiveLoopInt(invocation.CloneDepth)) {
 		return invalidArgumentsf("--clone-depth must be a positive integer or full")

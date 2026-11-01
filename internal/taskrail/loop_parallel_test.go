@@ -167,7 +167,7 @@ func TestLoopExecuteDeliversParallelCloneBatch(t *testing.T) {
 	}
 	child := []string{helper, "-test.run=^TestLoopLaunchChildHelper$", "--", "parallel-worker", filepath.Join(t.TempDir(), "unused")}
 
-	report, err := svc.LoopExecute(context.Background(), LoopInvocation{MaxIterations: 2, Parallel: 2, Child: child})
+	report, err := svc.LoopExecute(context.Background(), LoopInvocation{MaxIterations: 2, Parallel: 2, Check: passingLoopCheck(t), Child: child})
 	if err != nil {
 		t.Fatalf("LoopExecute: %v", err)
 	}
@@ -396,6 +396,7 @@ func TestFinishParallelDeliveryRefusesSourceDriftAfterFetch(t *testing.T) {
 	t.Cleanup(func() { testHookParallelPublishAfterFetch = nil })
 	diagnostic := LoopDiagnostic{}
 	batch := ParallelBatch{Integration: ParallelIntegration{AggregatePass: true, Head: &target, Workspace: &integration,
+		Check:    &ParallelCheck{Head: target, Evidence: LoopCheckEvidence{ExitCode: new(int)}},
 		Children: []ParallelIntegrationChild{{Role: "aggregate_gate", BoundHead: target, Outcome: "pass"}}}}
 
 	svc.finishParallelDelivery(snapshot, &diagnostic, &batch)
@@ -444,6 +445,7 @@ func TestFinishParallelDeliveryReportsInterruptedFastForwardForConservativeRecov
 	t.Cleanup(func() { testHookParallelPublishAfterFastForward = nil })
 	diagnostic := LoopDiagnostic{}
 	batch := ParallelBatch{Integration: ParallelIntegration{AggregatePass: true, Head: &target, Workspace: &integration,
+		Check:    &ParallelCheck{Head: target, Evidence: LoopCheckEvidence{ExitCode: new(int)}},
 		Children: []ParallelIntegrationChild{{Role: "aggregate_gate", BoundHead: target, Outcome: "pass"}}}}
 
 	svc.finishParallelDelivery(snapshot, &diagnostic, &batch)
@@ -492,6 +494,7 @@ func TestFinishParallelDeliveryTreatsDirtyBaseHeadAsInterrupted(t *testing.T) {
 	t.Cleanup(func() { testHookParallelPublishBeforeFastForward = nil })
 	diagnostic := LoopDiagnostic{}
 	batch := ParallelBatch{Integration: ParallelIntegration{AggregatePass: true, Head: &target, Workspace: &integration,
+		Check:    &ParallelCheck{Head: target, Evidence: LoopCheckEvidence{ExitCode: new(int)}},
 		Children: []ParallelIntegrationChild{{Role: "aggregate_gate", BoundHead: target, Outcome: "pass"}}}}
 
 	svc.finishParallelDelivery(snapshot, &diagnostic, &batch)
@@ -765,7 +768,21 @@ func runParallelLoopChild(conflictMode string) int {
 		_ = os.WriteFile(os.Getenv("LOOP_CHILD_STOP_RECORD"), []byte(taskID), 0o600)
 		return 7
 	}
-	if conflictMode != "" {
+	if conflictMode == "semantic" {
+		product, data := "independent.txt", taskID+"\n"
+		if taskID == "T-001-ready" {
+			product, data = "api.go", "package fixture\nfunc New() {}\n"
+		}
+		if taskID == "T-002-ready" {
+			product, data = "caller.go", "package fixture\nfunc Caller() { Old() }\n"
+		}
+		if err := os.WriteFile(product, []byte(data), 0o600); err != nil {
+			return 94
+		}
+		if err := exec.Command("git", "add", product).Run(); err != nil {
+			return 94
+		}
+	} else if conflictMode != "" {
 		product := "shared.txt"
 		if taskID == "T-003-ready" {
 			product = "independent.txt"

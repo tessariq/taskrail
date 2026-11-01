@@ -34,15 +34,24 @@ type ParallelWorker struct {
 	CandidateCommit  *string            `json:"candidate_commit"`
 	Integrated       bool               `json:"integrated"`
 	IntegratedCommit *string            `json:"integrated_commit"`
+	Check            *ParallelCheck     `json:"check"`
 	Workspace        *string            `json:"workspace"`
 	Violations       []MachineViolation `json:"violations"`
 }
+
+type ParallelCheck struct {
+	Head     string            `json:"head"`
+	Evidence LoopCheckEvidence `json:"evidence"`
+}
+
+var errParallelCheckRollback = errors.New("integration check rollback could not be verified")
 
 type ParallelIntegration struct {
 	BaseHead      string                     `json:"base_head"`
 	Head          *string                    `json:"head"`
 	AcceptedTasks []string                   `json:"accepted_tasks"`
 	AggregatePass bool                       `json:"aggregate_pass"`
+	Check         *ParallelCheck             `json:"check"`
 	Children      []ParallelIntegrationChild `json:"children"`
 	Workspace     *string                    `json:"workspace"`
 }
@@ -352,6 +361,13 @@ func (s *Service) integrateParallelWorkers(ctx context.Context, invocation LoopI
 			batch.Integration.Children = append(batch.Integration.Children, *child)
 		}
 		if err != nil {
+			if errors.Is(err, errParallelCheckRollback) || (worker.Check != nil && len(worker.Check.Evidence.MutationViolations) != 0) {
+				worker.Outcome = "integration_failed"
+				worker.Violations = append(worker.Violations, parallelViolation("integration_failed", err.Error()))
+				// A reset cannot restore arbitrary untracked files, refs, or Git
+				// configuration. Do not assess another candidate on these inputs.
+				return append(violations, parallelViolation("check_mutation", "integration check mutated repository state; batch stopped after rollback"))
+			}
 			if errors.Is(err, errLoopGitConfigChanged) {
 				worker.Outcome = "invalid_postflight"
 				worker.Violations = append(worker.Violations, parallelViolation("git_config_changed", "parallel integration child changed Git configuration"))
@@ -394,6 +410,13 @@ func (s *Service) integrateParallelCandidate(ctx context.Context, invocation Loo
 	defer func() {
 		if resultErr != nil {
 			parallelResetIntegration(root, head)
+			if worker.Check != nil {
+				observed, err := gitCommand(root, "rev-parse", "HEAD")
+				status, statusErr := gitCommand(root, "status", "--porcelain=v1", "--untracked-files=all")
+				if err != nil || statusErr != nil || strings.TrimSpace(observed) != head || strings.TrimSpace(status) != "" {
+					resultErr = fmt.Errorf("%w: %v", errParallelCheckRollback, resultErr)
+				}
+			}
 			if child != nil {
 				child.Outcome = "fail"
 			}
@@ -449,6 +472,17 @@ func (s *Service) integrateParallelCandidate(ctx context.Context, invocation Loo
 	command.Env = append(os.Environ(), commitEnvironment...)
 	if output, err := command.CombinedOutput(); err != nil {
 		return child, fmt.Errorf("commit integrated candidate: %w: %s", err, strings.TrimSpace(string(output)))
+	}
+	if snapshot.check != nil {
+		checkedHead, err := gitCommand(root, "rev-parse", "HEAD")
+		if err != nil {
+			return child, err
+		}
+		evidence, passed := service.runLoopCheck(ctx, snapshot)
+		worker.Check = &ParallelCheck{Head: strings.TrimSpace(checkedHead), Evidence: evidence}
+		if !passed {
+			return child, fmt.Errorf("integration check failed on %s", worker.Check.Head)
+		}
 	}
 	return child, nil
 }
@@ -568,6 +602,11 @@ func (s *Service) runParallelAggregateChild(ctx context.Context, invocation Loop
 	}
 	value := child.BoundHead
 	batch.Integration.Head = &value
+	if snapshot.check != nil {
+		evidence, passed := validation.runLoopCheck(ctx, snapshot)
+		batch.Integration.Check = &ParallelCheck{Head: value, Evidence: evidence}
+		return passed, nil
+	}
 	return true, nil
 }
 
@@ -853,6 +892,9 @@ func (s *Service) finishParallelDelivery(snapshot LoopPreflightSnapshot, diagnos
 
 func parallelAggregateAttested(integration ParallelIntegration) bool {
 	if !integration.AggregatePass || integration.Head == nil {
+		return false
+	}
+	if integration.Check == nil || integration.Check.Head != *integration.Head || !loopCheckPassed(integration.Check.Evidence) {
 		return false
 	}
 	for _, child := range integration.Children {

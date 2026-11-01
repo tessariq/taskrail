@@ -34,6 +34,13 @@ func newLoopCmd() *cobra.Command {
 			"for sequential runs: after each delivered completed pass it runs " +
 			"once with no arguments or shell, using --timeout and the caller " +
 			"environment. Failure stops without resetting the delivered commit.\n\n" +
+			"Effective parallel widths above one require --check. Each replayed " +
+			"integration commit is checked, and a final check follows the aggregate " +
+			"child on the same head before local publication. Failed candidates " +
+			"roll back; mutating checks stop the batch fail-closed. Effective width " +
+			"is min(--parallel, --max-iterations), not eligible-frontier size. " +
+			"Parallel --delivery review with a check is unsupported before any " +
+			"workspace, worker, or adapter call; missing-check errors take precedence.\n\n" +
 			"--parallel greater than one runs that many isolated workers " +
 			"concurrently in private repository clones, and requires committed " +
 			"storage in a clean, attached worktree. Under the default " +
@@ -93,7 +100,7 @@ func newLoopCmd() *cobra.Command {
 	cmd.Flags().Var(&keepWorkspaces, "keep-workspaces", "parallel workspace retention")
 	cmd.Flags().Var(&delivery, "delivery", "parallel delivery mode")
 	cmd.Flags().Var(&reviewAdapter, "review-adapter", "caller-owned review delivery adapter")
-	cmd.Flags().Var(&check, "check", "optional caller-owned read-only gate executable (sequential only)")
+	cmd.Flags().Var(&check, "check", "caller-owned read-only gate executable (required for effective parallel width >1)")
 	cmd.Flags().StringVar(&input.AllowPromptOverrideSHA256, "allow-prompt-override-sha256", "", "authorize an exact replacement prompt template")
 	cmd.Flags().IntVar(&maxReviewRounds, "max-review-rounds", 0, "override implementation review rounds (1-2)")
 	cmd.Flags().DurationVar(&timeout, "timeout", 0, "per-child timeout")

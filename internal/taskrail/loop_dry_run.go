@@ -115,13 +115,19 @@ func (s *Service) LoopDryRun(invocation LoopInvocation) (LoopDryRunResult, error
 	}
 	report := loopDryRunReport(snapshot, selection)
 	report.Check = snapshot.check
-	if invocation.Parallel > 1 {
+	parallel := min(invocation.Parallel, invocation.MaxIterations) > 1
+	if parallel {
 		plan, err := s.loopParallelPlan(snapshot, selection.Tasks)
 		if err != nil {
 			return LoopDryRunResult{}, err
 		}
 		report.Parallel = &plan
 		report.SelectedTask = nil
+		if snapshot.check == nil {
+			report.Action = "invalid"
+			report.Reason = "effective parallel width greater than 1 requires --check"
+			return report, nil
+		}
 		if len(plan.Frontier) > 0 {
 			report.Action = "run"
 			report.Reason = "selected allowed parallel frontier by priority and stable task id"
@@ -135,7 +141,7 @@ func (s *Service) LoopDryRun(invocation LoopInvocation) (LoopDryRunResult, error
 		return LoopDryRunResult{}, err
 	}
 	ids := []string{"task-implementation"}
-	if invocation.Parallel > 1 {
+	if parallel {
 		ids = append(ids, "loop-integration")
 	}
 	replacements, err := s.loopPromptReplacementDigests(snapshot, ids...)
@@ -162,7 +168,7 @@ func (s *Service) LoopDryRun(invocation LoopInvocation) (LoopDryRunResult, error
 			return report, nil
 		}
 	}
-	if report.Action != "run" || invocation.Parallel > 1 {
+	if report.Action != "run" || parallel {
 		return report, nil
 	}
 	prompt, err := s.loopDryRunPrompt(snapshot, *selection.SelectedTask)
@@ -222,7 +228,7 @@ func (s *Service) loopParallelPlan(snapshot LoopPreflightSnapshot, rows []TaskLo
 		frontier[i] = ParallelTaskPlan{Rank: i + 1, Task: task}
 	}
 	var adapter *string
-	if invocation.Delivery == "review" {
+	if invocation.Delivery == "review" && snapshot.check != nil {
 		resolved, err := resolveReviewAdapter(invocation.ReviewAdapter)
 		if err != nil {
 			return ParallelPlan{}, err
