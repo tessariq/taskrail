@@ -3,12 +3,80 @@ package taskrail
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 )
+
+func TestLoopExecuteDeliversTwoFreshVerifications(t *testing.T) {
+	clearLoopChildEnvironment(t)
+	t.Setenv("GO_WANT_LOOP_CHILD", "1")
+	binary := buildTaskrailExecutable(t)
+	previous := loopExecutablePath
+	loopExecutablePath = func() (string, error) { return binary, nil }
+	t.Cleanup(func() { loopExecutablePath = previous })
+	check := buildLoopCheck(t)
+	for _, checked := range []bool{false, true} {
+		t.Run(fmt.Sprint(checked), func(t *testing.T) {
+			repo, svc := loopFixture(t)
+			writeFile(t, filepath.Join(repo, ".gitattributes"), "* text eol=lf\n")
+			ids := []string{"T-001-ready", "T-002-ready"}
+			for _, id := range ids {
+				writeTask(t, repo, id, "Sequential delivery", "todo", "high", "specs/v0.1.0.md#summary", nil)
+				if _, err := svc.MutateTaskLoopPolicy(LoopPolicyMutationInput{TaskID: id, Operation: LoopPolicyAllow, Reason: "sequential delivery"}); err != nil {
+					t.Fatal(err)
+				}
+			}
+			runGit(t, repo, "add", ".")
+			runGit(t, repo, "commit", "-m", "allow sequential tasks")
+			base := gitOutput(t, repo, "rev-parse", "HEAD")
+			record := filepath.Join(t.TempDir(), "check-heads")
+			t.Setenv("LOOP_CHECK_RECORD", record)
+			t.Setenv("LOOP_CHECK_MODE", "pass")
+			input := LoopInvocation{MaxIterations: 2, Child: []string{os.Args[0], "-test.run=^TestLoopLaunchChildHelper$", "--", "parallel-worker", "unused"}}
+			if checked {
+				input.Check = check
+			}
+			report, err := svc.LoopExecute(context.Background(), input)
+			if err != nil || report.Outcome != "no_work" || report.IterationsCompleted != 2 {
+				t.Fatalf("two-task delivery: %+v, %v", report, err)
+			}
+			commits := strings.Fields(gitOutput(t, repo, "rev-list", "--reverse", base+"..HEAD"))
+			if len(commits) != 2 || gitOutput(t, repo, "status", "--porcelain") != "" {
+				t.Fatalf("delivery commits/cleanliness: %v", commits)
+			}
+			seen := map[string]bool{}
+			for i, id := range ids {
+				task, state, reports, _ := svc.loopPostflightLifecycle(id)
+				meta := task.Frontmatter.CompletionVerificationMetadata
+				if task.Frontmatter.Status != "completed" || meta.LastVerificationResult != "pass" || meta.CompletionID == "" || meta.LastVerifiedCompletionID != meta.CompletionID || meta.LastVerificationPreviousID != "" {
+					t.Fatalf("task %s completion metadata: %+v", id, meta)
+				}
+				if !lowerHex32.MatchString(meta.LastVerificationID) || seen[meta.LastVerificationID] {
+					t.Fatalf("task %s verification identity is invalid or reused: %q", id, meta.LastVerificationID)
+				}
+				artifact, ok := reports[meta.LastVerificationID]
+				if !ok || artifact.TaskID != id || artifact.Result != "pass" || valueOrEmpty(artifact.ObservedCompletionID) != meta.CompletionID || artifact.PreviousVerificationID != nil {
+					t.Fatalf("task %s metadata/artifact: %+v %+v", id, meta, artifact)
+				}
+				seen[meta.LastVerificationID] = true
+				committed := gitOutput(t, repo, "show", commits[i]+":planning/tasks/"+id+".md")
+				if !strings.Contains(committed, meta.LastVerificationID) || !strings.Contains(committed, meta.CompletionID) {
+					t.Fatalf("delivery commit lacks task bindings: %s", committed)
+				}
+				if i == 1 && (valueOrEmpty(report.LastIteration.VerificationIDAfter) != meta.LastVerificationID || valueOrEmpty(report.LastIteration.ObservedCompletionID) != meta.CompletionID || state.Frontmatter.LastVerificationID != meta.LastVerificationID) {
+					t.Fatalf("final observations disagree: %+v", report.LastIteration)
+				}
+			}
+			if checked && strings.Join(strings.Fields(readBytes(t, record)), "\n") != strings.Join(commits, "\n") {
+				t.Fatalf("checks did not observe both deliveries in order: %s", readBytes(t, record))
+			}
+		})
+	}
+}
 
 func TestLoopExecuteReportsInitialNoWorkWithoutLaunchingChild(t *testing.T) {
 	clearLoopChildEnvironment(t)

@@ -61,6 +61,8 @@ verification are accepted: a clean committed completion reports
 Sequential runs optionally accept a caller-owned `--check <path>`: a read-only
 executable gate after each delivered completed pass. Failure stops with
 `check_failed` and retains the delivered commit and result-file evidence.
+Each verification gets a fresh identity, so sequential children can complete
+and verify multiple tasks in one invocation, with or without a check.
 Effective parallel widths above one require `--check`: each replayed integration
 commit must pass, and the aggregate child is followed by a final check on the
 same head before local publication. Failed candidate checks roll back without

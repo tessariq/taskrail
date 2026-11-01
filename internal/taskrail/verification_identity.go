@@ -27,16 +27,9 @@ func (s *Service) freshVerificationID(state *State, tasks []*Task) (string, erro
 	if err != nil {
 		return "", err
 	}
-	if delegatedInvocation() {
-		id := os.Getenv("TASKRAIL_DELEGATION_ID")
-		if !lowerHex32.MatchString(id) {
-			return "", fmt.Errorf("generate verification id: delegation id must be lower-case 32-hex")
-		}
-		if _, exists := used[id]; exists {
-			return "", fmt.Errorf("generate verification id: delegation id is already present in preflight evidence")
-		}
-		return id, nil
-	}
+	// Delegation authenticates the writer for the whole loop invocation, not a
+	// verification event. Each event needs its own fresh identity, including
+	// later children and audits by the same child.
 	generator := s.verificationID
 	if generator == nil {
 		generator = randomVerificationID

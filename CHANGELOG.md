@@ -32,6 +32,8 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ### Fixed
 
+- Sequential `taskrail loop` children can each complete and verify a task in one
+  invocation without colliding on the prior child's verification identity.
 - `taskrail loop` gives each staged executable a unique hash-prefixed path, so
   an abruptly killed coordinator's leftover copy no longer blocks a later run
   with the same binary after guarded lock recovery. Cleanup remains limited to

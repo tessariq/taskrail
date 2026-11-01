@@ -1,6 +1,6 @@
 ---
 schema_version: 2
-updated_at: "2026-11-01T00:43:38Z"
+updated_at: "2026-11-01T01:06:43Z"
 active_spec_version: v0.5.0
 active_spec_path: specs/v0.5.0.md
 current_task: ""
@@ -8,9 +8,9 @@ current_task_title: ""
 status_summary: idle
 blockers: []
 next_action: Select the next eligible task
-last_verification_result: pass for T-444-require-loop-check-for-parallel-candidates at 2026-11-01T00:37:22Z id af670805ec75fd60ccd2fc8d53ab8491
-last_verification_id: af670805ec75fd60ccd2fc8d53ab8491
-last_verified_completion_id: 5b16de81853cbbbfbc63bee76d65b7e3
+last_verification_result: pass for T-445-give-sequential-loop-children-fresh-verification at 2026-11-01T01:06:43Z id 9f573107c2cb9b93b3558b0637f49d8d
+last_verification_id: 9f573107c2cb9b93b3558b0637f49d8d
+last_verified_completion_id: 41912ed4c7180ec62fb94267566bf03c
 relevant_artifacts: []
 ---
 
@@ -34,7 +34,7 @@ relevant_artifacts: []
 
 ## Last Verification
 
-- pass for T-444-require-loop-check-for-parallel-candidates at 2026-11-01T00:37:22Z id af670805ec75fd60ccd2fc8d53ab8491
+- pass for T-445-give-sequential-loop-children-fresh-verification at 2026-11-01T01:06:43Z id 9f573107c2cb9b93b3558b0637f49d8d
 
 ## Next Action
 
@@ -46,8 +46,8 @@ relevant_artifacts: []
 
 ## Task Counts
 
-- todo: 76
+- todo: 75
 - in_progress: 0
-- completed: 369
+- completed: 370
 - blocked: 0
 - cancelled: 0

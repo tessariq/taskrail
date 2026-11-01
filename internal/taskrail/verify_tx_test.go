@@ -712,8 +712,8 @@ func TestDelegatedVerifyWrites(t *testing.T) {
 			}
 		}
 		want := strings.TrimRight(strings.Join(lines, "\n"), "\n")
-		want = strings.Replace(want, stamp, stamp+"\ncompletion_id: \""+firstCompletionID+"\"\nlast_verification_id: \""+delegatedVerificationID+"\"\nlast_verification_result: pass\nlast_verified_at: \"2026-08-17T09:00:00Z\"\nlast_verified_completion_id: \""+firstCompletionID+"\"", 1) +
-			"\n\n## Implementation Notes\n\n- 2026-08-17T09:00:00Z: verification pass id " + delegatedVerificationID + " previous none completion " + firstCompletionID + "\n"
+		want = strings.Replace(want, stamp, stamp+"\ncompletion_id: \""+firstCompletionID+"\"\nlast_verification_id: \""+testVerificationID(1)+"\"\nlast_verification_result: pass\nlast_verified_at: \"2026-08-17T09:00:00Z\"\nlast_verified_completion_id: \""+firstCompletionID+"\"", 1) +
+			"\n\n## Implementation Notes\n\n- 2026-08-17T09:00:00Z: verification pass id " + testVerificationID(1) + " previous none completion " + firstCompletionID + "\n"
 		if after != want {
 			t.Fatalf("delegated verify changed an owned line:\nwant:\n%s\ngot:\n%s", want, after)
 		}
@@ -788,7 +788,7 @@ func TestDelegatedLocalVerifyUsesPhysicalArtifactGrant(t *testing.T) {
 	if _, err := runVerify(t, svc, baseVerifyInput()); err != nil {
 		t.Fatalf("delegated local verify: %v", err)
 	}
-	artifact := filepath.Join(svc.paths.VerifyDir, "T-002", verifyTimestamp+"-"+delegatedVerificationID, "report.json")
+	artifact := filepath.Join(svc.paths.VerifyDir, "T-002", verifyTimestamp+"-"+testVerificationID(1), "report.json")
 	if _, err := os.Stat(artifact); err != nil {
 		t.Fatalf("local verification artifact %s: %v", artifact, err)
 	}

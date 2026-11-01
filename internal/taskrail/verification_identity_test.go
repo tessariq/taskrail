@@ -14,6 +14,34 @@ const (
 	secondVerificationID = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 )
 
+func TestDelegatedVerifyRejectsReusedIdentityAndPreservesTaskPredecessor(t *testing.T) {
+	svc, repo, delegation := verifyDelegationFixture(t, "T-002")
+	asVerifyDelegate(t, delegation)
+	first, err := svc.Verify(baseVerifyInput())
+	if err != nil {
+		t.Fatal(err)
+	}
+	before := snapshotTree(t, repo)
+	svc.verificationID = func() (string, error) { return first.VerificationID, nil }
+	if _, err := svc.Verify(baseVerifyInput()); err == nil || !strings.Contains(err.Error(), "absent from preflight evidence") {
+		t.Fatalf("reused identity accepted: %v", err)
+	}
+	if !mapEqual(snapshotTree(t, repo), before) {
+		t.Fatal("refused replay changed persisted evidence")
+	}
+	svc.verificationID = func() (string, error) { return secondVerificationID, nil }
+	second, err := svc.Verify(baseVerifyInput())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if second.VerificationID != secondVerificationID || valueOrEmpty(second.PreviousVerificationID) != first.VerificationID || !sameOptionalID(first.ObservedCompletionID, second.ObservedCompletionID) {
+		t.Fatalf("delegated verification chain: first %+v second %+v", first, second)
+	}
+	if validation, err := svc.Validate(); err != nil || !validation.Valid {
+		t.Fatalf("validate delegated chain: %+v, %v", validation, err)
+	}
+}
+
 func TestVerifyPublishesStableIdentityAndPredecessor(t *testing.T) {
 	repo := seedFixtureRepo(t)
 	writeTask(t, repo, "T-001", "One", "completed", "high", "specs/v0.1.0.md#summary", nil)

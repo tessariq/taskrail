@@ -1,12 +1,17 @@
 ---
 id: T-445-give-sequential-loop-children-fresh-verification
 title: Give sequential loop children fresh verification identities
-status: todo
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#cross-platform-autonomous-loop
 dependencies:
     - T-443-gate-sequential-loop-runs-on-caller-owned-check
-updated_at: "2026-10-31T18:56:45Z"
+updated_at: "2026-11-01T01:06:43Z"
+completion_id: "41912ed4c7180ec62fb94267566bf03c"
+last_verification_id: "9f573107c2cb9b93b3558b0637f49d8d"
+last_verification_result: pass
+last_verified_at: "2026-11-01T01:06:43Z"
+last_verified_completion_id: "41912ed4c7180ec62fb94267566bf03c"
 ---
 
 # T-445-give-sequential-loop-children-fresh-verification Give sequential loop children fresh verification identities
@@ -67,3 +72,6 @@ deliveries.
   result envelopes, artifact bindings and persisted Git/task/state observations.
 
 ## Implementation Notes
+
+- 2026-11-01T01:06:31Z: Decoupled verification events from invocation-wide delegation identity while preserving fresh-ID, completion/predecessor and delegated authorization guards. Test-first two-delivery regression, full deterministic checks, bounded independent review and independent disposable CLI QA passed.
+- 2026-11-01T01:06:43Z: verification pass id 9f573107c2cb9b93b3558b0637f49d8d previous none completion 41912ed4c7180ec62fb94267566bf03c
