@@ -85,7 +85,7 @@ func TestParallelChecksGateIntegrationAndPublication(t *testing.T) {
 			repo, svc := loopFixture(t)
 			writeFile(t, filepath.Join(repo, "go.mod"), "module example.com/checkfixture\n\ngo 1.26\n")
 			writeFile(t, filepath.Join(repo, "api.go"), "package fixture\nfunc Old() {}\n")
-			writeFile(t, filepath.Join(repo, ".gitattributes"), "*.go text eol=lf\n")
+			writeFile(t, filepath.Join(repo, ".gitattributes"), "*.go text eol=lf\nindependent.txt text eol=lf\n")
 			for _, id := range []string{"T-001-ready", "T-002-ready", "T-003-ready"} {
 				writeTask(t, repo, id, id, "todo", "high", "specs/v0.1.0.md#summary", nil)
 				setLoopPolicy(t, repo, id, "allow", "independent work")
