@@ -49,6 +49,7 @@ type ParallelPlan struct {
 	Workspace      ParallelWorkspace  `json:"workspace"`
 	Delivery       string             `json:"delivery"`
 	ReviewAdapter  *string            `json:"review_adapter"`
+	ReviewProtocol *string            `json:"review_protocol"`
 	Frontier       []ParallelTaskPlan `json:"frontier"`
 }
 
@@ -227,16 +228,19 @@ func (s *Service) loopParallelPlan(snapshot LoopPreflightSnapshot, rows []TaskLo
 	for i, task := range candidates {
 		frontier[i] = ParallelTaskPlan{Rank: i + 1, Task: task}
 	}
-	var adapter *string
+	var adapter, protocol *string
 	if invocation.Delivery == "review" && snapshot.check != nil {
 		resolved, err := resolveReviewAdapter(invocation.ReviewAdapter)
 		if err != nil {
 			return ParallelPlan{}, err
 		}
 		adapter = &resolved
+		if invocation.ReviewProtocol != "" {
+			protocol = stringPtr(invocation.ReviewProtocol)
+		}
 	}
 	return ParallelPlan{RequestedWidth: invocation.Parallel, EffectiveWidth: width, BaseRef: git.Ref, BaseHead: git.Head,
-		Workspace: workspace, Delivery: invocation.Delivery, ReviewAdapter: adapter, Frontier: frontier}, nil
+		Workspace: workspace, Delivery: invocation.Delivery, ReviewAdapter: adapter, ReviewProtocol: protocol, Frontier: frontier}, nil
 }
 
 func (s *Service) frozenTaskNumericMaximum(snapshot LoopPreflightSnapshot) int {

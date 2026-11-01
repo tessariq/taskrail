@@ -247,6 +247,7 @@ func main() {
  case "rootref": os.WriteFile(".git/CHECK_REF", []byte("changed"), 0600)
  case "input": os.WriteFile("specs/v0.1.0.md", []byte("changed"), 0600)
  }
+ if record := os.Getenv("REVIEW_EVENT_RECORD"); record != "" { f, err := os.OpenFile(record, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600); if err != nil { os.Exit(93) }; fmt.Fprintf(f, "check %s", head); f.Close() }
 }
 `)
 	binary := filepath.Join(dir, "check")

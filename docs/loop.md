@@ -66,13 +66,11 @@ before local fast-forward publication. Candidate and final diagnostics retain
 the checked head and process evidence, including after rollback.
 
 Effective width is `min(--parallel, --max-iterations)`, not frontier size.
-Parallel review delivery is temporarily unavailable: with a supplied check,
-`--delivery review` refuses `unsupported` before workspaces, workers, or adapter
-calls. Without a check, the missing-check refusal takes precedence. The existing
-adapter protocol merges before aggregate validation and cannot yet provide the
-required pre-publication guarantee; Taskrail does not claim remote rollback.
-The review-adapter description below documents that protocol, not an enabled
-safe-delivery mode. Width-one parallel-only flag refusals are unchanged.
+Parallel `--delivery review` still refuses `unsupported` before workspaces,
+workers, or adapter calls unless the caller explicitly supplies
+`--review-protocol checked-combined-v1`. Missing-check refusal takes precedence.
+The opt-in requires `--timeout`, an external result file, and a cooperating
+schema-2 adapter. Width-one parallel-only flag refusals are unchanged.
 
 After a final per-child `completed_pass`, the check runs once at the repository
 root, with no arguments, no shell, empty stdin, the caller environment without
@@ -124,17 +122,60 @@ durable after the foreground run. It does not embed credentials, provider APIs,
 or shell evaluation. The adapter may wrap tools such as `gh` or `glab`, but owns
 their authentication and provider semantics.
 
-Passing worker branches and changes can open concurrently; Taskrail inspects,
-merges, and refreshes remaining changes in frozen frontier order. A failed
-worker, adapter operation, check, or refresh is not retried, but other
-independently valid changes remain eligible. A replacement implementation prompt
-requires its exact template SHA-256 through `--allow-prompt-override-sha256`.
+Checked review delivery first negotiates `checked_combined_ff_v1` with a read-only
+capability request, before workspaces or workers. Legacy, malformed, or
+unsupported responses stop there with a retained receipt; dry-run resolves the
+adapter and reports the selected protocol without invoking it. The adapter must
+not mutate the local checkout during any operation.
+
+Workers and serial integration use the same local candidate checks as local
+delivery. After the aggregate child and final check pass on unchanged head H,
+Taskrail publishes one invocation-unique branch and opens one combined change.
+Separate task commits are preserved, including an independently accepted subset
+when a sibling fails. There is no per-worker remote merge or post-merge refresh.
+A failing final check makes no branch, change, or merge request.
+
+Taskrail inspects the change twice, comparing the exact target identity/ref/base,
+source ref/head, passing checks, and an opaque approval/check revision token.
+It revalidates the source and integration inputs, Git index/refs/worktree/config,
+and check executable digest before and after adapter operations. Drift refuses
+without repair, retry, or silent refresh. The one `merge_change` request requires
+the adapter to enforce the same conditions at the mutation point and advance
+only the expected target B to checked H. Squash, rebase, and newly generated merge
+commits are unsupported. A provider that cannot guarantee this conditional
+exact-head operation must not advertise the capability. Taskrail verifies
+adapter-reported claims, not hosted reviewer identity or provider implementation.
+
+The result keeps local candidate/integration/check identities separate from
+adapter receipts. `delivery.publication` is `not_attempted`, `applied`, `refused`,
+or `unknown`; `published_tasks` includes only confirmed exact-head application.
+`pending_tasks` means not confirmed published, not known unapplied. A timeout,
+lost/malformed result, or invalid identity after a mutating call is unknown even
+if the remote operation actually succeeded. Preserve receipts and retained
+workspaces, inspect/reconcile remote state yourself, and only then begin a new
+invocation. Taskrail never retries, rolls back remote changes, or treats later
+local drift/result-file failure as undoing a reported merge. Branches or changes
+created before refusal can remain open; operation receipts record those effects.
+Pending or refused approval stops without polling or bypassing hosted checks.
+
+A replacement implementation prompt requires its exact template SHA-256 through
+`--allow-prompt-override-sha256`. Exact schema-2 request/result and receipt fields
+are defined in the [machine API companion](../specs/contracts/v0.5.0-machine-api.md).
 
 Execution keeps child output streaming, so local delivery may use
 `--result-file <external-path>` and review delivery requires it to receive the
 one terminal schema-1 envelope. The target must be absent in an existing,
 non-symlinked directory outside the worktree and Git metadata; Taskrail rechecks
 that directory and creates the file without replacement after postflight.
+If final publication fails after review operations, Taskrail keeps the nonzero
+`result_file_publish_failed` error and writes the terminal JSON document to stderr
+between `TASKRAIL_LOOP_RESULT_RECOVERY_BEGIN` and
+`TASKRAIL_LOOP_RESULT_RECOVERY_END` lines. This is a recovery copy, not a published
+result file; the occupied destination is never overwritten. Capture stderr to
+retain these observations. If stderr also fails, Taskrail reports that failure
+but cannot guarantee a retained copy. Late repository recovery fences preserve
+parallel receipts inside an `invalid_postflight` diagnostic rather than claiming
+success or undoing external effects.
 
 ## Recovering an abruptly killed coordinator
 

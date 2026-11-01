@@ -67,9 +67,13 @@ Effective parallel widths above one require `--check`: each replayed integration
 commit must pass, and the aggregate child is followed by a final check on the
 same head before local publication. Failed candidate checks roll back without
 blocking later independent work; mutation stops publication fail-closed.
-Parallel `--delivery review` currently refuses `unsupported` before any adapter
-call when a check is supplied; safe pre-publication adapter gating is follow-up
-work, not a release-acceptance waiver.
+Parallel `--delivery review` refuses `unsupported` before any adapter call by
+default. Explicit `--review-protocol checked-combined-v1` with `--timeout` opts
+into a cooperating schema-2 adapter: one combined change preserves per-task
+commits and can advance the target only to the exact aggregate-checked head.
+Checks precede branch/change publication; target/source/check/approval drift
+refuses without retry. Receipts distinguish applied, refused, and unknown
+outcomes, never claiming remote rollback. See [review delivery](docs/loop.md).
 Parallel integration commits include reprojected `STATE.md` counts for all work
 accepted so far, rather than the last worker's isolated counts.
 If publication refuses after integration passes, the default `failure` retention

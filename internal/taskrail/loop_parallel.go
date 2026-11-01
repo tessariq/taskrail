@@ -54,6 +54,7 @@ type ParallelIntegration struct {
 	Check         *ParallelCheck             `json:"check"`
 	Children      []ParallelIntegrationChild `json:"children"`
 	Workspace     *string                    `json:"workspace"`
+	checked       *loopCheckSnapshot
 }
 
 // ParallelIntegrationChild binds one coordinator-launched integration child to
@@ -82,14 +83,18 @@ type parallelIntegrationBinding struct {
 }
 
 type ParallelDelivery struct {
-	Mode           string   `json:"mode"`
-	Adapter        *string  `json:"adapter"`
-	TargetRef      string   `json:"target_ref"`
-	HeadBefore     string   `json:"head_before"`
-	HeadAfter      *string  `json:"head_after"`
-	PublishedTasks []string `json:"published_tasks"`
-	PendingTasks   []string `json:"pending_tasks"`
-	Remote         string   `json:"remote"`
+	Mode           string                   `json:"mode"`
+	Adapter        *string                  `json:"adapter"`
+	TargetRef      string                   `json:"target_ref"`
+	HeadBefore     string                   `json:"head_before"`
+	HeadAfter      *string                  `json:"head_after"`
+	PublishedTasks []string                 `json:"published_tasks"`
+	PendingTasks   []string                 `json:"pending_tasks"`
+	Remote         string                   `json:"remote"`
+	Publication    string                   `json:"publication"`
+	Capability     *ReviewCapabilityReceipt `json:"capability"`
+	Operations     []ReviewOperationReceipt `json:"operations"`
+	failed         bool
 }
 
 type ParallelBatch struct {
@@ -179,12 +184,36 @@ func (s *Service) loopParallelExecute(ctx context.Context, invocation LoopInvoca
 	diagnostic.LastIteration = nil
 	batch := ParallelBatch{Plan: plan, Workers: make([]ParallelWorker, len(plan.Frontier)),
 		Integration: ParallelIntegration{BaseHead: plan.BaseHead, AcceptedTasks: []string{}, Children: []ParallelIntegrationChild{}},
-		Delivery:    ParallelDelivery{Mode: plan.Delivery, Adapter: plan.ReviewAdapter, TargetRef: plan.BaseRef, HeadBefore: plan.BaseHead, PublishedTasks: []string{}, PendingTasks: []string{}, Remote: "not_checked"}}
+		Delivery:    ParallelDelivery{Mode: plan.Delivery, Adapter: plan.ReviewAdapter, TargetRef: plan.BaseRef, HeadBefore: plan.BaseHead, PublishedTasks: []string{}, PendingTasks: []string{}, Remote: "not_checked", Publication: "not_attempted", Operations: []ReviewOperationReceipt{}}}
 	diagnostic.Parallel = &batch
 	if len(plan.Frontier) == 0 {
 		diagnostic.Outcome = "no_work"
 		diagnostic.NextAction = "No eligible allowed task remains; inspect task loop policy before another invocation."
 		return diagnostic, nil
+	}
+
+	var sourceBefore loopCheckSnapshot
+	if invocation.Delivery == "review" {
+		sourceBefore, err = s.loopCheckSnapshot()
+		if err != nil {
+			return LoopDiagnostic{}, err
+		}
+		bindingErr := s.reviewPublicationBinding(snapshot, sourceBefore, nil, loopCheckSnapshot{})
+		var negotiationErr error
+		if bindingErr == nil {
+			negotiationErr = s.negotiateReviewAdapter(ctx, invocation, &batch, os.Stderr)
+			bindingErr = s.reviewPublicationBinding(snapshot, sourceBefore, nil, loopCheckSnapshot{})
+		}
+		if negotiationErr != nil || bindingErr != nil {
+			diagnostic.Outcome = "batch_failed"
+			diagnostic.NextAction = "Review delivery is unsupported or its read-only capability probe failed; inspect the retained receipt before another invocation."
+			diagnostic.MutationViolations = reviewDeliveryRefusal(&batch, errors.Join(negotiationErr, bindingErr))
+			for _, item := range plan.Frontier {
+				batch.Delivery.PendingTasks = append(batch.Delivery.PendingTasks, item.Task.TaskID)
+			}
+			batch.Workers = []ParallelWorker{}
+			return diagnostic, nil
+		}
 	}
 
 	root, err := os.MkdirTemp(plan.Workspace.Root, "taskrail-parallel-")
@@ -226,15 +255,14 @@ func (s *Service) loopParallelExecute(ctx context.Context, invocation LoopInvoca
 	}
 	wait.Wait()
 
+	integrationRoot := filepath.Join(root, "integration")
+	if hasParallelCandidate(batch.Workers) {
+		batch.Integration.Workspace = stringPtr(integrationRoot)
+		diagnostic.MutationViolations = append(diagnostic.MutationViolations, s.integrateParallelWorkers(ctx, invocation, snapshot, plan, integrationRoot, &batch, stdout, stderr)...)
+	}
 	if invocation.Delivery == "review" {
-		diagnostic.MutationViolations = append(diagnostic.MutationViolations, s.deliverParallelReviews(ctx, invocation, snapshot, plan, root, &batch, stdout, stderr)...)
+		diagnostic.MutationViolations = append(diagnostic.MutationViolations, s.deliverParallelReviews(ctx, invocation, snapshot, &batch, sourceBefore, stderr)...)
 	} else {
-		integrationRoot := filepath.Join(root, "integration")
-		if hasParallelCandidate(batch.Workers) {
-			value := integrationRoot
-			batch.Integration.Workspace = &value
-			diagnostic.MutationViolations = append(diagnostic.MutationViolations, s.integrateParallelWorkers(ctx, invocation, snapshot, plan, integrationRoot, &batch, stdout, stderr)...)
-		}
 		s.finishParallelDelivery(snapshot, &diagnostic, &batch)
 	}
 	if invocation.Delivery == "review" {
@@ -250,8 +278,13 @@ func (s *Service) loopParallelExecute(ctx context.Context, invocation LoopInvoca
 		}
 		parallelOutcome(&diagnostic, &batch)
 		if len(diagnostic.MutationViolations) != 0 {
-			diagnostic.Outcome = "batch_partial"
-			diagnostic.NextAction = "Inspect source drift and adapter diagnostics before another invocation."
+			batch.Delivery.failed = true
+			if len(batch.Delivery.PublishedTasks) == 0 {
+				diagnostic.Outcome = "batch_failed"
+			} else {
+				diagnostic.Outcome = "batch_partial"
+			}
+			diagnostic.NextAction = "Preserve receipts and inspect/reconcile adapter outcomes and source drift before another invocation; do not retry uncertain operations."
 		}
 	}
 	if cleanup := s.cleanupParallelWorkspaces(owner, invocation.KeepWorkspaces, &batch); len(cleanup) != 0 {
@@ -297,6 +330,7 @@ func (s *Service) runParallelWorker(ctx context.Context, invocation LoopInvocati
 	cloneInvocation.WorkspaceRootSet, cloneInvocation.CloneDepthSet, cloneInvocation.KeepWorkspacesSet = false, false, false
 	cloneInvocation.DeliverySet, cloneInvocation.ReviewAdapterSet = false, false
 	cloneInvocation.Delivery, cloneInvocation.ReviewAdapter = "local", ""
+	cloneInvocation.ReviewProtocol, cloneInvocation.ReviewProtocolSet = "", false
 	if implementationPromptSource == "builtin" {
 		cloneInvocation.AllowPromptOverrideSHA256 = ""
 	}
@@ -488,11 +522,7 @@ func (s *Service) integrateParallelCandidate(ctx context.Context, invocation Loo
 }
 
 func parallelCandidateCommitEnvironment(root string) ([]string, error) {
-	return parallelCommitEnvironment(root, "FETCH_HEAD")
-}
-
-func parallelCommitEnvironment(root, revision string) ([]string, error) {
-	output, err := exec.Command("git", "-C", root, "show", "-s", "--format=%cn%x00%ce%x00%cI", revision).Output()
+	output, err := exec.Command("git", "-C", root, "show", "-s", "--format=%cn%x00%ce%x00%cI", "FETCH_HEAD").Output()
 	if err != nil {
 		return nil, fmt.Errorf("read candidate commit metadata: %w", err)
 	}
@@ -562,6 +592,10 @@ func (s *Service) runParallelAggregateChild(ctx context.Context, invocation Loop
 	if err != nil {
 		return false, nil
 	}
+	attested, err := validation.loopCheckSnapshot()
+	if err != nil {
+		return false, nil
+	}
 	inputs, err := loopInputBytes(validation.paths)
 	if err != nil {
 		return false, nil
@@ -605,6 +639,9 @@ func (s *Service) runParallelAggregateChild(ctx context.Context, invocation Loop
 	if snapshot.check != nil {
 		evidence, passed := validation.runLoopCheck(ctx, snapshot)
 		batch.Integration.Check = &ParallelCheck{Head: value, Evidence: evidence}
+		if passed {
+			batch.Integration.checked = &attested
+		}
 		return passed, nil
 	}
 	return true, nil
@@ -1034,7 +1071,8 @@ func (s *Service) cleanupParallelWorkspaces(owner parallelWorkspaceOwner, retent
 	violations := []MachineViolation{}
 	for i := range batch.Workers {
 		worker := &batch.Workers[i]
-		if worker.Workspace == nil || (retention == "failure" && !worker.Integrated) || retention == "always" {
+		unpublished := batch.Delivery.Mode == "review" && !slices.Contains(batch.Delivery.PublishedTasks, worker.Task.TaskID)
+		if worker.Workspace == nil || (retention == "failure" && (!worker.Integrated || unpublished || batch.Delivery.failed)) || retention == "always" {
 			continue
 		}
 		if err := removeParallelWorkspace(owner, *worker.Workspace); err != nil {
@@ -1045,7 +1083,7 @@ func (s *Service) cleanupParallelWorkspaces(owner parallelWorkspaceOwner, retent
 		}
 		worker.Workspace = nil
 	}
-	if batch.Integration.Workspace != nil && retention != "always" && (retention == "never" || (batch.Integration.AggregatePass && batch.Delivery.HeadAfter != nil)) {
+	if batch.Integration.Workspace != nil && retention != "always" && (retention == "never" || (batch.Integration.AggregatePass && batch.Delivery.HeadAfter != nil && !batch.Delivery.failed)) {
 		if err := removeParallelWorkspace(owner, *batch.Integration.Workspace); err == nil {
 			batch.Integration.Workspace = nil
 		} else {

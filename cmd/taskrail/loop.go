@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"time"
@@ -19,6 +20,7 @@ func newLoopCmd() *cobra.Command {
 	keepWorkspaces := loopStringFlag{target: &input.KeepWorkspaces}
 	delivery := loopStringFlag{target: &input.Delivery}
 	reviewAdapter := loopStringFlag{target: &input.ReviewAdapter}
+	reviewProtocol := loopStringFlag{target: &input.ReviewProtocol}
 	check := loopStringFlag{target: &input.Check}
 	cmd := &cobra.Command{
 		Use:   "loop [flags] -- <command> <args...>",
@@ -39,8 +41,11 @@ func newLoopCmd() *cobra.Command {
 			"child on the same head before local publication. Failed candidates " +
 			"roll back; mutating checks stop the batch fail-closed. Effective width " +
 			"is min(--parallel, --max-iterations), not eligible-frontier size. " +
-			"Parallel --delivery review with a check is unsupported before any " +
-			"workspace, worker, or adapter call; missing-check errors take precedence.\n\n" +
+			"Parallel --delivery review is unsupported unless explicitly enabled " +
+			"with --review-protocol checked-combined-v1. That protocol requires a " +
+			"cooperating schema-2 adapter and --timeout; it publishes one combined " +
+			"change only after the aggregate and final check, using an exact-head " +
+			"conditional fast-forward. Missing-check errors take precedence.\n\n" +
 			"--parallel greater than one runs that many isolated workers " +
 			"concurrently in private repository clones, and requires committed " +
 			"storage in a clean, attached worktree. Under the default " +
@@ -100,6 +105,7 @@ func newLoopCmd() *cobra.Command {
 	cmd.Flags().Var(&keepWorkspaces, "keep-workspaces", "parallel workspace retention")
 	cmd.Flags().Var(&delivery, "delivery", "parallel delivery mode")
 	cmd.Flags().Var(&reviewAdapter, "review-adapter", "caller-owned review delivery adapter")
+	cmd.Flags().Var(&reviewProtocol, "review-protocol", "opt into checked-combined-v1 review delivery")
 	cmd.Flags().Var(&check, "check", "caller-owned read-only gate executable (required for effective parallel width >1)")
 	cmd.Flags().StringVar(&input.AllowPromptOverrideSHA256, "allow-prompt-override-sha256", "", "authorize an exact replacement prompt template")
 	cmd.Flags().IntVar(&maxReviewRounds, "max-review-rounds", 0, "override implementation review rounds (1-2)")
@@ -110,7 +116,7 @@ func newLoopCmd() *cobra.Command {
 		for _, flag := range []struct {
 			name  string
 			count int
-		}{{"--parallel", parallel.count}, {"--workspace-root", workspaceRoot.count}, {"--clone-depth", cloneDepth.count}, {"--keep-workspaces", keepWorkspaces.count}, {"--delivery", delivery.count}, {"--review-adapter", reviewAdapter.count}, {"--check", check.count}} {
+		}{{"--parallel", parallel.count}, {"--workspace-root", workspaceRoot.count}, {"--clone-depth", cloneDepth.count}, {"--keep-workspaces", keepWorkspaces.count}, {"--delivery", delivery.count}, {"--review-adapter", reviewAdapter.count}, {"--review-protocol", reviewProtocol.count}, {"--check", check.count}} {
 			if flag.count > 1 {
 				return publishSelectionError(cmd, invalidArgumentsf("loop flag %s is repeated", flag.name))
 			}
@@ -133,6 +139,7 @@ func captureLoopInput(cmd *cobra.Command, input *taskrail.LoopInvocation, maxRev
 	input.KeepWorkspacesSet = cmd.Flags().Changed("keep-workspaces")
 	input.DeliverySet = cmd.Flags().Changed("delivery")
 	input.ReviewAdapterSet = cmd.Flags().Changed("review-adapter")
+	input.ReviewProtocolSet = cmd.Flags().Changed("review-protocol")
 	input.CheckSet = cmd.Flags().Changed("check")
 }
 
@@ -177,7 +184,7 @@ func runLoopWithResultFile(cmd *cobra.Command, input taskrail.LoopInvocation) er
 		executeErr = loopDiagnosticGate(report)
 	}
 	if recoveryErr := svc.CheckRecovery(); recoveryErr != nil {
-		if report.LastIteration == nil {
+		if report.LastIteration == nil && report.Parallel == nil {
 			executeErr = recoveryErr
 		} else {
 			report.Outcome = "invalid_postflight"
@@ -198,7 +205,14 @@ func publishLoopResultFile(cmd *cobra.Command, result *taskrail.LoopResultFile, 
 		return taskrail.WithMachineErrorCode("result_file_publish_failed", fmt.Errorf("encode result file: %w", err))
 	}
 	if err := result.Publish(document); err != nil {
-		return taskrail.WithMachineErrorCode("result_file_publish_failed", fmt.Errorf("publish result file: %w", err))
+		var recoveryErr error
+		if report != nil && report.Parallel != nil && len(report.Parallel.Delivery.Operations) != 0 {
+			_, recoveryErr = fmt.Fprintf(cmd.ErrOrStderr(), "\nTASKRAIL_LOOP_RESULT_RECOVERY_BEGIN\n%s\nTASKRAIL_LOOP_RESULT_RECOVERY_END\n", document)
+			if recoveryErr != nil {
+				recoveryErr = fmt.Errorf("write result recovery document: %w", recoveryErr)
+			}
+		}
+		return taskrail.WithMachineErrorCode("result_file_publish_failed", errors.Join(fmt.Errorf("publish result file: %w", err), recoveryErr))
 	}
 	return nil
 }

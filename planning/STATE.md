@@ -1,6 +1,6 @@
 ---
 schema_version: 2
-updated_at: "2026-11-01T01:06:43Z"
+updated_at: "2026-11-01T15:35:51Z"
 active_spec_version: v0.5.0
 active_spec_path: specs/v0.5.0.md
 current_task: ""
@@ -8,9 +8,9 @@ current_task_title: ""
 status_summary: idle
 blockers: []
 next_action: Select the next eligible task
-last_verification_result: pass for T-445-give-sequential-loop-children-fresh-verification at 2026-11-01T01:06:43Z id 9f573107c2cb9b93b3558b0637f49d8d
-last_verification_id: 9f573107c2cb9b93b3558b0637f49d8d
-last_verified_completion_id: 41912ed4c7180ec62fb94267566bf03c
+last_verification_result: pass for T-446-gate-parallel-review-publication-on-the-checked at 2026-11-01T15:35:51Z id a565ec0b50bcde119971b3de657b5827
+last_verification_id: a565ec0b50bcde119971b3de657b5827
+last_verified_completion_id: be65dbbf5fd4ce65106584c2bb8017d6
 relevant_artifacts: []
 ---
 
@@ -34,7 +34,7 @@ relevant_artifacts: []
 
 ## Last Verification
 
-- pass for T-445-give-sequential-loop-children-fresh-verification at 2026-11-01T01:06:43Z id 9f573107c2cb9b93b3558b0637f49d8d
+- pass for T-446-gate-parallel-review-publication-on-the-checked at 2026-11-01T15:35:51Z id a565ec0b50bcde119971b3de657b5827
 
 ## Next Action
 
@@ -46,8 +46,8 @@ relevant_artifacts: []
 
 ## Task Counts
 
-- todo: 75
+- todo: 74
 - in_progress: 0
-- completed: 370
+- completed: 371
 - blocked: 0
 - cancelled: 0

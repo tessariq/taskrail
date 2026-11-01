@@ -3,6 +3,7 @@ package taskrail
 import (
 	"bytes"
 	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -11,29 +12,60 @@ import (
 	"testing"
 )
 
+func TestCheckedCombinedReviewProtocolOptIn(t *testing.T) {
+	input, err := ParseLoopInvocation([]string{"--parallel", "2", "--max-iterations", "2", "--delivery", "review", "--review-adapter", "adapter", "--review-protocol", "checked-combined-v1", "--check", "check", "--timeout", "1m", "--result-file", "result", "--", "worker"})
+	if err != nil {
+		t.Fatalf("approved protocol opt-in: %v", err)
+	}
+	if input.ReviewProtocol != "checked-combined-v1" || !input.ReviewProtocolSet {
+		t.Fatalf("protocol not captured: %+v", input)
+	}
+	for name, mutate := range map[string]func(*LoopInvocation){
+		"unknown":   func(in *LoopInvocation) { in.ReviewProtocol = "other" },
+		"empty":     func(in *LoopInvocation) { in.ReviewProtocol = "" },
+		"local":     func(in *LoopInvocation) { in.Delivery = "local" },
+		"width-one": func(in *LoopInvocation) { in.MaxIterations = 1 },
+		"unbounded": func(in *LoopInvocation) { in.Timeout = nil },
+	} {
+		t.Run(name, func(t *testing.T) {
+			candidate := input
+			mutate(&candidate)
+			if err := ValidateLoopInvocation(candidate); MachineFailureFor(err).Code != MachineCodeInvalidArguments {
+				t.Fatalf("unsafe protocol invocation accepted: %v", err)
+			}
+		})
+	}
+}
+
 func TestValidateReviewAdapterResultRejectsUntrustedResponses(t *testing.T) {
+	zero := 0
 	request := ReviewAdapterRequest{
-		SchemaVersion:      1,
+		SchemaVersion:      2,
 		RequestID:          "request-1",
 		Operation:          "inspect_change",
 		Repository:         "/repo",
+		TargetID:           "target-1",
 		TargetRef:          "refs/heads/main",
 		SourceRef:          "refs/heads/taskrail/T-001",
 		ChangeID:           stringPtr("change-1"),
 		ExpectedTargetHead: "base",
 		CandidateHead:      "candidate",
+		Check:              &ParallelCheck{Head: "candidate", Evidence: LoopCheckEvidence{ExitCode: &zero}},
 	}
 	valid := ReviewAdapterResult{
-		SchemaVersion: 1,
+		SchemaVersion: 2,
 		RequestID:     request.RequestID,
 		Operation:     request.Operation,
-		Applied:       true,
+		State:         "applied",
+		TargetID:      request.TargetID,
 		ChangeID:      request.ChangeID,
 		SourceRef:     request.SourceRef,
 		TargetRef:     request.TargetRef,
 		SourceHead:    request.CandidateHead,
 		TargetHead:    request.ExpectedTargetHead,
 		Checks:        "pass",
+		Approval:      "approved",
+		ApprovalToken: stringPtr("approval-1"),
 		Message:       "ready",
 	}
 	if err := validateReviewAdapterResult(request, valid); err != nil {
@@ -118,21 +150,37 @@ func TestResolveReviewAdapterRejectsUnresolvedPath(t *testing.T) {
 }
 
 func TestRunReviewAdapterRejectsExtraStdout(t *testing.T) {
+	zero := 0
+	request := ReviewAdapterRequest{SchemaVersion: 2, RequestID: "request-1", Operation: "inspect_change",
+		Repository: t.TempDir(), TargetID: "target", TargetRef: "refs/heads/main", SourceRef: "refs/heads/taskrail/T-001", ChangeID: stringPtr("change-1"),
+		ExpectedTargetHead: "base", CandidateHead: "candidate", Check: &ParallelCheck{Head: "candidate", Evidence: LoopCheckEvidence{ExitCode: &zero}}}
+	if _, err := runReviewAdapter(context.Background(), buildReviewAdapter(t), request, &bytes.Buffer{}); err != nil {
+		t.Fatalf("valid adapter: %v", err)
+	}
 	adapter := buildReviewAdapter(t, "{}")
-	request := ReviewAdapterRequest{SchemaVersion: 1, RequestID: "request-1", Operation: "inspect_change",
-		Repository: t.TempDir(), TargetRef: "refs/heads/main", SourceRef: "refs/heads/taskrail/T-001", ChangeID: stringPtr("change-1"),
-		ExpectedTargetHead: "base", CandidateHead: "candidate"}
 	if _, err := runReviewAdapter(context.Background(), adapter, request, &bytes.Buffer{}); err == nil {
 		t.Fatal("runReviewAdapter accepted multiple stdout documents")
 	}
 }
 
+func TestCancelledReviewDoesNotLaunchAdapter(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err := runReviewDocument(ctx, filepath.Join(t.TempDir(), "must-not-launch"), t.TempDir(), ReviewCapabilityRequest{}, &bytes.Buffer{})
+	if !errors.Is(err, context.Canceled) || strings.Contains(err.Error(), "launch adapter") {
+		t.Fatalf("cancelled invocation reached spawn: %v", err)
+	}
+}
+
 func TestDecodeReviewAdapterResultRejectsMalformedDocuments(t *testing.T) {
-	valid := `{"schema_version":1,"request_id":"r","operation":"inspect_change","applied":true,"change_id":"c","source_ref":"s","target_ref":"t","source_head":"h","target_head":"b","checks":"pass","merge_head":null,"message":"ok"}`
+	valid := `{"schema_version":2,"request_id":"r","operation":"inspect_change","state":"applied","target_id":"target","change_id":"c","source_ref":"s","target_ref":"t","source_head":"h","target_head":"b","checks":"pass","approval":"approved","approval_token":"a","merge_head":null,"message":"ok"}`
+	if _, err := decodeReviewAdapterResult([]byte(valid)); err != nil {
+		t.Fatal(err)
+	}
 	for name, data := range map[string][]byte{
 		"duplicate":    []byte(strings.Replace(valid, `"message":"ok"`, `"message":"ok","message":"again"`, 1)),
 		"missing":      []byte(strings.Replace(valid, `,"message":"ok"`, "", 1)),
-		"null":         []byte(strings.Replace(valid, `"applied":true`, `"applied":null`, 1)),
+		"null":         []byte(strings.Replace(valid, `"state":"applied"`, `"state":null`, 1)),
 		"invalid utf8": append([]byte(valid[:len(valid)-1]), 0xff, '}'),
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -143,12 +191,20 @@ func TestDecodeReviewAdapterResultRejectsMalformedDocuments(t *testing.T) {
 	}
 }
 
+func TestReviewCapabilityRejectsNullArrayElement(t *testing.T) {
+	data := []byte(`{"schema_version":2,"request_id":"r","operation":"capabilities","target_id":"t","capabilities":[null,"checked_combined_ff_v1"],"message":"ok"}`)
+	var result ReviewCapabilityResult
+	if err := decodeReviewDocument(data, []string{"schema_version", "request_id", "operation", "target_id", "capabilities", "message"}, nil, &result); err == nil {
+		t.Fatal("capability accepted a null string element")
+	}
+}
+
 func buildReviewAdapter(t *testing.T, trailer ...string) string {
 	t.Helper()
 	source := `package main
 import ("encoding/json"; "io"; "os")
-type request struct { SchemaVersion int ` + "`json:\"schema_version\"`" + `; RequestID string ` + "`json:\"request_id\"`" + `; Operation string ` + "`json:\"operation\"`" + `; TargetRef string ` + "`json:\"target_ref\"`" + `; SourceRef string ` + "`json:\"source_ref\"`" + `; ChangeID *string ` + "`json:\"change_id\"`" + `; ExpectedTargetHead string ` + "`json:\"expected_target_head\"`" + `; CandidateHead string ` + "`json:\"candidate_head\"`" + ` }
-func main() { data, _ := io.ReadAll(os.Stdin); var r request; if json.Unmarshal(data, &r) != nil { os.Exit(2) }; result := map[string]any{"schema_version": 1, "request_id": r.RequestID, "operation": r.Operation, "applied": true, "change_id": r.ChangeID, "source_ref": r.SourceRef, "target_ref": r.TargetRef, "source_head": r.CandidateHead, "target_head": r.ExpectedTargetHead, "checks": "pass", "merge_head": nil, "message": "accepted"}; if r.Operation == "open_change" { result["change_id"] = "change-1" }; if r.Operation == "merge_change" { result["merge_head"] = r.CandidateHead }; _ = json.NewEncoder(os.Stdout).Encode(result)`
+func main() { data, _ := io.ReadAll(os.Stdin); var r map[string]any; if json.Unmarshal(data, &r) != nil { os.Exit(2) }
+ result := map[string]any{"schema_version": 2, "request_id": r["request_id"], "operation": r["operation"], "state": "applied", "target_id":r["target_id"], "change_id": r["change_id"], "source_ref": r["source_ref"], "target_ref": r["target_ref"], "source_head": r["candidate_head"], "target_head": r["expected_target_head"], "checks": "pass", "approval":"approved", "approval_token":"approval", "merge_head": nil, "message": "accepted"}; _ = json.NewEncoder(os.Stdout).Encode(result)`
 	if len(trailer) != 0 {
 		source += `; _, _ = os.Stdout.WriteString("` + trailer[0] + `")`
 	}

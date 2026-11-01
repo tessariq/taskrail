@@ -15,10 +15,14 @@ All notable user-visible changes to Taskrail will be documented in this file.
   a final check follows the aggregate child on the same head before publication.
   Diagnostics preserve checked-head and process evidence after rollback, and
   mutating checks stop the batch fail-closed.
-  Parallel review delivery with a supplied check now refuses `unsupported`
-  before workspaces, workers, or adapter calls until the adapter protocol can
-  verify the exact combined head before publication. Missing-check refusals
-  take precedence.
+- Parallel review delivery can explicitly opt into
+  `--review-protocol checked-combined-v1` with a cooperating schema-2 adapter.
+  Candidate checks and the aggregate/final same-head gate precede one combined
+  review change, retaining separate task commits. Publication requires an exact
+  checked-head conditional fast-forward and unchanged target/source/check/
+  approval bindings. Receipts distinguish applied, refused, and unknown effects;
+  no retry or remote rollback is claimed. Default review delivery still refuses
+  before adapter calls; unsupported negotiation stops before workers/workspaces.
 - `taskrail init` — inside a Git worktree, adds a marked `.gitignore` block
   keeping generated `planning/artifacts/` output out of Git status; existing
   user rules are preserved byte-for-byte and re-runs add nothing.

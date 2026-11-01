@@ -33,6 +33,8 @@ type LoopInvocation struct {
 	DeliverySet               bool
 	ReviewAdapter             string
 	ReviewAdapterSet          bool
+	ReviewProtocol            string
+	ReviewProtocolSet         bool
 	Check                     string
 	CheckSet                  bool
 	MaxReviewRounds           *int
@@ -154,7 +156,7 @@ func ParseLoopInvocation(args []string) (LoopInvocation, error) {
 			if name == "--dry-run" {
 				invocation.DryRun = true
 			}
-		case "--max-iterations", "--parallel", "--workspace-root", "--clone-depth", "--keep-workspaces", "--delivery", "--review-adapter", "--check", "--max-review-rounds", "--timeout", "--allow-prompt-override-sha256", "--result-file":
+		case "--max-iterations", "--parallel", "--workspace-root", "--clone-depth", "--keep-workspaces", "--delivery", "--review-adapter", "--review-protocol", "--check", "--max-review-rounds", "--timeout", "--allow-prompt-override-sha256", "--result-file":
 			if !inline {
 				i++
 				if i == len(args) {
@@ -196,6 +198,8 @@ func ParseLoopInvocation(args []string) (LoopInvocation, error) {
 				invocation.Delivery, invocation.DeliverySet = value, true
 			case "--review-adapter":
 				invocation.ReviewAdapter, invocation.ReviewAdapterSet = value, true
+			case "--review-protocol":
+				invocation.ReviewProtocol, invocation.ReviewProtocolSet = value, true
 			case "--check":
 				invocation.Check, invocation.CheckSet = value, true
 			case "--max-review-rounds":
@@ -265,8 +269,8 @@ func (s *Service) LoopPreflight(invocation LoopInvocation) (LoopPreflightSnapsho
 	if err != nil {
 		return LoopPreflightSnapshot{}, err
 	}
-	if min(invocation.Parallel, invocation.MaxIterations) > 1 && invocation.Delivery == "review" && check != nil {
-		return LoopPreflightSnapshot{}, WithMachineErrorCode(MachineCodeUnsupported, errors.New("parallel review delivery with --check is unsupported until the adapter can verify the combined head before publication"))
+	if min(invocation.Parallel, invocation.MaxIterations) > 1 && invocation.Delivery == "review" && check != nil && invocation.ReviewProtocol != "checked-combined-v1" {
+		return LoopPreflightSnapshot{}, WithMachineErrorCode(MachineCodeUnsupported, errors.New("parallel review delivery requires explicit --review-protocol checked-combined-v1 and a cooperating schema-2 adapter"))
 	}
 	if s.paths.WorktreeRoot == "" || s.paths.GitDir == "" || s.paths.GitCommonDir == "" {
 		return LoopPreflightSnapshot{}, WithMachineErrorCode(MachineCodeGitState, errors.New("loop requires a Git worktree"))
@@ -391,7 +395,7 @@ func validateParallelInvocation(invocation LoopInvocation) error {
 		return invalidArgumentsf("--delivery must be local or review")
 	}
 	if min(invocation.Parallel, invocation.MaxIterations) == 1 {
-		if invocation.WorkspaceRootSet || invocation.CloneDepthSet || invocation.KeepWorkspacesSet || invocation.DeliverySet || invocation.ReviewAdapterSet {
+		if invocation.WorkspaceRootSet || invocation.CloneDepthSet || invocation.KeepWorkspacesSet || invocation.DeliverySet || invocation.ReviewAdapterSet || invocation.ReviewProtocolSet {
 			return invalidArgumentsf("parallel-only flags require an effective parallel width greater than 1")
 		}
 		return nil
@@ -401,6 +405,12 @@ func validateParallelInvocation(invocation LoopInvocation) error {
 	}
 	if invocation.Delivery == "local" && invocation.ReviewAdapterSet {
 		return invalidArgumentsf("--review-adapter requires --delivery review")
+	}
+	if invocation.ReviewProtocolSet && (invocation.Delivery != "review" || invocation.ReviewProtocol != "checked-combined-v1") {
+		return invalidArgumentsf("--review-protocol requires --delivery review and checked-combined-v1")
+	}
+	if !invocation.DryRun && invocation.Delivery == "review" && invocation.ReviewProtocol == "checked-combined-v1" && invocation.Timeout == nil {
+		return invalidArgumentsf("checked review delivery requires --timeout")
 	}
 	if !invocation.DryRun && invocation.Delivery == "review" && invocation.ResultFile == "" {
 		return invalidArgumentsf("--delivery review requires --result-file")

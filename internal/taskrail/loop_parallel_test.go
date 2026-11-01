@@ -730,6 +730,15 @@ func runParallelLoopChild(conflictMode string) int {
 	}
 	first := strings.SplitN(string(prompt), "\n", 2)[0]
 	if strings.HasPrefix(first, "Use this coordinator-owned parallel integration prompt") {
+		if strings.Contains(first, "aggregate_gate") && os.Getenv("REVIEW_EVENT_RECORD") != "" {
+			head, _ := exec.Command("git", "rev-parse", "HEAD").Output()
+			f, err := os.OpenFile(os.Getenv("REVIEW_EVENT_RECORD"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+			if err != nil {
+				return 95
+			}
+			fmt.Fprintf(f, "aggregate %s", head)
+			f.Close()
+		}
 		if conflictMode == "" || conflictMode == "unmerged" || strings.Contains(first, "aggregate_gate") {
 			return 0
 		}
