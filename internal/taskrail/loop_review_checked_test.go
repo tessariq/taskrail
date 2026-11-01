@@ -56,11 +56,11 @@ func TestCheckedCombinedReviewPublication(t *testing.T) {
 			}
 			before := snapshotTreeWithoutGitHousekeeping(t, repo)
 			workspace := t.TempDir()
-			if err := os.Chmod(workspace, 0o700); err != nil {
-				t.Fatal(err)
+			for _, key := range []string{"TMPDIR", "TMP", "TEMP"} {
+				t.Setenv(key, workspace)
 			}
 			args := []string{"--parallel", "3", "--max-iterations", "3", "--check", check, "--delivery", "review", "--review-adapter", adapter,
-				"--review-protocol", "checked-combined-v1", "--timeout", "1m", "--workspace-root", workspace,
+				"--review-protocol", "checked-combined-v1", "--timeout", "1m",
 				"--keep-workspaces", "always", "--result-file", filepath.Join(t.TempDir(), "result.json"), "--", "worker"}
 			input, err := ParseLoopInvocation(args)
 			if err != nil {
