@@ -209,6 +209,8 @@ func TestFullTaskSkillsFollowCanonicalLifecycle(t *testing.T) {
 				"Do not rewrite scope after lifecycle work begins.",
 				"failing test whenever practical",
 				"sandbox-first manual testing",
+				"Follow the repository's documented manual-testing policy, including required manual testing for non-visible changes.",
+				"If no repository policy exists, require manual testing for visible workflow behavior, not for every task.",
 				"one fresh reviewer by default",
 				"one to three reviewers, each with a named, non-duplicative lens",
 				"`fix-now`, `separate-followup`, `blocked`, or `rejected`",

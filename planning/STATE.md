@@ -1,6 +1,6 @@
 ---
 schema_version: 2
-updated_at: "2026-11-02T21:57:32Z"
+updated_at: "2026-11-02T23:02:27Z"
 active_spec_version: v0.5.0
 active_spec_path: specs/v0.5.0.md
 current_task: ""
@@ -8,9 +8,9 @@ current_task_title: ""
 status_summary: idle
 blockers: []
 next_action: Select the next eligible task
-last_verification_result: pass for T-409-reachable-skill-eval-scenarios at 2026-11-01T20:57:18Z id 6845a871bf02632fc846c39f6bf76c31
-last_verification_id: 6845a871bf02632fc846c39f6bf76c31
-last_verified_completion_id: 04c1650a6ad144938388881cd1fd6c54
+last_verification_result: pass for T-447-respect-repository-manual-testing-policy-in at 2026-11-02T23:02:27Z id 1ecf33c7d1cb0056811714432d518dc6
+last_verification_id: 1ecf33c7d1cb0056811714432d518dc6
+last_verified_completion_id: 900a7bcb6dfc23867bae3ef78760caf5
 relevant_artifacts: []
 ---
 
@@ -34,7 +34,7 @@ relevant_artifacts: []
 
 ## Last Verification
 
-- pass for T-409-reachable-skill-eval-scenarios at 2026-11-01T20:57:18Z id 6845a871bf02632fc846c39f6bf76c31
+- pass for T-447-respect-repository-manual-testing-policy-in at 2026-11-02T23:02:27Z id 1ecf33c7d1cb0056811714432d518dc6
 
 ## Next Action
 
@@ -46,8 +46,8 @@ relevant_artifacts: []
 
 ## Task Counts
 
-- todo: 76
+- todo: 75
 - in_progress: 0
-- completed: 373
+- completed: 374
 - blocked: 0
 - cancelled: 0

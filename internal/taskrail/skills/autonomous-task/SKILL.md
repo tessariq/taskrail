@@ -46,7 +46,11 @@ do not contain the source helper and skip this source-only guard.
 
 1. Implement the smallest safe in-scope change. Start behavior changes with a
    failing test whenever practical. Run formatting, focused tests, deterministic
-   checks, and sandbox-first manual testing for visible workflow behavior.
+   checks. Follow the repository's documented
+   manual-testing policy, including required manual testing for non-visible
+   changes. If no repository policy exists, require manual testing for visible
+   workflow behavior, not for every task. Use sandbox-first manual testing
+   whenever required.
 2. Do not mutate external systems, production data, credentials, billed
    resources, live services, or resources outside the repository. Headless
    ambiguity, destructive scope, live consoles, and operator decisions stop for

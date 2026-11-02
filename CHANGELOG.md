@@ -36,6 +36,10 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ### Fixed
 
+- `autonomous-task` and `autonomous-backlog` follow the adopting repository's
+  manual-testing policy, including requirements for non-visible changes. Without
+  a repository policy, manual testing remains required for visible workflow
+  behavior rather than every task.
 - Skill-eval prompts name the conditions their fixtures actually establish,
   including missing-input and no-op boundaries, rather than requesting
   unsupported positive or recovery flows. Loop fixtures explicitly allow their

@@ -1,11 +1,16 @@
 ---
 id: T-447-respect-repository-manual-testing-policy-in
 title: Respect repository manual-testing policy in autonomous skills
-status: todo
+status: completed
 priority: medium
 spec_ref: specs/v0.5.0.md#lifecycle-complete-skill-flows
 dependencies: []
-updated_at: "2026-11-02T21:57:31Z"
+updated_at: "2026-11-02T23:02:27Z"
+completion_id: "900a7bcb6dfc23867bae3ef78760caf5"
+last_verification_id: "1ecf33c7d1cb0056811714432d518dc6"
+last_verification_result: pass
+last_verified_at: "2026-11-02T23:02:27Z"
+last_verified_completion_id: "900a7bcb6dfc23867bae3ef78760caf5"
 ---
 
 # T-447-respect-repository-manual-testing-policy-in Respect repository manual-testing policy in autonomous skills
@@ -41,3 +46,6 @@ guidance precedence, not a new configuration surface or a change to the CLI.
   fallback; run it and `task check:skills` after regeneration.
 
 ## Implementation Notes
+
+- 2026-11-02T23:02:27Z: Both full-task skills now follow repository manual-testing policy, including non-visible changes; policy-free fallback remains visible workflow behavior. Regenerated mirrors, red/green contract coverage, three manual guidance scenarios, simplification and independent review passed. Full Linux tests and vet passed; known Windows baseline remains outside this task.
+- 2026-11-02T23:02:27Z: verification pass id 1ecf33c7d1cb0056811714432d518dc6 previous none completion 900a7bcb6dfc23867bae3ef78760caf5

@@ -52,6 +52,11 @@ one would. Every `--json` command emits one versioned envelope
 (`schema_version`, `command`, `warnings`, and exactly one of `result` or
 `error`), so an agent parses one shape.
 
+The packaged `autonomous-task` and `autonomous-backlog` skills follow your
+repository's manual-testing policy, including requirements for non-visible
+changes. Without a policy, they require manual testing for visible workflow
+behavior, not for every task. Required manual testing stays sandbox-first.
+
 For unattended runs, `loop` executes explicitly allowed tasks inside operator-set
 bounds — see [docs/loop.md](docs/loop.md). A failed or interrupted child that
 leaves HEAD unchanged reports `child_failed`; repository integrity violations
