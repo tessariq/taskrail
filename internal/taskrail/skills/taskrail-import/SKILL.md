@@ -58,5 +58,5 @@ rollback evidence.
 - split independently useful outcomes, but never split one result by file, layer,
   discipline, phase, or estimate
 - require durable evidence and one owner for required integrated behavior
-- the thin `--llm` adapter (binary calling a model directly) is not available; it
-  is deferred to a later version by design
+- keep semantic work in the agent; the binary remains deterministic and
+  provider-neutral, with no direct model calls

@@ -58,5 +58,5 @@ do not contain the source helper and skip this source-only guard.
 - return only the JSON draft in step 4; no prose, no code fence
 - every `spec_ref` must point at a heading that already exists after step 3
 - keep drafts small and focused; prefer several tasks over one broad task
-- the thin `--llm` adapter (binary calling a model directly) is not available; it
-  is deferred to a later version by design
+- keep semantic work in the agent; the binary remains deterministic and
+  provider-neutral, with no direct model calls

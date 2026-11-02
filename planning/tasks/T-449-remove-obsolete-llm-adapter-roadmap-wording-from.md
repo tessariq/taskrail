@@ -1,11 +1,16 @@
 ---
 id: T-449-remove-obsolete-llm-adapter-roadmap-wording-from
 title: Remove obsolete LLM adapter roadmap wording from skills
-status: todo
+status: completed
 priority: low
 spec_ref: specs/v0.5.0.md#recommendation-about-llm-support
 dependencies: []
-updated_at: "2026-11-02T21:57:31Z"
+updated_at: "2026-11-02T23:43:17Z"
+completion_id: "58d032428444f9715b8fdaee1208e663"
+last_verification_id: "d43c81ad1ef5ed877212343b94a24612"
+last_verification_result: pass
+last_verified_at: "2026-11-02T23:43:17Z"
+last_verified_completion_id: "58d032428444f9715b8fdaee1208e663"
 ---
 
 # T-449-remove-obsolete-llm-adapter-roadmap-wording-from Remove obsolete LLM adapter roadmap wording from skills
@@ -37,3 +42,6 @@ deterministic CLI. No new flag, adapter, or spec change belongs in this task.
   regeneration. No CLI behavior or provider integration is introduced.
 
 ## Implementation Notes
+
+- 2026-11-02T23:43:01Z: Removed obsolete future adapter promises from import and retrofit while retaining agent semantic work and deterministic provider-neutral binary boundaries. Regenerated both skill mirrors; structural checks, full Go tests, vet, dedicated simplification and independent review passed.
+- 2026-11-02T23:43:17Z: verification pass id d43c81ad1ef5ed877212343b94a24612 previous none completion 58d032428444f9715b8fdaee1208e663

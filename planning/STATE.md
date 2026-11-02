@@ -1,6 +1,6 @@
 ---
 schema_version: 2
-updated_at: "2026-11-02T23:26:02Z"
+updated_at: "2026-11-02T23:43:17Z"
 active_spec_version: v0.5.0
 active_spec_path: specs/v0.5.0.md
 current_task: ""
@@ -8,9 +8,9 @@ current_task_title: ""
 status_summary: idle
 blockers: []
 next_action: Select the next eligible task
-last_verification_result: pass for T-448-make-manual-test-guidance-repository-agnostic at 2026-11-02T23:26:02Z id 5aa25e501099a485e38666ce616ab2bf
-last_verification_id: 5aa25e501099a485e38666ce616ab2bf
-last_verified_completion_id: 593bb0fd09f8f6b0bb9a761fae98ab5f
+last_verification_result: pass for T-449-remove-obsolete-llm-adapter-roadmap-wording-from at 2026-11-02T23:43:17Z id d43c81ad1ef5ed877212343b94a24612
+last_verification_id: d43c81ad1ef5ed877212343b94a24612
+last_verified_completion_id: 58d032428444f9715b8fdaee1208e663
 relevant_artifacts: []
 ---
 
@@ -34,7 +34,7 @@ relevant_artifacts: []
 
 ## Last Verification
 
-- pass for T-448-make-manual-test-guidance-repository-agnostic at 2026-11-02T23:26:02Z id 5aa25e501099a485e38666ce616ab2bf
+- pass for T-449-remove-obsolete-llm-adapter-roadmap-wording-from at 2026-11-02T23:43:17Z id d43c81ad1ef5ed877212343b94a24612
 
 ## Next Action
 
@@ -46,8 +46,8 @@ relevant_artifacts: []
 
 ## Task Counts
 
-- todo: 74
+- todo: 73
 - in_progress: 0
-- completed: 375
+- completed: 376
 - blocked: 0
 - cancelled: 0

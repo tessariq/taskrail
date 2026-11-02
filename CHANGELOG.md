@@ -36,6 +36,9 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ### Fixed
 
+- `taskrail-import` and `taskrail-retrofit` no longer promise a future direct-model
+  adapter. Semantic work stays with the agent; the binary remains deterministic
+  and provider-neutral.
 - `autonomous-manual-test` exercises the adopting product's acceptance criteria
   in the repository's documented test modes, with a temporary sandbox fallback,
   instead of defaulting to Taskrail command flows. One no-commit rule covers
