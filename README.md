@@ -56,6 +56,9 @@ The packaged `autonomous-task` and `autonomous-backlog` skills follow your
 repository's manual-testing policy, including requirements for non-visible
 changes. Without a policy, they require manual testing for visible workflow
 behavior, not for every task. Required manual testing stays sandbox-first.
+The `autonomous-manual-test` skill exercises your product's acceptance criteria
+using your documented test modes, with a temporary sandbox fallback when none
+are documented. Its evidence and temporary test code are never committed.
 
 For unattended runs, `loop` executes explicitly allowed tasks inside operator-set
 bounds — see [docs/loop.md](docs/loop.md). A failed or interrupted child that

@@ -1,6 +1,6 @@
 ---
 schema_version: 2
-updated_at: "2026-11-02T23:02:27Z"
+updated_at: "2026-11-02T23:26:02Z"
 active_spec_version: v0.5.0
 active_spec_path: specs/v0.5.0.md
 current_task: ""
@@ -8,9 +8,9 @@ current_task_title: ""
 status_summary: idle
 blockers: []
 next_action: Select the next eligible task
-last_verification_result: pass for T-447-respect-repository-manual-testing-policy-in at 2026-11-02T23:02:27Z id 1ecf33c7d1cb0056811714432d518dc6
-last_verification_id: 1ecf33c7d1cb0056811714432d518dc6
-last_verified_completion_id: 900a7bcb6dfc23867bae3ef78760caf5
+last_verification_result: pass for T-448-make-manual-test-guidance-repository-agnostic at 2026-11-02T23:26:02Z id 5aa25e501099a485e38666ce616ab2bf
+last_verification_id: 5aa25e501099a485e38666ce616ab2bf
+last_verified_completion_id: 593bb0fd09f8f6b0bb9a761fae98ab5f
 relevant_artifacts: []
 ---
 
@@ -34,7 +34,7 @@ relevant_artifacts: []
 
 ## Last Verification
 
-- pass for T-447-respect-repository-manual-testing-policy-in at 2026-11-02T23:02:27Z id 1ecf33c7d1cb0056811714432d518dc6
+- pass for T-448-make-manual-test-guidance-repository-agnostic at 2026-11-02T23:26:02Z id 5aa25e501099a485e38666ce616ab2bf
 
 ## Next Action
 
@@ -46,8 +46,8 @@ relevant_artifacts: []
 
 ## Task Counts
 
-- todo: 75
+- todo: 74
 - in_progress: 0
-- completed: 374
+- completed: 375
 - blocked: 0
 - cancelled: 0

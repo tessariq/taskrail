@@ -341,6 +341,24 @@ func TestManualTestSkillDefinesPlaceholderAcceptanceOutcome(t *testing.T) {
 	)
 }
 
+func TestManualTestSkillExercisesAdopterProduct(t *testing.T) {
+	assertSkillReferences(t, "autonomous-manual-test",
+		"Read the adopting repository's documented manual-test modes",
+		"Exercise the affected product's user-facing flows",
+		"Use Taskrail commands as the product under test only when they are the subject of the task",
+		"Without documented modes, prefer a temporary sandbox",
+		"storage.artifacts_dir",
+		"delete their directories and files as part of the step 8 cleanup",
+		"Never commit ephemeral manual-test evidence or temporary manual test code",
+		"Do not mutate external systems, production data, credentials, billed resources, live services, or resources outside the repository",
+		"except the run's owned disposable test sandbox",
+		"stop for a human rather than guessing",
+	)
+	if strings.Contains(readShippableSkill(t, "autonomous-manual-test"), "Exercise normal `${TASKRAIL:-taskrail} ...` flows") {
+		t.Error("manual testing must exercise the adopter's product, not default to Taskrail flows")
+	}
+}
+
 // The loop skill is the interactive parent supervisor, not another coordinator.
 // Its instructions must bind every mutating launch to a reviewed dry-run and
 // leave selection, lifecycle, integration, delivery, and recovery writes to the

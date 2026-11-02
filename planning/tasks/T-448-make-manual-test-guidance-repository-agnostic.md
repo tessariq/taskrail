@@ -1,11 +1,16 @@
 ---
 id: T-448-make-manual-test-guidance-repository-agnostic
 title: Make manual-test guidance repository-agnostic
-status: todo
+status: completed
 priority: medium
 spec_ref: specs/v0.5.0.md#storage-neutral-packaged-skills
 dependencies: []
-updated_at: "2026-11-02T21:57:31Z"
+updated_at: "2026-11-02T23:26:02Z"
+completion_id: "593bb0fd09f8f6b0bb9a761fae98ab5f"
+last_verification_id: "5aa25e501099a485e38666ce616ab2bf"
+last_verification_result: pass
+last_verified_at: "2026-11-02T23:26:02Z"
+last_verified_completion_id: "593bb0fd09f8f6b0bb9a761fae98ab5f"
 ---
 
 # T-448-make-manual-test-guidance-repository-agnostic Make manual-test guidance repository-agnostic
@@ -46,3 +51,6 @@ Do not add container management or prescribe a new adopter workflow.
   run the focused tests plus `task check:skills`.
 
 ## Implementation Notes
+
+- 2026-11-02T23:26:01Z: Manual-test guidance now selects adopter-documented modes and acceptance-derived product flows, with a temporary sandbox fallback. Preserved placeholder non-pass, JSON artifact discovery, cleanup, evidence and temporary-code no-commit rules, and external safety boundaries. Focused contracts, package parity, vet, full Linux tests, disposable interpretation scenarios, simplification, and independent review passed; review clarified the owned local sandbox exception.
+- 2026-11-02T23:26:02Z: verification pass id 5aa25e501099a485e38666ce616ab2bf previous none completion 593bb0fd09f8f6b0bb9a761fae98ab5f

@@ -1,6 +1,6 @@
 ---
 name: autonomous-manual-test
-description: Generate and execute a manual test plan against Taskrail task acceptance criteria in a temporary sandbox
+description: Generate and execute a manual test plan against a tracked task's acceptance criteria using the adopting repository's documented test modes or a temporary sandbox
 ---
 
 # autonomous-manual-test
@@ -19,8 +19,9 @@ Requires the installed `taskrail` binary on `PATH`.
 3. Run `${TASKRAIL:-taskrail} status --json` and use its exact
    `storage.artifacts_dir` as the transient root. Create a manual test plan at
    `<artifacts-dir>/manual-test/<task-id>/<timestamp>/plan.md`.
-4. Derive numbered test steps from the acceptance criteria. If the task has
-   missing or placeholder acceptance criteria (for example `TODO:` scaffold
+4. Read the adopting repository's documented manual-test modes and derive
+   numbered test steps from the acceptance criteria using those modes. If the
+   task has missing or placeholder acceptance criteria (for example `TODO:` scaffold
    lines), do not derive steps from any other material: record the criteria as
    untestable, skip step execution, and choose a stated non-pass outcome (fail
    or stop): write the report with verdict fail, or stop the run before report
@@ -32,12 +33,17 @@ Requires the installed `taskrail` binary on `PATH`.
    per-step results and a final verdict.
 8. Clean up any temporary manual test code after the report is written.
 
-## Sandbox Mode
+## Test Modes
 
-Prefer a sandbox for most manual testing.
+Follow the repository's documented test modes, including sandbox or container
+modes when provided; do not introduce a new test workflow or manage containers.
+Without documented modes, prefer a temporary sandbox.
 
-- Run commands in a temporary directory or temporary repository.
-- Exercise normal `${TASKRAIL:-taskrail} ...` flows.
+- For the sandbox fallback, run commands in a temporary directory or temporary
+  repository.
+- Exercise the affected product's user-facing flows, such as an application's
+  interactions or another CLI's commands. Use Taskrail commands as the product
+  under test only when they are the subject of the task.
 - Use small temporary helper programs only when direct shell commands are not
   enough; delete their directories and files as part of the step 8 cleanup.
 
@@ -61,8 +67,13 @@ Prefer a sandbox for most manual testing.
 
 ## Rules
 
-- manual-test artifacts beneath `<artifacts-dir>/manual-test/` are ephemeral,
-  gitignored evidence; never commit them
+- Never commit ephemeral manual-test evidence or temporary manual test code.
+  Keep evidence beneath `<artifacts-dir>/manual-test/`, where it is gitignored.
+- Do not mutate external systems, production data, credentials, billed
+  resources, live services, or resources outside the repository, except the
+  run's owned disposable test sandbox. This exception permits only local test
+  files, not external-resource access. Headless ambiguity, destructive scope,
+  live consoles, and operator decisions stop for a human rather than guessing.
 - never substitute ordinary automated tests for manual test evidence when the
   change needs end-to-end judgment
 - missing or placeholder acceptance criteria yield a stated non-pass outcome
@@ -72,4 +83,3 @@ Prefer a sandbox for most manual testing.
 - re-run only the affected test step after a fix
 - do not auto-select another task after manual testing completes
 - keep manual-test narrative in the ephemeral report, never in `planning/STATE.md`
-- never commit temporary manual test code

@@ -36,6 +36,11 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ### Fixed
 
+- `autonomous-manual-test` exercises the adopting product's acceptance criteria
+  in the repository's documented test modes, with a temporary sandbox fallback,
+  instead of defaulting to Taskrail command flows. One no-commit rule covers
+  both ephemeral evidence and temporary test code; cleanup and safety boundaries
+  remain explicit.
 - `autonomous-task` and `autonomous-backlog` follow the adopting repository's
   manual-testing policy, including requirements for non-visible changes. Without
   a repository policy, manual testing remains required for visible workflow
