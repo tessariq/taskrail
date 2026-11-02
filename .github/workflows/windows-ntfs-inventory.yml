@@ -1,0 +1,161 @@
+name: Windows NTFS inventory only
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-ntfs-inventory
+  cancel-in-progress: false
+
+jobs:
+  inventory:
+    runs-on: windows-2025
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: source
+    env:
+      SOURCE_REVISION: f72bc2ca893c8808c9ba5fe6e093b58903a25e88
+      APPROVAL_RECORD: https://ampcode.com/threads/T-01a191e2-0278-75cd-bba8-a0d3dbb8c8db
+      EVIDENCE_ROOT: ${{ runner.temp }}\taskrail-ntfs-inventory-${{ github.run_id }}-${{ github.run_attempt }}
+
+    steps:
+      - name: Fetch frozen source for provenance only
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: f72bc2ca893c8808c9ba5fe6e093b58903a25e88
+          path: source
+          persist-credentials: false
+          fetch-depth: 1
+          submodules: false
+          lfs: false
+
+      - name: Collect read-only host inventory and bounded receipts
+        id: inventory
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $head = (git rev-parse HEAD).Trim()
+          if ($LASTEXITCODE -ne 0 -or $head -ne $env:SOURCE_REVISION) { throw 'Wrong frozen source.' }
+          $tree = (git rev-parse 'HEAD^{tree}').Trim()
+          if ($LASTEXITCODE -ne 0 -or $tree -ne 'e35facffc5f294b7f8b057ab4a90fa573477efda') { throw 'Wrong source tree.' }
+          if ($env:GITHUB_RUN_ID -notmatch '^\d+$' -or $env:GITHUB_RUN_ATTEMPT -notmatch '^\d+$') { throw 'Invalid run identity.' }
+          $temp = [IO.Path]::GetFullPath($env:RUNNER_TEMP).TrimEnd('\')
+          $drive = [IO.Path]::GetPathRoot($temp)
+          if ($drive -notmatch '^[A-Za-z]:\\$') { throw 'Evidence requires a local drive, not UNC.' }
+          $expected = Join-Path $temp "taskrail-ntfs-inventory-$($env:GITHUB_RUN_ID)-$($env:GITHUB_RUN_ATTEMPT)"
+          if ([IO.Path]::GetFullPath($env:EVIDENCE_ROOT) -cne $expected) { throw 'Unexpected evidence path.' }
+          $ancestors = @()
+          $item = Get-Item -LiteralPath $temp -Force
+          while ($null -ne $item) {
+            if (-not $item.PSIsContainer -or ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+              throw 'Refuse evidence writes through non-directory or reparse ancestor.'
+            }
+            $ancestors += [ordered]@{ path = $item.FullName; attributes = [string]$item.Attributes }
+            $item = $item.Parent
+          }
+          if (Test-Path -LiteralPath $expected) { throw 'Never reuse an evidence directory.' }
+          $volume = Get-Volume -DriveLetter $drive.Substring(0, 1)
+          if ($volume.SizeRemaining -lt 64MB) { throw 'Insufficient evidence headroom.' }
+          # No scratch root, fixtures, probe build, flush, rename or fault is executed.
+          New-Item -ItemType Directory -Path $expected -ErrorAction Stop | Out-Null
+          'owned=true' >> $env:GITHUB_OUTPUT
+          [ordered]@{ state = 'collection-started-no-admission'; source = $head; tree = $tree;
+            workflow_sha = $env:GITHUB_WORKFLOW_SHA; recorded_utc = [DateTime]::UtcNow.ToString('o') } |
+            ConvertTo-Json | Set-Content -LiteralPath "$expected\attempt.json" -Encoding utf8
+          $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+          $principal = [Security.Principal.WindowsPrincipal]::new($identity)
+          $os = Get-CimInstance Win32_OperatingSystem
+          $machine = Get-CimInstance Win32_ComputerSystem
+          $disks = @(Get-CimInstance Win32_DiskDrive | Select-Object -First 16 DeviceID, Model, InterfaceType, FirmwareRevision, Size, BytesPerSector)
+          $whoami = (& whoami.exe /all 2>&1 | Out-String)
+          # String.Length counts UTF-16 units, not encoded bytes. The final byte budget includes token.txt.
+          if ($LASTEXITCODE -ne 0 -or $whoami.Length -gt 131072) { throw 'Token inventory unavailable or oversized.' }
+          $gitVersion = (& git --version | Out-String).Trim()
+          if ($LASTEXITCODE -ne 0) { throw 'Git version unavailable.' }
+          $goCommand = Get-Command go -ErrorAction SilentlyContinue
+          $inventory = [ordered]@{
+            schema_version = 1
+            stage = 'inventory-only'
+            claim = 'Host observations only. No primitive admission or durability guarantee.'
+            approval_record = $env:APPROVAL_RECORD
+            source_commit = $head
+            source_tree = $tree
+            workflow_ref = $env:GITHUB_WORKFLOW_REF
+            workflow_sha = $env:GITHUB_WORKFLOW_SHA
+            run_id = $env:GITHUB_RUN_ID
+            run_attempt = $env:GITHUB_RUN_ATTEMPT
+            recorded_utc = [DateTime]::UtcNow.ToString('o')
+            host = [ordered]@{ name = $env:COMPUTERNAME; manufacturer = $machine.Manufacturer; model = $machine.Model; hypervisor_present = $machine.HypervisorPresent }
+            os = [ordered]@{ caption = $os.Caption; version = $os.Version; build = $os.BuildNumber; architecture = $os.OSArchitecture }
+            runner_image = [ordered]@{ os = $env:ImageOS; version = $env:ImageVersion }
+            tools = [ordered]@{ powershell = $PSVersionTable.PSVersion.ToString(); git = $gitVersion; go_path_only = $goCommand.Source }
+            token = [ordered]@{ sid = $identity.User.Value; effective_administrator = $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator); raw_receipt = 'token.txt' }
+            volume = [ordered]@{ drive = $drive; filesystem = $volume.FileSystem; drive_type = [string]$volume.DriveType; unique_id = $volume.UniqueId; size_bytes = $volume.Size; free_bytes = $volume.SizeRemaining; health = [string]$volume.HealthStatus }
+            disk_inventory = $disks
+            temp_ancestors = $ancestors
+            temp_acl_sddl = (Get-Acl -LiteralPath $temp).Sddl
+            evidence_acl_sddl = (Get-Acl -LiteralPath $expected).Sddl
+            unresolved = @('native parent/volume/file IDs', 'numeric native token admission checks', 'effective per-operation ACL rights', 'filter-driver inventory', 'physical/backing-store topology and cache/flush policy', 'device power-loss protection', 'primitive admission')
+          }
+          $inventory | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath "$expected\inventory.json" -Encoding utf8
+          $whoami | Set-Content -LiteralPath "$expected\token.txt" -Encoding utf8
+          @('Read-only inventory plus disposable evidence creation only.',
+            'No source script, test, build, primitive harness or Taskrail lifecycle command executed.',
+            'An elevated hosted token is recorded, not changed or admitted for primitive work.',
+            'NTFS metadata and success returns are not namespace persistence evidence.',
+            'No new paid infrastructure, package installation, cache policy or privileges requested.') |
+            Set-Content -LiteralPath "$expected\scope.txt" -Encoding utf8
+          $files = @(Get-ChildItem -LiteralPath $expected -File)
+          $files | Get-FileHash -Algorithm SHA256 | Select-Object @{n='file';e={[IO.Path]::GetFileName($_.Path)}}, Hash |
+            ConvertTo-Json | Set-Content -LiteralPath "$expected\sha256.json" -Encoding utf8
+          # Measure actual file bytes AFTER writing the manifest. Nothing writes this directory afterward.
+          $finalFiles = @(Get-ChildItem -LiteralPath $expected -File)
+          if (($finalFiles | Measure-Object Length -Sum).Sum -gt 1MB) { throw 'Evidence including manifest exceeds upload budget; raw files retained.' }
+          'upload_ready=true' >> $env:GITHUB_OUTPUT
+
+      - name: Record separately bounded upload refusal
+        id: withheld
+        if: always() && steps.inventory.outputs.owned == 'true' && (steps.inventory.outcome != 'success' || steps.inventory.outputs.upload_ready != 'true')
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # Inspect lengths only. Never delete, truncate or upload the withheld raw directory.
+          $files = @(Get-ChildItem -LiteralPath $env:EVIDENCE_ROOT -File -ErrorAction Stop)
+          $total = [uint64](($files | Measure-Object Length -Sum).Sum)
+          $receipt = [ordered]@{
+            state = 'inventory-upload-withheld'
+            claim = 'No admission or durability claim.'
+            reason = 'Collection failed or final byte budget was not validated.'
+            raw_file_count = $files.Count
+            withheld_bytes = $total
+            discarded_bytes = 0
+            raw_evidence_retained = $true
+            raw_retention = 'Runner-local only; normally lost at hosted-job teardown.'
+            normal_upload_limit_bytes = 1048576
+          } | ConvertTo-Json -Compress
+          $bytes = [Text.UTF8Encoding]::new($false).GetBytes($receipt)
+          if ($bytes.Length -gt 4096) { throw 'Refusal receipt exceeds its separate byte budget; upload nothing.' }
+          $file = [IO.File]::Open("$($env:EVIDENCE_ROOT)-withheld.json", [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
+          try { $file.Write($bytes, 0, $bytes.Length) } finally { $file.Dispose() }
+          'upload_ready=true' >> $env:GITHUB_OUTPUT
+
+      - name: Preserve validated bounded inventory only
+        if: always() && steps.inventory.outcome == 'success' && steps.inventory.outputs.upload_ready == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: windows-ntfs-inventory-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.EVIDENCE_ROOT }}
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Preserve bounded refusal receipt only
+        if: always() && steps.withheld.outcome == 'success' && steps.withheld.outputs.upload_ready == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: windows-ntfs-inventory-withheld-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.EVIDENCE_ROOT }}-withheld.json
+          if-no-files-found: error
+          retention-days: 7
