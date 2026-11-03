@@ -112,7 +112,7 @@ func TestShippableSkillsHaveStorageNeutralInventory(t *testing.T) {
 		"autonomous-backlog":            {[]string{"task show <task-id> --json", "spec show <version> --json"}, []string{"status --json", "committed mode", "local mode"}},
 		"autonomous-task":               {[]string{"task show <task-id> --json", "spec show <version> --json"}, []string{"status --json", "committed mode", "local mode"}},
 		"autonomous-verify":             {[]string{"task show <task-id> --json"}, []string{"status --json", "storage.artifacts_dir"}},
-		"autonomous-recovery":           {[]string{"repair --apply --json"}, nil},
+		"autonomous-recovery":           {[]string{"../taskrail-repair/SKILL.md"}, nil},
 		"autonomous-manual-test":        {[]string{"task show <task-id> --json"}, []string{"status --json", "storage.artifacts_dir"}},
 		"taskrail-loop":                 {[]string{"loop --dry-run --json"}, nil},
 		"taskrail-import":               {[]string{"import --apply draft.json --json"}, nil},
@@ -171,7 +171,7 @@ func TestShippableSkillsConsumeStructuredResultsAsJSON(t *testing.T) {
 		"autonomous-backlog":            {"} validate --json", "} next --json", "} start <task-id> --json", "} verify <task-id> --result pass --summary \"...\" --json", "} verify <task-id> --result fail --summary \"...\" --json", "} task new --follow-up <task-id> --title \"...\" --json", "} complete <task-id> --note \"...\" --json", "} block <task-id> --reason \"...\" --json"},
 		"autonomous-task":               {"} validate --json", "} start <task-id> --json", "} verify <task-id> --result pass --summary \"...\" --json", "} verify <task-id> --result fail --summary \"...\" --json", "} task new --follow-up <task-id> --title \"...\" --json", "} complete <task-id> --note \"...\" --json", "} block <task-id> --reason \"...\" --json"},
 		"autonomous-verify":             {"} validate --json", "} verify <task-id> --result pass --summary \"...\" --json", "} verify <task-id> --result fail --summary \"...\" --json", "} task new --follow-up <task-id> --title \"...\" --json", "} verify <task-id> --result fail --summary \"...\" --create-followup --json"},
-		"autonomous-recovery":           {"} validate --json", "} repair --json", "} repair --apply --json"},
+		"autonomous-recovery":           {"../taskrail-repair/SKILL.md"},
 		"autonomous-manual-test":        {"} validate --json"},
 		"taskrail-loop":                 {"} loop --dry-run --json", "} loop", "--result-file <absolute-external-path>", "--parallel <n>", "--workspace-root <absolute-external-path>", "--clone-depth <n|full>", "--keep-workspaces <never|failure|always>", "--delivery <local|review>", "--review-adapter <path>", "--allow-prompt-override-sha256 <digest>", "-- <child-command> <args...>", "} lock status --json", "} recover <transaction-id>", "--take-over-lock <lock-id> --expect-sha256 <digest> --json", "--apply"},
 		"taskrail-import":               {"} import --apply draft.json --json", "} validate --json"},
@@ -684,30 +684,6 @@ func TestRepairSkillCoversStateConflict(t *testing.T) {
 		"} repair --apply",
 		"task file",
 	)
-}
-
-// The retargeted recovery skill must route through repair and must no longer
-// permit hand-editing authoritative state (its old bootstrap-edit fallback).
-func TestRecoverySkillRoutesThroughRepair(t *testing.T) {
-	// Recovery now lives only in the embedded package and its committed
-	// .agents/.claude copies; the retired repo-root skills/ tree is gone (T-055).
-	for _, dir := range committedSkillTargets {
-		path := filepath.Join(dir, "autonomous-recovery", "SKILL.md")
-		data, err := os.ReadFile(path)
-		if err != nil {
-			t.Fatalf("read %s: %v", path, err)
-		}
-		body := string(data)
-		// Matches the resolved subcommand tail of the configurable entry point
-		// (`${TASKRAIL:-taskrail} repair`, T-051/T-055), not a bare `taskrail`
-		// prefix, consistent with the other packaged-skill assertions above.
-		if !strings.Contains(body, "} repair") {
-			t.Errorf("%s must route recovery through the repair command", path)
-		}
-		if strings.Contains(body, "bootstrap-era manual edits") {
-			t.Errorf("%s must drop the bootstrap-era manual-edit fallback", path)
-		}
-	}
 }
 
 // The spec skill must cover the packaged spec workflow command surface.

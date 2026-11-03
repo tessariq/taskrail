@@ -29,7 +29,9 @@ do not contain the source helper and skip this source-only guard.
 
 1. **Inspect.** Run `${TASKRAIL:-taskrail} validate --json` and read the violations. Repair
    only heals mechanical STATE.md drift; other violations (a missing `spec_ref`, a
-   dependency cycle, more than one in_progress task) need human judgement.
+   dependency cycle, more than one in_progress task) need human judgement. If state
+   is ambiguous or non-mechanical, stop and report it before applying; do not
+   choose a task or invent a correction.
 2. **Dry-run.** Run `${TASKRAIL:-taskrail} repair --json`. This defaults to a dry run: it reports the
    proposed frontmatter corrections and the STATE.md body diff and writes nothing.
 3. **Review.** Confirm every proposed change follows the task files (the source of
@@ -54,11 +56,12 @@ regenerated, not merged:
    whole (e.g. `git checkout --theirs planning/STATE.md` or `--ours`); the choice
    does not matter because the next step overwrites it. Never edit the conflict
    markers by hand.
-2. **Re-project.** Run `${TASKRAIL:-taskrail} repair --apply --json` to rebuild
-   `STATE.md` from the merged task files. Each PR edits its own task file, so the
-   task files merge cleanly and the re-projected aggregate is correct.
-3. **Re-validate.** Run `${TASKRAIL:-taskrail} validate --json` and confirm the state is
-   valid, then commit the regenerated `STATE.md`.
+2. **Re-project.** Follow the Flow above, including inspection, dry-run, review,
+   the source-checkout guard before apply, and revalidation, to rebuild `STATE.md`
+   from the merged task files. Distinct task-file edits can merge cleanly; confirm
+   the merged task files are unambiguous before applying.
+3. Commit the regenerated `STATE.md` with the merged task files after validation
+   passes.
 
 Boundary — repair only re-projects the derived aggregate. It does **not** resolve
 a real conflict on the *same task file* (two PRs editing one task is genuine
@@ -84,3 +87,4 @@ Taskrail CLI behaviour.
 - repair only reconciles mechanical drift; it never advances status or invents work
 - inconsistencies repair leaves untouched are surfaced by validation — fix them
   through the tracked-work commands, not by editing state
+- do not implement unrelated product changes during recovery-only runs

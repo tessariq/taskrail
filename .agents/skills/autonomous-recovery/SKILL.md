@@ -22,27 +22,18 @@ binary the workflow will invoke. If it fails, stop, apply the remedy it names,
 and rerun the guard; do not run the writer first. Installed adopter repositories
 do not contain the source helper and skip this source-only guard.
 
-## Required Flow
+## Recovery Procedure
 
-1. **Inspect.** Run `${TASKRAIL:-taskrail} validate --json` and read the
-   violations.
-2. **Dry-run.** Run `${TASKRAIL:-taskrail} repair --json` to preview the conservative,
-   mechanical corrections (a stale `current_task` pointer, a `status_summary`
-   stale against a single `in_progress` task, stale rendered task counts). This
-   defaults to a dry run: review the proposed frontmatter changes and the
-   `STATE.md` body diff before applying.
-3. **Apply.** Run `${TASKRAIL:-taskrail} repair --apply --json` to write the reconciled
-   `STATE.md` and re-run validation.
-4. **Re-validate.** Run `${TASKRAIL:-taskrail} validate --json` again.
-5. If violations remain, they are outside repair's mechanical scope (a missing
-   `spec_ref`, a dependency cycle, more than one `in_progress` task). Resolve them
-   through the tracked-work commands, never by editing `STATE.md` or task status
-   fields by hand.
+Read and follow [taskrail-repair](../taskrail-repair/SKILL.md), the canonical
+mechanical recovery procedure installed alongside this skill. Its inspection,
+reviewed dry-run, apply, revalidation, and refusal boundaries apply to this entry
+point too. If the sibling skill cannot be loaded, stop and report the missing
+procedure; do not improvise a replacement or hand-edit state.
 
 ## Rules
 
-- never hand-edit `planning/STATE.md` frontmatter or task status fields; route
-  every correction through `${TASKRAIL:-taskrail} repair`
+- never hand-edit `planning/STATE.md` frontmatter or task status fields; use the
+  canonical procedure above
 - treat `planning/STATE.md` as current state, never as a task/session log; do not
   add continuation prose while recovering it
 - never force progress by casual state mutation

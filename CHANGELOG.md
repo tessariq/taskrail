@@ -78,6 +78,10 @@ All notable user-visible changes to Taskrail will be documented in this file.
   precedence as `invalid_postflight`.
 - Packaged skills state task-sizing criteria and the semantic gap-analysis
   rationale without requiring Taskrail's development tasks or product specs.
+- Packaged `autonomous-recovery` delegates to the installed `taskrail-repair`
+  procedure instead of maintaining a second mechanical recovery recipe. Both
+  entry points retain freshness, reviewed dry-run, revalidation, and refusal
+  boundaries; generated-state merge recovery uses the same procedure.
 - Maintainer skill-evaluation stages now seal artifact-root and ancestor
   identities. Resume and optional stage-pinned baseline adoption refuse replaced
   namespaces, including byte-identical copies and renamed trees. Executed arms

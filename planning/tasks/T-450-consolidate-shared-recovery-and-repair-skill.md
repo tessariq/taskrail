@@ -1,11 +1,16 @@
 ---
 id: T-450-consolidate-shared-recovery-and-repair-skill
 title: Consolidate shared recovery and repair skill guidance
-status: todo
+status: completed
 priority: low
 spec_ref: specs/v0.5.0.md#repository-discovery-locking-and-recovery
 dependencies: []
-updated_at: "2026-11-02T21:57:32Z"
+updated_at: "2026-11-03T00:02:26Z"
+completion_id: "b7c59440bb6ad69c85ffc47385b2698b"
+last_verification_id: "ded841461397aecd79801fdf61c3b4be"
+last_verification_result: pass
+last_verified_at: "2026-11-03T00:02:26Z"
+last_verified_completion_id: "b7c59440bb6ad69c85ffc47385b2698b"
 ---
 
 # T-450-consolidate-shared-recovery-and-repair-skill Consolidate shared recovery and repair skill guidance
@@ -45,3 +50,6 @@ scope; do not merge away entry points or broaden CLI recovery behavior.
   checks, and `task check:skills`; record transient evidence paths.
 
 ## Implementation Notes
+
+- 2026-11-03T00:02:19Z: Consolidated mechanical recovery in packaged taskrail-repair with installed sibling delegation from autonomous-recovery. Preserved safety and generated-state conflict boundaries; regenerated copies. Both installed layouts and entry points passed disposable CLI drift and ambiguous-stop checks; focused contracts, full Go suite, vet, parity, simplification and independent review passed.
+- 2026-11-03T00:02:26Z: verification pass id ded841461397aecd79801fdf61c3b4be previous none completion b7c59440bb6ad69c85ffc47385b2698b

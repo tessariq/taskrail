@@ -56,6 +56,10 @@ The packaged `autonomous-task` and `autonomous-backlog` skills follow your
 repository's manual-testing policy, including requirements for non-visible
 changes. Without a policy, they require manual testing for visible workflow
 behavior, not for every task. Required manual testing stays sandbox-first.
+The packaged `autonomous-recovery` entry point delegates to `taskrail-repair`
+for the shared inspect, dry-run, review, apply, and revalidate procedure. Both
+entry points stop on ambiguous or non-mechanical state; neither permits
+hand-editing authoritative state or implementing unrelated changes.
 The `autonomous-manual-test` skill exercises your product's acceptance criteria
 using your documented test modes, with a temporary sandbox fallback when none
 are documented. Its evidence and temporary test code are never committed.
