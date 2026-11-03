@@ -21,7 +21,6 @@ jobs:
     env:
       SOURCE_REVISION: f72bc2ca893c8808c9ba5fe6e093b58903a25e88
       APPROVAL_RECORD: https://ampcode.com/threads/T-01a191e2-0278-75cd-bba8-a0d3dbb8c8db
-      EVIDENCE_ROOT: ${{ runner.temp }}\taskrail-ntfs-inventory-${{ github.run_id }}-${{ github.run_attempt }}
 
     steps:
       - name: Fetch frozen source for provenance only
@@ -33,6 +32,14 @@ jobs:
           fetch-depth: 1
           submodules: false
           lfs: false
+
+      - name: Resolve runner-local evidence path
+        id: evidence
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $root = Join-Path ([IO.Path]::GetFullPath($env:RUNNER_TEMP).TrimEnd('\')) "taskrail-ntfs-inventory-$($env:GITHUB_RUN_ID)-$($env:GITHUB_RUN_ATTEMPT)"
+          "EVIDENCE_ROOT=$root" >> $env:GITHUB_ENV
+          "root=$root" >> $env:GITHUB_OUTPUT
 
       - name: Collect read-only host inventory and bounded receipts
         id: inventory
@@ -147,7 +154,7 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: windows-ntfs-inventory-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ env.EVIDENCE_ROOT }}
+          path: ${{ steps.evidence.outputs.root }}
           if-no-files-found: warn
           retention-days: 7
 
@@ -156,6 +163,6 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: windows-ntfs-inventory-withheld-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ env.EVIDENCE_ROOT }}-withheld.json
+          path: ${{ steps.evidence.outputs.root }}-withheld.json
           if-no-files-found: error
           retention-days: 7
