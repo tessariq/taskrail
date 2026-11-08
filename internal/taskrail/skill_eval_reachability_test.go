@@ -62,6 +62,9 @@ func TestSkillEvalRegistryReachableSetup(t *testing.T) {
 			if err := os.CopyFS(sandbox, fixture); err != nil {
 				t.Fatal(err)
 			}
+			if evaluation.StorageMode == "local" {
+				requireRecoveryDirectoryDurability(t, sandbox)
+			}
 			command := func(program string, args ...string) ([]byte, error) {
 				t.Helper()
 				cmd := exec.CommandContext(t.Context(), program, args...)
