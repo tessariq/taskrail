@@ -151,7 +151,7 @@ jobs:
 
       - name: Preserve validated bounded inventory only
         if: always() && steps.inventory.outcome == 'success' && steps.inventory.outputs.upload_ready == 'true'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: windows-ntfs-inventory-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ steps.evidence.outputs.root }}
@@ -160,7 +160,7 @@ jobs:
 
       - name: Preserve bounded refusal receipt only
         if: always() && steps.withheld.outcome == 'success' && steps.withheld.outputs.upload_ready == 'true'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: windows-ntfs-inventory-withheld-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ steps.evidence.outputs.root }}-withheld.json
