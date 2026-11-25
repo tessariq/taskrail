@@ -588,7 +588,7 @@ func syncDirectory(parent *os.Root) error {
 		return err
 	}
 	defer dir.Close()
-	return nativeSync(dir)
+	return nativeSyncDirectory(dir)
 }
 
 func sameIdentities(a, b []Identity) bool {

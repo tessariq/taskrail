@@ -66,6 +66,8 @@ func replaceStaged(parent *os.Root, _ *os.File, staged, leaf string) error {
 
 func isReparsePoint(fs.FileInfo) bool { return false }
 
+func nativeSyncDirectory(dir *os.File) error { return nativeSync(dir) }
+
 func classifySyncError(step Barrier, err error) error {
 	if errors.Is(err, syscall.EINVAL) || errors.Is(err, syscall.ENOTSUP) || errors.Is(err, syscall.ENOSYS) {
 		return fmt.Errorf("%w: %s barrier: %v", ErrUnsupported, step, err)
