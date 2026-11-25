@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/tessariq/taskrail/internal/durablefs"
 	"github.com/tessariq/taskrail/internal/repolock"
 )
 
@@ -366,8 +367,16 @@ func request(root string, bundleType Type, destination string, bundle []File) Re
 
 func requireDirectoryPublication(t *testing.T) {
 	t.Helper()
-	if runtime.GOOS == "windows" {
-		t.Skip("Windows reports directory durability as unsupported")
+	root := t.TempDir()
+	parent, err := durablefs.OpenExternal(filepath.Dir(root))
+	if err != nil {
+		t.Fatalf("open directory durability probe: %v", err)
+	}
+	defer parent.Close()
+	if err := parent.SyncDir(filepath.Base(root)); errors.Is(err, durablefs.ErrUnsupported) {
+		t.Skipf("filesystem does not support durable directory sync: %v", err)
+	} else if err != nil {
+		t.Fatalf("directory durability probe: %v", err)
 	}
 }
 

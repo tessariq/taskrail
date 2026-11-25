@@ -11,6 +11,7 @@ import (
 )
 
 func TestPublicationRunsOrderedDurabilityBarriers(t *testing.T) {
+	requireDirectoryPublication(t)
 	repo := t.TempDir()
 	root, lock := openTestRoot(t, repo)
 	defer releaseTestRoot(t, root, lock)
