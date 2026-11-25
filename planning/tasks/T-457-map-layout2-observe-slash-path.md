@@ -1,12 +1,12 @@
 ---
 id: T-457-map-layout2-observe-slash-path
 title: Observe migrated transactions with a slash path in tests
-status: in_progress
+status: blocked
 priority: high
 spec_ref: specs/v0.5.0.md#repository-discovery-locking-and-recovery
 dependencies:
     - T-456-map-windows-move-collision
-updated_at: "2026-11-25T23:15:00Z"
+updated_at: "2026-11-25T23:17:31Z"
 ---
 
 # T-457-map-layout2-observe-slash-path Observe migrated transactions with a slash path in tests
@@ -43,3 +43,5 @@ so it checks the same contract on every platform.
 - Native confirmation needs the next approved Windows run.
 
 ## Implementation Notes
+
+- 2026-11-25T23:17:31Z: Fix committed; awaiting native Windows confirmation of the layout-2 migration tests in the next approved run

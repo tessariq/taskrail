@@ -455,6 +455,9 @@ func TestLoopLaunchChildHelper(t *testing.T) {
 		runLoopHelperCommand(cwd, "git", "commit", "-m", "record lifecycle")
 		os.Exit(0)
 	case "delegate-local-lifecycle":
+		if _, err := io.Copy(io.Discard, os.Stdin); err != nil {
+			os.Exit(98)
+		}
 		if len(args) < separator+4 {
 			os.Exit(82)
 		}
