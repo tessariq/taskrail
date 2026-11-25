@@ -1,12 +1,17 @@
 ---
 id: T-456-map-windows-move-collision
 title: Report Windows no-replace move collisions as exists
-status: in_progress
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#repository-discovery-locking-and-recovery
 dependencies:
     - T-322-provide-handle-bound-durable-filesystem-primitives
-updated_at: "2026-11-25T22:09:43Z"
+updated_at: "2026-11-25T23:13:01Z"
+completion_id: "e24469b61bbab30eadb499eef42cc766"
+last_verification_id: "686e59f06c129f7534f5cb3131c192e6"
+last_verification_result: pass
+last_verified_at: "2026-11-25T23:13:01Z"
+last_verified_completion_id: "e24469b61bbab30eadb499eef42cc766"
 ---
 
 # T-456-map-windows-move-collision Report Windows no-replace move collisions as exists
@@ -48,3 +53,6 @@ native refusal and every other error unchanged.
   verbose filesystem step showing the test passing.
 
 ## Implementation Notes
+
+- 2026-11-25T23:13:00Z: Windows no-replace collision now maps to ERROR_ALREADY_EXISTS (os.ErrExist); native rename and other statuses unchanged
+- 2026-11-25T23:13:01Z: verification pass id 686e59f06c129f7534f5cb3131c192e6 previous none completion e24469b61bbab30eadb499eef42cc766
