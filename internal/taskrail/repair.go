@@ -36,7 +36,8 @@ type RepairResult struct {
 
 // Repair conservatively heals mechanical STATE.md inconsistencies: a current_task
 // pointer disagreeing with the task files, a status_summary stale against a single
-// in_progress task (QC-1), and a stale rendered body (task counts / focus). It only
+// in_progress task or, with none in progress, against the active-spec blockers
+// projection (QC-1), and a stale rendered body (task counts / focus). It only
 // ever rewrites STATE.md — never a task file — so it structurally
 // cannot advance a status or fabricate work (the Explicitly-Excluded guard). Any
 // violation it cannot mechanically resolve (missing spec_ref, dependency cycles,
@@ -134,16 +135,20 @@ func repairCurrentTask(fm *StateFrontmatter, tasks []*Task) []RepairChange {
 	return changes
 }
 
-// repairStatusSummary reconciles status_summary with the task files in the one
-// direction the T-052 audit proved deterministic (QC-1): exactly one in_progress
-// task forces the value to "in_progress", the only value Start can set while a
-// task is in_progress. The idle/blocked direction (no in_progress task) is left
-// alone — its correct value reflects the last transition, not current task state,
-// so two safe values exist and repair must not guess. Like repairCurrentTask it
-// refuses when more than one task is in_progress, and mutates only STATE.md
-// frontmatter, so no status advances and no work is fabricated.
+// repairStatusSummary reconciles status_summary with the task files (QC-1).
+// Exactly one in_progress task forces "in_progress", the only value Start can set
+// while a task is in_progress. With none in progress, the idle/blocked value is
+// the active-spec blockers projection the transitions write (T-453), so repair
+// re-applies it, keeping next_action pointers `next` and `verify` own. Like
+// repairCurrentTask it refuses when more than one task is in_progress, and
+// mutates only STATE.md frontmatter, so no status advances and no work is
+// fabricated.
 func repairStatusSummary(fm *StateFrontmatter, tasks []*Task) []RepairChange {
-	if len(inProgressTasks(tasks)) != 1 || fm.StatusSummary == statusSummaryInProgress {
+	inProgress := len(inProgressTasks(tasks))
+	if inProgress == 0 && fm.CurrentTask == "" {
+		return repairIdlePointers(fm, tasks)
+	}
+	if inProgress != 1 || fm.StatusSummary == statusSummaryInProgress {
 		return nil
 	}
 	change := RepairChange{
@@ -154,6 +159,20 @@ func repairStatusSummary(fm *StateFrontmatter, tasks []*Task) []RepairChange {
 	}
 	fm.StatusSummary = statusSummaryInProgress
 	return []RepairChange{change}
+}
+
+func repairIdlePointers(fm *StateFrontmatter, tasks []*Task) []RepairChange {
+	before := *fm
+	reprojectIdlePointers(fm, tasks)
+	reason := "match the active-spec blockers projection"
+	changes := make([]RepairChange, 0, 2)
+	if fm.StatusSummary != before.StatusSummary {
+		changes = append(changes, RepairChange{Field: "status_summary", From: before.StatusSummary, To: fm.StatusSummary, Reason: reason})
+	}
+	if fm.NextAction != before.NextAction {
+		changes = append(changes, RepairChange{Field: "next_action", From: before.NextAction, To: fm.NextAction, Reason: reason})
+	}
+	return changes
 }
 
 // lineDiff returns a compact, human-readable set of line changes between two

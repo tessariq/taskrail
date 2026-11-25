@@ -244,3 +244,68 @@ func TestActivateSpecPreservesUnownedStateFields(t *testing.T) {
 		t.Fatalf("activation changed the verification tuple: %+v", state.Frontmatter)
 	}
 }
+
+// idlePointers returns the persisted status_summary and next_action.
+func idlePointers(t *testing.T, svc *Service) (string, string) {
+	t.Helper()
+	state, err := svc.loadState()
+	if err != nil {
+		t.Fatalf("load state: %v", err)
+	}
+	return state.Frontmatter.StatusSummary, state.Frontmatter.NextAction
+}
+
+// TestActivateSpecReprojectsIdleStatus locks in that activation recomputes the
+// idle status against the newly active spec in both directions, while `next`,
+// which changes no input of that projection, leaves it alone.
+func TestActivateSpecReprojectsIdleStatus(t *testing.T) {
+	repo := seedFixtureRepo(t)
+	writeFile(t, filepath.Join(repo, "specs", "v0.2.0.md"), "# Taskrail v0.2.0\n\n## Summary\n\nNext spec.\n")
+	writeTask(t, repo, "T-002", "Old", "todo", "high", "specs/v0.1.0.md#summary", nil)
+	writeTask(t, repo, "T-003", "New", "todo", "high", "specs/v0.2.0.md#summary", nil)
+	svc := newTestService(t, repo, time.Date(2026, 7, 10, 12, 0, 0, 0, time.UTC))
+	if _, err := svc.Block("T-002", "deferred"); err != nil {
+		t.Fatalf("block: %v", err)
+	}
+
+	if _, err := svc.ActivateSpec("v0.2.0"); err != nil {
+		t.Fatalf("activate v0.2.0: %v", err)
+	}
+	if summary, next := idlePointers(t, svc); summary != "idle" || next != nextActionSelectEligible {
+		t.Errorf("after moving away from the blocker's spec = (%q, %q), want idle and neutral", summary, next)
+	}
+
+	if _, err := svc.ActivateSpec("v0.1.0"); err != nil {
+		t.Fatalf("activate v0.1.0: %v", err)
+	}
+	if summary, next := idlePointers(t, svc); summary != "blocked" || next != "Resolve blocker on T-002" {
+		t.Errorf("after returning to the blocker's spec = (%q, %q), want blocked on T-002", summary, next)
+	}
+
+	if _, err := svc.Next(); err != nil {
+		t.Fatalf("next: %v", err)
+	}
+	if summary, _ := idlePointers(t, svc); summary != "blocked" {
+		t.Errorf("next changed status_summary to %q; it must leave the projection alone", summary)
+	}
+}
+
+// TestActivateSpecLeavesActiveTaskPointers locks in that an active task owns
+// status_summary and next_action, so activation does not reproject them.
+func TestActivateSpecLeavesActiveTaskPointers(t *testing.T) {
+	repo := seedFixtureRepo(t)
+	writeFile(t, filepath.Join(repo, "specs", "v0.2.0.md"), "# Taskrail v0.2.0\n\n## Summary\n\nNext spec.\n")
+	writeTask(t, repo, "T-002", "Old", "todo", "high", "specs/v0.1.0.md#summary", nil)
+	svc := newTestService(t, repo, time.Date(2026, 7, 10, 12, 0, 0, 0, time.UTC))
+	if _, err := svc.Start("T-002"); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	wantSummary, wantNext := idlePointers(t, svc)
+
+	if _, err := svc.ActivateSpec("v0.2.0"); err != nil {
+		t.Fatalf("activate: %v", err)
+	}
+	if summary, next := idlePointers(t, svc); summary != wantSummary || next != wantNext {
+		t.Errorf("activation changed active-task pointers to (%q, %q), want (%q, %q)", summary, next, wantSummary, wantNext)
+	}
+}

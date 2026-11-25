@@ -42,8 +42,13 @@ All notable user-visible changes to Taskrail will be documented in this file.
   on …` next action only from active-spec blockers, matching `next`'s
   active-spec selection. Away-from-spec blockers stay listed under
   `## Blockers` with their reasons, and human `taskrail status` marks them
-  `(away from active spec)`. An existing `STATE.md` is re-projected on its next
-  idle transition.
+  `(away from active spec)`.
+- `spec activate`, `task repoint`, and `repair --apply` now recompute that idle
+  status when no task is active, so activating a spec or moving a blocked task
+  never leaves `STATE.md` reading `blocked` on another spec's blocker. They
+  replace `next_action` only when it points at a blocker or the state newly
+  becomes blocked, keeping pointers `next` and `verify` wrote. Run
+  `taskrail repair --apply` once to fix a `STATE.md` an older release wrote.
 - `taskrail-import` and `taskrail-retrofit` no longer promise a future direct-model
   adapter. Semantic work stays with the agent; the binary remains deterministic
   and provider-neutral.

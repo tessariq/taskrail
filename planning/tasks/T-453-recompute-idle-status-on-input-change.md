@@ -1,12 +1,17 @@
 ---
 id: T-453-recompute-idle-status-on-input-change
 title: Recompute idle status in repair, spec activate, and repoint
-status: todo
+status: completed
 priority: medium
 spec_ref: specs/v0.5.0.md#canonical-transition-order
 dependencies:
     - T-452-anchor-idle-blocked-status
-updated_at: "2026-11-25T04:11:00Z"
+updated_at: "2026-11-25T04:42:52Z"
+completion_id: "7b716b40af1d473f094c9c661f619af4"
+last_verification_id: "2d6475f0ea87a7282c337d7578ca9089"
+last_verification_result: pass
+last_verified_at: "2026-11-25T04:42:52Z"
+last_verified_completion_id: "7b716b40af1d473f094c9c661f619af4"
 ---
 
 # T-453-recompute-idle-status-on-input-change Recompute idle status in repair, spec activate, and repoint
@@ -78,3 +83,6 @@ together with the behavior.
   `taskrail validate`.
 
 ## Implementation Notes
+
+- 2026-11-25T04:42:51Z: spec activate, applied task repoint, and repair now apply the active-spec idle projection through reprojectIdlePointers when no task is active, replacing next_action only for blocker pointers or a newly blocked state so next/verify pointers survive. Review found no blocking issue; task rename not re-keying the blockers ledger (pre-existing) is deferred to T-454.
+- 2026-11-25T04:42:52Z: verification pass id 2d6475f0ea87a7282c337d7578ca9089 previous none completion 7b716b40af1d473f094c9c661f619af4

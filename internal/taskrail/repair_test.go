@@ -374,41 +374,102 @@ func TestRepairFixesStaleStatusSummaryInProgress(t *testing.T) {
 	}
 }
 
-// Excluded direction (audit case D): with no task in_progress, status_summary's
-// correct value (idle vs blocked) reflects the last transition, not task state.
-// Two safe values exist, so repair must leave a stale "in_progress" alone.
-func TestRepairLeavesStatusSummaryWhenNoInProgress(t *testing.T) {
-	repo := seedFixtureRepo(t)
-	writeTask(t, repo, "T-001", "Task One", "todo", "high", "specs/v0.1.0.md#summary", nil)
-	svc := newTestService(t, repo, time.Date(2026, 4, 1, 12, 0, 0, 0, time.UTC))
+// With no task in_progress, repair re-projects the idle status from the blockers
+// ledger against the active spec, as the transitions do. It replaces next_action
+// only when that pointer is a stale "Resolve blocker" one or the state newly
+// becomes blocked, so pointers next and verify persist survive.
+func TestRepairReprojectsIdleStatus(t *testing.T) {
+	tests := []struct {
+		name                    string
+		summary, nextAction     string
+		blockers                []string
+		wantSummary, wantAction string
+	}{
+		{
+			name:    "off-spec blocker left the state blocked",
+			summary: "blocked", nextAction: "Resolve blocker on T-002",
+			blockers:    []string{"T-002: deferred"},
+			wantSummary: "idle", wantAction: nextActionSelectEligible,
+		},
+		{
+			name:    "off-spec blocker left the state blocked; next's pointer survives",
+			summary: "blocked", nextAction: "Start task T-003: Active",
+			blockers:    []string{"T-002: deferred"},
+			wantSummary: "idle", wantAction: "Start task T-003: Active",
+		},
+		{
+			name:    "pointer at an off-spec blocker moves to the active-spec one",
+			summary: "blocked", nextAction: "Resolve blocker on T-002",
+			blockers:    []string{"T-004: vendor", "T-002: deferred"},
+			wantSummary: "blocked", wantAction: "Resolve blocker on T-004",
+		},
+		{
+			name:    "idle state with an active-spec blocker becomes blocked",
+			summary: "idle", nextAction: "Start task T-003: Active",
+			blockers:    []string{"T-004: vendor"},
+			wantSummary: "blocked", wantAction: "Resolve blocker on T-004",
+		},
+		{
+			name:    "stale in_progress with no task in progress goes idle",
+			summary: "in_progress", nextAction: "Implement T-003 and run targeted tests",
+			wantSummary: "idle", wantAction: "Implement T-003 and run targeted tests",
+		},
+		{
+			name:    "verify's pointer on a correctly blocked state is kept",
+			summary: "blocked", nextAction: "Resolve verification findings for T-004",
+			blockers:    []string{"T-004: vendor"},
+			wantSummary: "blocked", wantAction: "Resolve verification findings for T-004",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			repo := seedFixtureRepo(t)
+			writeFile(t, filepath.Join(repo, "specs", "v0.2.0.md"), "# Taskrail v0.2.0\n\n## Summary\n\nFixture spec.\n")
+			writeTask(t, repo, "T-002", "Old", "blocked", "high", "specs/v0.2.0.md#summary", nil)
+			writeTask(t, repo, "T-003", "Active", "todo", "high", "specs/v0.1.0.md#summary", nil)
+			writeTask(t, repo, "T-004", "Active blocked", "blocked", "high", "specs/v0.1.0.md#summary", nil)
+			svc := newTestService(t, repo, time.Date(2026, 4, 1, 12, 0, 0, 0, time.UTC))
+			state, tasks, err := svc.loadStateAndTasks()
+			if err != nil {
+				t.Fatalf("load: %v", err)
+			}
+			state.Frontmatter.StatusSummary = tt.summary
+			state.Frontmatter.NextAction = tt.nextAction
+			state.Frontmatter.Blockers = append([]string{}, tt.blockers...)
+			state.Body = renderStateBody(state.Frontmatter, tasks)
+			if err := svc.saveState(state); err != nil {
+				t.Fatalf("save: %v", err)
+			}
 
-	state, tasks, err := svc.loadStateAndTasks()
-	if err != nil {
-		t.Fatalf("load: %v", err)
-	}
-	state.Frontmatter.CurrentTask = ""
-	state.Frontmatter.CurrentTaskTitle = ""
-	state.Frontmatter.StatusSummary = "in_progress" // stale, but idle/blocked is ambiguous
-	state.Body = renderStateBody(state.Frontmatter, tasks)
-	if err := svc.saveState(state); err != nil {
-		t.Fatalf("save: %v", err)
-	}
+			preview, err := svc.Repair(RepairInput{})
+			if err != nil {
+				t.Fatalf("repair dry run: %v", err)
+			}
+			proposed := map[string]string{}
+			for _, ch := range preview.Changes {
+				proposed[ch.Field] = ch.To
+			}
+			if tt.summary != tt.wantSummary && proposed["status_summary"] != tt.wantSummary {
+				t.Errorf("dry run status_summary change = %q, want %q (changes %+v)", proposed["status_summary"], tt.wantSummary, preview.Changes)
+			}
+			if tt.nextAction != tt.wantAction && proposed["next_action"] != tt.wantAction {
+				t.Errorf("dry run next_action change = %q, want %q (changes %+v)", proposed["next_action"], tt.wantAction, preview.Changes)
+			}
+			if _, ok := proposed["next_action"]; ok && tt.nextAction == tt.wantAction {
+				t.Errorf("dry run proposes replacing a pointer it must keep: %+v", preview.Changes)
+			}
 
-	result, err := svc.Repair(RepairInput{Apply: true})
-	if err != nil {
-		t.Fatalf("repair: %v", err)
-	}
-	for _, ch := range result.Changes {
-		if ch.Field == "status_summary" {
-			t.Errorf("repair touched status_summary in the excluded idle/blocked direction: %+v", ch)
-		}
-	}
-	reloaded, err := svc.loadState()
-	if err != nil {
-		t.Fatalf("reload: %v", err)
-	}
-	if reloaded.Frontmatter.StatusSummary != "in_progress" {
-		t.Errorf("status_summary = %q, want left as authored (in_progress)", reloaded.Frontmatter.StatusSummary)
+			if _, err := svc.Repair(RepairInput{Apply: true}); err != nil {
+				t.Fatalf("repair apply: %v", err)
+			}
+			got, err := svc.loadState()
+			if err != nil {
+				t.Fatalf("reload: %v", err)
+			}
+			if got.Frontmatter.StatusSummary != tt.wantSummary || got.Frontmatter.NextAction != tt.wantAction {
+				t.Errorf("after apply = (%q, %q), want (%q, %q)", got.Frontmatter.StatusSummary, got.Frontmatter.NextAction, tt.wantSummary, tt.wantAction)
+			}
+		})
 	}
 }
 

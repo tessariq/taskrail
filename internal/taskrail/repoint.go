@@ -136,6 +136,9 @@ func (s *Service) RepointTask(input RepointTaskInput) (result RepointTaskResult,
 	}
 	stateCandidate := *state
 	stateCandidate.Frontmatter.UpdatedAt = now
+	if stateCandidate.Frontmatter.CurrentTask == "" {
+		reprojectIdlePointers(&stateCandidate.Frontmatter, previewTasks)
+	}
 	stateCandidate.Body = renderStateBody(stateCandidate.Frontmatter, previewTasks)
 	validation, err := s.commitTaskWriter(own, taskRepointWriter, taskWriterLedger{
 		state:     &stateCandidate,

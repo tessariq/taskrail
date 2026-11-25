@@ -651,11 +651,29 @@ func reconcileIdlePointers(fm *StateFrontmatter, tasks []*Task) {
 			continue
 		}
 		fm.StatusSummary = statusSummaryBlocked
-		fm.NextAction = fmt.Sprintf("Resolve blocker on %s", id)
+		fm.NextAction = nextActionResolveBlocker + id
 		return
 	}
 	fm.StatusSummary = statusSummaryIdle
 	fm.NextAction = nextActionSelectEligible
+}
+
+const nextActionResolveBlocker = "Resolve blocker on "
+
+// reprojectIdlePointers applies the reconcileIdlePointers projection for writers
+// that change one of its inputs without a lifecycle transition (spec activate,
+// task repoint) and for repair. Unlike a transition, these must not discard a
+// pointer `next` or `verify` persisted, so next_action is replaced only when it
+// is a blocker pointer, which the projection owns, or when the state newly
+// becomes blocked. Callers invoke it only when no task is active.
+func reprojectIdlePointers(fm *StateFrontmatter, tasks []*Task) {
+	projected := *fm
+	reconcileIdlePointers(&projected, tasks)
+	newlyBlocked := projected.StatusSummary == statusSummaryBlocked && fm.StatusSummary != statusSummaryBlocked
+	if newlyBlocked || strings.HasPrefix(fm.NextAction, nextActionResolveBlocker) {
+		fm.NextAction = projected.NextAction
+	}
+	fm.StatusSummary = projected.StatusSummary
 }
 
 // ensurePortableNote rejects a transition note that embeds a concrete gitignored

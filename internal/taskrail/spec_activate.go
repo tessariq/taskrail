@@ -35,8 +35,9 @@ type SpecActivateResult struct {
 // CLI-only writer of active_spec_version/active_spec_path: it validates the
 // version against the versioned-specs convention and that specs/<version>.md
 // exists, rejecting a bad target with no write. On success it rewrites only
-// STATE.md (never task files or status fields), then re-runs validation and
-// returns its result. Activation repoints the active spec and nothing else.
+// STATE.md (never task files or task statuses), then re-runs validation and
+// returns its result. Besides the repoint, it re-projects only the idle status
+// pointers, because the active spec decides which blockers count.
 func (s *Service) ActivateSpec(version string) (result SpecActivateResult, err error) {
 	if !specVersionPattern.MatchString(version) {
 		return SpecActivateResult{}, invalidArgumentsf("invalid spec version %q: expected a versioned name like v0.3.0", version)
@@ -67,6 +68,9 @@ func (s *Service) ActivateSpec(version string) (result SpecActivateResult, err e
 	state.Frontmatter.ActiveSpecVersion = version
 	state.Frontmatter.ActiveSpecPath = logicalSpecFile
 	state.Frontmatter.UpdatedAt = timestamp(s.now())
+	if state.Frontmatter.CurrentTask == "" {
+		reprojectIdlePointers(&state.Frontmatter, tasks)
+	}
 	state.Body = renderStateBody(state.Frontmatter, tasks)
 	stateBytes, err := s.marshalState(state)
 	if err != nil {

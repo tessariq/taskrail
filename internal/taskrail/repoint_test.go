@@ -416,3 +416,28 @@ func TestRepointTaskBumpsOnlyTargetUpdatedAt(t *testing.T) {
 		t.Fatalf("expected task file at its original path: %v", err)
 	}
 }
+
+// TestRepointTaskReprojectsIdleStatus locks in that moving a blocked task off or
+// onto the active spec recomputes the idle status, since the task's spec_ref is
+// an input of that projection.
+func TestRepointTaskReprojectsIdleStatus(t *testing.T) {
+	repo := repointFixture(t)
+	svc := repointTestService(t, repo)
+	if _, err := svc.Block("T-002", "waiting"); err != nil {
+		t.Fatalf("block: %v", err)
+	}
+
+	if _, err := svc.RepointTask(RepointTaskInput{TaskID: "T-002", SpecRef: "specs/v0.2.0.md#legacy-area"}); err != nil {
+		t.Fatalf("repoint away: %v", err)
+	}
+	if summary, next := idlePointers(t, svc); summary != "idle" || next != nextActionSelectEligible {
+		t.Errorf("after repointing the only blocker away = (%q, %q), want idle and neutral", summary, next)
+	}
+
+	if _, err := svc.RepointTask(RepointTaskInput{TaskID: "T-002", Area: "details"}); err != nil {
+		t.Fatalf("repoint back: %v", err)
+	}
+	if summary, next := idlePointers(t, svc); summary != "blocked" || next != "Resolve blocker on T-002" {
+		t.Errorf("after repointing the blocker onto the active spec = (%q, %q), want blocked on T-002", summary, next)
+	}
+}

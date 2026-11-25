@@ -26,6 +26,17 @@ Taskrail commands intentionally use different write conventions based on risk:
 `updated_at`. Use `status` when you need the same next-task computation without a
 tracked write.
 
+With no active task, the `STATE.md` status reads `blocked` only while a blocker
+belongs to a task on the active spec, and then `next_action` names that blocker.
+Blocked tasks that point at another spec stay listed under `## Blockers` but
+leave the status `idle`. `complete`, `block`, `unblock`, and `task release`
+recompute this when they leave no task active. `spec activate` and `task
+repoint` recompute it too, because each changes which blockers count, and
+`repair --apply` restores it in a `STATE.md` an older binary wrote. Those three
+replace `next_action` only when it points at a blocker or the state becomes
+blocked, so a pointer `next` or `verify` wrote is kept. `next` never changes the
+status.
+
 `next`, `start`, `complete`, `block`, `unblock`, `task release`, and `verify` take
 the repository mutation lock and publish their exact state/task write set (plus
 verification artifacts and any `--create-followup` task) transactionally. So do the
