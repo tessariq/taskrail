@@ -59,7 +59,12 @@ jobs:
           $item = Get-Item -LiteralPath $temp -Force
           $diagnosticOrdinal = 0
           while ($null -ne $item) {
-            if ($diagnosticOrdinal -lt 32 -or -not $item.PSIsContainer -or ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+            $attributes = $item.Attributes
+            $refuseAncestor = ($item -isnot [IO.DirectoryInfo] -or
+              $attributes -isnot [IO.FileAttributes] -or
+              ($attributes -band [IO.FileAttributes]::Directory) -eq 0 -or
+              ($attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0)
+            if ($diagnosticOrdinal -lt 32 -or $refuseAncestor) {
               $containerProperty = $item.PSObject.Properties['PSIsContainer']
               $diagnosticPath = [string]$item.FullName
               $diagnosticType = $item.GetType().FullName
@@ -74,17 +79,17 @@ jobs:
                 runtime_type = $diagnosticType.Substring(0, [Math]::Min(128, $diagnosticType.Length))
                 ps_is_container_present = $null -ne $containerProperty
                 ps_is_container_value = if ($null -eq $containerProperty) { $null } else { $diagnosticContainer.Substring(0, [Math]::Min(32, $diagnosticContainer.Length)) }
-                attributes_numeric = [int64]$item.Attributes
-                reparse_bit = [bool]($item.Attributes -band [IO.FileAttributes]::ReparsePoint)
+                attributes_numeric = [int64]$attributes
+                reparse_bit = [bool]($attributes -band [IO.FileAttributes]::ReparsePoint)
                 powershell_version = $diagnosticVersion.Substring(0, [Math]::Min(64, $diagnosticVersion.Length))
                 metadata_truncated = $diagnosticType.Length -gt 128 -or $diagnosticContainer.Length -gt 32 -or $diagnosticVersion.Length -gt 64
               } | ConvertTo-Json -Compress | ForEach-Object { Write-Output "ancestor-diagnostic $_" }
             }
             $diagnosticOrdinal++
-            if (-not $item.PSIsContainer -or ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+            if ($refuseAncestor) {
               throw 'Refuse evidence writes through non-directory or reparse ancestor.'
             }
-            $ancestors += [ordered]@{ path = $item.FullName; attributes = [string]$item.Attributes }
+            $ancestors += [ordered]@{ path = $item.FullName; attributes = [string]$attributes }
             $item = $item.Parent
           }
           if (Test-Path -LiteralPath $expected) { throw 'Never reuse an evidence directory.' }
