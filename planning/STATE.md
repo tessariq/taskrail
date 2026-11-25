@@ -1,17 +1,17 @@
 ---
 schema_version: 2
-updated_at: "2026-11-25T22:09:43Z"
+updated_at: "2026-11-25T23:13:01Z"
 active_spec_version: v0.5.0
 active_spec_path: specs/v0.5.0.md
-current_task: T-456-map-windows-move-collision
-current_task_title: Report Windows no-replace move collisions as exists
-status_summary: in_progress
+current_task: ""
+current_task_title: ""
+status_summary: blocked
 blockers:
     - 'T-455-exercise-windows-durable-paths: Native run 45620924637 exposed a Windows no-replace collision error-mapping defect; awaiting T-456-map-windows-move-collision'
-next_action: Implement T-456-map-windows-move-collision and run targeted tests
-last_verification_result: pass for T-453-recompute-idle-status-on-input-change at 2026-11-25T04:42:52Z id 2d6475f0ea87a7282c337d7578ca9089
-last_verification_id: 2d6475f0ea87a7282c337d7578ca9089
-last_verified_completion_id: 7b716b40af1d473f094c9c661f619af4
+next_action: Select the next eligible task
+last_verification_result: pass for T-456-map-windows-move-collision at 2026-11-25T23:13:01Z id 686e59f06c129f7534f5cb3131c192e6
+last_verification_id: 686e59f06c129f7534f5cb3131c192e6
+last_verified_completion_id: e24469b61bbab30eadb499eef42cc766
 relevant_artifacts: []
 ---
 
@@ -23,12 +23,11 @@ relevant_artifacts: []
 
 ## Current Focus
 
-- Task: `T-456-map-windows-move-collision`
-- Title: Report Windows no-replace move collisions as exists
+- Task: none
 
 ## Status
 
-- in_progress
+- blocked
 
 ## Blockers
 
@@ -36,11 +35,11 @@ relevant_artifacts: []
 
 ## Last Verification
 
-- pass for T-453-recompute-idle-status-on-input-change at 2026-11-25T04:42:52Z id 2d6475f0ea87a7282c337d7578ca9089
+- pass for T-456-map-windows-move-collision at 2026-11-25T23:13:01Z id 686e59f06c129f7534f5cb3131c192e6
 
 ## Next Action
 
-- Implement T-456-map-windows-move-collision and run targeted tests
+- Select the next eligible task
 
 ## Relevant Artifacts
 
@@ -49,7 +48,7 @@ relevant_artifacts: []
 ## Task Counts
 
 - todo: 74
-- in_progress: 1
-- completed: 379
+- in_progress: 0
+- completed: 380
 - blocked: 1
 - cancelled: 0
