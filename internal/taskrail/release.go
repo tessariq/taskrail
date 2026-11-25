@@ -95,7 +95,7 @@ func (s *Service) ReleaseTask(input ReleaseTaskInput) (result ReleaseTaskResult,
 	stateCandidate.Frontmatter.CurrentTaskTitle = ""
 	stateCandidate.Frontmatter.UpdatedAt = now
 	stateCandidate.Frontmatter.Blockers = removeBlocker(stateCandidate.Frontmatter.Blockers, input.TaskID)
-	reconcileIdlePointers(&stateCandidate.Frontmatter)
+	reconcileIdlePointers(&stateCandidate.Frontmatter, tasks)
 	preview := replaceReleaseTask(tasks, task, &candidate)
 	stateCandidate.Body = renderStateBody(stateCandidate.Frontmatter, preview)
 	validation := s.validateInMemory(&stateCandidate, preview)

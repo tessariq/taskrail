@@ -1,6 +1,6 @@
 ---
 schema_version: 2
-updated_at: "2026-11-04T22:29:10Z"
+updated_at: "2026-11-25T04:13:02Z"
 active_spec_version: v0.5.0
 active_spec_path: specs/v0.5.0.md
 current_task: ""
@@ -8,9 +8,9 @@ current_task_title: ""
 status_summary: idle
 blockers: []
 next_action: Select the next eligible task
-last_verification_result: pass for T-450-consolidate-shared-recovery-and-repair-skill at 2026-11-03T00:02:26Z id ded841461397aecd79801fdf61c3b4be
-last_verification_id: ded841461397aecd79801fdf61c3b4be
-last_verified_completion_id: b7c59440bb6ad69c85ffc47385b2698b
+last_verification_result: pass for T-452-anchor-idle-blocked-status at 2026-11-25T04:13:02Z id 7dbbe7de3b6ca53f58d88b755de5118b
+last_verification_id: 7dbbe7de3b6ca53f58d88b755de5118b
+last_verified_completion_id: bc82d4e5192e95a87a723b5196e36d59
 relevant_artifacts: []
 ---
 
@@ -34,7 +34,7 @@ relevant_artifacts: []
 
 ## Last Verification
 
-- pass for T-450-consolidate-shared-recovery-and-repair-skill at 2026-11-03T00:02:26Z id ded841461397aecd79801fdf61c3b4be
+- pass for T-452-anchor-idle-blocked-status at 2026-11-25T04:13:02Z id 7dbbe7de3b6ca53f58d88b755de5118b
 
 ## Next Action
 
@@ -46,8 +46,8 @@ relevant_artifacts: []
 
 ## Task Counts
 
-- todo: 73
+- todo: 74
 - in_progress: 0
-- completed: 377
+- completed: 378
 - blocked: 0
 - cancelled: 0

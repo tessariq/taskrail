@@ -634,17 +634,24 @@ func (s *Service) CreateTask(input CreateTaskInput) (result CreateTaskResult, er
 }
 
 // reconcileIdlePointers sets status_summary/next_action for the no-active-task
-// state from the blockers ledger, the single reconciliation Unblock and both
-// finishTask branches share. Callers must upsert/drop the ledger for the current
-// transition first, then invoke this only when current_task is empty (an active
-// task owns those pointers). While any blocker remains, stay "blocked" pointing at
-// the most-recently recorded one — for the block branch that is the just-blocked
-// task (upsertBlocker appends it last); for complete/unblock it is a still-blocked
-// sibling. Only once the ledger is empty do the neutral idle pointers apply.
-func reconcileIdlePointers(fm *StateFrontmatter) {
-	if remaining := fm.Blockers; len(remaining) > 0 {
+// state from the blockers ledger, the single reconciliation Unblock, Release, and
+// both finishTask branches share. Callers must upsert/drop the ledger for the
+// current transition first, then invoke this only when current_task is empty (an
+// active task owns those pointers). Like `next`, the projection is anchored to the
+// active spec: only a blocker on an active-spec task makes the state "blocked",
+// pointing at the most recently recorded such entry (upsertBlocker appends last).
+// Away-from-spec blockers keep their ledger entries but cannot block active-spec
+// selection, so they never flip the summary or steal next_action. A ledger entry
+// whose task is absent is treated as active-spec rather than silently ignored.
+func reconcileIdlePointers(fm *StateFrontmatter, tasks []*Task) {
+	activeSpecPath := strings.TrimSpace(fm.ActiveSpecPath)
+	for i := len(fm.Blockers) - 1; i >= 0; i-- {
+		id := blockerID(fm.Blockers[i])
+		if task, ok := taskByID(tasks, id); ok && activeSpecPath != "" && !taskMatchesActiveSpec(task, activeSpecPath) {
+			continue
+		}
 		fm.StatusSummary = statusSummaryBlocked
-		fm.NextAction = fmt.Sprintf("Resolve blocker on %s", blockerID(remaining[len(remaining)-1]))
+		fm.NextAction = fmt.Sprintf("Resolve blocker on %s", id)
 		return
 	}
 	fm.StatusSummary = statusSummaryIdle

@@ -47,9 +47,19 @@ func renderStatusText(r taskrail.StatusReport) string {
 	b.WriteString(renderStatusNext(r.Next))
 
 	if len(r.Blocked) > 0 {
+		// Mark blockers outside the active spec so they do not read as blocking the
+		// active-spec work `next` selects; membership reuses the drift breakdown.
+		away := make(map[string]bool, len(r.ActiveSpecDrift.Away))
+		for _, task := range r.ActiveSpecDrift.Away {
+			away[task.TaskID] = true
+		}
 		b.WriteString("blocked:\n")
 		for _, blocked := range r.Blocked {
-			fmt.Fprintf(&b, "  - %s: %s\n", blocked.TaskID, blocked.Reason)
+			marker := ""
+			if away[blocked.TaskID] {
+				marker = " (away from active spec)"
+			}
+			fmt.Fprintf(&b, "  - %s: %s%s\n", blocked.TaskID, blocked.Reason, marker)
 		}
 	}
 

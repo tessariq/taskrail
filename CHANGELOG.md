@@ -36,6 +36,14 @@ All notable user-visible changes to Taskrail will be documented in this file.
 
 ### Fixed
 
+- `STATE.md` no longer reports `Status: blocked` because of blocked tasks whose
+  `spec_ref` points away from the active spec. `complete`, `block`, `unblock`,
+  and `task release` now derive the idle status summary and `Resolve blocker
+  on …` next action only from active-spec blockers, matching `next`'s
+  active-spec selection. Away-from-spec blockers stay listed under
+  `## Blockers` with their reasons, and human `taskrail status` marks them
+  `(away from active spec)`. An existing `STATE.md` is re-projected on its next
+  idle transition.
 - `taskrail-import` and `taskrail-retrofit` no longer promise a future direct-model
   adapter. Semantic work stays with the agent; the binary remains deterministic
   and provider-neutral.

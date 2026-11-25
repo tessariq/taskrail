@@ -253,6 +253,26 @@ func TestStatusActiveSpecDriftBreakdown(t *testing.T) {
 	}
 }
 
+// TestStatusMarksBlockersAwayFromActiveSpec locks in that the human blocked list
+// says which blockers sit outside the active spec, so they do not read as
+// blockers of the active-spec work `next` selects.
+func TestStatusMarksBlockersAwayFromActiveSpec(t *testing.T) {
+	root := setupRepo(t)
+	writeCoverageTaskFile(t, root, "T-100", "blocked", "specs/v0.1.0.md#summary")
+	writeCoverageTaskFile(t, root, "T-201", "blocked", "specs/v0.3.0.md#older")
+
+	human, err := runRoot(t, "status")
+	if err != nil {
+		t.Fatalf("status: %v", err)
+	}
+	if line := lineContaining(human, "- T-201:"); !strings.HasSuffix(line, "(away from active spec)") {
+		t.Errorf("away blocker line = %q, want away marker; output %q", line, human)
+	}
+	if line := lineContaining(human, "- T-100:"); strings.Contains(line, "away") {
+		t.Errorf("active-spec blocker line = %q, want no away marker", line)
+	}
+}
+
 // TestStatusActiveSpecDriftNoAwayWork locks in that when all open work is on the
 // active spec, the breakdown reports zero away and omits the away section.
 func TestStatusActiveSpecDriftNoAwayWork(t *testing.T) {

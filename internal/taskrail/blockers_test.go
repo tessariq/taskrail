@@ -1,6 +1,7 @@
 package taskrail
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -206,6 +207,77 @@ func TestCompleteReconcilesSummaryWithRemainingBlockers(t *testing.T) {
 			}
 			if tt.otherBlocked && !hasBlocker(blockerEntries(t, svc), "T-003: waiting on vendor") {
 				t.Errorf("completing T-004 wiped T-003's blocker: %v", state.Frontmatter.Blockers)
+			}
+		})
+	}
+}
+
+// TestIdleSummaryIgnoresBlockersAwayFromActiveSpec locks in that the idle
+// projection is anchored to the active spec like `next`: a blocker on a task
+// whose spec_ref points at another spec stays in the ledger but neither makes
+// status_summary "blocked" nor becomes the next_action target, even when it is
+// the most recently recorded entry.
+func TestIdleSummaryIgnoresBlockersAwayFromActiveSpec(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name          string
+		activeBlocked bool
+		wantSummary   string
+		wantNext      string
+	}{
+		{
+			name:        "only an away-from-spec blocker remains",
+			wantSummary: "idle",
+			wantNext:    nextActionSelectEligible,
+		},
+		{
+			name:          "active-spec blocker wins over a later away-from-spec one",
+			activeBlocked: true,
+			wantSummary:   "blocked",
+			wantNext:      "Resolve blocker on T-003",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			repo := seedFixtureRepo(t)
+			writeFile(t, filepath.Join(repo, "specs", "v0.2.0.md"), "# Taskrail v0.2.0\n\n## Summary\n\nFixture spec.\n")
+			writeTask(t, repo, "T-002", "Old spec", "todo", "high", "specs/v0.1.0.md#summary", nil)
+			writeTask(t, repo, "T-003", "Active blocked", "todo", "high", "specs/v0.2.0.md#summary", nil)
+			writeTask(t, repo, "T-004", "Active work", "todo", "high", "specs/v0.2.0.md#summary", nil)
+			svc := newTestService(t, repo, time.Date(2026, 3, 31, 12, 0, 0, 0, time.UTC))
+
+			if tt.activeBlocked {
+				if _, err := svc.Block("T-003", "waiting on vendor"); err != nil {
+					t.Fatalf("block T-003: %v", err)
+				}
+			}
+			// Recorded last, so a ledger-order-only projection would point at it.
+			if _, err := svc.Block("T-002", "operator deferred"); err != nil {
+				t.Fatalf("block T-002: %v", err)
+			}
+			if _, err := svc.ActivateSpec("v0.2.0"); err != nil {
+				t.Fatalf("activate v0.2.0: %v", err)
+			}
+			if _, err := svc.Start("T-004"); err != nil {
+				t.Fatalf("start T-004: %v", err)
+			}
+			if _, err := svc.Complete("T-004", "done"); err != nil {
+				t.Fatalf("complete T-004: %v", err)
+			}
+
+			state, err := svc.loadState()
+			if err != nil {
+				t.Fatalf("load state: %v", err)
+			}
+			if state.Frontmatter.StatusSummary != tt.wantSummary {
+				t.Errorf("status_summary = %q, want %q", state.Frontmatter.StatusSummary, tt.wantSummary)
+			}
+			if state.Frontmatter.NextAction != tt.wantNext {
+				t.Errorf("next_action = %q, want %q", state.Frontmatter.NextAction, tt.wantNext)
+			}
+			if !hasBlocker(state.Frontmatter.Blockers, "T-002: operator deferred") {
+				t.Errorf("away-from-spec blocker dropped from ledger: %v", state.Frontmatter.Blockers)
 			}
 		})
 	}

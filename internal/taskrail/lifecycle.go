@@ -188,7 +188,7 @@ func (s *Service) Unblock(taskID, reason string) (result UnblockResult, err erro
 	// no active task does reconcileIdlePointers re-derive them from the ledger just
 	// updated above (never pointing at the task we unblocked, whose entry is gone).
 	if state.Frontmatter.CurrentTask == "" {
-		reconcileIdlePointers(&state.Frontmatter)
+		reconcileIdlePointers(&state.Frontmatter, tasks)
 	}
 	state.Body = renderStateBody(state.Frontmatter, tasks)
 
@@ -297,7 +297,7 @@ func (s *Service) finishTask(w writerCommand, taskID, status, note string) (outc
 	// never clobbers a still-active task's summary; the ledger reconciliation itself
 	// lives in reconcileIdlePointers.
 	if state.Frontmatter.CurrentTask == "" {
-		reconcileIdlePointers(&state.Frontmatter)
+		reconcileIdlePointers(&state.Frontmatter, tasks)
 	}
 	state.Body = renderStateBody(state.Frontmatter, tasks)
 
