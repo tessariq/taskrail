@@ -1,12 +1,17 @@
 ---
 id: T-454-rekey-blockers-on-rename
 title: Re-key blockers ledger on task rename
-status: todo
+status: completed
 priority: medium
 spec_ref: specs/v0.5.0.md#canonical-transition-order
 dependencies:
     - T-453-recompute-idle-status-on-input-change
-updated_at: "2026-11-25T04:37:14Z"
+updated_at: "2026-11-25T13:07:17Z"
+completion_id: "fd089cfa2a7f787b4a37f42f2ce3df9b"
+last_verification_id: "91724f7ae878b4c993c541469d92a501"
+last_verification_result: pass
+last_verified_at: "2026-11-25T13:07:17Z"
+last_verified_completion_id: "fd089cfa2a7f787b4a37f42f2ce3df9b"
 ---
 
 # T-454-rekey-blockers-on-rename Re-key blockers ledger on task rename
@@ -48,3 +53,6 @@ same transaction as the rest of the rename.
 - Full gate: `gofmt -l .`, `go vet ./...`, `go test ./...`, `taskrail validate`.
 
 ## Implementation Notes
+
+- 2026-11-25T13:07:16Z: task rename now re-keys the renamed task's blockers entry (reason and position kept, matched with blockerID like unblock) and an exact Resolve blocker pointer to the new id in renamePreview, so dry run and apply share it. Review found nothing blocking; an Implement <old-id> pointer surviving a rename of the active task predates this and is out of scope.
+- 2026-11-25T13:07:17Z: verification pass id 91724f7ae878b4c993c541469d92a501 previous none completion fd089cfa2a7f787b4a37f42f2ce3df9b

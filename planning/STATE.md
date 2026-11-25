@@ -1,6 +1,6 @@
 ---
 schema_version: 2
-updated_at: "2026-11-25T04:42:52Z"
+updated_at: "2026-11-25T13:07:17Z"
 active_spec_version: v0.5.0
 active_spec_path: specs/v0.5.0.md
 current_task: ""
@@ -8,9 +8,9 @@ current_task_title: ""
 status_summary: idle
 blockers: []
 next_action: Select the next eligible task
-last_verification_result: pass for T-453-recompute-idle-status-on-input-change at 2026-11-25T04:42:52Z id 2d6475f0ea87a7282c337d7578ca9089
-last_verification_id: 2d6475f0ea87a7282c337d7578ca9089
-last_verified_completion_id: 7b716b40af1d473f094c9c661f619af4
+last_verification_result: pass for T-454-rekey-blockers-on-rename at 2026-11-25T13:07:17Z id 91724f7ae878b4c993c541469d92a501
+last_verification_id: 91724f7ae878b4c993c541469d92a501
+last_verified_completion_id: fd089cfa2a7f787b4a37f42f2ce3df9b
 relevant_artifacts: []
 ---
 
@@ -34,7 +34,7 @@ relevant_artifacts: []
 
 ## Last Verification
 
-- pass for T-453-recompute-idle-status-on-input-change at 2026-11-25T04:42:52Z id 2d6475f0ea87a7282c337d7578ca9089
+- pass for T-454-rekey-blockers-on-rename at 2026-11-25T13:07:17Z id 91724f7ae878b4c993c541469d92a501
 
 ## Next Action
 
@@ -46,8 +46,8 @@ relevant_artifacts: []
 
 ## Task Counts
 
-- todo: 74
+- todo: 73
 - in_progress: 0
-- completed: 379
+- completed: 380
 - blocked: 0
 - cancelled: 0

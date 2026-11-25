@@ -49,6 +49,10 @@ All notable user-visible changes to Taskrail will be documented in this file.
   replace `next_action` only when it points at a blocker or the state newly
   becomes blocked, keeping pointers `next` and `verify` wrote. Run
   `taskrail repair --apply` once to fix a `STATE.md` an older release wrote.
+- `task rename` now moves a blocked task's `STATE.md` blockers entry, with its
+  reason, and a `Resolve blocker on …` next action to the new id. Before, the
+  entry kept the old id, so `unblock` could not clear it and the status stayed
+  `blocked` on a task that no longer existed.
 - `taskrail-import` and `taskrail-retrofit` no longer promise a future direct-model
   adapter. Semantic work stays with the agent; the binary remains deterministic
   and provider-neutral.

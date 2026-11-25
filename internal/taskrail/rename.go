@@ -306,8 +306,25 @@ func renamePreview(state *State, tasks []*Task, target *Task, inbound []*Task, o
 		}
 	}
 	previewState := *state
-	if previewState.Frontmatter.CurrentTask == oldID {
-		previewState.Frontmatter.CurrentTask = newID
+	fm := &previewState.Frontmatter
+	if fm.CurrentTask == oldID {
+		fm.CurrentTask = newID
+	}
+	// The blockers ledger and its next_action pointer name the task too; left on
+	// the old id, unblock could never clear the entry and the idle projection
+	// would count it as a blocker whose task is missing.
+	fm.Blockers = slices.Clone(fm.Blockers)
+	for i, entry := range fm.Blockers {
+		if blockerID(entry) != oldID {
+			continue
+		}
+		fm.Blockers[i] = newID
+		if colon := strings.Index(entry, ":"); colon >= 0 {
+			fm.Blockers[i] += entry[colon:]
+		}
+	}
+	if fm.NextAction == nextActionResolveBlocker+oldID {
+		fm.NextAction = nextActionResolveBlocker + newID
 	}
 	return &previewState, preview
 }

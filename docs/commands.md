@@ -230,7 +230,9 @@ the filename, leaving the frontmatter `id:` as `T-<n>`, so the next `validate`
 fails with `task <id> filename must be <id>.md`. The fix is `task rename`, which
 re-slugs atomically: it rewrites the `id:` field, renames the file, repoints the
 body's `# <id> <title>` heading, rewrites every inbound `dependencies:` reference
-to the task, re-projects `STATE.md`, and re-runs `validate`. The coupled change
+to the task, moves the task's `STATE.md` blockers entry and any `Resolve blocker
+on <id>` next action to the new id, re-projects `STATE.md`, and re-runs
+`validate`. The coupled change
 publishes through one locked transaction as plain filesystem operations — nothing
 is staged through Git — so a collision, a concurrent edit, or a handled failure
 leaves the tree either fully renamed or untouched.
@@ -257,7 +259,8 @@ visible title, edit the task's `title:` field directly.
 rename *would* leave behind, not the one it would replace — so re-slugging to heal
 a `filename must be <id>.md` drift answers "would this fix it?". The preview covers
 the whole change set (id, filename, inbound dependency refs, and the `current_task`
-pointer when it names the task); violations the rename does not touch still show up.
+pointer, blockers entry, and blocker next action when they name the task);
+violations the rename does not touch still show up.
 
 ## Re-pointing a task onto another spec area
 

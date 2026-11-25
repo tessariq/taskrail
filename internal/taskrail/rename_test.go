@@ -809,3 +809,47 @@ func TestRenameTaskUpdatesCurrentTaskPointer(t *testing.T) {
 		t.Fatalf("validate after rename of active task: valid=%v violations=%v err=%v", v.Valid, v.Violations, err)
 	}
 }
+
+// TestRenameTaskRekeysBlockersLedger locks in that renaming a blocked task moves
+// its blockers entry and a "Resolve blocker on" pointer to the new id, so unblock
+// can clear it and the idle projection never reports a phantom blocker.
+func TestRenameTaskRekeysBlockersLedger(t *testing.T) {
+	t.Parallel()
+	repo := seedFixtureRepo(t)
+	writeTask(t, repo, "T-003-old", "Renamed", "todo", "high", "specs/v0.1.0.md#summary", nil)
+	writeTask(t, repo, "T-004", "Other", "todo", "high", "specs/v0.1.0.md#summary", nil)
+	svc := newTestService(t, repo, time.Date(2026, 7, 16, 12, 0, 0, 0, time.UTC))
+	if _, err := svc.Block("T-004", "vendor"); err != nil {
+		t.Fatalf("block T-004: %v", err)
+	}
+	if _, err := svc.Block("T-003-old", "waiting: on review"); err != nil {
+		t.Fatalf("block T-003-old: %v", err)
+	}
+
+	if _, err := svc.RenameTask(RenameTaskInput{OldID: "T-003-old", Slug: "new"}); err != nil {
+		t.Fatalf("rename: %v", err)
+	}
+	state, err := svc.loadState()
+	if err != nil {
+		t.Fatalf("load state: %v", err)
+	}
+	if want := []string{"T-004: vendor", "T-003-new: waiting: on review"}; !slices.Equal(state.Frontmatter.Blockers, want) {
+		t.Errorf("blockers = %v, want %v", state.Frontmatter.Blockers, want)
+	}
+	if state.Frontmatter.NextAction != "Resolve blocker on T-003-new" {
+		t.Errorf("next_action = %q, want Resolve blocker on T-003-new", state.Frontmatter.NextAction)
+	}
+	if preview, err := svc.Repair(RepairInput{}); err != nil || len(preview.Changes) != 0 {
+		t.Errorf("repair after rename proposes %+v (err %v), want none", preview.Changes, err)
+	}
+
+	if _, err := svc.Unblock("T-003-new", ""); err != nil {
+		t.Fatalf("unblock: %v", err)
+	}
+	if _, err := svc.Unblock("T-004", ""); err != nil {
+		t.Fatalf("unblock T-004: %v", err)
+	}
+	if summary, next := idlePointers(t, svc); summary != "idle" || next != nextActionSelectEligible {
+		t.Errorf("after unblocking both = (%q, %q), want idle and neutral", summary, next)
+	}
+}
