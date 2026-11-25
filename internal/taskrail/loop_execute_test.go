@@ -276,13 +276,15 @@ func TestLoopExecuteDeliversLocalLifecycleWithOneProductCommit(t *testing.T) {
 		t.Fatalf("allow local task: %v", err)
 	}
 
+	template := []byte("Implement {{TASK_ID}}.\n" + strings.Repeat("Lifecycle child must consume its prompt.\n", 4096))
+	writeFile(t, filepath.Join(svc.paths.PromptsDir, "v1", "task-implementation.md"), string(template))
 	child := []string{os.Args[0], "-test.run=^TestLoopLaunchChildHelper$", "--", "delegate-local-lifecycle", filepath.Join(t.TempDir(), "record"), taskID}
-	report, err := svc.LoopExecute(context.Background(), LoopInvocation{MaxIterations: 1, Child: child})
+	report, err := svc.LoopExecute(context.Background(), LoopInvocation{MaxIterations: 1, Child: child, AllowPromptOverrideSHA256: promptDigest(template)})
 	if err != nil {
 		t.Fatalf("LoopExecute: %v", err)
 	}
 	if report.Outcome != "no_work" || report.LastIteration == nil || report.LastIteration.Outcome != "completed_pass" || report.Storage.Mode != string(StorageLocal) {
-		t.Fatalf("local loop report = %+v", report)
+		t.Fatalf("local loop report = %+v, child = %+v", report, report.LastIteration)
 	}
 	if !report.Git.Clean || !report.Git.Descendant || len(report.Git.Commits) != 1 || report.Git.HeadBefore != initialHead || report.Git.HeadAfter == initialHead {
 		t.Fatalf("local delivery evidence = %+v", report.Git)
