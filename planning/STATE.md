@@ -1,16 +1,16 @@
 ---
 schema_version: 2
-updated_at: "2026-11-25T23:12:45Z"
+updated_at: "2026-11-26T02:14:19Z"
 active_spec_version: v0.5.0
 active_spec_path: specs/v0.5.0.md
-current_task: ""
-current_task_title: ""
-status_summary: idle
+current_task: T-455-exercise-windows-durable-paths
+current_task_title: Exercise newly reachable Windows durable paths in tests
+status_summary: in_progress
 blockers: []
-next_action: Select the next eligible task
-last_verification_result: pass for T-454-rekey-blockers-on-rename at 2026-11-25T13:07:17Z id 91724f7ae878b4c993c541469d92a501
-last_verification_id: 91724f7ae878b4c993c541469d92a501
-last_verified_completion_id: fd089cfa2a7f787b4a37f42f2ce3df9b
+next_action: Implement T-455-exercise-windows-durable-paths and run targeted tests
+last_verification_result: pass for T-453-recompute-idle-status-on-input-change at 2026-11-25T04:42:52Z id 2d6475f0ea87a7282c337d7578ca9089
+last_verification_id: 2d6475f0ea87a7282c337d7578ca9089
+last_verified_completion_id: 7b716b40af1d473f094c9c661f619af4
 relevant_artifacts: []
 ---
 
@@ -22,11 +22,12 @@ relevant_artifacts: []
 
 ## Current Focus
 
-- Task: none
+- Task: `T-455-exercise-windows-durable-paths`
+- Title: Exercise newly reachable Windows durable paths in tests
 
 ## Status
 
-- idle
+- in_progress
 
 ## Blockers
 
@@ -34,11 +35,11 @@ relevant_artifacts: []
 
 ## Last Verification
 
-- pass for T-454-rekey-blockers-on-rename at 2026-11-25T13:07:17Z id 91724f7ae878b4c993c541469d92a501
+- pass for T-453-recompute-idle-status-on-input-change at 2026-11-25T04:42:52Z id 2d6475f0ea87a7282c337d7578ca9089
 
 ## Next Action
 
-- Select the next eligible task
+- Implement T-455-exercise-windows-durable-paths and run targeted tests
 
 ## Relevant Artifacts
 
@@ -47,7 +48,7 @@ relevant_artifacts: []
 ## Task Counts
 
 - todo: 74
-- in_progress: 0
+- in_progress: 1
 - completed: 380
 - blocked: 0
 - cancelled: 0

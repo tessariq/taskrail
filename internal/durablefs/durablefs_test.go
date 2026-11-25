@@ -336,9 +336,7 @@ func TestOperationsAreBoundedAndCompareImmediatelyBeforeMutation(t *testing.T) {
 }
 
 func TestCreatePublishReplaceRemoveAndMkdir(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("Windows reports directory durability as unsupported")
-	}
+	requireDirectoryPublication(t)
 	repo := t.TempDir()
 	root, lock := openTestRoot(t, repo)
 	defer releaseTestRoot(t, root, lock)
@@ -369,9 +367,7 @@ func TestCreatePublishReplaceRemoveAndMkdir(t *testing.T) {
 }
 
 func TestRemoveDirExpectedRefusesReplacement(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("Windows reports directory durability as unsupported")
-	}
+	requireDirectoryPublication(t)
 	repo := t.TempDir()
 	root, lock := openTestRoot(t, repo)
 	defer releaseTestRoot(t, root, lock)
@@ -768,10 +764,19 @@ func TestPublishDirectoryPostcommitSubstitutionDoesNotReportSuccess(t *testing.T
 	}
 }
 
+// requireDirectoryPublication skips only where the production directory
+// barrier itself reports the filesystem unsupported, such as non-NTFS Windows.
 func requireDirectoryPublication(t *testing.T) {
 	t.Helper()
-	if runtime.GOOS == "windows" {
-		t.Skip("Windows reports directory durability as unsupported")
+	root, err := os.OpenRoot(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer root.Close()
+	if err := barrier(BarrierDirectory, func() error { return syncDirectory(root) }); errors.Is(err, ErrUnsupported) {
+		t.Skipf("filesystem does not support the directory barrier: %v", err)
+	} else if err != nil {
+		t.Fatalf("directory barrier probe: %v", err)
 	}
 }
 

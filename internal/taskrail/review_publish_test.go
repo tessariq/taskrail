@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -14,9 +13,7 @@ import (
 )
 
 func TestReviewPublishTaskPreviewAndApplyBindExactBytes(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("Windows reports directory durability as unsupported")
-	}
+	requireRecoveryDirectoryDurability(t, t.TempDir())
 	repo := realGitRepo(t)
 	seedFixtureTree(t, repo)
 	markCurrentLayout(t, repo)
@@ -65,9 +62,7 @@ func TestReviewPublishTaskPreviewAndApplyBindExactBytes(t *testing.T) {
 }
 
 func TestReviewPublishSpecPreviewAndApplyBindExactBytes(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("Windows reports directory durability as unsupported")
-	}
+	requireRecoveryDirectoryDurability(t, t.TempDir())
 	repo, svc, input, files := specReviewPublishFixture(t)
 	preview, err := svc.ReviewPublish(ReviewPublishInput{
 		Type: input.Type, Proposal: input.Proposal, Destination: input.Destination,
@@ -96,9 +91,7 @@ func TestReviewPublishSpecPreviewAndApplyBindExactBytes(t *testing.T) {
 // publisher keeps retained rounds and their findings instead of collapsing the
 // history to the final round.
 func TestReviewPublishSpecAppliesDeclaredRoundHistory(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("Windows reports directory durability as unsupported")
-	}
+	requireRecoveryDirectoryDurability(t, t.TempDir())
 	earlier := digestRaw([]byte("# v0.1.0 (earlier bytes)\n"))
 	repo, svc, input, _ := writeSpecReview2ProposalFixture(t, earlier)
 	result, err := svc.ReviewPublish(input)
@@ -120,9 +113,7 @@ func TestReviewPublishSpecAppliesDeclaredRoundHistory(t *testing.T) {
 }
 
 func TestReviewPublishDecompositionPreviewAndApplyBindExactBytes(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("Windows reports directory durability as unsupported")
-	}
+	requireRecoveryDirectoryDurability(t, t.TempDir())
 	repo, svc, input, files := decompositionReviewPublishFixture(t)
 	preview, err := svc.ReviewPublish(ReviewPublishInput{
 		Type:                   input.Type,
@@ -515,9 +506,7 @@ func TestReviewPublishSpecPromptBindingPrecedence(t *testing.T) {
 }
 
 func TestReviewPublishSpecRechecksEveryPromptSnapshotBeforeCommit(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("Windows reports directory durability as unsupported")
-	}
+	requireRecoveryDirectoryDurability(t, t.TempDir())
 	for _, lens := range specReviewLensOrder {
 		t.Run(lens, func(t *testing.T) {
 			repo, svc, input, _ := specReviewPublishFixture(t)
@@ -535,9 +524,7 @@ func TestReviewPublishSpecRechecksEveryPromptSnapshotBeforeCommit(t *testing.T) 
 }
 
 func TestReviewPublishSpecPreservesMixedPromptBindingsInLensFiles(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("Windows reports directory durability as unsupported")
-	}
+	requireRecoveryDirectoryDurability(t, t.TempDir())
 	repo, svc, input, files := specReviewPublishFixture(t)
 	for _, lens := range []string{"gaps", "adversarial"} {
 		promptID := "spec-" + lens
@@ -571,9 +558,7 @@ func TestReviewPublishSpecPreservesMixedPromptBindingsInLensFiles(t *testing.T) 
 }
 
 func TestReviewPublishSpecCleansNewParentsAfterLateSnapshotConflict(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("Windows reports directory durability as unsupported")
-	}
+	requireRecoveryDirectoryDurability(t, t.TempDir())
 	repo, svc, input, _ := specReviewPublishFixture(t)
 	testHookAfterReviewParent = func() {
 		writeFile(t, filepath.Join(repo, ".taskrail", "config.yml"), "layout_version: 1\nspecs_dir: specs\nplanning_dir: planning\n# changed\n")
@@ -589,9 +574,7 @@ func TestReviewPublishSpecCleansNewParentsAfterLateSnapshotConflict(t *testing.T
 }
 
 func TestReviewPublishDecompositionAcceptsTwoConsecutivePasses(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("Windows reports directory durability as unsupported")
-	}
+	requireRecoveryDirectoryDurability(t, t.TempDir())
 	repo, svc, input, files := decompositionReviewPublishFixture(t)
 	spec, err := os.ReadFile(filepath.Join(repo, "specs", "v0.5.0.md"))
 	if err != nil {
@@ -695,9 +678,7 @@ func TestReviewPublishDecompositionPromptBindingPrecedence(t *testing.T) {
 }
 
 func TestReviewPublishDecompositionPreservesReplacementPromptBindings(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("Windows reports directory durability as unsupported")
-	}
+	requireRecoveryDirectoryDurability(t, t.TempDir())
 	for _, twoPasses := range []bool{false, true} {
 		name := "one pass"
 		if twoPasses {
@@ -739,9 +720,7 @@ func TestReviewPublishDecompositionPreservesReplacementPromptBindings(t *testing
 }
 
 func TestReviewShowDecompositionDoesNotRevalidateHistoricalPrompt(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("Windows reports directory durability as unsupported")
-	}
+	requireRecoveryDirectoryDurability(t, t.TempDir())
 	repo, svc, input, files := decompositionReviewPublishFixture(t)
 	if _, err := svc.ReviewPublish(input); err != nil {
 		t.Fatalf("ReviewPublish: %v", err)
@@ -758,9 +737,7 @@ func TestReviewShowDecompositionDoesNotRevalidateHistoricalPrompt(t *testing.T) 
 }
 
 func TestReviewPublishDecompositionRechecksPromptAndConfigBeforeCommit(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("Windows reports directory durability as unsupported")
-	}
+	requireRecoveryDirectoryDurability(t, t.TempDir())
 	for _, test := range []struct {
 		name  string
 		setup func(t *testing.T, repo string)
@@ -922,9 +899,7 @@ func TestReviewPublishTaskPromptBindingPrecedence(t *testing.T) {
 }
 
 func TestReviewPublishTaskRechecksBoundSnapshotsBeforeCommit(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("Windows reports directory durability as unsupported")
-	}
+	requireRecoveryDirectoryDurability(t, t.TempDir())
 	for _, test := range []struct {
 		name  string
 		setup func(t *testing.T, repo, proposal string)

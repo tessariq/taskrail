@@ -3,7 +3,6 @@ package taskrail
 import (
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -272,9 +271,7 @@ func TestImportApplyAndReviewPublishRefuseLayout1(t *testing.T) {
 	})
 
 	t.Run("review publish workflow", func(t *testing.T) {
-		if runtime.GOOS == "windows" {
-			t.Skip("Windows reports directory durability as unsupported")
-		}
+		requireRecoveryDirectoryDurability(t, t.TempDir())
 		t.Parallel()
 
 		repo, runGit := workflowEvidenceGitRepo(t)
@@ -315,9 +312,7 @@ func TestImportApplyAndReviewPublishRefuseLayout1(t *testing.T) {
 	})
 
 	t.Run("review publish", func(t *testing.T) {
-		if runtime.GOOS == "windows" {
-			t.Skip("Windows reports directory durability as unsupported")
-		}
+		requireRecoveryDirectoryDurability(t, t.TempDir())
 		t.Parallel()
 
 		repo := realGitRepo(t)

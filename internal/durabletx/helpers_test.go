@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/tessariq/taskrail/internal/durablefs"
 	"github.com/tessariq/taskrail/internal/repolock"
 )
 
@@ -46,17 +47,15 @@ func newLocalRepository(t *testing.T) repolock.Repository {
 
 func requireDirectoryDurability(t *testing.T, root string) {
 	t.Helper()
-	directory, err := os.Open(root)
+	parent, err := durablefs.OpenExternal(filepath.Dir(root))
 	if err != nil {
 		t.Fatalf("open directory durability probe: %v", err)
 	}
-	syncErr := directory.Sync()
-	closeErr := directory.Close()
-	if syncErr != nil {
-		t.Skipf("filesystem does not support durable directory sync: %v", syncErr)
-	}
-	if closeErr != nil {
-		t.Fatalf("close directory durability probe: %v", closeErr)
+	defer parent.Close()
+	if err := parent.SyncDir(filepath.Base(root)); errors.Is(err, durablefs.ErrUnsupported) {
+		t.Skipf("filesystem does not support durable directory sync: %v", err)
+	} else if err != nil {
+		t.Fatalf("directory durability probe: %v", err)
 	}
 }
 
