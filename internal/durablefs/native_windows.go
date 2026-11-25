@@ -157,3 +157,106 @@ func classifySyncError(step Barrier, err error) error {
 func nativeSync(file *os.File) error {
 	return windows.FlushFileBuffers(windows.Handle(file.Fd()))
 }
+
+// Directory access rights from File Access Rights Constants; they share their
+// values with FILE_WRITE_DATA and FILE_APPEND_DATA.
+const (
+	fileAddFile         = 0x2
+	fileAddSubdirectory = 0x4
+)
+
+const (
+	fileFsDeviceInformation = 4
+	fileRemoteDevice        = 0x10
+)
+
+var (
+	ntdll                            = windows.NewLazySystemDLL("ntdll.dll")
+	procNtFlushBuffersFileEx         = ntdll.NewProc("NtFlushBuffersFileEx")
+	procNtQueryVolumeInformationFile = ntdll.NewProc("NtQueryVolumeInformationFile")
+)
+
+// refuseRemoteVolume keeps network shares unsupported: a server reports its
+// own file system name (Samba says "NTFS" by default) and may acknowledge a
+// directory flush without syncing, so the NTFS check proves nothing there.
+func refuseRemoteVolume(handle windows.Handle) error {
+	var device struct{ DeviceType, Characteristics uint32 }
+	var status windows.IO_STATUS_BLOCK
+	code, _, _ := procNtQueryVolumeInformationFile.Call(uintptr(handle), uintptr(unsafe.Pointer(&status)),
+		uintptr(unsafe.Pointer(&device)), unsafe.Sizeof(device), fileFsDeviceInformation)
+	if uint32(code) != 0 {
+		return windows.NTStatus(uint32(code)).Errno()
+	}
+	if device.Characteristics&fileRemoteDevice != 0 {
+		return fmt.Errorf("%w: directory is on a network volume", ErrUnsupported)
+	}
+	return nil
+}
+
+// nativeSyncDirectory flushes the directory behind dir, which os.Root opens
+// read-only. A flush needs write or append access, so it reopens the same
+// object by an empty name relative to dir: nothing is parsed, so no reparse
+// point or replaced entry can redirect it. Only NTFS persists directory
+// structure on flush (MS-FSA 2.1.5.7, note <80>); other file systems report
+// success without flushing, so they and network volumes stay unsupported.
+func nativeSyncDirectory(dir *os.File) error {
+	reopened, err := reopenDirectoryForFlush(windows.Handle(dir.Fd()))
+	if err != nil {
+		return err
+	}
+	defer reopened.Close()
+	want, _, err := nativeIdentity(dir)
+	if err != nil {
+		return err
+	}
+	got, _, err := nativeIdentity(reopened)
+	if err != nil {
+		return err
+	}
+	if got != want {
+		return fmt.Errorf("%w: directory reopened as a different object", ErrConflict)
+	}
+	handle := windows.Handle(reopened.Fd())
+	if err := refuseRemoteVolume(handle); err != nil {
+		return err
+	}
+	name := make([]uint16, windows.MAX_PATH+1)
+	if err := windows.GetVolumeInformationByHandle(handle, nil, 0, nil, nil, nil, &name[0], uint32(len(name))); err != nil {
+		return err
+	}
+	if fileSystem := windows.UTF16ToString(name); fileSystem != "NTFS" {
+		return fmt.Errorf("%w: %s does not persist directory flushes", ErrUnsupported, fileSystem)
+	}
+	var status windows.IO_STATUS_BLOCK
+	if code, _, _ := procNtFlushBuffersFileEx.Call(uintptr(handle), 0, 0, 0, uintptr(unsafe.Pointer(&status))); uint32(code) != 0 {
+		return windows.NTStatus(uint32(code)).Errno()
+	}
+	return nil
+}
+
+// reopenDirectoryForFlush requests one add right at a time because an ACL may
+// grant only one of them, and either satisfies the flush access check.
+func reopenDirectoryForFlush(dir windows.Handle) (*os.File, error) {
+	var err error
+	for _, access := range []uint32{fileAddFile, fileAddSubdirectory} {
+		attributes := &windows.OBJECT_ATTRIBUTES{
+			Length:        uint32(unsafe.Sizeof(windows.OBJECT_ATTRIBUTES{})),
+			RootDirectory: dir,
+			ObjectName:    &windows.NTUnicodeString{},
+		}
+		var handle windows.Handle
+		err = windows.NtCreateFile(&handle, windows.SYNCHRONIZE|windows.FILE_READ_ATTRIBUTES|access, attributes,
+			&windows.IO_STATUS_BLOCK{}, nil, 0, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE,
+			windows.FILE_OPEN, windows.FILE_DIRECTORY_FILE|windows.FILE_SYNCHRONOUS_IO_NONALERT|windows.FILE_OPEN_REPARSE_POINT, 0, 0)
+		if err == nil {
+			return os.NewFile(uintptr(handle), "."), nil
+		}
+		if status, ok := err.(windows.NTStatus); ok {
+			err = status.Errno()
+		}
+		if !errors.Is(err, windows.ERROR_ACCESS_DENIED) {
+			return nil, err
+		}
+	}
+	return nil, err
+}
