@@ -1,12 +1,12 @@
 ---
 id: T-455-exercise-windows-durable-paths
 title: Exercise newly reachable Windows durable paths in tests
-status: in_progress
+status: blocked
 priority: high
 spec_ref: specs/v0.5.0.md#repository-discovery-locking-and-recovery
 dependencies:
     - T-322-provide-handle-bound-durable-filesystem-primitives
-updated_at: "2026-11-25T13:02:19Z"
+updated_at: "2026-11-25T22:09:42Z"
 ---
 
 # T-455-exercise-windows-durable-paths Exercise newly reachable Windows durable paths in tests
@@ -67,3 +67,5 @@ and recovery run instead of skipping. They still skip where that barrier reports
   scope here.
 
 ## Implementation Notes
+
+- 2026-11-25T22:09:42Z: Native run 45620924637 exposed a Windows no-replace collision error-mapping defect; awaiting T-456-map-windows-move-collision

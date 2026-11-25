@@ -50,5 +50,11 @@ func moveDirectoryNoReplace(source *os.Root, sourceName string, destination *os.
 	info.FileNameLength = uint32(len(name) * 2)
 	copy(unsafe.Slice(&info.FileName[0], len(name)), name)
 	var status windows.IO_STATUS_BLOCK
-	return windows.NtSetInformationFile(handle, &status, &buffer[0], uint32(len(buffer)), windows.FileRenameInformation)
+	err = windows.NtSetInformationFile(handle, &status, &buffer[0], uint32(len(buffer)), windows.FileRenameInformation)
+	// Report the no-replace refusal as os.ErrExist, as renameat2 and
+	// renameatx_np do; the raw NT status satisfies no fs error.
+	if err == windows.STATUS_OBJECT_NAME_COLLISION {
+		return windows.ERROR_ALREADY_EXISTS
+	}
+	return err
 }
