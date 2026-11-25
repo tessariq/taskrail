@@ -57,7 +57,30 @@ jobs:
           if ([IO.Path]::GetFullPath($env:EVIDENCE_ROOT) -cne $expected) { throw 'Unexpected evidence path.' }
           $ancestors = @()
           $item = Get-Item -LiteralPath $temp -Force
+          $diagnosticOrdinal = 0
           while ($null -ne $item) {
+            if ($diagnosticOrdinal -lt 32 -or -not $item.PSIsContainer -or ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+              $containerProperty = $item.PSObject.Properties['PSIsContainer']
+              $diagnosticPath = [string]$item.FullName
+              $diagnosticType = $item.GetType().FullName
+              $diagnosticContainer = if ($null -eq $containerProperty) { '' } else { [string]$containerProperty.Value }
+              $diagnosticVersion = [string]$PSVersionTable.PSVersion
+              [ordered]@{
+                stage = 'ancestor-observation-no-admission'
+                ordinal = $diagnosticOrdinal
+                path = $diagnosticPath.Substring(0, [Math]::Min(256, $diagnosticPath.Length))
+                path_length = $diagnosticPath.Length
+                path_truncated = $diagnosticPath.Length -gt 256
+                runtime_type = $diagnosticType.Substring(0, [Math]::Min(128, $diagnosticType.Length))
+                ps_is_container_present = $null -ne $containerProperty
+                ps_is_container_value = if ($null -eq $containerProperty) { $null } else { $diagnosticContainer.Substring(0, [Math]::Min(32, $diagnosticContainer.Length)) }
+                attributes_numeric = [int64]$item.Attributes
+                reparse_bit = [bool]($item.Attributes -band [IO.FileAttributes]::ReparsePoint)
+                powershell_version = $diagnosticVersion.Substring(0, [Math]::Min(64, $diagnosticVersion.Length))
+                metadata_truncated = $diagnosticType.Length -gt 128 -or $diagnosticContainer.Length -gt 32 -or $diagnosticVersion.Length -gt 64
+              } | ConvertTo-Json -Compress | ForEach-Object { Write-Output "ancestor-diagnostic $_" }
+            }
+            $diagnosticOrdinal++
             if (-not $item.PSIsContainer -or ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
               throw 'Refuse evidence writes through non-directory or reparse ancestor.'
             }
