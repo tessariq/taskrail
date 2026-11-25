@@ -54,7 +54,7 @@ func assertMigratedToLayout2(t *testing.T, repo string) {
 	if bytes.Contains(stateData, []byte("continuation_notes")) || bytes.Contains(stateData, []byte("## Notes\n")) {
 		t.Fatalf("published state still carries legacy continuation content:\n%s", stateData)
 	}
-	snapshot, err := durablefs.ObserveTree(repo, filepath.Join(".git", "taskrail", "transactions"))
+	snapshot, err := durablefs.ObserveTree(repo, ".git/taskrail/transactions")
 	if err != nil || snapshot.Present && len(snapshot.Entries) != 0 {
 		t.Fatalf("transactions retained after the migration: %+v err = %v", snapshot.Entries, err)
 	}
