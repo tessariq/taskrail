@@ -1,5 +1,5 @@
 ---
-id: T-455-rekey-active-next-action-on-rename
+id: T-459-rekey-active-next-action-on-rename
 title: Re-key the active task's next_action on task rename
 status: todo
 priority: low
@@ -9,7 +9,7 @@ dependencies:
 updated_at: "2026-11-25T23:12:45Z"
 ---
 
-# T-455-rekey-active-next-action-on-rename Re-key the active task's next_action on task rename
+# T-459-rekey-active-next-action-on-rename Re-key the active task's next_action on task rename
 
 ## Description
 
