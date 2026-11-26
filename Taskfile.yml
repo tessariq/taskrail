@@ -77,8 +77,14 @@ tasks:
   test:
     desc: Run all tests
     deps: [taskrail:install]
+    # -count=1 is a speedup, not a coverage change. A cacheable run makes
+    # cmd/go log every file each test opens and, after a passing package,
+    # re-stat and symlink-resolve all of them to key the result cache. The
+    # temp-directory fixtures in internal/taskrail log about four million
+    # entries, which added over half an hour on Windows after the package had
+    # already passed, and CI never reuses a cached result anyway.
     cmds:
-      - go test -timeout 60m ./...
+      - go test -count=1 -timeout 60m ./...
 
   test:short:
     desc: Run the tests minus the long working-binary suites (local hook lane; CI runs `test`)
@@ -89,8 +95,8 @@ tasks:
   test:filesystem:
     desc: Run native filesystem portability tests verbosely, including capability skips
     cmds:
-      - go test -v ./internal/durablefs ./internal/durabletx ./internal/repolock ./internal/repotx
-      - go test -v ./internal/taskrail -run '^(TestParseFrontmatterHandlesCRLF|TestAppendTaskNoteTwiceKeepsOneHeading|TestApplyImportDraftResolvesSpecRefAgainstPendingImportedSpec|TestDecodeDecompositionBundlePreservesCompleteValidBundle|TestDiscoverPathsLinkedWorktreePreservesGitIdentities)$'
+      - go test -v -count=1 ./internal/durablefs ./internal/durabletx ./internal/repolock ./internal/repotx
+      - go test -v -count=1 ./internal/taskrail -run '^(TestParseFrontmatterHandlesCRLF|TestAppendTaskNoteTwiceKeepsOneHeading|TestApplyImportDraftResolvesSpecRefAgainstPendingImportedSpec|TestDecodeDecompositionBundlePreservesCompleteValidBundle|TestDiscoverPathsLinkedWorktreePreservesGitIdentities)$'
 
   test:commit-msg:
     desc: Test the commit-message policy

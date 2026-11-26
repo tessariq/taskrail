@@ -517,6 +517,17 @@ func TestCIMatrixCoversRequiredOSes(t *testing.T) {
 	}
 }
 
+// CI's full suite must bypass the test-result cache: a cacheable passing run
+// spends over half an hour on Windows hashing the testlog after the package has
+// already passed, and CI never reuses the cached result. The ceiling stays the
+// owner-approved sixty minutes.
+func TestCIFullSuiteBypassesTestResultCache(t *testing.T) {
+	target := strings.Join(taskfileBlock(readFile(t, repoRoot(t), "Taskfile.yml"), "test:"), "\n")
+	if !strings.Contains(target, "go test -count=1 -timeout 60m ./...") {
+		t.Errorf("Taskfile test target must run `go test -count=1 -timeout 60m ./...`, have:\n%s", target)
+	}
+}
+
 // Filesystem capability skips must be visible on each native matrix leg rather
 // than buried in the non-verbose full suite.
 func TestCIRunsVerboseFilesystemPortabilitySuiteOnNativeMatrix(t *testing.T) {
