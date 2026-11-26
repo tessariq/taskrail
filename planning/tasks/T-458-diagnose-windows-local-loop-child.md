@@ -1,12 +1,17 @@
 ---
 id: T-458-diagnose-windows-local-loop-child
 title: Diagnose Windows local loop child_failed after delivery
-status: in_progress
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#repository-discovery-locking-and-recovery
 dependencies:
     - T-456-map-windows-move-collision
-updated_at: "2026-11-25T23:17:31Z"
+updated_at: "2026-11-26T00:57:37Z"
+completion_id: "4e2d0c2d982154d81a1a194a8a8bd3fb"
+last_verification_id: "73e625412b32fe5aab1f9b05518ea956"
+last_verification_result: pass
+last_verified_at: "2026-11-26T00:57:37Z"
+last_verified_completion_id: "4e2d0c2d982154d81a1a194a8a8bd3fb"
 ---
 
 # T-458-diagnose-windows-local-loop-child Diagnose Windows local loop child_failed after delivery
@@ -51,3 +56,6 @@ classification is unchanged.
 - Native confirmation needs the next approved Windows run.
 
 ## Implementation Notes
+
+- 2026-11-26T00:57:37Z: Native Windows run 45722268952 at c674115: internal/taskrail ok (2094.204s, non-verbose; per-test result inferred from package success).
+- 2026-11-26T00:57:37Z: verification pass id 73e625412b32fe5aab1f9b05518ea956 previous none completion 4e2d0c2d982154d81a1a194a8a8bd3fb
