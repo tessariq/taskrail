@@ -1,18 +1,16 @@
 ---
 schema_version: 2
-updated_at: "2026-11-26T02:14:57Z"
+updated_at: "2026-11-26T02:15:22Z"
 active_spec_version: v0.5.0
 active_spec_path: specs/v0.5.0.md
-current_task: T-458-diagnose-windows-local-loop-child
-current_task_title: Diagnose Windows local loop child_failed after delivery
-status_summary: in_progress
-blockers:
-    - 'T-455-exercise-windows-durable-paths: Native run 45620924637 exposed a Windows no-replace collision error-mapping defect; awaiting T-456-map-windows-move-collision'
-    - 'T-457-map-layout2-observe-slash-path: Fix committed; awaiting native Windows confirmation of the layout-2 migration tests in the next approved run'
-next_action: Implement T-458-diagnose-windows-local-loop-child and run targeted tests
-last_verification_result: pass for T-456-map-windows-move-collision at 2026-11-25T23:13:01Z id 686e59f06c129f7534f5cb3131c192e6
-last_verification_id: 686e59f06c129f7534f5cb3131c192e6
-last_verified_completion_id: e24469b61bbab30eadb499eef42cc766
+current_task: ""
+current_task_title: ""
+status_summary: idle
+blockers: []
+next_action: Select the next eligible task
+last_verification_result: pass for T-455-exercise-windows-durable-paths at 2026-11-26T00:57:52Z id 57f258ec65f5011c0df46a7b8f482562
+last_verification_id: 57f258ec65f5011c0df46a7b8f482562
+last_verified_completion_id: 08adeffa8817f7e9a1fbb5045d5bfd2a
 relevant_artifacts: []
 ---
 
@@ -24,25 +22,23 @@ relevant_artifacts: []
 
 ## Current Focus
 
-- Task: `T-458-diagnose-windows-local-loop-child`
-- Title: Diagnose Windows local loop child_failed after delivery
+- Task: none
 
 ## Status
 
-- in_progress
+- idle
 
 ## Blockers
 
-- T-455-exercise-windows-durable-paths: Native run 45620924637 exposed a Windows no-replace collision error-mapping defect; awaiting T-456-map-windows-move-collision
-- T-457-map-layout2-observe-slash-path: Fix committed; awaiting native Windows confirmation of the layout-2 migration tests in the next approved run
+- None
 
 ## Last Verification
 
-- pass for T-456-map-windows-move-collision at 2026-11-25T23:13:01Z id 686e59f06c129f7534f5cb3131c192e6
+- pass for T-455-exercise-windows-durable-paths at 2026-11-26T00:57:52Z id 57f258ec65f5011c0df46a7b8f482562
 
 ## Next Action
 
-- Implement T-458-diagnose-windows-local-loop-child and run targeted tests
+- Select the next eligible task
 
 ## Relevant Artifacts
 
@@ -51,7 +47,7 @@ relevant_artifacts: []
 ## Task Counts
 
 - todo: 74
-- in_progress: 1
-- completed: 381
-- blocked: 2
+- in_progress: 0
+- completed: 384
+- blocked: 0
 - cancelled: 0

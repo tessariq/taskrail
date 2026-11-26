@@ -1,12 +1,17 @@
 ---
 id: T-455-exercise-windows-durable-paths
 title: Exercise newly reachable Windows durable paths in tests
-status: blocked
+status: completed
 priority: high
 spec_ref: specs/v0.5.0.md#repository-discovery-locking-and-recovery
 dependencies:
     - T-322-provide-handle-bound-durable-filesystem-primitives
-updated_at: "2026-11-25T22:09:42Z"
+updated_at: "2026-11-26T00:57:52Z"
+completion_id: "08adeffa8817f7e9a1fbb5045d5bfd2a"
+last_verification_id: "57f258ec65f5011c0df46a7b8f482562"
+last_verification_result: pass
+last_verified_at: "2026-11-26T00:57:52Z"
+last_verified_completion_id: "08adeffa8817f7e9a1fbb5045d5bfd2a"
 ---
 
 # T-455-exercise-windows-durable-paths Exercise newly reachable Windows durable paths in tests
@@ -69,3 +74,6 @@ and recovery run instead of skipping. They still skip where that barrier reports
 ## Implementation Notes
 
 - 2026-11-25T22:09:42Z: Native run 45620924637 exposed a Windows no-replace collision error-mapping defect; awaiting T-456-map-windows-move-collision
+- 2026-11-26T00:57:50Z: T-456, T-457 and T-458 resolved the native failures this task exposed; run 45722268952 at c674115 passed.
+- 2026-11-26T00:57:51Z: Native failures exposed were filed and fixed as T-456 (collision mapping), T-457 (layout-2 slash path) and T-458 (loop helper stdin). Test ceiling raised to 60m with owner approval.
+- 2026-11-26T00:57:52Z: verification pass id 57f258ec65f5011c0df46a7b8f482562 previous none completion 08adeffa8817f7e9a1fbb5045d5bfd2a
