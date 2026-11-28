@@ -1,0 +1,40 @@
+version: "2"
+
+# The standard linters plus a ceiling on function size and complexity. The
+# ceilings catch outliers rather than encode the style target: AGENTS.md asks
+# for focused functions well under these limits, and the linter fails only the
+# functions that clearly are not. Tests are exempt from the size ceilings,
+# because table-driven tests are long by design.
+linters:
+  default: standard
+  enable:
+    - funlen
+    - gocognit
+    - nestif
+  settings:
+    errcheck:
+      # The Windows counterpart of the Close calls the std-error-handling
+      # preset already exempts: a failed handle close is not actionable.
+      exclude-functions:
+        - golang.org/x/sys/windows.CloseHandle
+    funlen:
+      lines: 100
+      statements: 60
+    gocognit:
+      min-complexity: 40
+    nestif:
+      min-complexity: 6
+  exclusions:
+    presets:
+      - std-error-handling
+      - common-false-positives
+    rules:
+      - path: _test\.go
+        linters:
+          - funlen
+          - gocognit
+          - nestif
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0

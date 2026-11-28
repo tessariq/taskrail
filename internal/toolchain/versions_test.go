@@ -154,3 +154,13 @@ func TestMiseLefthookPinMatchesHookGuidance(t *testing.T) {
 		}
 	}
 }
+
+// CI runs `task lint` with whatever golangci-lint mise provisions, so the pin
+// must be an exact release: a floating one lets a new linter version fail CI
+// with no change in this repository.
+func TestMisePinsGolangciLintExactly(t *testing.T) {
+	pin := miseTool(t, readFile(t, repoRoot(t), "mise.toml"), "golangci-lint")
+	if !regexp.MustCompile(`^\d+\.\d+\.\d+$`).MatchString(pin) {
+		t.Errorf("mise.toml golangci-lint pin %q must be an exact X.Y.Z release", pin)
+	}
+}

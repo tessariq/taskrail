@@ -1,0 +1,54 @@
+name: Commit policy
+
+# Server-side mirror of the pre-push attribution and author-identity guard. The
+# local hooks are opt-in and skipped by --no-verify, so this is the gate that
+# actually holds. Deliberately no path filters: a doc-only push carries commits
+# too, and neither ci.yml nor planning.yml alone sees every push.
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: commit-policy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  commits:
+    name: Attribution and author identity
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The range endpoints must be present locally for git rev-list.
+          fetch-depth: 0
+
+      # Event values arrive through env rather than inline ${{ }} interpolation,
+      # so nothing from the event payload is spliced into the script text.
+      - name: Check the pushed or proposed commits
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PUSH_AFTER: ${{ github.sha }}
+        run: |
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            range="$PR_BASE..$PR_HEAD"
+          elif [ -z "$PUSH_BEFORE" ] || [ "$PUSH_BEFORE" = "0000000000000000000000000000000000000000" ] \
+            || ! git cat-file -e "$PUSH_BEFORE^{commit}" 2>/dev/null; then
+            # A newly created branch has no previous tip, and a force-push can
+            # leave the old tip unfetchable; check the new tip's history, which
+            # the script bounds.
+            range="$PUSH_AFTER"
+          else
+            range="$PUSH_BEFORE..$PUSH_AFTER"
+          fi
+          echo "checking $range"
+          bash scripts/check-push-messages.sh "$range"

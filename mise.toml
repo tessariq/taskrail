@@ -14,6 +14,9 @@
 go = "1.26"
 task = "3.52.0"
 lefthook = "1.13.6"
+# Pinned exactly: a new linter release adds checks, which would fail CI with no
+# change in this repository.
+golangci-lint = "2.15.0"
 
 # Expose the working-tree taskrail build on the mise-provided PATH, alongside
 # go/task/lefthook. A bare `taskrail` (the ${TASKRAIL:-taskrail} fallback the

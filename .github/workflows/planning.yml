@@ -42,6 +42,7 @@ jobs:
   validate:
     name: Planning + docs checks
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -54,6 +55,14 @@ jobs:
 
       - name: Check task bodies for duplicate Implementation Notes headings
         run: task check:task-bodies
+
+      - name: Verify STATE.md matches its task-file projection
+        run: task check:state
+
+      # ci.yml ignores these paths, so without this step a doc edit that breaks
+      # a doc-pinning test fails only on the next unrelated code PR.
+      - name: Documentation-pinning tests
+        run: task check:docs
 
       - name: Gate active-spec self-coverage (coverage --min 100)
         run: task coverage:gate

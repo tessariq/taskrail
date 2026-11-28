@@ -168,6 +168,67 @@ tasks:
     cmds:
       - go test ./internal/taskrail -run '^TestCorpusTasksHaveOneOfEachScaffoldSection$|^TestDuplicateScaffoldSectionsFlagsRepeatedHeadings$|^TestScaffoldSectionHeadingsMatchScaffoldOutput$'
 
+  check:docs:
+    desc: Run the tests that pin the repository's real documentation (AGENTS.md, README.md, docs/, specs/, ...)
+    # ci.yml ignores doc-only paths, so these run in planning.yml and the
+    # lefthook docs hook; otherwise a reworded contract fails first on a later,
+    # unrelated code PR. The list is every internal/taskrail test that fails when
+    # the documentation files are absent; keep it in step when adding one.
+    cmds:
+      - go test ./internal/toolchain
+      - go test ./internal/taskrail -run '^TestGapGatingContractIsDocumentedAtSources$|^TestSkillsOverviewStatesGapMechanicalLimit$|^TestDocsSkillListsMatchShippableSet$|^TestWorkflowDocsKeepArtifactsEphemeral$|^TestAutonomousContractNamesCurrentSkillAndBinarySources$|^TestAutonomousContractCitesCanonicalLifecycleRegistry$|^TestV04ShippedPrerequisitesAreDocumented$|^TestWorkflowContractCurrentGuidanceRetiresSourceCheckoutLoopAndKeepsProviderBoundary$|^TestTaskImplementationSpecRejectsReportOnlyFindingDisposition$|^TestMachineInventoryMatchesCompanionRegistry$|^TestMachineRegistriesMatchNormativeSources$|^TestMachineInventoryErrorSubsetsMatchCompanionAssignment$|^TestMachineInventoryWarningSubsetsMatchCompanionAssignment$|^TestMachineExitPoliciesMatchTheSpecGatingList$'
+
+  check:state:
+    desc: Fail if planning/STATE.md drifted from its task-file projection (repair would change it) or does not validate
+    # repair exits 0 on a dry run even when it finds drift; statecheck reads its
+    # JSON envelope and turns drift into a failure. A plain pipe, so Task's
+    # built-in shell runs it on native Windows as well.
+    cmds:
+      - go run ./cmd/taskrail repair --json | go run ./internal/toolchain/cmd/statecheck
+
+  lint:
+    desc: Run golangci-lint (version pinned in mise.toml, config in .golangci.yml)
+    cmds:
+      - golangci-lint run ./...
+
+  check:
+    desc: Run every task-based check of CI's checks and build-test jobs locally (mirrors ci.yml)
+    # Guarded by TestLocalCheckMirrorsTheCIJobs: the order and set match the
+    # ci.yml checks job, then the unconditional build-test steps, then
+    # build:cross. Steps that are not `task` calls or run only on one matrix leg
+    # are left out.
+    cmds:
+      - task: fmt:check
+      - task: lint
+      - task: check:skills
+      - task: test:commit-msg
+      - task: test:author
+      - task: test:push-messages
+      - task: test:orb-setup
+      - task: check:state
+      - task: taskrail:install
+      - task: taskrail:check
+      - task: coverage:gate
+      - task: build
+      - task: vet
+      - task: test:filesystem
+      - task: test:workflow-contract
+      - task: test
+      - task: run:help
+      - task: validate
+      - task: build:cross
+
+  check:planning:
+    desc: Run the planning fast lane locally (mirrors planning.yml)
+    # Guarded by TestLocalPlanningCheckMirrorsThePlanningWorkflow.
+    cmds:
+      - task: validate
+      - task: check:task-bodies
+      - task: check:state
+      - task: check:docs
+      - task: coverage:gate
+      - task: test:workflow-contract
+
   skills:regen:
     desc: Regenerate committed .agents/.claude skill copies from the embedded package, then verify parity
     # Copies straight from the embedded source (internal/taskrail/skills) rather

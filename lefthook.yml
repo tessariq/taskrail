@@ -26,17 +26,46 @@ pre-commit:
           echo "$unformatted" >&2
           exit 1
         fi
+    # A resolved conflict that left its markers behind still compiles for
+    # Markdown and YAML, so nothing else here would notice it. Only added lines
+    # are inspected: a file that legitimately documents a marker is untouched
+    # unless the commit adds one.
+    conflict-markers:
+      run: |
+        markers="$(git diff --cached -U0 -- {staged_files} | grep -E '^\+(<{7}|={7}|>{7})([[:space:]]|$)' || true)"
+        if [ -n "$markers" ]; then
+          echo "unresolved merge markers are staged:" >&2
+          echo "$markers" >&2
+          exit 1
+        fi
     vet:
+      glob: "*.go"
       run: task vet
     validate:
+      glob: "{planning/**,specs/**,.taskrail/**}"
       run: task validate
     skill-parity:
+      glob: "{internal/taskrail/skills/**,.agents/skills/**,.claude/skills/**}"
       run: task check:skills
+    # The tests that pin the real documentation run only in CI's planning lane
+    # for a doc-only change, so a reworded contract would otherwise fail first on
+    # someone else's later code PR.
+    docs:
+      glob: "{AGENTS.md,CLAUDE.md,README.md,CHANGELOG.md,CONTRIBUTING.md,docs/**,specs/**,**/AGENTS.md}"
+      run: task check:docs
+    # taskrail repair exits 0 on drift, so a hand-edited or stale STATE.md would
+    # otherwise reach review looking valid.
+    state-projection:
+      glob: "{planning/**,specs/**,.taskrail/**}"
+      run: task check:state
     # Tracked-work commands write task and state files. A binary older than the
     # working tree writes them without erroring, so the damage is only visible by
     # reading the files afterwards (T-123). Refusing the commit closes that window
-    # locally; CI's freshness leg remains the authoritative gate.
+    # locally; CI's freshness leg remains the authoritative gate. It is scoped to
+    # the paths those commands write, since a commit carrying none of them
+    # carries no CLI-written state for a stale binary to have damaged.
     taskrail-freshness:
+      glob: "{planning/**,specs/**,.taskrail/**}"
       run: task taskrail:check
 
 commit-msg:
@@ -53,6 +82,9 @@ pre-push:
     message-policy:
       priority: 1
       run: bash scripts/check-push-messages.sh
-    tests:
+    lint:
       priority: 2
+      run: task lint
+    tests:
+      priority: 3
       run: task test:short
