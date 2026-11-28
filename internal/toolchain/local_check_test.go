@@ -229,11 +229,12 @@ func TestEveryJobDeclaresATimeout(t *testing.T) {
 		}
 	}
 
-	// The Test step's `go test -timeout 60m` must fire first, so a slow leg ends
-	// with the test binary's goroutine dump instead of a bare cancellation.
+	// `go test -timeout 60m` bounds each test binary, not the step, so a green
+	// native Windows job has taken 116 minutes. The job ceiling only exists to
+	// stop a hung runner; set below that, it cancels healthy runs.
 	_, jobs := workflowJobs(readFile(t, repoRoot(t), ".github/workflows/ci.yml"))
-	if got := jobTimeout(jobs["build-test"]); got <= 60 {
-		t.Errorf("ci.yml build-test timeout-minutes = %d; must exceed the sixty-minute test allowance", got)
+	if got := jobTimeout(jobs["build-test"]); got < 120 {
+		t.Errorf("ci.yml build-test timeout-minutes = %d; must be at least 120 (green Windows jobs have taken 116)", got)
 	}
 }
 

@@ -97,9 +97,10 @@ jobs:
   build-test:
     needs: checks
     runs-on: ${{ matrix.runner }}
-    # Above the Test target's own sixty-minute `go test -timeout`, so a slow leg
-    # fails with the test binary's goroutine dump rather than a bare cancel.
-    timeout-minutes: 90
+    # `go test -timeout 60m` bounds each test binary, not the whole step: on
+    # native Windows the Test step took 106 minutes on eb7be35 (job: 116). The
+    # job ceiling only stops a hung runner and must stay above that.
+    timeout-minutes: 150
     strategy:
       fail-fast: false
       matrix:
