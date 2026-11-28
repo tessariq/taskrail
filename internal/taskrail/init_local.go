@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -68,34 +67,10 @@ func (s *Service) initLocal(in InitInput) (InitResult, error) {
 }
 
 func (s *Service) applyLocalInit(in InitInput) (result InitResult, err error) {
-	excludePath, err := localExcludePath(s.paths)
-	if err != nil {
+	// The pre-lock pass rejects obvious unsafe repositories before lock work;
+	// only the observation rebuilt under the lock below is trusted.
+	if _, err := s.initLocalObserve(in, false); err != nil {
 		return InitResult{}, err
-	}
-	excludeOriginal, err := readInitFile(excludePath)
-	if err != nil {
-		return InitResult{}, fmt.Errorf("inspect Git exclusion: %w", err)
-	}
-	exclude, err := localExcludeCandidate(excludeOriginal)
-	if err != nil {
-		return InitResult{}, err
-	}
-	if err := s.preflightLocalPaths(false); err != nil {
-		return InitResult{}, err
-	}
-	var skillPlan localSkillPlan
-	if in.WithSkills {
-		skillPlan, err = s.planLocalSkills()
-		if err != nil {
-			return InitResult{}, err
-		}
-		if err := validateFreshLocalSkillPlan(skillPlan, localSkillCreate, localSkillExclusionCreate); err != nil {
-			return InitResult{}, err
-		}
-		exclude, err = localSkillExclusionCandidate(exclude, skillPlan)
-		if err != nil {
-			return InitResult{}, err
-		}
 	}
 	transactionID, err := newMigrationTransactionID()
 	if err != nil {
@@ -114,41 +89,10 @@ func (s *Service) applyLocalInit(in InitInput) (result InitResult, err error) {
 		}
 	}()
 	// Rebuild the mutable Git and filesystem observations under the writer lock.
-	// The first pass above rejects obvious unsafe repositories before lock work;
-	// this pass is the candidate that publication is allowed to trust.
-	excludePath, err = localExcludePath(s.paths)
+	// This pass is the candidate that publication is allowed to trust.
+	observed, err := s.initLocalObserve(in, true)
 	if err != nil {
 		return InitResult{}, err
-	}
-	excludeOriginal, err = readInitFile(excludePath)
-	if err != nil {
-		return InitResult{}, fmt.Errorf("inspect Git exclusion: %w", err)
-	}
-	exclude, err = localExcludeCandidate(excludeOriginal)
-	if err != nil {
-		return InitResult{}, err
-	}
-	s.recoverEmptyLocalInitDirectories()
-	if err := s.preflightLocalPaths(true); err != nil {
-		return InitResult{}, err
-	}
-	if in.WithSkills {
-		skillPlan, err = s.planLocalSkills()
-		if err != nil {
-			return InitResult{}, err
-		}
-		if err := validateFreshLocalSkillPlan(skillPlan, localSkillCreate, localSkillExclusionCreate); err != nil {
-			return InitResult{}, err
-		}
-		exclude, err = localSkillExclusionCandidate(exclude, skillPlan)
-		if err != nil {
-			return InitResult{}, err
-		}
-		if testHookLocalSkillsPlanned != nil {
-			if err := testHookLocalSkillsPlanned(); err != nil {
-				return InitResult{}, err
-			}
-		}
 	}
 	// durabletx requires an existing managed root. These empty directories are
 	// removed on handled failure and safely discarded by the next local init if a
@@ -165,20 +109,111 @@ func (s *Service) applyLocalInit(in InitInput) (result InitResult, err error) {
 	if err := os.MkdirAll(s.paths.TasksDir, 0o755); err != nil {
 		return InitResult{}, fmt.Errorf("create local tasks directory: %w", err)
 	}
+	members, markerBytes, err := s.initLocalMembers(observed)
+	if err != nil {
+		return InitResult{}, err
+	}
+	installed := SkillInstallResult{}
+	if in.WithSkills {
+		var skillMembers []durabletx.Member
+		skillMembers, installed, err = initLocalSkillMembers(observed.skillPlan, in.SkillVersion)
+		if err != nil {
+			return InitResult{}, err
+		}
+		members = append(members, skillMembers...)
+	}
+	if testHookLocalTransactionReady != nil {
+		if err := testHookLocalTransactionReady(); err != nil {
+			return InitResult{}, err
+		}
+	}
+	validate, validateBeforeCandidates := s.initLocalValidators(in, observed, members)
+	if _, err := durabletx.Run(context.Background(), lock, s.paths.LockRepository(), durabletx.Request{
+		Command:                  localInitCommand,
+		Members:                  members,
+		Validate:                 validate,
+		ValidateBeforeCandidates: validateBeforeCandidates,
+	}); err != nil {
+		return InitResult{}, s.mapMigrationFailure(transactionID, err)
+	}
+	committed = true
+	return s.initLocalResult(in, observed.skillPlan, markerBytes, installed)
+}
+
+// initLocalObservation is one read of the mutable inputs local init publishes
+// against: the effective Git exclusion, its candidate content, and the skill
+// plan when skills are requested.
+type initLocalObservation struct {
+	excludePath     string
+	excludeOriginal []byte
+	exclude         []byte
+	skillPlan       localSkillPlan
+}
+
+// initLocalObserve reads the local-init inputs and rejects unsafe ones.
+// underLock selects the stricter pass that runs under the writer lock: it
+// first discards empty directories a crashed run left behind, then also
+// checks the storage root and destinations.
+func (s *Service) initLocalObserve(in InitInput, underLock bool) (initLocalObservation, error) {
+	excludePath, err := localExcludePath(s.paths)
+	if err != nil {
+		return initLocalObservation{}, err
+	}
+	excludeOriginal, err := readInitFile(excludePath)
+	if err != nil {
+		return initLocalObservation{}, fmt.Errorf("inspect Git exclusion: %w", err)
+	}
+	exclude, err := localExcludeCandidate(excludeOriginal)
+	if err != nil {
+		return initLocalObservation{}, err
+	}
+	if underLock {
+		s.recoverEmptyLocalInitDirectories()
+	}
+	if err := s.preflightLocalPaths(underLock); err != nil {
+		return initLocalObservation{}, err
+	}
+	observed := initLocalObservation{excludePath: excludePath, excludeOriginal: excludeOriginal, exclude: exclude}
+	if !in.WithSkills {
+		return observed, nil
+	}
+	observed.skillPlan, err = s.planLocalSkills()
+	if err != nil {
+		return initLocalObservation{}, err
+	}
+	if err := validateFreshLocalSkillPlan(observed.skillPlan, localSkillCreate, localSkillExclusionCreate); err != nil {
+		return initLocalObservation{}, err
+	}
+	observed.exclude, err = localSkillExclusionCandidate(observed.exclude, observed.skillPlan)
+	if err != nil {
+		return initLocalObservation{}, err
+	}
+	if underLock && testHookLocalSkillsPlanned != nil {
+		if err := testHookLocalSkillsPlanned(); err != nil {
+			return initLocalObservation{}, err
+		}
+	}
+	return observed, nil
+}
+
+// initLocalMembers builds the exclusion, marker, origin, and layout members of
+// the local-init transaction, returning the marker bytes the result digests.
+func (s *Service) initLocalMembers(observed initLocalObservation) ([]durabletx.Member, []byte, error) {
 	marker := Layout2Config{
 		LayoutVersion: layout2Version, SpecsDir: defaultSpecsDir, PlanningDir: defaultPlanningDir,
 		StorageMode: StorageLocal, ImplementationReviewMaxRounds: defaultImplementationReviewMaxRounds,
 	}
 	markerBytes, err := yaml.Marshal(marker)
 	if err != nil {
-		return InitResult{}, err
+		return nil, nil, err
 	}
 	origin, err := localOriginBytes(s.paths, s.now)
 	if err != nil {
-		return InitResult{}, err
+		return nil, nil, err
 	}
+	excludePath := observed.excludePath
 	members := []durabletx.Member{
-		{Kind: durabletx.Git, Reported: filepath.ToSlash(excludePath), Path: gitRelativePath(s.paths.GitCommonDir, excludePath), Content: exclude, PreSemantic: true},
+		{Kind: durabletx.Git, Reported: filepath.ToSlash(excludePath), Path: gitRelativePath(s.paths.GitCommonDir, excludePath), Content: observed.exclude, PreSemantic: true},
 		{Kind: durabletx.Worktree, Reported: markerRelPath(), Path: markerRelPath(), Content: markerBytes},
 		{Kind: durabletx.Worktree, Reported: filepath.ToSlash(relPath(s.paths.RepoRoot, filepath.Join(s.paths.RuntimeDir, "origin.json"))), Path: filepath.ToSlash(relPath(s.paths.RepoRoot, filepath.Join(s.paths.RuntimeDir, "origin.json"))), Content: origin},
 	}
@@ -195,95 +230,98 @@ func (s *Service) applyLocalInit(in InitInput) (result InitResult, err error) {
 			state := starterState(s.now(), schema)
 			content, err = marshalStateAtSchema(schema, state)
 			if err != nil {
-				return InitResult{}, err
+				return nil, nil, err
 			}
 		}
 		members = append(members, durabletx.Member{Kind: durabletx.Managed, Reported: file.logical, Path: file.logical, Content: content})
 	}
+	return members, markerBytes, nil
+}
+
+// initLocalSkillMembers stamps each planned embedded skill into a transaction
+// member.
+func initLocalSkillMembers(plan localSkillPlan, version string) ([]durabletx.Member, SkillInstallResult, error) {
+	var members []durabletx.Member
 	installed := SkillInstallResult{}
-	if in.WithSkills {
-		for _, destination := range skillPlan.Destinations {
-			packaged, readErr := shippableSkillsFS.ReadFile(path.Join(shippableSkillsRoot, destination.PackagePath))
-			if readErr != nil {
-				return InitResult{}, fmt.Errorf("read embedded skill %s: %w", destination.PackagePath, readErr)
-			}
-			if validateErr := validateAgentSkill(packaged); validateErr != nil {
-				return InitResult{}, fmt.Errorf("validate embedded skill %s: %w", destination.PackagePath, validateErr)
-			}
-			stamped, stampErr := stampSkillVersion(packaged, in.SkillVersion)
-			if stampErr != nil {
-				return InitResult{}, fmt.Errorf("stamp embedded skill %s: %w", destination.PackagePath, stampErr)
-			}
-			members = append(members, durabletx.Member{Kind: durabletx.Worktree, Reported: destination.Path, Path: destination.Path, Content: stamped})
-			installed.Written = append(installed.Written, destination.Path)
+	for _, destination := range plan.Destinations {
+		stamped, err := localSkillStampPackaged(destination.PackagePath, version)
+		if err != nil {
+			return nil, SkillInstallResult{}, err
 		}
+		members = append(members, durabletx.Member{Kind: durabletx.Worktree, Reported: destination.Path, Path: destination.Path, Content: stamped})
+		installed.Written = append(installed.Written, destination.Path)
 	}
-	if testHookLocalTransactionReady != nil {
-		if err := testHookLocalTransactionReady(); err != nil {
-			return InitResult{}, err
-		}
-	}
-	expected := map[string]string{string(durabletx.Git) + "\x00" + filepath.ToSlash(excludePath): digestBytes(excludeOriginal)}
+	return members, installed, nil
+}
+
+// initLocalValidators returns the durabletx validation hooks: the exclusion
+// must still hold its observed bytes and every other member must still be
+// absent, and requested skills must still plan cleanly.
+func (s *Service) initLocalValidators(in InitInput, observed initLocalObservation, members []durabletx.Member) (validate, validateBeforeCandidates func([]durabletx.Evidence) error) {
+	expected := map[string]string{string(durabletx.Git) + "\x00" + filepath.ToSlash(observed.excludePath): digestBytes(observed.excludeOriginal)}
 	for _, member := range members[1:] {
 		expected[string(member.Kind)+"\x00"+member.Reported] = ""
 	}
-	validate := func(evidence []durabletx.Evidence) error {
+	validate = func(evidence []durabletx.Evidence) error {
 		for _, item := range evidence {
 			if want, ok := expected[string(item.Kind)+"\x00"+item.Reported]; ok && item.OriginalSHA256 != want {
 				return fmt.Errorf("%s changed after local-init preflight", item.Reported)
 			}
 		}
 		if in.WithSkills {
-			plan, planErr := s.planLocalSkills()
-			if planErr != nil {
-				return planErr
-			}
-			if localSkillCandidatesPublished(evidence) {
-				if planErr := validateFreshLocalSkillPlan(plan, localSkillRefresh, localSkillExclusionManaged); planErr != nil {
-					return planErr
-				}
-			} else if planErr := validateFreshLocalSkillPlan(plan, localSkillCreate, ""); planErr != nil {
-				return planErr
+			if err := s.initLocalRevalidateSkills(evidence); err != nil {
+				return err
 			}
 		}
 		return s.verifyLocalIgnored()
 	}
-	validateBeforeCandidates := validate
-	if in.WithSkills {
-		validateBeforeCandidates = func(evidence []durabletx.Evidence) error {
-			plan, planErr := s.planLocalSkills()
-			if planErr != nil {
-				return planErr
-			}
-			return validateFreshLocalSkillPlan(plan, localSkillCreate, localSkillExclusionManaged)
+	if !in.WithSkills {
+		return validate, validate
+	}
+	validateBeforeCandidates = func(evidence []durabletx.Evidence) error {
+		plan, planErr := s.planLocalSkills()
+		if planErr != nil {
+			return planErr
 		}
+		return validateFreshLocalSkillPlan(plan, localSkillCreate, localSkillExclusionManaged)
 	}
-	if _, err := durabletx.Run(context.Background(), lock, s.paths.LockRepository(), durabletx.Request{
-		Command:                  localInitCommand,
-		Members:                  members,
-		Validate:                 validate,
-		ValidateBeforeCandidates: validateBeforeCandidates,
-	}); err != nil {
-		return InitResult{}, s.mapMigrationFailure(transactionID, err)
+	return validate, validateBeforeCandidates
+}
+
+// initLocalRevalidateSkills re-plans the skills against the evidence: once the
+// skill candidates are published they must read as managed refreshes, before
+// that as fresh creates.
+func (s *Service) initLocalRevalidateSkills(evidence []durabletx.Evidence) error {
+	plan, err := s.planLocalSkills()
+	if err != nil {
+		return err
 	}
-	committed = true
+	if localSkillCandidatesPublished(evidence) {
+		return validateFreshLocalSkillPlan(plan, localSkillRefresh, localSkillExclusionManaged)
+	}
+	return validateFreshLocalSkillPlan(plan, localSkillCreate, "")
+}
+
+// initLocalResult reports a committed local init.
+func (s *Service) initLocalResult(in InitInput, skillPlan localSkillPlan, markerBytes []byte, installed SkillInstallResult) (InitResult, error) {
 	digest, err := markerDigestBytes(markerBytes)
 	if err != nil {
 		return InitResult{}, err
 	}
-	result = InitResult{
+	result := InitResult{
 		Outcome: InitCreated, ToVersion: layout2Version, Applied: true, StorageMode: string(StorageLocal),
 		Config: InitConfig{Path: markerRelPath(), Action: configActionCreate, CandidateSHA256: digest}, SkillInstall: installed,
 		Writes: s.localInitWrites(), Notes: s.initNotes(true, false, nil), Skills: []InitSkill{}, SkillExclusions: []InitSkillExclusion{}, ContinuationNotes: []string{},
 		Validation: &ValidationResult{Valid: true, Violations: []string{}},
 	}
-	if in.WithSkills {
-		result.Skills, _, err = s.skillReport(installed)
-		if err != nil {
-			return InitResult{}, err
-		}
-		result.SkillExclusions = localSkillExclusionReport(skillPlan)
+	if !in.WithSkills {
+		return result, nil
 	}
+	result.Skills, _, err = s.skillReport(installed)
+	if err != nil {
+		return InitResult{}, err
+	}
+	result.SkillExclusions = localSkillExclusionReport(skillPlan)
 	return result, nil
 }
 

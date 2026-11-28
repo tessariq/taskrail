@@ -127,31 +127,9 @@ func (s *Service) applyReviewedImportDraftLocked(own durabletx.Ownership, input 
 		return ApplyDraftResult{}, err
 	}
 	published = append([]repotx.Candidate{managedCandidate(s.reportedStatePath(), s.paths.StateFile, stateBytes)}, published...)
-	consumed, err := writerConsumedPaths(s.paths, preview, preview[len(tasks):]...)
+	consumed, err := s.importApplyConsumedPaths(preview, preview[len(tasks):], published, files, manifestPath, manifest.SpecReviewManifestPath, specReviewFiles)
 	if err != nil {
 		return ApplyDraftResult{}, err
-	}
-	publishedPaths := make(map[string]struct{}, len(published))
-	for _, candidate := range published {
-		publishedPaths[candidate.Reported] = struct{}{}
-	}
-	filtered := consumed[:0]
-	for _, candidate := range consumed {
-		if _, published := publishedPaths[candidate.Reported]; !published {
-			filtered = append(filtered, candidate)
-		}
-	}
-	consumed = filtered
-	for name := range files {
-		consumed = append(consumed, repotx.Path{Kind: repotx.Managed, Reported: path.Join(path.Dir(relPath(s.paths.RepoRoot, manifestPath)), name), Physical: filepath.Join(filepath.Dir(manifestPath), name)})
-	}
-	for name := range specReviewFiles {
-		logical := path.Join(path.Dir(manifest.SpecReviewManifestPath), name)
-		physical, err := s.paths.physicalManagedPath(logical)
-		if err != nil {
-			return ApplyDraftResult{}, err
-		}
-		consumed = append(consumed, repotx.Path{Kind: repotx.Managed, Reported: logical, Physical: physical})
 	}
 	inputs, err := snapshotImportInputs(candidatePaths(consumed, published))
 	if err != nil {
@@ -173,6 +151,99 @@ func (s *Service) applyReviewedImportDraftLocked(own durabletx.Ownership, input 
 		return ApplyDraftResult{}, writerTransactionError(err)
 	}
 	return result, nil
+}
+
+// importApplyConsumedPaths is the consumed set of a reviewed import: the
+// writer's ordinary reads minus anything it publishes, plus every file of the
+// published decomposition bundle and of the spec review it cites.
+func (s *Service) importApplyConsumedPaths(preview, created []*Task, published []repotx.Candidate, files map[string][]byte, manifestPath, specReviewManifestPath string, specReviewFiles map[string][]byte) ([]repotx.Path, error) {
+	consumed, err := writerConsumedPaths(s.paths, preview, created...)
+	if err != nil {
+		return nil, err
+	}
+	consumed = importApplyUnpublished(consumed, published)
+	for name := range files {
+		consumed = append(consumed, repotx.Path{Kind: repotx.Managed, Reported: path.Join(path.Dir(relPath(s.paths.RepoRoot, manifestPath)), name), Physical: filepath.Join(filepath.Dir(manifestPath), name)})
+	}
+	for name := range specReviewFiles {
+		logical := path.Join(path.Dir(specReviewManifestPath), name)
+		physical, err := s.paths.physicalManagedPath(logical)
+		if err != nil {
+			return nil, err
+		}
+		consumed = append(consumed, repotx.Path{Kind: repotx.Managed, Reported: logical, Physical: physical})
+	}
+	return consumed, nil
+}
+
+func importApplyParseV1Draft(data []byte, input ApplyDraftInput) (ImportDraft, error) {
+	var version struct {
+		SchemaVersion int `json:"schema_version"`
+	}
+	if err := json.Unmarshal(data, &version); err != nil {
+		return ImportDraft{}, WithMachineErrorCode(MachineCodeInvalidProposal, fmt.Errorf("parse import draft: %w", err))
+	}
+	if version.SchemaVersion == 2 {
+		return ImportDraft{}, WithMachineErrorCode(MachineCodeSourceChanged, errors.New("import draft changed while acquiring the writer lock"))
+	}
+	draft, err := ParseImportDraft(data)
+	if err != nil {
+		return ImportDraft{}, WithMachineErrorCode(MachineCodeInvalidProposal, err)
+	}
+	if input.ExpectSHA256 != "" || input.ReviewManifestPath != "" || input.ExpectReviewSHA256 != "" {
+		return ImportDraft{}, invalidArgumentsf("reviewed import flags require an ImportDraft v2")
+	}
+	if violations := ValidateImportDraft(draft); len(violations) > 0 {
+		return ImportDraft{}, WithMachineErrorCode(MachineCodeInvalidProposal,
+			fmt.Errorf("import draft is invalid: %s", strings.Join(violations, "; ")))
+	}
+	return draft, nil
+}
+
+// importApplyUnpublished drops consumed paths the writer also publishes; a
+// transaction cannot both consume and publish one path. It filters in place.
+func importApplyUnpublished(consumed []repotx.Path, published []repotx.Candidate) []repotx.Path {
+	publishedPaths := make(map[string]struct{}, len(published))
+	for _, candidate := range published {
+		publishedPaths[candidate.Reported] = struct{}{}
+	}
+	filtered := consumed[:0]
+	for _, candidate := range consumed {
+		if _, published := publishedPaths[candidate.Reported]; !published {
+			filtered = append(filtered, candidate)
+		}
+	}
+	return filtered
+}
+
+func (s *Service) importApplyV1Validator(state *State, baseline ValidationResult, corpus []string, inputs []importInput, draftPath string, data []byte, draftInRepository bool) func([]repotx.Snapshot) error {
+	return func([]repotx.Snapshot) error {
+		if testHookWriterValidated != nil {
+			testHookWriterValidated()
+		}
+		if !sameImportInputs(inputs) {
+			return errImportInputChanged
+		}
+		if !draftInRepository {
+			current, readErr := os.ReadFile(draftPath)
+			if readErr != nil || !slices.Equal(current, data) {
+				return errImportInputChanged
+			}
+		}
+		currentTasks, loadErr := s.loadTasks()
+		if loadErr != nil {
+			return loadErr
+		}
+		if !sameTaskCorpus(corpus, currentTasks) {
+			return fmt.Errorf("import task corpus changed during candidate validation")
+		}
+		// preflightImportDraft validates every new task and its pending-spec
+		// anchor; validateInMemory cannot see a spec candidate before publish.
+		if candidateIntroducesViolations(ValidationResult{Violations: s.validateState(state)}, baseline) {
+			return errors.New("import candidate failed validation")
+		}
+		return nil
+	}
 }
 
 func (s *Service) readPublishedDecompositionFiles(input ApplyDraftInput, draftBytes []byte, draftPath string) (map[string][]byte, string, error) {
@@ -301,25 +372,9 @@ func (s *Service) ApplyImportDraft(input ApplyDraftInput) (result ApplyDraftResu
 	if err != nil {
 		return ApplyDraftResult{}, err
 	}
-	var version struct {
-		SchemaVersion int `json:"schema_version"`
-	}
-	if err := json.Unmarshal(data, &version); err != nil {
-		return ApplyDraftResult{}, WithMachineErrorCode(MachineCodeInvalidProposal, fmt.Errorf("parse import draft: %w", err))
-	}
-	if version.SchemaVersion == 2 {
-		return ApplyDraftResult{}, WithMachineErrorCode(MachineCodeSourceChanged, errors.New("import draft changed while acquiring the writer lock"))
-	}
-	draft, err := ParseImportDraft(data)
+	draft, err := importApplyParseV1Draft(data, input)
 	if err != nil {
-		return ApplyDraftResult{}, WithMachineErrorCode(MachineCodeInvalidProposal, err)
-	}
-	if input.ExpectSHA256 != "" || input.ReviewManifestPath != "" || input.ExpectReviewSHA256 != "" {
-		return ApplyDraftResult{}, invalidArgumentsf("reviewed import flags require an ImportDraft v2")
-	}
-	if violations := ValidateImportDraft(draft); len(violations) > 0 {
-		return ApplyDraftResult{}, WithMachineErrorCode(MachineCodeInvalidProposal,
-			fmt.Errorf("import draft is invalid: %s", strings.Join(violations, "; ")))
+		return ApplyDraftResult{}, err
 	}
 	state, tasks, err := s.loadStateAndTasks()
 	if err != nil {
@@ -353,28 +408,12 @@ func (s *Service) ApplyImportDraft(input ApplyDraftInput) (result ApplyDraftResu
 	if err != nil {
 		return ApplyDraftResult{}, err
 	}
-	publishedPaths := make(map[string]struct{}, len(published))
-	for _, candidate := range published {
-		publishedPaths[candidate.Reported] = struct{}{}
-	}
-	filtered := consumed[:0]
-	for _, path := range consumed {
-		if _, published := publishedPaths[path.Reported]; !published {
-			filtered = append(filtered, path)
-		}
-	}
-	consumed = filtered
+	consumed = importApplyUnpublished(consumed, published)
 	draftInRepository := pathWithinRepository(s.paths.RepoRoot, draftPath)
 	if draftInRepository {
 		consumed = append(consumed, repotx.Path{Kind: repotx.Worktree, Reported: relPath(s.paths.RepoRoot, draftPath), Physical: draftPath})
 	}
-	observedPaths := make([]string, 0, len(consumed)+len(published)+1)
-	for _, path := range consumed {
-		observedPaths = append(observedPaths, path.Physical)
-	}
-	for _, candidate := range published {
-		observedPaths = append(observedPaths, candidate.Physical)
-	}
+	observedPaths := candidatePaths(consumed, published)
 	if !draftInRepository {
 		observedPaths = append(observedPaths, draftPath)
 	}
@@ -390,33 +429,7 @@ func (s *Service) ApplyImportDraft(input ApplyDraftInput) (result ApplyDraftResu
 		Command:   "import",
 		Consumed:  consumed,
 		Published: published,
-		Validate: func([]repotx.Snapshot) error {
-			if testHookWriterValidated != nil {
-				testHookWriterValidated()
-			}
-			if !sameImportInputs(inputs) {
-				return errImportInputChanged
-			}
-			if !draftInRepository {
-				current, readErr := os.ReadFile(draftPath)
-				if readErr != nil || !slices.Equal(current, data) {
-					return errImportInputChanged
-				}
-			}
-			currentTasks, loadErr := s.loadTasks()
-			if loadErr != nil {
-				return loadErr
-			}
-			if !sameTaskCorpus(corpus, currentTasks) {
-				return fmt.Errorf("import task corpus changed during candidate validation")
-			}
-			// preflightImportDraft validates every new task and its pending-spec
-			// anchor; validateInMemory cannot see a spec candidate before publish.
-			if candidateIntroducesViolations(ValidationResult{Violations: s.validateState(state)}, baseline) {
-				return errors.New("import candidate failed validation")
-			}
-			return nil
-		},
+		Validate:  s.importApplyV1Validator(state, baseline, corpus, inputs, draftPath, data, draftInRepository),
 	}
 	if testHookWriterCandidateBuilt != nil {
 		testHookWriterCandidateBuilt()

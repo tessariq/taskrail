@@ -600,7 +600,7 @@ func validateSkillEvalCaseDefinition(item SkillEvalCase) error {
 		actions[action.ID] = true
 	}
 	for _, oracle := range item.Oracle.Assertions {
-		if !assertions[oracle.Assertion] || !actions[oracle.Action] || !validSkillEvalPredicate(oracle.Predicate) || assertions[oracle.Assertion] == false {
+		if !assertions[oracle.Assertion] || !actions[oracle.Action] || !validSkillEvalPredicate(oracle.Predicate) {
 			return fmt.Errorf("has an unsupported or ambiguous oracle predicate")
 		}
 		delete(assertions, oracle.Assertion)
@@ -905,6 +905,22 @@ func validateSkillEvalReport(report SkillEvalReport) error {
 	if len(report.Cases) == 0 || len(report.manifest.Cases) == 0 || len(report.Cases) != len(report.manifest.Cases) {
 		return fmt.Errorf("skill evaluation report has no cases")
 	}
+	if err := skillEvalValidateReportCases(report); err != nil {
+		return err
+	}
+	observed := false
+	for _, item := range report.Cases {
+		observed = observed || item.Candidate != nil || item.Baseline != nil
+	}
+	if report.Adapter.Observed != observed || report.Model.Observed != observed {
+		return fmt.Errorf("skill evaluation report identity observation is inconsistent")
+	}
+	return validateSkillEvalReportOutcome(report)
+}
+
+// skillEvalValidateReportCases checks each case against the runner manifest
+// and requires strict ordering, so a report cannot add, drop, or reorder cases.
+func skillEvalValidateReportCases(report SkillEvalReport) error {
 	seen := map[string]bool{}
 	for index, item := range report.Cases {
 		expected, found := report.manifest.Cases[item.CaseID]
@@ -932,14 +948,7 @@ func validateSkillEvalReport(report SkillEvalReport) error {
 			return fmt.Errorf("skill evaluation report case %q comparison does not match its baseline", item.CaseID)
 		}
 	}
-	observed := false
-	for _, item := range report.Cases {
-		observed = observed || item.Candidate != nil || item.Baseline != nil
-	}
-	if report.Adapter.Observed != observed || report.Model.Observed != observed {
-		return fmt.Errorf("skill evaluation report identity observation is inconsistent")
-	}
-	return validateSkillEvalReportOutcome(report)
+	return nil
 }
 
 func validateSkillEvalReportOutcome(report SkillEvalReport) error {

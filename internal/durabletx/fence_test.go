@@ -335,8 +335,7 @@ func TestRecoverResumesInterruptedFenceRollback(t *testing.T) {
 	// the fence member (which restores last) leaves the journal rolling_back
 	// with the marker still fenced. Recovery must retry the same restore, not
 	// strand the repository on bytes no branch accepts.
-	var restoreHook func(phase Phase, reported string) error
-	restoreHook = func(phase Phase, reported string) error {
+	restoreHook := func(phase Phase, reported string) error {
 		if phase == PhasePublishing && reported == "planning/STATE.md" {
 			return errors.New("injected publication failure")
 		}

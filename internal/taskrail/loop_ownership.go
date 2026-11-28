@@ -184,6 +184,12 @@ func stageLoopExecutable(gitCommonDir, source string) (loopStagedExecutable, err
 		_ = os.Remove(path)
 		return loopStagedExecutable{}, errors.New("running executable changed while it was staged")
 	}
+	return loopStageVerifiedExecutable(path, expected)
+}
+
+// loopStageVerifiedExecutable rehashes the closed staged copy and pins it with
+// a hard-link guard; any failure removes the copy so no unverified path stays.
+func loopStageVerifiedExecutable(path, expected string) (loopStagedExecutable, error) {
 	verified, err := repolock.ExecutableDigest(path)
 	if err != nil {
 		_ = os.Remove(path)

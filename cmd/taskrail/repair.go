@@ -58,6 +58,6 @@ func repairSummary(result taskrail.RepairResult) string {
 	for _, line := range result.BodyDiff {
 		fmt.Fprintf(&b, "  %s\n", line)
 	}
-	b.WriteString(fmt.Sprintf("validation: %s", validationLabel(result.Validation)))
+	fmt.Fprintf(&b, "validation: %s", validationLabel(result.Validation))
 	return b.String()
 }

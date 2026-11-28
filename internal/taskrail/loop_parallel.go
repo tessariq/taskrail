@@ -194,66 +194,23 @@ func (s *Service) loopParallelExecute(ctx context.Context, invocation LoopInvoca
 
 	var sourceBefore loopCheckSnapshot
 	if invocation.Delivery == "review" {
-		sourceBefore, err = s.loopCheckSnapshot()
+		var refused bool
+		sourceBefore, refused, err = s.loopParallelReviewPreflight(ctx, invocation, snapshot, plan, &batch, &diagnostic)
 		if err != nil {
 			return LoopDiagnostic{}, err
 		}
-		bindingErr := s.reviewPublicationBinding(snapshot, sourceBefore, nil, loopCheckSnapshot{})
-		var negotiationErr error
-		if bindingErr == nil {
-			negotiationErr = s.negotiateReviewAdapter(ctx, invocation, &batch, os.Stderr)
-			bindingErr = s.reviewPublicationBinding(snapshot, sourceBefore, nil, loopCheckSnapshot{})
-		}
-		if negotiationErr != nil || bindingErr != nil {
-			diagnostic.Outcome = "batch_failed"
-			diagnostic.NextAction = "Review delivery is unsupported or its read-only capability probe failed; inspect the retained receipt before another invocation."
-			diagnostic.MutationViolations = reviewDeliveryRefusal(&batch, errors.Join(negotiationErr, bindingErr))
-			for _, item := range plan.Frontier {
-				batch.Delivery.PendingTasks = append(batch.Delivery.PendingTasks, item.Task.TaskID)
-			}
-			batch.Workers = []ParallelWorker{}
+		if refused {
 			return diagnostic, nil
 		}
 	}
 
-	root, err := os.MkdirTemp(plan.Workspace.Root, "taskrail-parallel-")
+	owner, err := loopParallelWorkspaceOwner(plan.Workspace.Root)
 	if err != nil {
-		return LoopDiagnostic{}, fmt.Errorf("create parallel workspace: %w", err)
+		return LoopDiagnostic{}, err
 	}
-	if err := os.Chmod(root, 0o700); err != nil {
-		_ = os.RemoveAll(root)
-		return LoopDiagnostic{}, fmt.Errorf("secure parallel workspace: %w", err)
-	}
-	root, err = canonicalParallelRoot(root)
-	if err != nil {
-		return LoopDiagnostic{}, fmt.Errorf("resolve parallel workspace: %w", err)
-	}
-	ownerRoot, err := os.OpenRoot(root)
-	if err != nil {
-		_ = os.RemoveAll(root)
-		return LoopDiagnostic{}, fmt.Errorf("open parallel workspace root: %w", err)
-	}
-	owner := parallelWorkspaceOwner{path: root, root: ownerRoot}
-	if err := owner.root.WriteFile(".taskrail-parallel-owner", []byte(root), 0o600); err != nil {
-		_ = owner.root.Close()
-		_ = os.RemoveAll(root)
-		return LoopDiagnostic{}, fmt.Errorf("bind parallel workspace identity: %w", err)
-	}
-	for i, item := range plan.Frontier {
-		workspace := filepath.Join(root, fmt.Sprintf("worker-%02d", item.Rank))
-		value := workspace
-		batch.Workers[i] = ParallelWorker{Rank: item.Rank, Task: item.Task, Outcome: "child_failed", Workspace: &value, Violations: []MachineViolation{}}
-	}
+	root := owner.path
 	stdout, stderr := &lockedLoopWriter{w: os.Stdout}, &lockedLoopWriter{w: os.Stderr}
-	var wait sync.WaitGroup
-	for i := range batch.Workers {
-		wait.Add(1)
-		go func(i int) {
-			defer wait.Done()
-			batch.Workers[i] = s.runParallelWorker(ctx, invocation, plan, maximum, implementationPromptSource, batch.Workers[i], stdout, stderr)
-		}(i)
-	}
-	wait.Wait()
+	s.loopParallelRunWorkers(ctx, invocation, plan, maximum, implementationPromptSource, root, &batch, stdout, stderr)
 
 	integrationRoot := filepath.Join(root, "integration")
 	if hasParallelCandidate(batch.Workers) {
@@ -262,30 +219,9 @@ func (s *Service) loopParallelExecute(ctx context.Context, invocation LoopInvoca
 	}
 	if invocation.Delivery == "review" {
 		diagnostic.MutationViolations = append(diagnostic.MutationViolations, s.deliverParallelReviews(ctx, invocation, snapshot, &batch, sourceBefore, stderr)...)
+		s.loopParallelFinishReview(snapshot, &diagnostic, &batch)
 	} else {
 		s.finishParallelDelivery(snapshot, &diagnostic, &batch)
-	}
-	if invocation.Delivery == "review" {
-		if inputs, inputErr := loopInputBytes(s.paths); inputErr != nil || !reflect.DeepEqual(inputs, snapshot.Inputs()) {
-			diagnostic.MutationViolations = append(diagnostic.MutationViolations, parallelViolation("source_drift", "source repository inputs changed during review delivery"))
-		} else if git, gitErr := loopGitSnapshot(s.paths.WorktreeRoot, s.paths.GitDir); gitErr != nil || !reflect.DeepEqual(git, snapshot.Git()) {
-			diagnostic.MutationViolations = append(diagnostic.MutationViolations, parallelViolation("source_drift", "source repository Git state changed during review delivery"))
-			if gitErr == nil {
-				diagnostic.Git = LoopGitDiagnostic{Ref: git.Ref, HeadBefore: snapshot.Git().Head, HeadAfter: git.Head, Clean: git.Clean, Descendant: false, Commits: []string{}}
-			}
-		} else if configs, configErr := loopGitConfigSnapshot(s.paths.GitDir, s.paths.GitCommonDir); configErr != nil || !reflect.DeepEqual(configs, snapshot.GitConfig()) {
-			diagnostic.MutationViolations = append(diagnostic.MutationViolations, parallelViolation("source_drift", "source repository Git configuration changed during review delivery"))
-		}
-		parallelOutcome(&diagnostic, &batch)
-		if len(diagnostic.MutationViolations) != 0 {
-			batch.Delivery.failed = true
-			if len(batch.Delivery.PublishedTasks) == 0 {
-				diagnostic.Outcome = "batch_failed"
-			} else {
-				diagnostic.Outcome = "batch_partial"
-			}
-			diagnostic.NextAction = "Preserve receipts and inspect/reconcile adapter outcomes and source drift before another invocation; do not retry uncertain operations."
-		}
 	}
 	if cleanup := s.cleanupParallelWorkspaces(owner, invocation.KeepWorkspaces, &batch); len(cleanup) != 0 {
 		diagnostic.MutationViolations = append(diagnostic.MutationViolations, cleanup...)
@@ -296,6 +232,106 @@ func (s *Service) loopParallelExecute(ctx context.Context, invocation LoopInvoca
 	}
 	diagnostic.Parallel = &batch
 	return diagnostic, nil
+}
+
+// loopParallelRunWorkers assigns each frontier task its own workspace under
+// root and runs every worker concurrently, returning once all have finished.
+func (s *Service) loopParallelRunWorkers(ctx context.Context, invocation LoopInvocation, plan ParallelPlan, maximum int, implementationPromptSource, root string, batch *ParallelBatch, stdout, stderr io.Writer) {
+	for i, item := range plan.Frontier {
+		workspace := filepath.Join(root, fmt.Sprintf("worker-%02d", item.Rank))
+		value := workspace
+		batch.Workers[i] = ParallelWorker{Rank: item.Rank, Task: item.Task, Outcome: "child_failed", Workspace: &value, Violations: []MachineViolation{}}
+	}
+	var wait sync.WaitGroup
+	for i := range batch.Workers {
+		wait.Add(1)
+		go func(i int) {
+			defer wait.Done()
+			batch.Workers[i] = s.runParallelWorker(ctx, invocation, plan, maximum, implementationPromptSource, batch.Workers[i], stdout, stderr)
+		}(i)
+	}
+	wait.Wait()
+}
+
+// loopParallelReviewPreflight negotiates the review adapter before any worker
+// starts. A refusal finalizes diagnostic and batch, so the caller must return
+// diagnostic unchanged.
+func (s *Service) loopParallelReviewPreflight(ctx context.Context, invocation LoopInvocation, snapshot LoopPreflightSnapshot, plan ParallelPlan, batch *ParallelBatch, diagnostic *LoopDiagnostic) (loopCheckSnapshot, bool, error) {
+	sourceBefore, err := s.loopCheckSnapshot()
+	if err != nil {
+		return loopCheckSnapshot{}, false, err
+	}
+	bindingErr := s.reviewPublicationBinding(snapshot, sourceBefore, nil, loopCheckSnapshot{})
+	var negotiationErr error
+	if bindingErr == nil {
+		negotiationErr = s.negotiateReviewAdapter(ctx, invocation, batch, os.Stderr)
+		bindingErr = s.reviewPublicationBinding(snapshot, sourceBefore, nil, loopCheckSnapshot{})
+	}
+	if negotiationErr == nil && bindingErr == nil {
+		return sourceBefore, false, nil
+	}
+	diagnostic.Outcome = "batch_failed"
+	diagnostic.NextAction = "Review delivery is unsupported or its read-only capability probe failed; inspect the retained receipt before another invocation."
+	diagnostic.MutationViolations = reviewDeliveryRefusal(batch, errors.Join(negotiationErr, bindingErr))
+	for _, item := range plan.Frontier {
+		batch.Delivery.PendingTasks = append(batch.Delivery.PendingTasks, item.Task.TaskID)
+	}
+	batch.Workers = []ParallelWorker{}
+	return sourceBefore, true, nil
+}
+
+// loopParallelWorkspaceOwner creates the private batch root and binds its
+// identity file; every failure after creation removes the partial root.
+func loopParallelWorkspaceOwner(parent string) (parallelWorkspaceOwner, error) {
+	root, err := os.MkdirTemp(parent, "taskrail-parallel-")
+	if err != nil {
+		return parallelWorkspaceOwner{}, fmt.Errorf("create parallel workspace: %w", err)
+	}
+	if err := os.Chmod(root, 0o700); err != nil {
+		_ = os.RemoveAll(root)
+		return parallelWorkspaceOwner{}, fmt.Errorf("secure parallel workspace: %w", err)
+	}
+	root, err = canonicalParallelRoot(root)
+	if err != nil {
+		return parallelWorkspaceOwner{}, fmt.Errorf("resolve parallel workspace: %w", err)
+	}
+	ownerRoot, err := os.OpenRoot(root)
+	if err != nil {
+		_ = os.RemoveAll(root)
+		return parallelWorkspaceOwner{}, fmt.Errorf("open parallel workspace root: %w", err)
+	}
+	owner := parallelWorkspaceOwner{path: root, root: ownerRoot}
+	if err := owner.root.WriteFile(".taskrail-parallel-owner", []byte(root), 0o600); err != nil {
+		_ = owner.root.Close()
+		_ = os.RemoveAll(root)
+		return parallelWorkspaceOwner{}, fmt.Errorf("bind parallel workspace identity: %w", err)
+	}
+	return owner, nil
+}
+
+// loopParallelFinishReview records source drift caused during review delivery
+// and downgrades the outcome when any mutation violation was observed.
+func (s *Service) loopParallelFinishReview(snapshot LoopPreflightSnapshot, diagnostic *LoopDiagnostic, batch *ParallelBatch) {
+	if inputs, inputErr := loopInputBytes(s.paths); inputErr != nil || !reflect.DeepEqual(inputs, snapshot.Inputs()) {
+		diagnostic.MutationViolations = append(diagnostic.MutationViolations, parallelViolation("source_drift", "source repository inputs changed during review delivery"))
+	} else if git, gitErr := loopGitSnapshot(s.paths.WorktreeRoot, s.paths.GitDir); gitErr != nil || !reflect.DeepEqual(git, snapshot.Git()) {
+		diagnostic.MutationViolations = append(diagnostic.MutationViolations, parallelViolation("source_drift", "source repository Git state changed during review delivery"))
+		if gitErr == nil {
+			diagnostic.Git = LoopGitDiagnostic{Ref: git.Ref, HeadBefore: snapshot.Git().Head, HeadAfter: git.Head, Clean: git.Clean, Descendant: false, Commits: []string{}}
+		}
+	} else if configs, configErr := loopGitConfigSnapshot(s.paths.GitDir, s.paths.GitCommonDir); configErr != nil || !reflect.DeepEqual(configs, snapshot.GitConfig()) {
+		diagnostic.MutationViolations = append(diagnostic.MutationViolations, parallelViolation("source_drift", "source repository Git configuration changed during review delivery"))
+	}
+	parallelOutcome(diagnostic, batch)
+	if len(diagnostic.MutationViolations) != 0 {
+		batch.Delivery.failed = true
+		if len(batch.Delivery.PublishedTasks) == 0 {
+			diagnostic.Outcome = "batch_failed"
+		} else {
+			diagnostic.Outcome = "batch_partial"
+		}
+		diagnostic.NextAction = "Preserve receipts and inspect/reconcile adapter outcomes and source drift before another invocation; do not retry uncertain operations."
+	}
 }
 
 func canonicalParallelRoot(root string) (string, error) {
@@ -443,17 +479,7 @@ func (s *Service) integrateParallelCandidate(ctx context.Context, invocation Loo
 	head = strings.TrimSpace(head)
 	defer func() {
 		if resultErr != nil {
-			parallelResetIntegration(root, head)
-			if worker.Check != nil {
-				observed, err := gitCommand(root, "rev-parse", "HEAD")
-				status, statusErr := gitCommand(root, "status", "--porcelain=v1", "--untracked-files=all")
-				if err != nil || statusErr != nil || strings.TrimSpace(observed) != head || strings.TrimSpace(status) != "" {
-					resultErr = fmt.Errorf("%w: %v", errParallelCheckRollback, resultErr)
-				}
-			}
-			if child != nil {
-				child.Outcome = "fail"
-			}
+			resultErr = loopParallelRollbackIntegration(root, head, worker, child, resultErr)
 		}
 	}()
 	commit := *worker.CandidateCommit
@@ -466,26 +492,11 @@ func (s *Service) integrateParallelCandidate(ctx context.Context, invocation Loo
 	}
 	if output, err := exec.Command("git", "-C", root, "cherry-pick", "--no-commit", "FETCH_HEAD").CombinedOutput(); err != nil {
 		if repairErr := repairParallelStateConflict(root); repairErr != nil {
-			if prepareErr := prepareParallelSemanticConflict(root); prepareErr != nil {
-				return nil, fmt.Errorf("prepare semantic replay conflict: %w", prepareErr)
+			var conflictErr error
+			child, conflictErr = s.loopParallelResolveReplayConflict(ctx, invocation, snapshot, root, head, commit, worker, err, output, stdout, stderr)
+			if conflictErr != nil {
+				return child, conflictErr
 			}
-			binding, bindingErr := parallelConflictBinding(root, worker)
-			if bindingErr != nil {
-				return nil, bindingErr
-			}
-			resolution, childErr := s.runParallelIntegrationChild(ctx, invocation, snapshot, root, worker, binding, stdout, stderr)
-			child = &resolution
-			if childErr != nil {
-				return child, childErr
-			}
-			currentHead, headErr := gitCommand(root, "rev-parse", "HEAD")
-			if headErr != nil || strings.TrimSpace(currentHead) != head {
-				return child, fmt.Errorf("conflict child changed bound integration head %s", head)
-			}
-			if child.Outcome != "pass" || parallelUnmerged(root) {
-				return child, fmt.Errorf("replay candidate %s: %w: %s", commit, err, strings.TrimSpace(string(output)))
-			}
-			_ = exec.Command("git", "-C", root, "cherry-pick", "--quit").Run()
 		}
 	}
 	service, err := NewService(root)
@@ -518,6 +529,51 @@ func (s *Service) integrateParallelCandidate(ctx context.Context, invocation Loo
 			return child, fmt.Errorf("integration check failed on %s", worker.Check.Head)
 		}
 	}
+	return child, nil
+}
+
+// loopParallelRollbackIntegration resets a failed integration to its bound
+// head. A checked candidate must leave a provably clean head, otherwise the
+// failure is escalated so the batch stops integrating.
+func loopParallelRollbackIntegration(root, head string, worker *ParallelWorker, child *ParallelIntegrationChild, resultErr error) error {
+	parallelResetIntegration(root, head)
+	if worker.Check != nil {
+		observed, err := gitCommand(root, "rev-parse", "HEAD")
+		status, statusErr := gitCommand(root, "status", "--porcelain=v1", "--untracked-files=all")
+		if err != nil || statusErr != nil || strings.TrimSpace(observed) != head || strings.TrimSpace(status) != "" {
+			resultErr = fmt.Errorf("%w: %v", errParallelCheckRollback, resultErr)
+		}
+	}
+	if child != nil {
+		child.Outcome = "fail"
+	}
+	return resultErr
+}
+
+// loopParallelResolveReplayConflict hands a semantic cherry-pick conflict to an
+// integration child and accepts its resolution only when the bound head is
+// unchanged and no unmerged paths remain.
+func (s *Service) loopParallelResolveReplayConflict(ctx context.Context, invocation LoopInvocation, snapshot LoopPreflightSnapshot, root, head, commit string, worker *ParallelWorker, replayErr error, replayOutput []byte, stdout, stderr io.Writer) (*ParallelIntegrationChild, error) {
+	if prepareErr := prepareParallelSemanticConflict(root); prepareErr != nil {
+		return nil, fmt.Errorf("prepare semantic replay conflict: %w", prepareErr)
+	}
+	binding, bindingErr := parallelConflictBinding(root, worker)
+	if bindingErr != nil {
+		return nil, bindingErr
+	}
+	resolution, childErr := s.runParallelIntegrationChild(ctx, invocation, snapshot, root, worker, binding, stdout, stderr)
+	child := &resolution
+	if childErr != nil {
+		return child, childErr
+	}
+	currentHead, headErr := gitCommand(root, "rev-parse", "HEAD")
+	if headErr != nil || strings.TrimSpace(currentHead) != head {
+		return child, fmt.Errorf("conflict child changed bound integration head %s", head)
+	}
+	if child.Outcome != "pass" || parallelUnmerged(root) {
+		return child, fmt.Errorf("replay candidate %s: %w: %s", commit, replayErr, strings.TrimSpace(string(replayOutput)))
+	}
+	_ = exec.Command("git", "-C", root, "cherry-pick", "--quit").Run()
 	return child, nil
 }
 

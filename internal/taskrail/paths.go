@@ -496,43 +496,59 @@ func validateDiscoveredPathsForRecovery(paths Paths, admitFencedCandidate bool) 
 		}
 	}
 	if paths.Storage.Mode == StorageLocal {
-		for _, committed := range []string{
-			filepath.Join(paths.ManagedRoot, filepath.FromSlash(paths.LogicalSpecsDir)),
-			filepath.Join(paths.ManagedRoot, filepath.FromSlash(paths.LogicalPlanningDir)),
-			filepath.Join(paths.ManagedRoot, taskrailConfigDir, "prompts"),
-		} {
-			if err := validateTargetPath(committed); err != nil {
-				return err
-			}
-			if exists(committed) && !admitFencedCandidate {
-				holds, err := treeHoldsEntries(committed)
-				if err != nil {
-					return err
-				}
-				if holds {
-					return fmt.Errorf("mixed committed/local Taskrail state at %s", committed)
-				}
-			}
-		}
-	} else {
-		localRoot := filepath.Join(paths.ManagedRoot, filepath.FromSlash(localStorageRoot))
-		if err := validateTargetPath(localRoot); err != nil {
+		return pathsRejectCommittedBesideLocal(paths, admitFencedCandidate)
+	}
+	return pathsRejectLocalBesideCommitted(paths)
+}
+
+// pathsRejectCommittedBesideLocal refuses a local-storage layout whose committed
+// roots still hold Taskrail content. Recovery admits a fenced candidate: an
+// interrupted operation can leave both shapes on disk, and recovery must read
+// them to derive the journal's safe action.
+func pathsRejectCommittedBesideLocal(paths Paths, admitFencedCandidate bool) error {
+	for _, committed := range []string{
+		filepath.Join(paths.ManagedRoot, filepath.FromSlash(paths.LogicalSpecsDir)),
+		filepath.Join(paths.ManagedRoot, filepath.FromSlash(paths.LogicalPlanningDir)),
+		filepath.Join(paths.ManagedRoot, taskrailConfigDir, "prompts"),
+	} {
+		if err := validateTargetPath(committed); err != nil {
 			return err
 		}
-		if exists(localRoot) && !isEmptyLocalInitScaffold(localRoot, paths.LogicalSpecsDir, paths.LogicalPlanningDir) && !isLocalPromotionRemnant(localRoot, paths.LogicalSpecsDir, paths.LogicalPlanningDir) {
-			return fmt.Errorf("mixed committed/local Taskrail state at %s", localRoot)
+		if !exists(committed) || admitFencedCandidate {
+			continue
 		}
-		for _, local := range []string{
-			filepath.Join(paths.ManagedRoot, filepath.FromSlash(localStorageRoot), filepath.FromSlash(paths.LogicalSpecsDir)),
-			filepath.Join(paths.ManagedRoot, filepath.FromSlash(localStorageRoot), filepath.FromSlash(paths.LogicalPlanningDir)),
-			filepath.Join(paths.ManagedRoot, filepath.FromSlash(localStorageRoot), "prompts"),
-		} {
-			if err := validateTargetPath(local); err != nil {
-				return err
-			}
-			if exists(local) && !isEmptyLocalInitScaffold(filepath.Join(paths.ManagedRoot, filepath.FromSlash(localStorageRoot)), paths.LogicalSpecsDir, paths.LogicalPlanningDir) && !isLocalPromotionRemnant(filepath.Join(paths.ManagedRoot, filepath.FromSlash(localStorageRoot)), paths.LogicalSpecsDir, paths.LogicalPlanningDir) {
-				return fmt.Errorf("mixed committed/local Taskrail state at %s", local)
-			}
+		holds, err := treeHoldsEntries(committed)
+		if err != nil {
+			return err
+		}
+		if holds {
+			return fmt.Errorf("mixed committed/local Taskrail state at %s", committed)
+		}
+	}
+	return nil
+}
+
+// pathsRejectLocalBesideCommitted refuses a committed layout that also carries
+// local storage, unless what is there is only an empty local-init scaffold or a
+// rolled-back promotion's remnant.
+func pathsRejectLocalBesideCommitted(paths Paths) error {
+	localRoot := filepath.Join(paths.ManagedRoot, filepath.FromSlash(localStorageRoot))
+	if err := validateTargetPath(localRoot); err != nil {
+		return err
+	}
+	if exists(localRoot) && !isEmptyLocalInitScaffold(localRoot, paths.LogicalSpecsDir, paths.LogicalPlanningDir) && !isLocalPromotionRemnant(localRoot, paths.LogicalSpecsDir, paths.LogicalPlanningDir) {
+		return fmt.Errorf("mixed committed/local Taskrail state at %s", localRoot)
+	}
+	for _, local := range []string{
+		filepath.Join(localRoot, filepath.FromSlash(paths.LogicalSpecsDir)),
+		filepath.Join(localRoot, filepath.FromSlash(paths.LogicalPlanningDir)),
+		filepath.Join(localRoot, "prompts"),
+	} {
+		if err := validateTargetPath(local); err != nil {
+			return err
+		}
+		if exists(local) && !isEmptyLocalInitScaffold(localRoot, paths.LogicalSpecsDir, paths.LogicalPlanningDir) && !isLocalPromotionRemnant(localRoot, paths.LogicalSpecsDir, paths.LogicalPlanningDir) {
+			return fmt.Errorf("mixed committed/local Taskrail state at %s", local)
 		}
 	}
 	return nil

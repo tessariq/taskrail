@@ -150,25 +150,25 @@ func renderFollowupTaskBody(id, title, description, sourceID string) string {
 func renderVerificationPlan(task *Task, input VerifyInput, verificationID, previousVerificationID, followupTaskID string) string {
 	var builder strings.Builder
 	builder.WriteString("# Verification Plan\n\n")
-	builder.WriteString(fmt.Sprintf("- Task: `%s`\n", task.Frontmatter.ID))
-	builder.WriteString(fmt.Sprintf("- Title: %s\n", task.Frontmatter.Title))
-	builder.WriteString(fmt.Sprintf("- Requested result: %s\n", input.Result))
-	builder.WriteString(fmt.Sprintf("- Verification ID: %s\n", verificationID))
+	fmt.Fprintf(&builder, "- Task: `%s`\n", task.Frontmatter.ID)
+	fmt.Fprintf(&builder, "- Title: %s\n", task.Frontmatter.Title)
+	fmt.Fprintf(&builder, "- Requested result: %s\n", input.Result)
+	fmt.Fprintf(&builder, "- Verification ID: %s\n", verificationID)
 	if task.Frontmatter.Status == "completed" && input.Result == "pass" {
-		builder.WriteString(fmt.Sprintf("- Observed completion ID: %s\n", task.Frontmatter.CompletionID))
+		fmt.Fprintf(&builder, "- Observed completion ID: %s\n", task.Frontmatter.CompletionID)
 	} else {
 		builder.WriteString("- Observed completion ID: none\n")
 	}
 	if previousVerificationID == "" {
 		previousVerificationID = "none"
 	}
-	builder.WriteString(fmt.Sprintf("- Previous verification ID: %s\n", previousVerificationID))
-	builder.WriteString(fmt.Sprintf("- Summary: %s\n", input.Summary))
+	fmt.Fprintf(&builder, "- Previous verification ID: %s\n", previousVerificationID)
+	fmt.Fprintf(&builder, "- Summary: %s\n", input.Summary)
 	if input.Details != "" {
-		builder.WriteString(fmt.Sprintf("- Details: %s\n", input.Details))
+		fmt.Fprintf(&builder, "- Details: %s\n", input.Details)
 	}
 	if followupTaskID != "" {
-		builder.WriteString(fmt.Sprintf("- Follow-up task to create: `%s`\n", followupTaskID))
+		fmt.Fprintf(&builder, "- Follow-up task to create: `%s`\n", followupTaskID)
 	}
 	return builder.String()
 }
@@ -176,31 +176,31 @@ func renderVerificationPlan(task *Task, input VerifyInput, verificationID, previ
 func renderVerificationReportMarkdown(report VerificationArtifact) string {
 	var builder strings.Builder
 	builder.WriteString("# Verification Report\n\n")
-	builder.WriteString(fmt.Sprintf("- Task: `%s`\n", report.TaskID))
-	builder.WriteString(fmt.Sprintf("- Title: %s\n", report.TaskTitle))
-	builder.WriteString(fmt.Sprintf("- Result: %s\n", report.Result))
-	builder.WriteString(fmt.Sprintf("- Verification ID: %s\n", report.VerificationID))
+	fmt.Fprintf(&builder, "- Task: `%s`\n", report.TaskID)
+	fmt.Fprintf(&builder, "- Title: %s\n", report.TaskTitle)
+	fmt.Fprintf(&builder, "- Result: %s\n", report.Result)
+	fmt.Fprintf(&builder, "- Verification ID: %s\n", report.VerificationID)
 	if report.ObservedCompletionID == nil {
 		builder.WriteString("- Observed completion ID: none\n")
 	} else {
-		builder.WriteString(fmt.Sprintf("- Observed completion ID: %s\n", *report.ObservedCompletionID))
+		fmt.Fprintf(&builder, "- Observed completion ID: %s\n", *report.ObservedCompletionID)
 	}
 	if report.PreviousVerificationID == nil {
 		builder.WriteString("- Previous verification ID: none\n")
 	} else {
-		builder.WriteString(fmt.Sprintf("- Previous verification ID: %s\n", *report.PreviousVerificationID))
+		fmt.Fprintf(&builder, "- Previous verification ID: %s\n", *report.PreviousVerificationID)
 	}
-	builder.WriteString(fmt.Sprintf("- Summary: %s\n", report.Summary))
+	fmt.Fprintf(&builder, "- Summary: %s\n", report.Summary)
 	if report.Details != "" {
-		builder.WriteString(fmt.Sprintf("- Details: %s\n", report.Details))
+		fmt.Fprintf(&builder, "- Details: %s\n", report.Details)
 	}
-	builder.WriteString(fmt.Sprintf("- Generated at: %s\n", report.GeneratedAt))
-	builder.WriteString(fmt.Sprintf("- Spec ref: `%s`\n", report.SpecRef))
+	fmt.Fprintf(&builder, "- Generated at: %s\n", report.GeneratedAt)
+	fmt.Fprintf(&builder, "- Spec ref: `%s`\n", report.SpecRef)
 	for _, artifact := range report.Artifacts {
-		builder.WriteString(fmt.Sprintf("- Artifact: `%s`\n", artifact))
+		fmt.Fprintf(&builder, "- Artifact: `%s`\n", artifact)
 	}
 	if report.FollowupTaskID != "" {
-		builder.WriteString(fmt.Sprintf("- Follow-up task: `%s`\n", report.FollowupTaskID))
+		fmt.Fprintf(&builder, "- Follow-up task: `%s`\n", report.FollowupTaskID)
 	}
 	return builder.String()
 }
@@ -217,35 +217,35 @@ func renderStateBodySchema1(state StateFrontmatter, tasks []*Task) string {
 	var builder strings.Builder
 	builder.WriteString("# STATE\n\n")
 	builder.WriteString("## Active Spec\n\n")
-	builder.WriteString(fmt.Sprintf("- `%s`\n\n", state.ActiveSpecPath))
+	fmt.Fprintf(&builder, "- `%s`\n\n", state.ActiveSpecPath)
 	builder.WriteString("## Current Focus\n\n")
 	if state.CurrentTask == "" {
 		builder.WriteString("- Task: none\n")
 	} else {
-		builder.WriteString(fmt.Sprintf("- Task: `%s`\n", state.CurrentTask))
-		builder.WriteString(fmt.Sprintf("- Title: %s\n", state.CurrentTaskTitle))
+		fmt.Fprintf(&builder, "- Task: `%s`\n", state.CurrentTask)
+		fmt.Fprintf(&builder, "- Title: %s\n", state.CurrentTaskTitle)
 	}
 	builder.WriteString("\n## Status\n\n")
-	builder.WriteString(fmt.Sprintf("- %s\n\n", state.StatusSummary))
+	fmt.Fprintf(&builder, "- %s\n\n", state.StatusSummary)
 	builder.WriteString("## Blockers\n\n")
 	if len(state.Blockers) == 0 {
 		builder.WriteString("- None\n\n")
 	} else {
 		for _, blocker := range state.Blockers {
-			builder.WriteString(fmt.Sprintf("- %s\n", blocker))
+			fmt.Fprintf(&builder, "- %s\n", blocker)
 		}
 		builder.WriteString("\n")
 	}
 	builder.WriteString("## Last Verification\n\n")
-	builder.WriteString(fmt.Sprintf("- %s\n\n", state.LastVerificationResult))
+	fmt.Fprintf(&builder, "- %s\n\n", state.LastVerificationResult)
 	builder.WriteString("## Next Action\n\n")
-	builder.WriteString(fmt.Sprintf("- %s\n\n", state.NextAction))
+	fmt.Fprintf(&builder, "- %s\n\n", state.NextAction)
 	builder.WriteString("## Relevant Artifacts\n\n")
 	if len(state.RelevantArtifacts) == 0 {
 		builder.WriteString("- None\n\n")
 	} else {
 		for _, artifact := range state.RelevantArtifacts {
-			builder.WriteString(fmt.Sprintf("- `%s`\n", artifact))
+			fmt.Fprintf(&builder, "- `%s`\n", artifact)
 		}
 		builder.WriteString("\n")
 	}
@@ -254,17 +254,17 @@ func renderStateBodySchema1(state StateFrontmatter, tasks []*Task) string {
 		builder.WriteString("- None\n")
 	} else {
 		for _, note := range state.ContinuationNotes {
-			builder.WriteString(fmt.Sprintf("- %s\n", note))
+			fmt.Fprintf(&builder, "- %s\n", note)
 		}
 	}
 	if len(tasks) > 0 {
 		counts := taskCounts(tasks)
 		builder.WriteString("\n## Task Counts\n\n")
-		builder.WriteString(fmt.Sprintf("- todo: %d\n", counts["todo"]))
-		builder.WriteString(fmt.Sprintf("- in_progress: %d\n", counts["in_progress"]))
-		builder.WriteString(fmt.Sprintf("- completed: %d\n", counts["completed"]))
-		builder.WriteString(fmt.Sprintf("- blocked: %d\n", counts["blocked"]))
-		builder.WriteString(fmt.Sprintf("- cancelled: %d\n", counts["cancelled"]))
+		fmt.Fprintf(&builder, "- todo: %d\n", counts["todo"])
+		fmt.Fprintf(&builder, "- in_progress: %d\n", counts["in_progress"])
+		fmt.Fprintf(&builder, "- completed: %d\n", counts["completed"])
+		fmt.Fprintf(&builder, "- blocked: %d\n", counts["blocked"])
+		fmt.Fprintf(&builder, "- cancelled: %d\n", counts["cancelled"])
 	}
 	return builder.String()
 }

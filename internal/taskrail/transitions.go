@@ -284,15 +284,7 @@ func (s *Service) Verify(input VerifyInput) (result VerifyResult, err error) {
 	// against the under-lock snapshot before it reaches any publication surface.
 	now := s.now().UTC()
 	ts := now.Format("20060102T150405Z")
-	preflightState, preflightTasks, err := s.loadStateAndTasks()
-	if err != nil {
-		return VerifyResult{}, err
-	}
-	verificationID, err := s.freshVerificationID(preflightState, preflightTasks)
-	if err != nil {
-		return VerifyResult{}, err
-	}
-	writes, err := s.verifyWriteClaim(input, ts, verificationID)
+	verificationID, writes, err := s.transitionVerifyPreflight(input, ts)
 	if err != nil {
 		return VerifyResult{}, err
 	}
@@ -320,74 +312,30 @@ func (s *Service) Verify(input VerifyInput) (result VerifyResult, err error) {
 		return VerifyResult{}, err
 	}
 
-	used, err := s.usedVerificationIDs(state, tasks)
+	if err := s.transitionVerifyIDStillFree(state, tasks, verificationID); err != nil {
+		return VerifyResult{}, err
+	}
+	previousVerificationID := task.Frontmatter.LastVerificationID
+	observedCompletionID, err := s.transitionVerifyCompletion(input, task, tasks)
 	if err != nil {
 		return VerifyResult{}, err
 	}
-	if _, exists := used[verificationID]; exists {
-		return VerifyResult{}, fmt.Errorf("generate verification id: preflight identity %s was published before the verification lock", verificationID)
-	}
-	previousVerificationID := task.Frontmatter.LastVerificationID
-	if input.Result == "fail" && task.Frontmatter.Status == "completed" && previousVerificationID != "" && task.Frontmatter.LastVerificationResult == "pass" &&
-		(task.Frontmatter.LastVerifiedCompletionID == "" || task.Frontmatter.LastVerifiedCompletionID != task.Frontmatter.CompletionID) {
-		return VerifyResult{}, WithMachineErrorCode(MachineCodeInvalidArguments,
-			fmt.Errorf("completed audit fail must directly follow the current bound pass"))
-	}
-	observedCompletionID := ""
-	if input.Result == "pass" && task.Frontmatter.Status == "completed" {
-		if task.Frontmatter.CompletionID == "" {
-			completionID, err := s.freshCompletionID(tasks)
-			if err != nil {
-				return VerifyResult{}, err
-			}
-			task.Frontmatter.CompletionID = completionID
-			task.Frontmatter.completionIDPresent = true
-		}
-		observedCompletionID = task.Frontmatter.CompletionID
-	}
-	artifactDir := filepath.Join(s.paths.VerifyDir, task.Frontmatter.ID, ts+"-"+verificationID)
-	planPath := filepath.Join(artifactDir, "plan.md")
-	reportPath := filepath.Join(artifactDir, "report.json")
-	reportMarkdownPath := filepath.Join(artifactDir, "report.md")
-	relPlan := relPath(s.paths.RepoRoot, planPath)
-	relReport := relPath(s.paths.RepoRoot, reportPath)
-	relReportMarkdown := relPath(s.paths.RepoRoot, reportMarkdownPath)
+	artifacts := s.transitionVerifyArtifactPaths(task.Frontmatter.ID, ts, verificationID)
 
-	var followups []*Task
-	followupTaskID := ""
-	warnings := verifyOrderWarnings(task, input.Result)
-	if input.CreateFollowup {
-		newTask, taskWarnings, err := s.createFollowupTask(tasks, task, input)
-		if err != nil {
-			return VerifyResult{}, err
-		}
-		followups = append(followups, newTask)
-		followupTaskID = newTask.Frontmatter.ID
-		warnings = append(warnings, taskWarnings...)
+	followups, followupTaskID, warnings, err := s.transitionVerifyFollowup(tasks, task, input)
+	if err != nil {
+		return VerifyResult{}, err
 	}
 	preview := append(slices.Clone(tasks), followups...)
 
-	plan := renderVerificationPlan(task, input, verificationID, previousVerificationID, followupTaskID)
-	report := VerificationArtifact{
-		SchemaVersion:          verificationArtifactSchemaVersion,
-		TaskID:                 task.Frontmatter.ID,
-		TaskTitle:              task.Frontmatter.Title,
-		VerificationID:         verificationID,
-		PreviousVerificationID: optionalVerificationID(previousVerificationID),
-		Result:                 input.Result,
-		ObservedCompletionID:   optionalVerificationID(observedCompletionID),
-		Summary:                strings.TrimSpace(input.Summary),
-		Details:                strings.TrimSpace(input.Details),
-		GeneratedAt:            timestamp(now),
-		SpecRef:                task.Frontmatter.SpecRef,
-		Artifacts:              []string{relPlan, relReportMarkdown},
-		FollowupTaskID:         followupTaskID,
+	verdict := transitionVerifyVerdict{
+		verificationID: verificationID, previousVerificationID: previousVerificationID,
+		observedCompletionID: observedCompletionID, followupTaskID: followupTaskID, generatedAt: timestamp(now),
 	}
-	reportBytes, err := json.MarshalIndent(report, "", "  ")
+	artifactCandidates, err := transitionVerifyArtifactCandidates(task, input, verdict, artifacts)
 	if err != nil {
-		return VerifyResult{}, fmt.Errorf("marshal verification report: %w", err)
+		return VerifyResult{}, err
 	}
-	reportMarkdown := renderVerificationReportMarkdown(report)
 
 	nowText := timestamp(now)
 	recordVerification(state, task, input, verificationID, previousVerificationID, observedCompletionID, followupTaskID, nowText, preview)
@@ -396,15 +344,11 @@ func (s *Service) Verify(input VerifyInput) (result VerifyResult, err error) {
 		state:     state,
 		task:      task,
 		followups: followups,
-		artifacts: []repotx.Candidate{
-			worktreeCandidate(relPlan, planPath, []byte(plan)),
-			worktreeCandidate(relReport, reportPath, reportBytes),
-			worktreeCandidate(relReportMarkdown, reportMarkdownPath, []byte(reportMarkdown)),
-		},
-		original: tasks,
-		preview:  preview,
-		corpus:   corpus,
-		baseline: baseline,
+		artifacts: artifactCandidates,
+		original:  tasks,
+		preview:   preview,
+		corpus:    corpus,
+		baseline:  baseline,
 	}
 	if err := s.commitVerify(own, ledger); err != nil {
 		return VerifyResult{}, err
@@ -416,13 +360,142 @@ func (s *Service) Verify(input VerifyInput) (result VerifyResult, err error) {
 		PreviousVerificationID: optionalVerificationID(previousVerificationID),
 		Result:                 input.Result,
 		ObservedCompletionID:   optionalVerificationID(observedCompletionID),
-		ArtifactDir:            relPath(s.paths.RepoRoot, artifactDir),
-		PlanPath:               relPlan,
-		ReportPath:             relReport,
-		ReportMarkdown:         relReportMarkdown,
+		ArtifactDir:            relPath(s.paths.RepoRoot, artifacts.dir),
+		PlanPath:               artifacts.relPlan,
+		ReportPath:             artifacts.relReport,
+		ReportMarkdown:         artifacts.relReportMarkdown,
 		FollowupTaskID:         followupTaskID,
 		Warnings:               warnings,
 	}, nil
+}
+
+// transitionVerifyPreflight draws a verification id against the pre-lock
+// snapshot and derives the write set the lock claims for it.
+func (s *Service) transitionVerifyPreflight(input VerifyInput, ts string) (string, []string, error) {
+	preflightState, preflightTasks, err := s.loadStateAndTasks()
+	if err != nil {
+		return "", nil, err
+	}
+	verificationID, err := s.freshVerificationID(preflightState, preflightTasks)
+	if err != nil {
+		return "", nil, err
+	}
+	writes, err := s.verifyWriteClaim(input, ts, verificationID)
+	if err != nil {
+		return "", nil, err
+	}
+	return verificationID, writes, nil
+}
+
+// transitionVerifyIDStillFree rechecks the preflight verification id against
+// the under-lock snapshot, refusing one another writer published meanwhile.
+func (s *Service) transitionVerifyIDStillFree(state *State, tasks []*Task, verificationID string) error {
+	used, err := s.usedVerificationIDs(state, tasks)
+	if err != nil {
+		return err
+	}
+	if _, exists := used[verificationID]; exists {
+		return fmt.Errorf("generate verification id: preflight identity %s was published before the verification lock", verificationID)
+	}
+	return nil
+}
+
+// transitionVerifyCompletion applies the completed-task rules of a verdict: an
+// audit fail of completed work must directly follow its current bound pass,
+// and a pass of completed work binds to its completion, allocating the
+// completion id a legacy task lacks. It returns the observed completion id,
+// empty when the verdict binds none.
+func (s *Service) transitionVerifyCompletion(input VerifyInput, task *Task, tasks []*Task) (string, error) {
+	if input.Result == "fail" && task.Frontmatter.Status == "completed" && task.Frontmatter.LastVerificationID != "" && task.Frontmatter.LastVerificationResult == "pass" &&
+		(task.Frontmatter.LastVerifiedCompletionID == "" || task.Frontmatter.LastVerifiedCompletionID != task.Frontmatter.CompletionID) {
+		return "", WithMachineErrorCode(MachineCodeInvalidArguments,
+			fmt.Errorf("completed audit fail must directly follow the current bound pass"))
+	}
+	if input.Result != "pass" || task.Frontmatter.Status != "completed" {
+		return "", nil
+	}
+	if task.Frontmatter.CompletionID == "" {
+		completionID, err := s.freshCompletionID(tasks)
+		if err != nil {
+			return "", err
+		}
+		task.Frontmatter.CompletionID = completionID
+		task.Frontmatter.completionIDPresent = true
+	}
+	return task.Frontmatter.CompletionID, nil
+}
+
+// transitionVerifyArtifacts names one verification's artifact files, both
+// physically and repo-relative.
+type transitionVerifyArtifacts struct {
+	dir, plan, report, reportMarkdown     string
+	relPlan, relReport, relReportMarkdown string
+}
+
+func (s *Service) transitionVerifyArtifactPaths(taskID, ts, verificationID string) transitionVerifyArtifacts {
+	dir := filepath.Join(s.paths.VerifyDir, taskID, ts+"-"+verificationID)
+	artifacts := transitionVerifyArtifacts{
+		dir:            dir,
+		plan:           filepath.Join(dir, "plan.md"),
+		report:         filepath.Join(dir, "report.json"),
+		reportMarkdown: filepath.Join(dir, "report.md"),
+	}
+	artifacts.relPlan = relPath(s.paths.RepoRoot, artifacts.plan)
+	artifacts.relReport = relPath(s.paths.RepoRoot, artifacts.report)
+	artifacts.relReportMarkdown = relPath(s.paths.RepoRoot, artifacts.reportMarkdown)
+	return artifacts
+}
+
+// transitionVerifyVerdict carries the identities one verification records.
+type transitionVerifyVerdict struct {
+	verificationID, previousVerificationID string
+	observedCompletionID, followupTaskID   string
+	generatedAt                            string
+}
+
+// transitionVerifyArtifactCandidates renders the verification's plan, JSON
+// report, and Markdown report as worktree candidates, in publication order.
+func transitionVerifyArtifactCandidates(task *Task, input VerifyInput, verdict transitionVerifyVerdict, artifacts transitionVerifyArtifacts) ([]repotx.Candidate, error) {
+	plan := renderVerificationPlan(task, input, verdict.verificationID, verdict.previousVerificationID, verdict.followupTaskID)
+	report := VerificationArtifact{
+		SchemaVersion:          verificationArtifactSchemaVersion,
+		TaskID:                 task.Frontmatter.ID,
+		TaskTitle:              task.Frontmatter.Title,
+		VerificationID:         verdict.verificationID,
+		PreviousVerificationID: optionalVerificationID(verdict.previousVerificationID),
+		Result:                 input.Result,
+		ObservedCompletionID:   optionalVerificationID(verdict.observedCompletionID),
+		Summary:                strings.TrimSpace(input.Summary),
+		Details:                strings.TrimSpace(input.Details),
+		GeneratedAt:            verdict.generatedAt,
+		SpecRef:                task.Frontmatter.SpecRef,
+		Artifacts:              []string{artifacts.relPlan, artifacts.relReportMarkdown},
+		FollowupTaskID:         verdict.followupTaskID,
+	}
+	reportBytes, err := json.MarshalIndent(report, "", "  ")
+	if err != nil {
+		return nil, fmt.Errorf("marshal verification report: %w", err)
+	}
+	reportMarkdown := renderVerificationReportMarkdown(report)
+	return []repotx.Candidate{
+		worktreeCandidate(artifacts.relPlan, artifacts.plan, []byte(plan)),
+		worktreeCandidate(artifacts.relReport, artifacts.report, reportBytes),
+		worktreeCandidate(artifacts.relReportMarkdown, artifacts.reportMarkdown, []byte(reportMarkdown)),
+	}, nil
+}
+
+// transitionVerifyFollowup creates the requested follow-up task and gathers the
+// verdict's warnings: the verify-order warning first, then the follow-up's own.
+func (s *Service) transitionVerifyFollowup(tasks []*Task, task *Task, input VerifyInput) ([]*Task, string, []Warning, error) {
+	warnings := verifyOrderWarnings(task, input.Result)
+	if !input.CreateFollowup {
+		return nil, "", warnings, nil
+	}
+	newTask, taskWarnings, err := s.createFollowupTask(tasks, task, input)
+	if err != nil {
+		return nil, "", nil, err
+	}
+	return []*Task{newTask}, newTask.Frontmatter.ID, append(warnings, taskWarnings...), nil
 }
 
 func verifyOrderWarnings(task *Task, result string) []Warning {
@@ -505,7 +578,7 @@ func (s *Service) CreateTask(input CreateTaskInput) (result CreateTaskResult, er
 	title := strings.TrimSpace(input.Title)
 
 	// The title lands verbatim in the committed frontmatter and scaffolded heading,
-	// both of which validate scans (taskArtifactRefs), so a gitignored path here
+	// both of which validate scans (taskArtifactRefsForPrefix), so a gitignored path here
 	// would make the very next validate fail. It is also the only free-text operator
 	// input that reaches the file: the slug is normalized to [a-z0-9-] and the
 	// description/provenance lines are generated.
@@ -554,22 +627,10 @@ func (s *Service) CreateTask(input CreateTaskInput) (result CreateTaskResult, er
 		}
 	}
 
-	deps := append([]string(nil), input.Dependencies...)
 	followUpOf := input.FollowUpOf
-	if followUpOf != "" {
-		parent, err := exactTaskByID(tasks, followUpOf)
-		if err != nil {
-			// `task new` creates a task rather than acting on one, so a --follow-up
-			// that names nothing is an invalid argument; its contract does not admit
-			// task_not_found.
-			return CreateTaskResult{}, WithMachineErrorCode(MachineCodeInvalidArguments, err)
-		}
-		if specRef == "" {
-			specRef = parent.Frontmatter.SpecRef
-		}
-		if !slices.Contains(deps, followUpOf) {
-			deps = append(deps, followUpOf)
-		}
+	specRef, deps, err := transitionNewTaskFollowUp(tasks, followUpOf, specRef, input.Dependencies)
+	if err != nil {
+		return CreateTaskResult{}, err
 	}
 
 	specRef, priority, err := s.validateTaskCreatable(tasks, specRef, input.Priority, deps, taskValidationOpts{})
@@ -582,25 +643,15 @@ func (s *Service) CreateTask(input CreateTaskInput) (result CreateTaskResult, er
 	// numeric prefix, so a slug suffix never affects id allocation or collision.
 	nextID, warnings := nextTaskIDWithSlug(tasks, input.Slug, input.SlugExplicit, input.SlugSourceSupplied)
 	now := timestamp(s.now())
-	var provenance string
-	if followUpOf != "" {
-		provenance = fmt.Sprintf("Follow-up derived from %s's verification or discovery. This task owns the independently meaningful deferred outcome and any required integrated delivery.", followUpOf)
-	}
-	body := renderNewTaskBody(nextID, title, provenance)
-	newTask := &Task{
-		Frontmatter: TaskFrontmatter{
-			ID:           nextID,
-			Title:        title,
-			Status:       "todo",
-			Priority:     priority,
-			SpecRef:      specRef,
-			Dependencies: deps,
-			UpdatedAt:    now,
-		},
-		Body:     body,
-		Path:     s.paths.logicalManagedPath(filepath.Join(s.paths.TasksDir, nextID+".md")),
-		Filename: filepath.Join(s.paths.TasksDir, nextID+".md"),
-	}
+	newTask := s.transitionNewTaskScaffold(nextID, title, followUpOf, TaskFrontmatter{
+		ID:           nextID,
+		Title:        title,
+		Status:       "todo",
+		Priority:     priority,
+		SpecRef:      specRef,
+		Dependencies: deps,
+		UpdatedAt:    now,
+	})
 	taskBytes, err := marshalFrontmatter(newTask.Frontmatter, newTask.Body)
 	if err != nil {
 		return CreateTaskResult{}, err
@@ -631,6 +682,45 @@ func (s *Service) CreateTask(input CreateTaskInput) (result CreateTaskResult, er
 		Path:     newTask.Path,
 		Warnings: warnings,
 	}, nil
+}
+
+// transitionNewTaskFollowUp wires a --follow-up parent into a new task: the
+// parent becomes a dependency and lends its spec_ref unless one was resolved
+// already. It returns a fresh dependency slice either way.
+func transitionNewTaskFollowUp(tasks []*Task, followUpOf, specRef string, dependencies []string) (string, []string, error) {
+	deps := append([]string(nil), dependencies...)
+	if followUpOf == "" {
+		return specRef, deps, nil
+	}
+	parent, err := exactTaskByID(tasks, followUpOf)
+	if err != nil {
+		// `task new` creates a task rather than acting on one, so a --follow-up
+		// that names nothing is an invalid argument; its contract does not admit
+		// task_not_found.
+		return "", nil, WithMachineErrorCode(MachineCodeInvalidArguments, err)
+	}
+	if specRef == "" {
+		specRef = parent.Frontmatter.SpecRef
+	}
+	if !slices.Contains(deps, followUpOf) {
+		deps = append(deps, followUpOf)
+	}
+	return specRef, deps, nil
+}
+
+// transitionNewTaskScaffold builds the new task file around frontmatter,
+// recording follow-up provenance in the body when the task derives from one.
+func (s *Service) transitionNewTaskScaffold(nextID, title, followUpOf string, frontmatter TaskFrontmatter) *Task {
+	var provenance string
+	if followUpOf != "" {
+		provenance = fmt.Sprintf("Follow-up derived from %s's verification or discovery. This task owns the independently meaningful deferred outcome and any required integrated delivery.", followUpOf)
+	}
+	return &Task{
+		Frontmatter: frontmatter,
+		Body:        renderNewTaskBody(nextID, title, provenance),
+		Path:        s.paths.logicalManagedPath(filepath.Join(s.paths.TasksDir, nextID+".md")),
+		Filename:    filepath.Join(s.paths.TasksDir, nextID+".md"),
+	}
 }
 
 // reconcileIdlePointers sets status_summary/next_action for the no-active-task
@@ -732,28 +822,9 @@ func (s *Service) createFollowupTask(tasks []*Task, source *Task, input VerifyIn
 	if err := rejectScaffoldHeading("follow-up description", description); err != nil {
 		return nil, nil, WithMachineErrorCode(MachineCodeInvalidArguments, err)
 	}
-	nextID, warnings := nextTaskIDWithSlug(tasks, title, false, true)
-	if delegatedInvocation() {
-		identity, err := delegatedWriterIdentity()
-		if err != nil {
-			return nil, nil, WithMachineErrorCode(MachineCodeDelegatedRefused,
-				fmt.Errorf("delegated follow-up identity: %w", err))
-		}
-		if identity.followupSequence != nil {
-			nextID, err = nextDelegatedFollowupID(tasks, identity.followupSequence)
-			if err != nil {
-				return nil, nil, WithMachineErrorCode(MachineCodeDelegatedRefused, err)
-			}
-			warnings = nil
-			slug := slugify(title)
-			if slug == "" {
-				warnings = emptySlugWarnings(title, nextID)
-			} else if slug = capSlug(slug); slug == "" {
-				warnings = emptySlugWarnings(title, nextID)
-			} else {
-				nextID += "-" + slug
-			}
-		}
+	nextID, warnings, err := transitionFollowupTaskID(tasks, title)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	body := renderFollowupTaskBody(nextID, title, description, source.Frontmatter.ID)
@@ -773,6 +844,36 @@ func (s *Service) createFollowupTask(tasks []*Task, source *Task, input VerifyIn
 		Filename: filename,
 	}
 	return task, warnings, nil
+}
+
+// transitionFollowupTaskID allocates a follow-up's id. A delegated loop child
+// carrying a reserved follow-up sequence takes its id from that sequence
+// instead of the next free number.
+func transitionFollowupTaskID(tasks []*Task, title string) (string, []Warning, error) {
+	nextID, warnings := nextTaskIDWithSlug(tasks, title, false, true)
+	if !delegatedInvocation() {
+		return nextID, warnings, nil
+	}
+	identity, err := delegatedWriterIdentity()
+	if err != nil {
+		return "", nil, WithMachineErrorCode(MachineCodeDelegatedRefused,
+			fmt.Errorf("delegated follow-up identity: %w", err))
+	}
+	if identity.followupSequence == nil {
+		return nextID, warnings, nil
+	}
+	nextID, err = nextDelegatedFollowupID(tasks, identity.followupSequence)
+	if err != nil {
+		return "", nil, WithMachineErrorCode(MachineCodeDelegatedRefused, err)
+	}
+	slug := slugify(title)
+	if slug == "" {
+		return nextID, emptySlugWarnings(title, nextID), nil
+	}
+	if slug = capSlug(slug); slug == "" {
+		return nextID, emptySlugWarnings(title, nextID), nil
+	}
+	return nextID + "-" + slug, nil, nil
 }
 
 func nextDelegatedFollowupID(tasks []*Task, sequence *repolock.FollowupSequence) (string, error) {

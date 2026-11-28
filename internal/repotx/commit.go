@@ -250,26 +250,7 @@ func publish(ctx context.Context, root string, entries []*entry) error {
 			return failure(KindConflict, evidence(entries),
 				fmt.Errorf("%s changed between the recheck and its publication", e.path.Reported))
 		}
-		if e.candidate.Remove {
-			if err := proveContained(root, e.path, filepath.Dir(e.path.Physical)); err != nil {
-				return err
-			}
-			// An already-absent path needs no unlink; every other error is a
-			// publication failure the caller's rollback compensates by
-			// restoring the snapshot's original bytes.
-			if err := os.Remove(e.path.Physical); err != nil && !errors.Is(err, os.ErrNotExist) {
-				return fmt.Errorf("remove %s: %w", e.path.Reported, fsCause(err))
-			}
-		} else if err := publishTo(root, e.path, e.candidate.Content, publishMode(e), e.candidate.NoClobber); err != nil {
-			if e.candidate.NoClobber && errors.Is(err, fs.ErrExist) {
-				// Link-or-create refused because another writer won after this
-				// path's final CAS check. Refresh evidence before returning so the
-				// conflict reports that writer's bytes rather than stale absence.
-				if _, observeErr := observe(e); observeErr != nil {
-					return withEvidence(observeErr, entries)
-				}
-				return failure(KindConflict, evidence(entries), fmt.Errorf("%s was created before its no-clobber publication", e.path.Reported))
-			}
+		if err := publishEntry(root, e, entries); err != nil {
 			return err
 		}
 		e.published = true
@@ -279,6 +260,37 @@ func publish(ctx context.Context, root string, entries []*entry) error {
 		}
 	}
 	return nil
+}
+
+// publishEntry writes or removes one candidate. entries supplies the evidence
+// a no-clobber conflict reports.
+func publishEntry(root string, e *entry, entries []*entry) error {
+	if e.candidate.Remove {
+		if err := proveContained(root, e.path, filepath.Dir(e.path.Physical)); err != nil {
+			return err
+		}
+		// An already-absent path needs no unlink; every other error is a
+		// publication failure the caller's rollback compensates by
+		// restoring the snapshot's original bytes.
+		if err := os.Remove(e.path.Physical); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("remove %s: %w", e.path.Reported, fsCause(err))
+		}
+		return nil
+	}
+	err := publishTo(root, e.path, e.candidate.Content, publishMode(e), e.candidate.NoClobber)
+	if err == nil {
+		return nil
+	}
+	if e.candidate.NoClobber && errors.Is(err, fs.ErrExist) {
+		// Link-or-create refused because another writer won after this
+		// path's final CAS check. Refresh evidence before returning so the
+		// conflict reports that writer's bytes rather than stale absence.
+		if _, observeErr := observe(e); observeErr != nil {
+			return withEvidence(observeErr, entries)
+		}
+		return failure(KindConflict, evidence(entries), fmt.Errorf("%s was created before its no-clobber publication", e.path.Reported))
+	}
+	return err
 }
 
 func publicationPlan(entries []*entry) []*entry {

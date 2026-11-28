@@ -14,22 +14,6 @@ import (
 // so its bytes land under the repository mutation lock as one validated
 // candidate ledger rather than a save-all rewrite.
 
-// validateAfterWrite re-runs validation once a write has committed. A read-back
-// failure here is the outcome of an operation that is already on disk, so it is
-// tagged applied — otherwise a committed transition would publish as a refusal
-// that changed nothing. The transactional writers (lifecycle, verification, and
-// the task mutation family in lifecycle_tx.go, verify_tx.go, and task_tx.go) no
-// longer use it: they validate the complete candidate before publication
-// instead. `spec activate` still does.
-func (s *Service) validateAfterWrite() (ValidationResult, error) {
-	validation, err := s.Validate()
-	if err != nil {
-		return ValidationResult{}, WithMachineFailure(
-			MachineFailure{Code: MachineCodeRepositoryInvalid, Applied: true}, err)
-	}
-	return validation, nil
-}
-
 func (s *Service) Start(taskID string) (result StartResult, err error) {
 	own, release, err := s.beginWriterWrite(lifecycleStart, taskID,
 		[]string{s.reportedStatePath(), s.reportedTaskPath(taskID)})
@@ -249,7 +233,7 @@ func (s *Service) finishTask(w writerCommand, taskID, status, note string) (outc
 	if err != nil {
 		return transitionOutcome{}, err
 	}
-	if task.Frontmatter.Status != "in_progress" && !(status == "blocked" && task.Frontmatter.Status == "todo") {
+	if task.Frontmatter.Status != "in_progress" && (status != "blocked" || task.Frontmatter.Status != "todo") {
 		return transitionOutcome{}, WithMachineErrorCode(MachineCodeInvalidStatus,
 			fmt.Errorf("task %s is not in a transitionable state", taskID))
 	}

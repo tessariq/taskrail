@@ -102,18 +102,31 @@ func Recover(ctx context.Context, own Ownership, repo repolock.Repository, req R
 		return result, nil
 	}
 	if completed != nil {
-		if err := cleanup(store, req.TransactionID, entries, func() error {
-			latest, err := observeEntries(store, entries)
-			if err != nil || !sameObservations(current, latest) || !actionComplete(action, entries, latest) {
-				return fmt.Errorf("completed set changed before fence clear: %w", err)
-			}
-			return nil
-		}); err != nil {
-			return RecoveryResult{}, failure(KindRecovery, req.TransactionID, doc.Phase, result.Snapshots, err)
-		}
-		result.Applied = true
-		return result, nil
+		return applyCompletedRecovery(store, req.TransactionID, doc.Phase, action, entries, current, result)
 	}
+	return applyRecovery(ctx, store, req, doc, action, entries, current, result)
+}
+
+// applyCompletedRecovery finishes a transaction whose recovery already
+// completed: it only clears the fence, after re-proving the completed set.
+func applyCompletedRecovery(store *store, id string, phase Phase, action Action, entries []*transactionEntry, current []observation, result RecoveryResult) (RecoveryResult, error) {
+	if err := cleanup(store, id, entries, func() error {
+		latest, err := observeEntries(store, entries)
+		if err != nil || !sameObservations(current, latest) || !actionComplete(action, entries, latest) {
+			return fmt.Errorf("completed set changed before fence clear: %w", err)
+		}
+		return nil
+	}); err != nil {
+		return RecoveryResult{}, failure(KindRecovery, id, phase, result.Snapshots, err)
+	}
+	result.Applied = true
+	return result, nil
+}
+
+// applyRecovery performs the selected action, proves the repository reached
+// its complete state, records completion, and clears the fence.
+func applyRecovery(ctx context.Context, store *store, req RecoveryRequest, doc journal, action Action, entries []*transactionEntry, current []observation, result RecoveryResult) (RecoveryResult, error) {
+	var err error
 	recoveryPhase := phaseForAction(action)
 	if doc.Phase != recoveryPhase {
 		doc, err = advancePhase(store, req.TransactionID, doc, recoveryPhase)
@@ -167,16 +180,9 @@ func Recover(ctx context.Context, own Ownership, repo repolock.Repository, req R
 }
 
 func loadRetained(store *store, id string) (journal, []*transactionEntry, *completion, error) {
-	var done completion
-	completionErr := store.readDocument(store.transactionDir(id)+"/"+completionName, &done)
-	if completionErr != nil && !errors.Is(completionErr, fs.ErrNotExist) {
-		return journal{}, nil, nil, completionErr
-	}
-	if errors.Is(completionErr, fs.ErrNotExist) {
-		completionErr = store.readDocument(clearingPath(store, id), &done)
-		if completionErr != nil && !errors.Is(completionErr, fs.ErrNotExist) {
-			return journal{}, nil, nil, completionErr
-		}
+	done, completionErr, err := readRetainedCompletion(store, id)
+	if err != nil {
+		return journal{}, nil, nil, err
 	}
 	var doc journal
 	journalErr := store.readDocument(store.transactionDir(id)+"/"+journalName, &doc)
@@ -210,18 +216,9 @@ func loadRetained(store *store, id string) (journal, []*transactionEntry, *compl
 			return journal{}, nil, nil, fmt.Errorf("completion action disagrees with retained journal")
 		}
 	}
-	var saved manifest
-	manifestErr := store.readDocument(store.transactionDir(id)+"/"+manifestName, &saved)
-	if manifestErr != nil {
-		if completionErr != nil {
-			return journal{}, nil, nil, manifestErr
-		}
-		if !errors.Is(manifestErr, fs.ErrNotExist) {
-			return journal{}, nil, nil, manifestErr
-		}
-		saved = done.Manifest
-	} else if completionErr == nil && !reflect.DeepEqual(saved, done.Manifest) {
-		return journal{}, nil, nil, fmt.Errorf("completion manifest disagrees with retained manifest")
+	saved, err := readRetainedManifest(store, id, done, completionErr == nil)
+	if err != nil {
+		return journal{}, nil, nil, err
 	}
 	if err := saved.validate(id, store.repo); err != nil {
 		return journal{}, nil, nil, err
@@ -229,30 +226,9 @@ func loadRetained(store *store, id string) (journal, []*transactionEntry, *compl
 	if saved.Command != doc.Command {
 		return journal{}, nil, nil, fmt.Errorf("journal and manifest command disagree")
 	}
-	entries := make([]*transactionEntry, len(saved.Members))
-	for i, member := range saved.Members {
-		entry := &transactionEntry{manifest: member}
-		if member.Original != nil && completionErr != nil {
-			data, err := durableReadOriginal(store, id, i)
-			if err != nil {
-				return journal{}, nil, nil, err
-			}
-			if digest(data) != member.Original.SHA256 {
-				return journal{}, nil, nil, fmt.Errorf("original %d digest disagrees with manifest", i)
-			}
-			entry.original = data
-		}
-		if member.Fence != nil && completionErr != nil {
-			data, err := durableReadFinal(store, id, i)
-			if err != nil {
-				return journal{}, nil, nil, err
-			}
-			if digest(data) != member.Candidate.SHA256 {
-				return journal{}, nil, nil, fmt.Errorf("retained final %d digest disagrees with manifest", i)
-			}
-			entry.candidate = data
-		}
-		entries[i] = entry
+	entries, err := loadRetainedEntries(store, id, saved, completionErr != nil)
+	if err != nil {
+		return journal{}, nil, nil, err
 	}
 	if completionErr == nil {
 		if done.Action != RestoreOriginal && done.Action != AcceptCandidate && done.Action != ClearFence {
@@ -261,6 +237,74 @@ func loadRetained(store *store, id string) (journal, []*transactionEntry, *compl
 		return doc, entries, &done, nil
 	}
 	return doc, entries, nil, nil
+}
+
+// readRetainedCompletion reads the completion marker, falling back to the
+// clearing marker. completionErr is nil when one was read and otherwise the
+// not-exist error the caller reports alongside a missing journal; err is any
+// other read failure.
+func readRetainedCompletion(store *store, id string) (done completion, completionErr, err error) {
+	completionErr = store.readDocument(store.transactionDir(id)+"/"+completionName, &done)
+	if completionErr != nil && !errors.Is(completionErr, fs.ErrNotExist) {
+		return completion{}, nil, completionErr
+	}
+	if errors.Is(completionErr, fs.ErrNotExist) {
+		completionErr = store.readDocument(clearingPath(store, id), &done)
+		if completionErr != nil && !errors.Is(completionErr, fs.ErrNotExist) {
+			return completion{}, nil, completionErr
+		}
+	}
+	return done, completionErr, nil
+}
+
+// readRetainedManifest reads the retained manifest. Once a completion marker
+// exists the manifest may already be gone, and the completion's copy stands in
+// for it; when both exist they must agree.
+func readRetainedManifest(store *store, id string, done completion, completed bool) (manifest, error) {
+	var saved manifest
+	manifestErr := store.readDocument(store.transactionDir(id)+"/"+manifestName, &saved)
+	if manifestErr != nil {
+		if !completed || !errors.Is(manifestErr, fs.ErrNotExist) {
+			return manifest{}, manifestErr
+		}
+		return done.Manifest, nil
+	}
+	if completed && !reflect.DeepEqual(saved, done.Manifest) {
+		return manifest{}, fmt.Errorf("completion manifest disagrees with retained manifest")
+	}
+	return saved, nil
+}
+
+// loadRetainedEntries builds one entry per manifest member. Only an
+// uncompleted transaction still needs its retained originals and fence finals,
+// so readBytes loads and digest-checks them only then.
+func loadRetainedEntries(store *store, id string, saved manifest, readBytes bool) ([]*transactionEntry, error) {
+	entries := make([]*transactionEntry, len(saved.Members))
+	for i, member := range saved.Members {
+		entry := &transactionEntry{manifest: member}
+		if member.Original != nil && readBytes {
+			data, err := durableReadOriginal(store, id, i)
+			if err != nil {
+				return nil, err
+			}
+			if digest(data) != member.Original.SHA256 {
+				return nil, fmt.Errorf("original %d digest disagrees with manifest", i)
+			}
+			entry.original = data
+		}
+		if member.Fence != nil && readBytes {
+			data, err := durableReadFinal(store, id, i)
+			if err != nil {
+				return nil, err
+			}
+			if digest(data) != member.Candidate.SHA256 {
+				return nil, fmt.Errorf("retained final %d digest disagrees with manifest", i)
+			}
+			entry.candidate = data
+		}
+		entries[i] = entry
+	}
+	return entries, nil
 }
 
 func completionMatchesPhase(action Action, phase Phase) bool {

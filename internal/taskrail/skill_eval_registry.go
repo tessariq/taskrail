@@ -166,6 +166,38 @@ type SkillEvalAssertionOracle struct {
 	Predicate string
 }
 
+// skillEvalLoadSkillCases loads every case directory of one skill, recording
+// case IDs in seenCases because IDs must be unique across the whole registry.
+func skillEvalLoadSkillCases(root, skill string, seenCases map[string]bool) ([]SkillEvalCase, error) {
+	caseEntries, err := os.ReadDir(filepath.Join(root, skill))
+	if err != nil {
+		return nil, fmt.Errorf("read cases for %s: %w", skill, err)
+	}
+	if len(caseEntries) == 0 {
+		return nil, fmt.Errorf("shipped skill %q has no cases", skill)
+	}
+	cases := make([]SkillEvalCase, 0, len(caseEntries))
+	for _, caseEntry := range caseEntries {
+		if !caseEntry.IsDir() {
+			return nil, fmt.Errorf("case entry %s/%s is not a directory", skill, caseEntry.Name())
+		}
+		caseRoot := filepath.Join(root, skill, caseEntry.Name())
+		evaluation, err := loadSkillEvalCase(caseRoot)
+		if err != nil {
+			return nil, err
+		}
+		if evaluation.Skill != skill || evaluation.CaseID != caseEntry.Name() {
+			return nil, fmt.Errorf("case %s/%s does not match its path", skill, caseEntry.Name())
+		}
+		if seenCases[evaluation.CaseID] {
+			return nil, fmt.Errorf("case ID %q is duplicated", evaluation.CaseID)
+		}
+		seenCases[evaluation.CaseID] = true
+		cases = append(cases, evaluation)
+	}
+	return cases, nil
+}
+
 func loadSkillEvalRegistry(root string, shippedSkills []string) ([]SkillEvalCase, error) {
 	shipped := make(map[string]struct{}, len(shippedSkills))
 	for _, skill := range shippedSkills {
@@ -195,35 +227,17 @@ func loadSkillEvalRegistry(root string, shippedSkills []string) ([]SkillEvalCase
 			return nil, fmt.Errorf("registry contains unshipped skill %q", skill)
 		}
 		seenSkills[skill] = true
-		caseEntries, err := os.ReadDir(filepath.Join(root, skill))
+		cases, err := skillEvalLoadSkillCases(root, skill, seenCases)
 		if err != nil {
-			return nil, fmt.Errorf("read cases for %s: %w", skill, err)
+			return nil, err
 		}
-		if len(caseEntries) == 0 {
-			return nil, fmt.Errorf("shipped skill %q has no cases", skill)
+		if seenModes[skill] == nil {
+			seenModes[skill] = map[string]bool{}
 		}
-		for _, caseEntry := range caseEntries {
-			if !caseEntry.IsDir() {
-				return nil, fmt.Errorf("case entry %s/%s is not a directory", skill, caseEntry.Name())
-			}
-			caseRoot := filepath.Join(root, skill, caseEntry.Name())
-			evaluation, err := loadSkillEvalCase(caseRoot)
-			if err != nil {
-				return nil, err
-			}
-			if evaluation.Skill != skill || evaluation.CaseID != caseEntry.Name() {
-				return nil, fmt.Errorf("case %s/%s does not match its path", skill, caseEntry.Name())
-			}
-			if seenCases[evaluation.CaseID] {
-				return nil, fmt.Errorf("case ID %q is duplicated", evaluation.CaseID)
-			}
-			seenCases[evaluation.CaseID] = true
-			if seenModes[skill] == nil {
-				seenModes[skill] = map[string]bool{}
-			}
+		for _, evaluation := range cases {
 			seenModes[skill][evaluation.StorageMode] = true
-			registry = append(registry, evaluation)
 		}
+		registry = append(registry, cases...)
 	}
 	for skill := range shipped {
 		if !seenSkills[skill] {

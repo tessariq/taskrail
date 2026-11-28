@@ -924,7 +924,7 @@ func openTestRoot(t *testing.T, repo string) (*Root, *repolock.Lock) {
 	lock := acquireTestLock(t, repo)
 	root, err := Open(repo, lock)
 	if err != nil {
-		lock.Release()
+		_ = lock.Release()
 		t.Fatal(err)
 	}
 	return root, lock

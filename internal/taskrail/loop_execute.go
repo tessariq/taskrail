@@ -129,35 +129,47 @@ func (s *Service) loopExecute(ctx context.Context, invocation LoopInvocation, pr
 			return diagnostic, nil
 		}
 
-		selection, err = s.TaskLoopSelect()
-		if err != nil {
-			diagnostic.Outcome = "invalid_postflight"
-			diagnostic.NextAction = "Inspect repository selection evidence before another loop invocation."
-			return diagnostic, nil
-		}
-		if selection.Action == "none" {
-			diagnostic.Outcome = "no_work"
-			diagnostic.NextAction = "No eligible allowed task remains; inspect task loop policy before another invocation."
-			return diagnostic, nil
-		}
-		if selection.Action != "run" || selection.SelectedTask == nil {
-			diagnostic.Outcome = "invalid_postflight"
-			diagnostic.NextAction = "Inspect repository validation and task loop policy before retrying manually."
-			return diagnostic, nil
-		}
-		if diagnostic.IterationsCompleted >= invocation.MaxIterations {
-			diagnostic.Outcome = "iteration_limit"
-			diagnostic.RemainingTask = selection.SelectedTask
-			diagnostic.NextAction = "Review the remaining allowed task and start a new loop invocation with an explicit iteration budget."
-			return diagnostic, nil
-		}
-		snapshot, err = s.nextLoopIterationSnapshot(snapshot)
-		if err != nil {
-			diagnostic.Outcome = "invalid_postflight"
-			diagnostic.NextAction = "Inspect repository postflight evidence before another loop invocation."
+		var done bool
+		selection, snapshot, done = s.loopExecuteAdvance(&diagnostic, invocation, snapshot)
+		if done {
 			return diagnostic, nil
 		}
 	}
+}
+
+// loopExecuteAdvance reselects after a passing iteration and refreezes the
+// snapshot for the next one. When it reports done, diagnostic holds the final
+// outcome and the returned selection and snapshot must not be used.
+func (s *Service) loopExecuteAdvance(diagnostic *LoopDiagnostic, invocation LoopInvocation, snapshot LoopPreflightSnapshot) (TaskLoopSelectionResult, LoopPreflightSnapshot, bool) {
+	selection, err := s.TaskLoopSelect()
+	if err != nil {
+		diagnostic.Outcome = "invalid_postflight"
+		diagnostic.NextAction = "Inspect repository selection evidence before another loop invocation."
+		return selection, snapshot, true
+	}
+	if selection.Action == "none" {
+		diagnostic.Outcome = "no_work"
+		diagnostic.NextAction = "No eligible allowed task remains; inspect task loop policy before another invocation."
+		return selection, snapshot, true
+	}
+	if selection.Action != "run" || selection.SelectedTask == nil {
+		diagnostic.Outcome = "invalid_postflight"
+		diagnostic.NextAction = "Inspect repository validation and task loop policy before retrying manually."
+		return selection, snapshot, true
+	}
+	if diagnostic.IterationsCompleted >= invocation.MaxIterations {
+		diagnostic.Outcome = "iteration_limit"
+		diagnostic.RemainingTask = selection.SelectedTask
+		diagnostic.NextAction = "Review the remaining allowed task and start a new loop invocation with an explicit iteration budget."
+		return selection, snapshot, true
+	}
+	next, err := s.nextLoopIterationSnapshot(snapshot)
+	if err != nil {
+		diagnostic.Outcome = "invalid_postflight"
+		diagnostic.NextAction = "Inspect repository postflight evidence before another loop invocation."
+		return selection, snapshot, true
+	}
+	return selection, next, false
 }
 
 func loopDiagnosticBase(snapshot LoopPreflightSnapshot, ownership *loopOwnership) LoopDiagnostic {

@@ -557,18 +557,9 @@ func decodeManifestDispositions(raw json.RawMessage, requireRound bool) ([]SpecR
 		var d SpecReviewDisposition
 		required := []string{"finding_id", "lens", "severity", "disposition", "rationale"}
 		if requireRound {
-			rawNumber, ok := obj["round"]
-			if !ok {
-				return nil, fmt.Errorf("%s is missing member %q", what, "round")
+			if d.Round, err = reviewSchemaDispositionRound(obj, what); err != nil {
+				return nil, err
 			}
-			number, ok := decodeJSONInteger(rawNumber)
-			if !ok || number < 1 {
-				return nil, fmt.Errorf("%s member %q is not a positive integer", what, "round")
-			}
-			if int64(int(number)) != number {
-				return nil, fmt.Errorf("%s member %q exceeds the supported round range", what, "round")
-			}
-			d.Round = int(number)
 			required = append([]string{"round"}, required...)
 		}
 		if err := exactOptionalMembers(obj, what, required, []string{"resulting_spec_ref", "target_version"}); err != nil {
@@ -596,23 +587,8 @@ func decodeManifestDispositions(raw json.RawMessage, requireRound bool) ([]SpecR
 		if d.Rationale, err = stringMember(obj, what, "rationale"); err != nil {
 			return nil, err
 		}
-		if _, ok := obj["resulting_spec_ref"]; ok {
-			value, err := stringMember(obj, what, "resulting_spec_ref")
-			if err != nil {
-				return nil, err
-			}
-			normalized, err := normalizeSpecRef(value)
-			if err != nil || normalized != value {
-				return nil, fmt.Errorf("%s resulting_spec_ref is not canonical", what)
-			}
-			d.ResultingSpecRef = &value
-		}
-		if _, ok := obj["target_version"]; ok {
-			value, err := stringMember(obj, what, "target_version")
-			if err != nil {
-				return nil, err
-			}
-			d.TargetVersion = &value
+		if err := reviewSchemaDispositionOptionals(obj, what, &d); err != nil {
+			return nil, err
 		}
 		if (d.Disposition == "accepted") != (d.ResultingSpecRef != nil) || (d.Disposition == "deferred") != (d.TargetVersion != nil) {
 			return nil, fmt.Errorf("%s optional fields do not match disposition", what)
@@ -620,6 +596,43 @@ func decodeManifestDispositions(raw json.RawMessage, requireRound bool) ([]SpecR
 		result = append(result, d)
 	}
 	return result, nil
+}
+
+func reviewSchemaDispositionRound(obj map[string]json.RawMessage, what string) (int, error) {
+	rawNumber, ok := obj["round"]
+	if !ok {
+		return 0, fmt.Errorf("%s is missing member %q", what, "round")
+	}
+	number, ok := decodeJSONInteger(rawNumber)
+	if !ok || number < 1 {
+		return 0, fmt.Errorf("%s member %q is not a positive integer", what, "round")
+	}
+	if int64(int(number)) != number {
+		return 0, fmt.Errorf("%s member %q exceeds the supported round range", what, "round")
+	}
+	return int(number), nil
+}
+
+func reviewSchemaDispositionOptionals(obj map[string]json.RawMessage, what string, d *SpecReviewDisposition) error {
+	if _, ok := obj["resulting_spec_ref"]; ok {
+		value, err := stringMember(obj, what, "resulting_spec_ref")
+		if err != nil {
+			return err
+		}
+		normalized, err := normalizeSpecRef(value)
+		if err != nil || normalized != value {
+			return fmt.Errorf("%s resulting_spec_ref is not canonical", what)
+		}
+		d.ResultingSpecRef = &value
+	}
+	if _, ok := obj["target_version"]; ok {
+		value, err := stringMember(obj, what, "target_version")
+		if err != nil {
+			return err
+		}
+		d.TargetVersion = &value
+	}
+	return nil
 }
 
 func validateSpecManifest(manifest SpecReviewManifest, lenses []SpecReviewLens, findings map[string]specFindingBinding) error {

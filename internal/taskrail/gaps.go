@@ -104,10 +104,10 @@ func validateGapAnchor(areas []parsedArea, deferred []string, anchor, specPath s
 			matches++
 		}
 	}
-	switch {
-	case matches == 1:
+	switch matches {
+	case 1:
 		return nil
-	case matches == 0:
+	case 0:
 		return areaRejectionError(areas, deferred, anchor, specPath)
 	default:
 		return ambiguousAreaError(anchor, specPath, matches)

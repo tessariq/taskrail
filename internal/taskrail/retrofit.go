@@ -106,7 +106,7 @@ func markerWriteChange() string {
 	return fmt.Sprintf("write %s (layout_version %d)", markerRelPath(), currentLayoutVersion)
 }
 
-// pendingLayoutChanges lists the layout directories and files ensureLayout would
+// pendingLayoutChanges lists the layout directories and files a layout write would
 // create, so a retrofit dry run can report exactly what applying it would add.
 // It fails for the same unusable notes destination the apply path refuses:
 // previewing a write that could never happen would be a worse answer than

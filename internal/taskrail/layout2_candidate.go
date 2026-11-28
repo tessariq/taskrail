@@ -336,21 +336,9 @@ func decodeMigrationTaskStrict(data []byte) (*Task, error) {
 }
 
 func buildLayout2MigrationCandidate(root string) (*Layout2MigrationCandidate, error) {
-	markerData, err := os.ReadFile(markerPath(root))
-	if err != nil {
-		return nil, fmt.Errorf("read layout marker: %w", fsCause(err))
-	}
-	sourceMarker, err := decodeLayoutMarkerStrict(markerData)
+	sourceMarker, err := layout2ReadSourceMarker(root)
 	if err != nil {
 		return nil, err
-	}
-	if sourceMarker.LayoutVersion != 1 {
-		return nil, fmt.Errorf("layout 2 migration candidate requires layout 1 input")
-	}
-	for field, dir := range map[string]string{"specs_dir": sourceMarker.SpecsDir, "planning_dir": sourceMarker.PlanningDir} {
-		if err := ensureWithinRoot(root, field, dir); err != nil {
-			return nil, err
-		}
 	}
 	// The migration manages the worktree-root .gitignore exactly like a fresh
 	// committed init (T-416). Discovery from the marker root resolves the same
@@ -367,19 +355,9 @@ func buildLayout2MigrationCandidate(root string) (*Layout2MigrationCandidate, er
 		return nil, err
 	}
 
-	stateData, err := os.ReadFile(paths.StateFile)
-	if err != nil {
-		return nil, fmt.Errorf("read state %s: %w", relPath(root, paths.StateFile), fsCause(err))
-	}
-	decodedState, _, err := decodeStateStrict(stateData)
+	decodedState, err := layout2ReadSourceState(root, paths)
 	if err != nil {
 		return nil, err
-	}
-	if err := ensureWithinRoot(root, "active_spec_path", filepath.FromSlash(decodedState.Frontmatter.ActiveSpecPath)); err != nil {
-		return nil, err
-	}
-	if !fileExists(filepath.Join(root, filepath.FromSlash(decodedState.Frontmatter.ActiveSpecPath))) {
-		return nil, fmt.Errorf("state active_spec_path does not exist: %s", decodedState.Frontmatter.ActiveSpecPath)
 	}
 
 	tasks, taskBytes, err := readMigrationTasks(paths)
@@ -449,6 +427,48 @@ func buildLayout2MigrationCandidate(root string) (*Layout2MigrationCandidate, er
 		return nil, fmt.Errorf("validate state candidate: %w", err)
 	}
 	return candidate, nil
+}
+
+// layout2ReadSourceMarker reads the layout-1 marker a migration starts from and
+// refuses configured directories that escape the repository root.
+func layout2ReadSourceMarker(root string) (Layout2Config, error) {
+	markerData, err := os.ReadFile(markerPath(root))
+	if err != nil {
+		return Layout2Config{}, fmt.Errorf("read layout marker: %w", fsCause(err))
+	}
+	sourceMarker, err := decodeLayoutMarkerStrict(markerData)
+	if err != nil {
+		return Layout2Config{}, err
+	}
+	if sourceMarker.LayoutVersion != 1 {
+		return Layout2Config{}, fmt.Errorf("layout 2 migration candidate requires layout 1 input")
+	}
+	for field, dir := range map[string]string{"specs_dir": sourceMarker.SpecsDir, "planning_dir": sourceMarker.PlanningDir} {
+		if err := ensureWithinRoot(root, field, dir); err != nil {
+			return Layout2Config{}, err
+		}
+	}
+	return sourceMarker, nil
+}
+
+// layout2ReadSourceState reads the source state and requires its active spec to
+// exist inside the repository root.
+func layout2ReadSourceState(root string, paths Paths) (decodedMigrationState, error) {
+	stateData, err := os.ReadFile(paths.StateFile)
+	if err != nil {
+		return decodedMigrationState{}, fmt.Errorf("read state %s: %w", relPath(root, paths.StateFile), fsCause(err))
+	}
+	decodedState, _, err := decodeStateStrict(stateData)
+	if err != nil {
+		return decodedMigrationState{}, err
+	}
+	if err := ensureWithinRoot(root, "active_spec_path", filepath.FromSlash(decodedState.Frontmatter.ActiveSpecPath)); err != nil {
+		return decodedMigrationState{}, err
+	}
+	if !fileExists(filepath.Join(root, filepath.FromSlash(decodedState.Frontmatter.ActiveSpecPath))) {
+		return decodedMigrationState{}, fmt.Errorf("state active_spec_path does not exist: %s", decodedState.Frontmatter.ActiveSpecPath)
+	}
+	return decodedState, nil
 }
 
 func readMigrationTasks(paths Paths) ([]*Task, map[string][]byte, error) {

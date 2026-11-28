@@ -173,16 +173,9 @@ func (s *Service) planPromotionSkills() (localSkillPlan, error) {
 	if err != nil {
 		return localSkillPlan{}, err
 	}
-	expected := make(map[string]map[string]bool, len(names))
-	for _, rel := range files {
-		name, _, found := strings.Cut(rel, "/")
-		if !found {
-			return localSkillPlan{}, fmt.Errorf("embedded skill file %s is not beneath a skill subtree", rel)
-		}
-		if expected[name] == nil {
-			expected[name] = map[string]bool{}
-		}
-		expected[name][rel] = true
+	expected, err := localSkillExpectedFiles(files, len(names))
+	if err != nil {
+		return localSkillPlan{}, err
 	}
 	unsafeSubtrees := map[string]bool{}
 	plan := localSkillPlan{
@@ -215,27 +208,11 @@ func (s *Service) planPromotionSkills() (localSkillPlan, error) {
 		}
 		for _, name := range names {
 			subtree := path.Join(filepath.ToSlash(target), name)
-			effective, err := gitIgnoredExact(s.paths.WorktreeRoot, subtree)
+			exclusion, err := s.localSkillPlanExclusion(excludePath, subtree, managed, managedPatterns, external)
 			if err != nil {
 				return localSkillPlan{}, err
 			}
-			shadowed, err := localSkillExclusionShadowed(s.paths.WorktreeRoot, excludePath, subtree)
-			if err != nil {
-				return localSkillPlan{}, err
-			}
-			exclusion := localSkillExclusion{
-				Path: subtree, Exact: managed[subtree], Effective: effective, Shadowed: shadowed || localSkillExcludedBy(external, subtree), SharedGitScope: sharedGitScope,
-			}
-			switch {
-			case exclusion.Exact:
-				exclusion.Ownership = localSkillExclusionManaged
-			case localSkillExcludedBy(managedPatterns, subtree):
-				exclusion.Ownership = localSkillExclusionAmbiguous
-			case localSkillExcludedBy(external, subtree) || exclusion.Effective:
-				exclusion.Ownership = localSkillExclusionExternal
-			default:
-				exclusion.Ownership = localSkillExclusionCreate
-			}
+			exclusion.SharedGitScope = sharedGitScope
 			plan.Exclusions = append(plan.Exclusions, exclusion)
 		}
 	}
@@ -243,6 +220,51 @@ func (s *Service) planPromotionSkills() (localSkillPlan, error) {
 	slices.SortFunc(plan.Exclusions, func(a, b localSkillExclusion) int { return strings.Compare(a.Path, b.Path) })
 	slices.SortFunc(plan.Unexpected, func(a, b localSkillUnexpected) int { return strings.Compare(a.Path, b.Path) })
 	return plan, nil
+}
+
+// localSkillExpectedFiles groups the embedded skill files by the skill subtree
+// they belong to.
+func localSkillExpectedFiles(files []string, skills int) (map[string]map[string]bool, error) {
+	expected := make(map[string]map[string]bool, skills)
+	for _, rel := range files {
+		name, _, found := strings.Cut(rel, "/")
+		if !found {
+			return nil, fmt.Errorf("embedded skill file %s is not beneath a skill subtree", rel)
+		}
+		if expected[name] == nil {
+			expected[name] = map[string]bool{}
+		}
+		expected[name][rel] = true
+	}
+	return expected, nil
+}
+
+// localSkillPlanExclusion classifies who owns the Git exclusion of one skill
+// subtree. An exact managed line wins; a managed pattern that only matches it
+// is ambiguous; any other exclusion belongs to the adopter.
+func (s *Service) localSkillPlanExclusion(excludePath, subtree string, managed map[string]bool, managedPatterns, external []string) (localSkillExclusion, error) {
+	effective, err := gitIgnoredExact(s.paths.WorktreeRoot, subtree)
+	if err != nil {
+		return localSkillExclusion{}, err
+	}
+	shadowed, err := localSkillExclusionShadowed(s.paths.WorktreeRoot, excludePath, subtree)
+	if err != nil {
+		return localSkillExclusion{}, err
+	}
+	exclusion := localSkillExclusion{
+		Path: subtree, Exact: managed[subtree], Effective: effective, Shadowed: shadowed || localSkillExcludedBy(external, subtree),
+	}
+	switch {
+	case exclusion.Exact:
+		exclusion.Ownership = localSkillExclusionManaged
+	case localSkillExcludedBy(managedPatterns, subtree):
+		exclusion.Ownership = localSkillExclusionAmbiguous
+	case localSkillExcludedBy(external, subtree) || exclusion.Effective:
+		exclusion.Ownership = localSkillExclusionExternal
+	default:
+		exclusion.Ownership = localSkillExclusionCreate
+	}
+	return exclusion, nil
 }
 
 func localSkillExclusionShadowed(root, excludePath, subtree string) (bool, error) {

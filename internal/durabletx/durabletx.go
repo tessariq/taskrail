@@ -224,15 +224,6 @@ func validateFenceOrder(members []manifestMember) error {
 	return nil
 }
 
-// less is the canonical member order prepareEntries sorts by: path kind, then
-// reported path.
-func less(a, b manifestMember) bool {
-	if a.Kind != b.Kind {
-		return string(a.Kind) < string(b.Kind)
-	}
-	return a.Reported < b.Reported
-}
-
 func recordUnique(repo repolock.Repository, reported, physical map[string]struct{}, kind PathKind, name, relative string) error {
 	reportedKey := string(kind) + "\x00" + name
 	if _, ok := reported[reportedKey]; ok {

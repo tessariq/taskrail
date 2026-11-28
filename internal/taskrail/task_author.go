@@ -80,22 +80,9 @@ func (s *Service) TaskAuthor(input TaskAuthorInput) (result TaskAuthorResult, er
 	if err != nil {
 		return result, err
 	}
-	before, err := os.ReadFile(target.Filename)
+	before, err := taskAuthorReadTarget(target, input)
 	if err != nil {
-		return result, fmt.Errorf("read task %s: %w", target.Path, fsCause(err))
-	}
-	if digestRaw(before) != input.ExpectSHA256 {
-		return result, WithMachineErrorCode(MachineCodeWriteConflict, fmt.Errorf("task %s does not match expected digest", input.TaskID))
-	}
-	exactFrontmatter, _, err := parseFrontmatter[TaskFrontmatter](before)
-	if err != nil {
-		return result, WithMachineErrorCode(MachineCodeInvalidProposal, fmt.Errorf("parse task %s: %w", input.TaskID, err))
-	}
-	if exactFrontmatter.ID != input.TaskID {
-		return result, WithMachineErrorCode(MachineCodeWriteConflict, fmt.Errorf("task %s identity changed while reading", input.TaskID))
-	}
-	if exactFrontmatter.Status != "todo" {
-		return result, WithMachineErrorCode(MachineCodeInvalidStatus, fmt.Errorf("task %s is %s: task author targets todo work", input.TaskID, exactFrontmatter.Status))
+		return result, err
 	}
 	proposal, err := s.readTaskAuthorProposal(input.BodyPath)
 	if err != nil {
@@ -127,25 +114,7 @@ func (s *Service) TaskAuthor(input TaskAuthorInput) (result TaskAuthorResult, er
 		Command: "task author", SelectedTask: input.TaskID, TaskFields: taskAuthorWriter.taskFields,
 		Consumed: consumed, Published: []repotx.Candidate{managedCandidate(target.Path, target.Filename, after)},
 		ExpectedOriginalSHA256: map[string]string{target.Path: result.TaskSHA256Before},
-		Validate: func([]repotx.Snapshot) error {
-			if err := s.validateWriterStorage(); err != nil {
-				return err
-			}
-			currentTasks, err := s.loadTasks()
-			if err != nil {
-				return err
-			}
-			if !sameTaskCorpus(corpus, currentTasks) {
-				return fmt.Errorf("task author task corpus changed during candidate validation")
-			}
-			if testHookWriterValidated != nil {
-				testHookWriterValidated()
-			}
-			if got := s.validateInMemory(state, preview); !got.Valid {
-				return fmt.Errorf("task author candidate failed validation: %s", strings.Join(got.Violations, "; "))
-			}
-			return nil
-		},
+		Validate:               s.taskAuthorRevalidate(corpus, state, preview),
 	}
 	if testHookWriterCandidateBuilt != nil {
 		testHookWriterCandidateBuilt()
@@ -155,6 +124,55 @@ func (s *Service) TaskAuthor(input TaskAuthorInput) (result TaskAuthorResult, er
 	}
 	result.Applied = true
 	return result, nil
+}
+
+// taskAuthorReadTarget reads the selected task's exact bytes and requires them
+// to be the reviewed revision of a todo task: the caller's digest binds the
+// patch to what was reviewed, and the frontmatter is re-read from those bytes.
+func taskAuthorReadTarget(target *Task, input TaskAuthorInput) ([]byte, error) {
+	before, err := os.ReadFile(target.Filename)
+	if err != nil {
+		return nil, fmt.Errorf("read task %s: %w", target.Path, fsCause(err))
+	}
+	if digestRaw(before) != input.ExpectSHA256 {
+		return nil, WithMachineErrorCode(MachineCodeWriteConflict, fmt.Errorf("task %s does not match expected digest", input.TaskID))
+	}
+	exactFrontmatter, _, err := parseFrontmatter[TaskFrontmatter](before)
+	if err != nil {
+		return nil, WithMachineErrorCode(MachineCodeInvalidProposal, fmt.Errorf("parse task %s: %w", input.TaskID, err))
+	}
+	if exactFrontmatter.ID != input.TaskID {
+		return nil, WithMachineErrorCode(MachineCodeWriteConflict, fmt.Errorf("task %s identity changed while reading", input.TaskID))
+	}
+	if exactFrontmatter.Status != "todo" {
+		return nil, WithMachineErrorCode(MachineCodeInvalidStatus, fmt.Errorf("task %s is %s: task author targets todo work", input.TaskID, exactFrontmatter.Status))
+	}
+	return before, nil
+}
+
+// taskAuthorRevalidate is the transaction's under-lock check: storage must
+// still be writable, the task corpus unchanged since the candidate was built,
+// and the candidate still valid.
+func (s *Service) taskAuthorRevalidate(corpus []string, state *State, preview []*Task) func([]repotx.Snapshot) error {
+	return func([]repotx.Snapshot) error {
+		if err := s.validateWriterStorage(); err != nil {
+			return err
+		}
+		currentTasks, err := s.loadTasks()
+		if err != nil {
+			return err
+		}
+		if !sameTaskCorpus(corpus, currentTasks) {
+			return fmt.Errorf("task author task corpus changed during candidate validation")
+		}
+		if testHookWriterValidated != nil {
+			testHookWriterValidated()
+		}
+		if got := s.validateInMemory(state, preview); !got.Valid {
+			return fmt.Errorf("task author candidate failed validation: %s", strings.Join(got.Violations, "; "))
+		}
+		return nil
+	}
 }
 
 func taskAuthorTransactionError(err error) error {

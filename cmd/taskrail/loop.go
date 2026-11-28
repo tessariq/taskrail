@@ -10,6 +10,38 @@ import (
 	"github.com/tessariq/taskrail/internal/taskrail"
 )
 
+const loopLongHelp = "Select tracked work deterministically and execute it: the default " +
+	"invocation launches one fresh external child process per selected task, " +
+	"writes the rendered prompt to its stdin, and validates the repository " +
+	"state that child leaves behind. Use --dry-run for the preview-only " +
+	"mode, which accepts no child command and reports the selected task and " +
+	"rendered prompt without launching one. Execution inside the Taskrail " +
+	"source checkout is unsupported.\n\n" +
+	"--check names an optional caller-owned read-only executable gate " +
+	"for sequential runs: after each delivered completed pass it runs " +
+	"once with no arguments or shell, using --timeout and the caller " +
+	"environment. Failure stops without resetting the delivered commit.\n\n" +
+	"Effective parallel widths above one require --check. Each replayed " +
+	"integration commit is checked, and a final check follows the aggregate " +
+	"child on the same head before local publication. Failed candidates " +
+	"roll back; mutating checks stop the batch fail-closed. Effective width " +
+	"is min(--parallel, --max-iterations), not eligible-frontier size. " +
+	"Parallel --delivery review is unsupported unless explicitly enabled " +
+	"with --review-protocol checked-combined-v1. That protocol requires a " +
+	"cooperating schema-2 adapter and --timeout; it publishes one combined " +
+	"change only after the aggregate and final check, using an exact-head " +
+	"conditional fast-forward. Missing-check errors take precedence.\n\n" +
+	"--parallel greater than one runs that many isolated workers " +
+	"concurrently in private repository clones, and requires committed " +
+	"storage in a clean, attached worktree. Under the default " +
+	"--delivery local, Taskrail replays each successful candidate as one " +
+	"integration commit in a separate integration clone and, only after the " +
+	"aggregate gate passes, fast-forwards the attached branch and worktree " +
+	"to the integrated head; it never pushes, merges, or opens pull " +
+	"requests itself. Under --delivery review, publishing, opening, and " +
+	"merging changes is performed by the caller-owned --review-adapter " +
+	"executable that Taskrail invokes."
+
 func newLoopCmd() *cobra.Command {
 	var input taskrail.LoopInvocation
 	var maxReviewRounds int
@@ -25,37 +57,7 @@ func newLoopCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "loop [flags] -- <command> <args...>",
 		Short: "Run deterministic unattended task execution",
-		Long: "Select tracked work deterministically and execute it: the default " +
-			"invocation launches one fresh external child process per selected task, " +
-			"writes the rendered prompt to its stdin, and validates the repository " +
-			"state that child leaves behind. Use --dry-run for the preview-only " +
-			"mode, which accepts no child command and reports the selected task and " +
-			"rendered prompt without launching one. Execution inside the Taskrail " +
-			"source checkout is unsupported.\n\n" +
-			"--check names an optional caller-owned read-only executable gate " +
-			"for sequential runs: after each delivered completed pass it runs " +
-			"once with no arguments or shell, using --timeout and the caller " +
-			"environment. Failure stops without resetting the delivered commit.\n\n" +
-			"Effective parallel widths above one require --check. Each replayed " +
-			"integration commit is checked, and a final check follows the aggregate " +
-			"child on the same head before local publication. Failed candidates " +
-			"roll back; mutating checks stop the batch fail-closed. Effective width " +
-			"is min(--parallel, --max-iterations), not eligible-frontier size. " +
-			"Parallel --delivery review is unsupported unless explicitly enabled " +
-			"with --review-protocol checked-combined-v1. That protocol requires a " +
-			"cooperating schema-2 adapter and --timeout; it publishes one combined " +
-			"change only after the aggregate and final check, using an exact-head " +
-			"conditional fast-forward. Missing-check errors take precedence.\n\n" +
-			"--parallel greater than one runs that many isolated workers " +
-			"concurrently in private repository clones, and requires committed " +
-			"storage in a clean, attached worktree. Under the default " +
-			"--delivery local, Taskrail replays each successful candidate as one " +
-			"integration commit in a separate integration clone and, only after the " +
-			"aggregate gate passes, fast-forwards the attached branch and worktree " +
-			"to the integrated head; it never pushes, merges, or opens pull " +
-			"requests itself. Under --delivery review, publishing, opening, and " +
-			"merging changes is performed by the caller-owned --review-adapter " +
-			"executable that Taskrail invokes.",
+		Long:  loopLongHelp,
 		Args: machineArgs(func(cmd *cobra.Command, args []string) error {
 			if err := cobra.ArbitraryArgs(cmd, args); err != nil {
 				return err

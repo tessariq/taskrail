@@ -219,8 +219,24 @@ func replaceDependenciesField(data []byte, before, after []string) ([]byte, erro
 	if strings.Contains(string(data), "\r\n") {
 		newline = "\r\n"
 	}
-	text := string(data)
-	lines := strings.SplitAfter(text, newline)
+	lines := strings.SplitAfter(string(data), newline)
+	start, end := dependencyFieldBounds(lines, newline)
+	if start < 0 || end < 0 {
+		return nil, errors.New("task frontmatter has no bounded dependencies field")
+	}
+	headerValue := strings.TrimSpace(strings.TrimPrefix(strings.TrimSuffix(lines[start], newline), "dependencies:"))
+	if headerValue == "" || strings.HasPrefix(headerValue, "#") {
+		if edited, ok := dependencyBlockEdit(lines, start, end, newline, before, after); ok {
+			return []byte(strings.Join(edited, "")), nil
+		}
+	}
+	lines = append(lines[:start], append([]string{dependencyFieldRender(after, newline)}, lines[end:]...)...)
+	return []byte(strings.Join(lines, "")), nil
+}
+
+// dependencyFieldBounds returns the line range [start, end) of the frontmatter
+// dependencies field, or -1 for a bound it could not find.
+func dependencyFieldBounds(lines []string, newline string) (int, int) {
 	inFrontmatter := false
 	start, end := -1, -1
 	for i, line := range lines {
@@ -247,55 +263,58 @@ func replaceDependenciesField(data []byte, before, after []string) ([]byte, erro
 			break
 		}
 	}
-	if start < 0 || end < 0 {
-		return nil, errors.New("task frontmatter has no bounded dependencies field")
-	}
-	headerValue := strings.TrimSpace(strings.TrimPrefix(strings.TrimSuffix(lines[start], newline), "dependencies:"))
-	blockStyle := headerValue == "" || strings.HasPrefix(headerValue, "#")
-	if blockStyle && len(after) == len(before)+1 && slices.Equal(after[:len(before)], before) {
+	return start, end
+}
+
+// dependencyBlockEdit applies a single-entry append or removal to a block-style
+// list in place, reporting false when the change is not one it can express.
+func dependencyBlockEdit(lines []string, start, end int, newline string, before, after []string) ([]string, bool) {
+	if len(after) == len(before)+1 && slices.Equal(after[:len(before)], before) {
+		if len(before) == 0 {
+			return nil, false
+		}
 		indent := "    "
 		insert := start + 1
 		for i := start + 1; i < end; i++ {
 			plain := strings.TrimSuffix(lines[i], newline)
-			trimmed := strings.TrimSpace(plain)
-			if strings.HasPrefix(trimmed, "- ") {
+			if strings.HasPrefix(strings.TrimSpace(plain), "- ") {
 				indent = plain[:len(plain)-len(strings.TrimLeft(plain, " \t"))]
 				insert = i + 1
 			}
 		}
-		if len(before) > 0 {
-			lines = append(lines[:insert], append([]string{indent + "- " + after[len(after)-1] + newline}, lines[insert:]...)...)
-			return []byte(strings.Join(lines, "")), nil
+		return append(lines[:insert], append([]string{indent + "- " + after[len(after)-1] + newline}, lines[insert:]...)...), true
+	}
+	if len(before) != len(after)+1 || len(after) == 0 {
+		return nil, false
+	}
+	removed := ""
+	for _, dependency := range before {
+		if !slices.Contains(after, dependency) {
+			removed = dependency
+			break
 		}
 	}
-	if blockStyle && len(before) == len(after)+1 {
-		removed := ""
-		for _, dependency := range before {
-			if !slices.Contains(after, dependency) {
-				removed = dependency
-				break
-			}
+	if removed == "" {
+		return nil, false
+	}
+	for i := start + 1; i < end; i++ {
+		if strings.TrimSpace(strings.TrimSuffix(lines[i], newline)) == "- "+removed {
+			return append(lines[:i], lines[i+1:]...), true
 		}
-		if removed != "" && len(after) > 0 {
-			for i := start + 1; i < end; i++ {
-				if strings.TrimSpace(strings.TrimSuffix(lines[i], newline)) == "- "+removed {
-					lines = append(lines[:i], lines[i+1:]...)
-					return []byte(strings.Join(lines, "")), nil
-				}
-			}
-		}
+	}
+	return nil, false
+}
+
+func dependencyFieldRender(after []string, newline string) string {
+	if len(after) == 0 {
+		return "dependencies: []" + newline
 	}
 	var replacement strings.Builder
-	if len(after) == 0 {
-		replacement.WriteString("dependencies: []" + newline)
-	} else {
-		replacement.WriteString("dependencies:" + newline)
-		for _, dependency := range after {
-			replacement.WriteString("    - " + dependency + newline)
-		}
+	replacement.WriteString("dependencies:" + newline)
+	for _, dependency := range after {
+		replacement.WriteString("    - " + dependency + newline)
 	}
-	lines = append(lines[:start], append([]string{replacement.String()}, lines[end:]...)...)
-	return []byte(strings.Join(lines, "")), nil
+	return replacement.String()
 }
 
 // writerConsumedPaths derives the consumed set a task writer's transaction

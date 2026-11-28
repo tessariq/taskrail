@@ -51,56 +51,19 @@ func (s *Service) refreshLocalSkills(in InitInput) (result InitResult, err error
 	if err := validateLocalSkillRefreshPlan(plan); err != nil {
 		return InitResult{}, err
 	}
-	excludePath, err := localExcludePath(s.paths)
+	excludePath, exclude, err := s.localSkillRefreshReadExclusion()
 	if err != nil {
 		return InitResult{}, err
-	}
-	exclude, err := readInitFile(excludePath)
-	if err != nil {
-		return InitResult{}, fmt.Errorf("inspect Git exclusion: %w", err)
-	}
-	if exclude == nil {
-		return InitResult{}, fmt.Errorf("inspect Git exclusion: file is absent")
 	}
 	members := []durabletx.Member{{
 		Kind: durabletx.Git, Reported: filepath.ToSlash(excludePath),
 		Path: gitRelativePath(s.paths.GitCommonDir, excludePath), Content: exclude,
 	}}
-	consumed := make([]durabletx.Path, 0, len(plan.Destinations))
-	installed := SkillInstallResult{}
-	for _, destination := range plan.Destinations {
-		if destination.Action == localSkillPreserve {
-			consumed = append(consumed, durabletx.Path{
-				Kind: durabletx.Worktree, Reported: destination.Path, Path: destination.Path,
-			})
-			continue
-		}
-		packaged, readErr := shippableSkillsFS.ReadFile(path.Join(shippableSkillsRoot, destination.PackagePath))
-		if readErr != nil {
-			return InitResult{}, fmt.Errorf("read embedded skill %s: %w", destination.PackagePath, readErr)
-		}
-		if validateErr := validateAgentSkill(packaged); validateErr != nil {
-			return InitResult{}, fmt.Errorf("validate embedded skill %s: %w", destination.PackagePath, validateErr)
-		}
-		stamped, stampErr := stampSkillVersion(packaged, in.SkillVersion)
-		if stampErr != nil {
-			return InitResult{}, fmt.Errorf("stamp embedded skill %s: %w", destination.PackagePath, stampErr)
-		}
-		existing, readErr := os.ReadFile(filepath.Join(s.paths.RepoRoot, filepath.FromSlash(destination.Path)))
-		if readErr != nil {
-			return InitResult{}, fmt.Errorf("read skill destination %s: %w", destination.Path, readErr)
-		}
-		if bytes.Equal(existing, stamped) {
-			consumed = append(consumed, durabletx.Path{
-				Kind: durabletx.Worktree, Reported: destination.Path, Path: destination.Path,
-			})
-			continue
-		}
-		members = append(members, durabletx.Member{
-			Kind: durabletx.Worktree, Reported: destination.Path, Path: destination.Path, Content: stamped,
-		})
-		installed.Overwritten = append(installed.Overwritten, destination.Path)
+	refreshMembers, consumed, installed, err := s.localSkillRefreshMembers(plan, in.SkillVersion)
+	if err != nil {
+		return InitResult{}, err
 	}
+	members = append(members, refreshMembers...)
 	if testHookLocalSkillsPlanned != nil {
 		if err := testHookLocalSkillsPlanned(); err != nil {
 			return InitResult{}, err
@@ -125,6 +88,29 @@ func (s *Service) refreshLocalSkills(in InitInput) (result InitResult, err error
 		return InitResult{}, s.mapMigrationFailure(transactionID, err)
 	}
 
+	return s.localSkillRefreshResult(installed)
+}
+
+// localSkillRefreshReadExclusion reads the effective Git exclusion a refresh
+// binds to. Refresh never creates it, so an absent file is an error.
+func (s *Service) localSkillRefreshReadExclusion() (string, []byte, error) {
+	excludePath, err := localExcludePath(s.paths)
+	if err != nil {
+		return "", nil, err
+	}
+	exclude, err := readInitFile(excludePath)
+	if err != nil {
+		return "", nil, fmt.Errorf("inspect Git exclusion: %w", err)
+	}
+	if exclude == nil {
+		return "", nil, fmt.Errorf("inspect Git exclusion: file is absent")
+	}
+	return excludePath, exclude, nil
+}
+
+// localSkillRefreshResult reports the repository as init sees it after the
+// refresh committed, with the refreshed skills and a fresh validation.
+func (s *Service) localSkillRefreshResult(installed SkillInstallResult) (InitResult, error) {
 	marker, found, err := readMarker(s.paths.RepoRoot)
 	if err != nil {
 		return InitResult{}, err
@@ -133,7 +119,7 @@ func (s *Service) refreshLocalSkills(in InitInput) (result InitResult, err error
 	if err != nil {
 		return InitResult{}, err
 	}
-	result, err = s.reportInit(initialized)
+	result, err := s.reportInit(initialized)
 	if err != nil {
 		return InitResult{}, err
 	}
@@ -148,6 +134,56 @@ func (s *Service) refreshLocalSkills(in InitInput) (result InitResult, err error
 	}
 	result.Validation = &validation
 	return result, nil
+}
+
+// localSkillRefreshMembers splits the planned destinations into members that
+// rewrite a drifted copy and consumed paths that must stay byte-identical:
+// preserved destinations and copies already matching the stamped package.
+func (s *Service) localSkillRefreshMembers(plan localSkillPlan, version string) ([]durabletx.Member, []durabletx.Path, SkillInstallResult, error) {
+	var members []durabletx.Member
+	consumed := make([]durabletx.Path, 0, len(plan.Destinations))
+	installed := SkillInstallResult{}
+	for _, destination := range plan.Destinations {
+		unchanged := durabletx.Path{Kind: durabletx.Worktree, Reported: destination.Path, Path: destination.Path}
+		if destination.Action == localSkillPreserve {
+			consumed = append(consumed, unchanged)
+			continue
+		}
+		stamped, err := localSkillStampPackaged(destination.PackagePath, version)
+		if err != nil {
+			return nil, nil, SkillInstallResult{}, err
+		}
+		existing, readErr := os.ReadFile(filepath.Join(s.paths.RepoRoot, filepath.FromSlash(destination.Path)))
+		if readErr != nil {
+			return nil, nil, SkillInstallResult{}, fmt.Errorf("read skill destination %s: %w", destination.Path, readErr)
+		}
+		if bytes.Equal(existing, stamped) {
+			consumed = append(consumed, unchanged)
+			continue
+		}
+		members = append(members, durabletx.Member{
+			Kind: durabletx.Worktree, Reported: destination.Path, Path: destination.Path, Content: stamped,
+		})
+		installed.Overwritten = append(installed.Overwritten, destination.Path)
+	}
+	return members, consumed, installed, nil
+}
+
+// localSkillStampPackaged reads one embedded skill file, refuses it unless it
+// validates, and stamps the installing binary's version into it.
+func localSkillStampPackaged(packagePath, version string) ([]byte, error) {
+	packaged, err := shippableSkillsFS.ReadFile(path.Join(shippableSkillsRoot, packagePath))
+	if err != nil {
+		return nil, fmt.Errorf("read embedded skill %s: %w", packagePath, err)
+	}
+	if err := validateAgentSkill(packaged); err != nil {
+		return nil, fmt.Errorf("validate embedded skill %s: %w", packagePath, err)
+	}
+	stamped, err := stampSkillVersion(packaged, version)
+	if err != nil {
+		return nil, fmt.Errorf("stamp embedded skill %s: %w", packagePath, err)
+	}
+	return stamped, nil
 }
 
 func validateLocalSkillRefreshPlan(plan localSkillPlan) error {

@@ -452,39 +452,57 @@ func (s *Service) promptReplacements(allowPathBlocked bool) (map[string]promptRe
 			continue
 		}
 		if !entry.Directory && path.Dir(entry.Path) == "v1" {
-			filename := path.Base(entry.Path)
-			definition, ok := promptDefinitionForFilename(filename, "v1")
-			if !ok {
-				for _, known := range promptRegistry {
-					if known.contract == "v1" && samePortableName(filename, known.id+".md") {
-						return nil, promptPathError(allowPathBlocked, "prompt replacement path alias %q", path.Join(s.paths.LogicalPromptsDir, entry.Path))
-					}
-				}
-				return nil, WithMachineErrorCode(MachineCodePromptInvalid, fmt.Errorf("unknown prompt replacement %q", path.Join(s.paths.LogicalPromptsDir, entry.Path)))
-			}
-			logical := path.Join(s.paths.LogicalPromptsDir, entry.Path)
-			data, _, err := durablefs.ReadFile(root, path.Join(replacementDir, entry.Path), promptReplacementLimit+1)
+			key, replacement, err := s.promptReadReplacement(root, replacementDir, entry.Path, allowPathBlocked)
 			if err != nil {
-				if errors.Is(err, durablefs.ErrUnsupported) {
-					return nil, WithMachineErrorCode(MachineCodePromptInvalid, fmt.Errorf("invalid prompt replacement %s: replacement exceeds %d bytes", logical, promptReplacementLimit))
-				}
-				return nil, promptReadError("read prompt replacement "+logical, err, allowPathBlocked)
+				return nil, err
 			}
-			if err := validatePromptReplacement(data); err != nil {
-				return nil, WithMachineErrorCode(MachineCodePromptInvalid, fmt.Errorf("invalid prompt replacement %s: %w", logical, err))
-			}
-			replacements[promptKey(definition.id, definition.contract)] = promptReplacement{logicalPath: logical, data: data}
+			replacements[key] = replacement
 			continue
 		}
-		if entry.Path == "v1" && !entry.Directory {
-			return nil, promptPathError(allowPathBlocked, "prompt contract %q is not a directory", s.paths.LogicalPromptsDir+"/v1")
-		}
-		if path.Dir(entry.Path) == "." && samePortableName(entry.Path, "v1") {
-			return nil, promptPathError(allowPathBlocked, "prompt contract path alias %q", path.Join(s.paths.LogicalPromptsDir, entry.Path))
-		}
-		return nil, WithMachineErrorCode(MachineCodePromptInvalid, fmt.Errorf("unknown prompt contract entry %q", path.Join(s.paths.LogicalPromptsDir, entry.Path)))
+		return nil, s.promptContractEntryError(entry.Path, entry.Directory, allowPathBlocked)
 	}
 	return replacements, nil
+}
+
+// promptReadReplacement reads and validates one v1 replacement file, keyed by
+// the registered prompt it replaces. A filename that only matches a registered
+// prompt under portable case folding is an alias, not an unknown prompt.
+func (s *Service) promptReadReplacement(root, replacementDir, entryPath string, allowPathBlocked bool) (string, promptReplacement, error) {
+	filename := path.Base(entryPath)
+	logical := path.Join(s.paths.LogicalPromptsDir, entryPath)
+	definition, ok := promptDefinitionForFilename(filename, "v1")
+	if !ok {
+		for _, known := range promptRegistry {
+			if known.contract == "v1" && samePortableName(filename, known.id+".md") {
+				return "", promptReplacement{}, promptPathError(allowPathBlocked, "prompt replacement path alias %q", logical)
+			}
+		}
+		return "", promptReplacement{}, WithMachineErrorCode(MachineCodePromptInvalid, fmt.Errorf("unknown prompt replacement %q", logical))
+	}
+	data, _, err := durablefs.ReadFile(root, path.Join(replacementDir, entryPath), promptReplacementLimit+1)
+	if err != nil {
+		if errors.Is(err, durablefs.ErrUnsupported) {
+			return "", promptReplacement{}, WithMachineErrorCode(MachineCodePromptInvalid, fmt.Errorf("invalid prompt replacement %s: replacement exceeds %d bytes", logical, promptReplacementLimit))
+		}
+		return "", promptReplacement{}, promptReadError("read prompt replacement "+logical, err, allowPathBlocked)
+	}
+	if err := validatePromptReplacement(data); err != nil {
+		return "", promptReplacement{}, WithMachineErrorCode(MachineCodePromptInvalid, fmt.Errorf("invalid prompt replacement %s: %w", logical, err))
+	}
+	return promptKey(definition.id, definition.contract), promptReplacement{logicalPath: logical, data: data}, nil
+}
+
+// promptContractEntryError classifies a replacement-tree entry outside the v1
+// contract directory, telling a misshapen or aliased v1 apart from an unknown
+// contract.
+func (s *Service) promptContractEntryError(entryPath string, directory, allowPathBlocked bool) error {
+	if entryPath == "v1" && !directory {
+		return promptPathError(allowPathBlocked, "prompt contract %q is not a directory", s.paths.LogicalPromptsDir+"/v1")
+	}
+	if path.Dir(entryPath) == "." && samePortableName(entryPath, "v1") {
+		return promptPathError(allowPathBlocked, "prompt contract path alias %q", path.Join(s.paths.LogicalPromptsDir, entryPath))
+	}
+	return WithMachineErrorCode(MachineCodePromptInvalid, fmt.Errorf("unknown prompt contract entry %q", path.Join(s.paths.LogicalPromptsDir, entryPath)))
 }
 
 // validateLocalPromptReplacementSource keeps overlay ownership distinct from the

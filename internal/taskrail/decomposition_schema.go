@@ -182,63 +182,9 @@ func decodeReviewedDraft(data []byte) (ReviewedImportDraft, error) {
 	}
 	seen := map[string]struct{}{}
 	for i, raw := range elements {
-		what := fmt.Sprintf("reviewed task at index %d", i)
-		obj, err := strictObject(raw, what)
+		task, err := decompositionReviewedTask(raw, fmt.Sprintf("reviewed task at index %d", i), seen)
 		if err != nil {
 			return out, err
-		}
-		if err := exactOptionalMembers(obj, what, []string{"key", "title", "dependencies", "body", "spec_ref"}, []string{"priority"}); err != nil {
-			return out, err
-		}
-		var task TaskDraft
-		if task.Key, err = reviewKeyMember(obj, what, "key"); err != nil {
-			return out, err
-		}
-		if _, exists := seen[task.Key]; exists {
-			return out, fmt.Errorf("duplicate task key %q", task.Key)
-		}
-		seen[task.Key] = struct{}{}
-		if task.Title, err = nonEmptyMember(obj, what, "title"); err != nil {
-			return out, err
-		}
-		if task.Body, err = nonEmptyMember(obj, what, "body"); err != nil {
-			return out, err
-		}
-		if err := validateReviewedBody(task.Body, what); err != nil {
-			return out, err
-		}
-		if task.SpecRef, err = stringMember(obj, what, "spec_ref"); err != nil {
-			return out, err
-		}
-		if normalized, e := normalizeSpecRef(task.SpecRef); e != nil || normalized != task.SpecRef {
-			return out, fmt.Errorf("%s spec_ref is not canonical", what)
-		}
-		deps, err := arrayMember(obj["dependencies"], what, "dependencies")
-		if err != nil {
-			return out, err
-		}
-		depSeen := map[string]struct{}{}
-		for j, depRaw := range deps {
-			dep, err := rawString(depRaw, fmt.Sprintf("%s dependency at index %d", what, j))
-			if err != nil {
-				return out, err
-			}
-			if dep == "" {
-				return out, fmt.Errorf("%s has empty dependency", what)
-			}
-			if _, exists := depSeen[dep]; exists {
-				return out, fmt.Errorf("%s repeats dependency %q", what, dep)
-			}
-			depSeen[dep] = struct{}{}
-			task.Dependencies = append(task.Dependencies, dep)
-		}
-		if raw, ok := obj["priority"]; ok {
-			if task.Priority, err = rawString(raw, what+" priority"); err != nil {
-				return out, err
-			}
-			if _, ok := validPriorites[task.Priority]; !ok {
-				return out, fmt.Errorf("%s has invalid priority %q", what, task.Priority)
-			}
 		}
 		out.Tasks = append(out.Tasks, task)
 	}
@@ -289,68 +235,218 @@ func decodeDecompositionTrace(data []byte, subjects DecompositionSubjects) (Deco
 	seen := map[string]struct{}{}
 	anchors := collectHeadingAnchors(string(subjects.Spec))
 	for i, raw := range elements {
-		what := fmt.Sprintf("trace requirement at index %d", i)
-		obj, err := strictObject(raw, what)
+		req, err := decompositionTraceRequirement(raw, fmt.Sprintf("trace requirement at index %d", i), subjects, anchors, seen)
 		if err != nil {
-			return out, err
-		}
-		if err := exactMembers(obj, what, []string{"requirement_id", "spec_ref", "source", "task_keys", "disposition", "rationale"}); err != nil {
-			return out, err
-		}
-		var req DecompositionRequirement
-		if req.RequirementID, err = stringMember(obj, what, "requirement_id"); err != nil {
-			return out, err
-		}
-		if _, ok := seen[req.RequirementID]; ok {
-			return out, fmt.Errorf("duplicate requirement_id %q", req.RequirementID)
-		}
-		seen[req.RequirementID] = struct{}{}
-		if req.SpecRef, err = stringMember(obj, what, "spec_ref"); err != nil {
-			return out, err
-		}
-		_, anchor, e := parseSpecRef(req.SpecRef)
-		normalized, ne := normalizeSpecRef(req.SpecRef)
-		if e != nil || ne != nil || normalized != req.SpecRef || specRefPath(normalized) != subjects.SpecPath {
-			return out, fmt.Errorf("%s spec_ref is not a normalized selected-spec reference", what)
-		}
-		if _, ok := anchors[anchor]; !ok {
-			return out, fmt.Errorf("%s spec_ref anchor does not exist", what)
-		}
-		if req.Source, err = decodeDecompositionSource(obj["source"], what, subjects.Spec); err != nil {
-			return out, err
-		}
-		keys, err := arrayMember(obj["task_keys"], what, "task_keys")
-		if err != nil {
-			return out, err
-		}
-		keySeen := map[string]struct{}{}
-		for j, rawKey := range keys {
-			key, err := rawString(rawKey, fmt.Sprintf("%s task key at index %d", what, j))
-			if err != nil {
-				return out, err
-			}
-			if !portableReviewKey.MatchString(key) {
-				return out, fmt.Errorf("%s has non-portable task key", what)
-			}
-			if _, ok := keySeen[key]; ok {
-				return out, fmt.Errorf("%s repeats task key %q", what, key)
-			}
-			keySeen[key] = struct{}{}
-			req.TaskKeys = append(req.TaskKeys, key)
-		}
-		if req.Disposition, err = enumMember(obj, what, "disposition", []string{"task", "no-task"}); err != nil {
-			return out, err
-		}
-		if (req.Disposition == "task") != (len(req.TaskKeys) > 0) {
-			return out, fmt.Errorf("%s task_keys do not match disposition", what)
-		}
-		if req.Rationale, err = nonEmptyMember(obj, what, "rationale"); err != nil {
 			return out, err
 		}
 		out.Requirements = append(out.Requirements, req)
 	}
 	out.Raw = append([]byte(nil), data...)
 	return out, nil
+}
+
+func decompositionReviewedDependencies(obj map[string]json.RawMessage, what string) ([]string, error) {
+	deps, err := arrayMember(obj["dependencies"], what, "dependencies")
+	if err != nil {
+		return nil, err
+	}
+	var out []string
+	depSeen := map[string]struct{}{}
+	for j, depRaw := range deps {
+		dep, err := rawString(depRaw, fmt.Sprintf("%s dependency at index %d", what, j))
+		if err != nil {
+			return nil, err
+		}
+		if dep == "" {
+			return nil, fmt.Errorf("%s has empty dependency", what)
+		}
+		if _, exists := depSeen[dep]; exists {
+			return nil, fmt.Errorf("%s repeats dependency %q", what, dep)
+		}
+		depSeen[dep] = struct{}{}
+		out = append(out, dep)
+	}
+	return out, nil
+}
+
+// decompositionReviewedTask decodes one reviewed task, recording its key in
+// seen so a later duplicate is refused before its other members are read.
+func decompositionReviewedTask(raw json.RawMessage, what string, seen map[string]struct{}) (TaskDraft, error) {
+	var task TaskDraft
+	obj, err := strictObject(raw, what)
+	if err != nil {
+		return task, err
+	}
+	if err := exactOptionalMembers(obj, what, []string{"key", "title", "dependencies", "body", "spec_ref"}, []string{"priority"}); err != nil {
+		return task, err
+	}
+	if task.Key, err = reviewKeyMember(obj, what, "key"); err != nil {
+		return task, err
+	}
+	if _, exists := seen[task.Key]; exists {
+		return task, fmt.Errorf("duplicate task key %q", task.Key)
+	}
+	seen[task.Key] = struct{}{}
+	if task.Title, err = nonEmptyMember(obj, what, "title"); err != nil {
+		return task, err
+	}
+	if task.Body, err = nonEmptyMember(obj, what, "body"); err != nil {
+		return task, err
+	}
+	if err := validateReviewedBody(task.Body, what); err != nil {
+		return task, err
+	}
+	if task.SpecRef, err = stringMember(obj, what, "spec_ref"); err != nil {
+		return task, err
+	}
+	if normalized, e := normalizeSpecRef(task.SpecRef); e != nil || normalized != task.SpecRef {
+		return task, fmt.Errorf("%s spec_ref is not canonical", what)
+	}
+	if task.Dependencies, err = decompositionReviewedDependencies(obj, what); err != nil {
+		return task, err
+	}
+	if raw, ok := obj["priority"]; ok {
+		if task.Priority, err = rawString(raw, what+" priority"); err != nil {
+			return task, err
+		}
+		if _, ok := validPriorites[task.Priority]; !ok {
+			return task, fmt.Errorf("%s has invalid priority %q", what, task.Priority)
+		}
+	}
+	return task, nil
+}
+
+func decompositionTraceTaskKeys(obj map[string]json.RawMessage, what string) ([]string, error) {
+	keys, err := arrayMember(obj["task_keys"], what, "task_keys")
+	if err != nil {
+		return nil, err
+	}
+	var out []string
+	keySeen := map[string]struct{}{}
+	for j, rawKey := range keys {
+		key, err := rawString(rawKey, fmt.Sprintf("%s task key at index %d", what, j))
+		if err != nil {
+			return nil, err
+		}
+		if !portableReviewKey.MatchString(key) {
+			return nil, fmt.Errorf("%s has non-portable task key", what)
+		}
+		if _, ok := keySeen[key]; ok {
+			return nil, fmt.Errorf("%s repeats task key %q", what, key)
+		}
+		keySeen[key] = struct{}{}
+		out = append(out, key)
+	}
+	return out, nil
+}
+
+func decompositionTraceRequirement(raw json.RawMessage, what string, subjects DecompositionSubjects, anchors map[string]struct{}, seen map[string]struct{}) (DecompositionRequirement, error) {
+	var req DecompositionRequirement
+	obj, err := strictObject(raw, what)
+	if err != nil {
+		return req, err
+	}
+	if err := exactMembers(obj, what, []string{"requirement_id", "spec_ref", "source", "task_keys", "disposition", "rationale"}); err != nil {
+		return req, err
+	}
+	if req.RequirementID, err = stringMember(obj, what, "requirement_id"); err != nil {
+		return req, err
+	}
+	if _, ok := seen[req.RequirementID]; ok {
+		return req, fmt.Errorf("duplicate requirement_id %q", req.RequirementID)
+	}
+	seen[req.RequirementID] = struct{}{}
+	if req.SpecRef, err = stringMember(obj, what, "spec_ref"); err != nil {
+		return req, err
+	}
+	_, anchor, e := parseSpecRef(req.SpecRef)
+	normalized, ne := normalizeSpecRef(req.SpecRef)
+	if e != nil || ne != nil || normalized != req.SpecRef || specRefPath(normalized) != subjects.SpecPath {
+		return req, fmt.Errorf("%s spec_ref is not a normalized selected-spec reference", what)
+	}
+	if _, ok := anchors[anchor]; !ok {
+		return req, fmt.Errorf("%s spec_ref anchor does not exist", what)
+	}
+	if req.Source, err = decodeDecompositionSource(obj["source"], what, subjects.Spec); err != nil {
+		return req, err
+	}
+	if req.TaskKeys, err = decompositionTraceTaskKeys(obj, what); err != nil {
+		return req, err
+	}
+	if req.Disposition, err = enumMember(obj, what, "disposition", []string{"task", "no-task"}); err != nil {
+		return req, err
+	}
+	if (req.Disposition == "task") != (len(req.TaskKeys) > 0) {
+		return req, fmt.Errorf("%s task_keys do not match disposition", what)
+	}
+	if req.Rationale, err = nonEmptyMember(obj, what, "rationale"); err != nil {
+		return req, err
+	}
+	return req, nil
+}
+
+func decompositionManifestReview(raw json.RawMessage, i int) (DecompositionManifestReview, error) {
+	var r DecompositionManifestReview
+	what := fmt.Sprintf("manifest review at index %d", i)
+	o, err := strictObject(raw, what)
+	if err != nil {
+		return r, err
+	}
+	if err := exactMembers(o, what, []string{"pass_number", "path", "sha256", "context_mode", "spec_sha256", "draft_sha256", "trace_sha256"}); err != nil {
+		return r, err
+	}
+	n, ok := decodeJSONInteger(o["pass_number"])
+	if !ok || int(n) != i+1 {
+		return r, fmt.Errorf("manifest reviews must be consecutive")
+	}
+	r.PassNumber = i + 1
+	if r.Path, err = fixedMember(o, what, "path", fmt.Sprintf("review-%d.json", i+1)); err != nil {
+		return r, err
+	}
+	if r.SHA256, err = reviewDigestMember(o, what, "sha256"); err != nil {
+		return r, err
+	}
+	if r.ContextMode, err = enumMember(o, what, "context_mode", []string{"fresh"}); err != nil {
+		return r, err
+	}
+	if r.SpecSHA256, err = reviewDigestMember(o, what, "spec_sha256"); err != nil {
+		return r, err
+	}
+	if r.DraftSHA256, err = reviewDigestMember(o, what, "draft_sha256"); err != nil {
+		return r, err
+	}
+	if r.TraceSHA256, err = reviewDigestMember(o, what, "trace_sha256"); err != nil {
+		return r, err
+	}
+	return r, nil
+}
+
+func decompositionManifestDisposition(raw json.RawMessage, what string, seen map[string]struct{}) (DecompositionDisposition, error) {
+	var d DecompositionDisposition
+	o, err := strictObject(raw, what)
+	if err != nil {
+		return d, err
+	}
+	if err := exactMembers(o, what, []string{"finding_id", "severity", "disposition", "rationale"}); err != nil {
+		return d, err
+	}
+	if d.FindingID, err = stringMember(o, what, "finding_id"); err != nil {
+		return d, err
+	}
+	if _, ok := seen[d.FindingID]; ok {
+		return d, fmt.Errorf("duplicate disposition finding_id %q", d.FindingID)
+	}
+	seen[d.FindingID] = struct{}{}
+	if d.Severity, err = enumMember(o, what, "severity", []string{"high", "medium", "low"}); err != nil {
+		return d, err
+	}
+	if d.Disposition, err = enumMember(o, what, "disposition", []string{"resolved", "rejected", "deferred"}); err != nil {
+		return d, err
+	}
+	if d.Rationale, err = decompositionTextMember(o, what, "rationale"); err != nil {
+		return d, err
+	}
+	return d, nil
 }
 
 func decodeDecompositionSource(raw json.RawMessage, what string, spec []byte) (DecompositionSource, error) {
@@ -584,36 +680,8 @@ func decodeDecompositionManifest(data []byte) (DecompositionManifest, error) {
 		return out, fmt.Errorf("decomposition manifest reviews must contain one or two passes")
 	}
 	for i, raw := range reviews {
-		what := fmt.Sprintf("manifest review at index %d", i)
-		o, err := strictObject(raw, what)
+		r, err := decompositionManifestReview(raw, i)
 		if err != nil {
-			return out, err
-		}
-		if err := exactMembers(o, what, []string{"pass_number", "path", "sha256", "context_mode", "spec_sha256", "draft_sha256", "trace_sha256"}); err != nil {
-			return out, err
-		}
-		var r DecompositionManifestReview
-		n, ok := decodeJSONInteger(o["pass_number"])
-		if !ok || int(n) != i+1 {
-			return out, fmt.Errorf("manifest reviews must be consecutive")
-		}
-		r.PassNumber = i + 1
-		if r.Path, err = fixedMember(o, what, "path", fmt.Sprintf("review-%d.json", i+1)); err != nil {
-			return out, err
-		}
-		if r.SHA256, err = reviewDigestMember(o, what, "sha256"); err != nil {
-			return out, err
-		}
-		if r.ContextMode, err = enumMember(o, what, "context_mode", []string{"fresh"}); err != nil {
-			return out, err
-		}
-		if r.SpecSHA256, err = reviewDigestMember(o, what, "spec_sha256"); err != nil {
-			return out, err
-		}
-		if r.DraftSHA256, err = reviewDigestMember(o, what, "draft_sha256"); err != nil {
-			return out, err
-		}
-		if r.TraceSHA256, err = reviewDigestMember(o, what, "trace_sha256"); err != nil {
 			return out, err
 		}
 		out.Reviews = append(out.Reviews, r)
@@ -624,29 +692,8 @@ func decodeDecompositionManifest(data []byte) (DecompositionManifest, error) {
 	}
 	seen := map[string]struct{}{}
 	for i, raw := range dispositions {
-		what := fmt.Sprintf("decomposition disposition at index %d", i)
-		o, err := strictObject(raw, what)
+		d, err := decompositionManifestDisposition(raw, fmt.Sprintf("decomposition disposition at index %d", i), seen)
 		if err != nil {
-			return out, err
-		}
-		if err := exactMembers(o, what, []string{"finding_id", "severity", "disposition", "rationale"}); err != nil {
-			return out, err
-		}
-		var d DecompositionDisposition
-		if d.FindingID, err = stringMember(o, what, "finding_id"); err != nil {
-			return out, err
-		}
-		if _, ok := seen[d.FindingID]; ok {
-			return out, fmt.Errorf("duplicate disposition finding_id %q", d.FindingID)
-		}
-		seen[d.FindingID] = struct{}{}
-		if d.Severity, err = enumMember(o, what, "severity", []string{"high", "medium", "low"}); err != nil {
-			return out, err
-		}
-		if d.Disposition, err = enumMember(o, what, "disposition", []string{"resolved", "rejected", "deferred"}); err != nil {
-			return out, err
-		}
-		if d.Rationale, err = decompositionTextMember(o, what, "rationale"); err != nil {
 			return out, err
 		}
 		out.Dispositions = append(out.Dispositions, d)
@@ -812,18 +859,6 @@ func decompositionTextMember(obj map[string]json.RawMessage, what, name string) 
 }
 
 func digestRaw(data []byte) string { sum := sha256.Sum256(data); return hex.EncodeToString(sum[:]) }
-
-func countMarkdownHeading(lines []string, want string) int {
-	count := 0
-	_, wantText := markdownATXHeading(want)
-	for _, line := range lines {
-		level, text := markdownATXHeading(line)
-		if level == 2 && text == wantText {
-			count++
-		}
-	}
-	return count
-}
 
 func indexMarkdownHeading(lines []string, want string) int {
 	_, wantText := markdownATXHeading(want)

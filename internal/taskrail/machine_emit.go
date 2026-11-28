@@ -353,9 +353,7 @@ func encodeMachineViolations(violations []MachineViolation) []machineViolationWi
 	sorted := sortedByContractKey(violations, violationOrderKey)
 	wire := make([]machineViolationWire, 0, len(sorted))
 	for _, violation := range sorted {
-		wire = append(wire, machineViolationWire{
-			Code: violation.Code, Message: violation.Message, Path: violation.Path,
-		})
+		wire = append(wire, machineViolationWire(violation))
 	}
 	return wire
 }
@@ -364,13 +362,7 @@ func encodeMachineSnapshots(snapshots []MachineSnapshot) []machineSnapshotWire {
 	sorted := sortedByContractKey(snapshots, snapshotOrderKey)
 	wire := make([]machineSnapshotWire, 0, len(sorted))
 	for _, snapshot := range sorted {
-		wire = append(wire, machineSnapshotWire{
-			PathKind:        snapshot.PathKind,
-			Path:            snapshot.Path,
-			OriginalSHA256:  snapshot.OriginalSHA256,
-			CandidateSHA256: snapshot.CandidateSHA256,
-			CurrentSHA256:   snapshot.CurrentSHA256,
-		})
+		wire = append(wire, machineSnapshotWire(snapshot))
 	}
 	return wire
 }

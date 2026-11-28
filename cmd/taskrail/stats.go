@@ -27,27 +27,7 @@ func newStatsCmd() *cobra.Command {
 			// machine document, so the flag conflict is settled before any
 			// repository work rather than after a discovery failure.
 			if format != "" {
-				if machineJSONRequested(cmd) {
-					return publishMachineError(cmd, invalidArgumentsf("--format and --json are mutually exclusive"), nil)
-				}
-				svc, err := serviceFromCmd(cmd)
-				if err != nil {
-					return err
-				}
-				var graph string
-				if activeSpec {
-					graph, err = svc.ActiveSpecDependencyGraph(format)
-				} else {
-					graph, err = svc.DependencyGraph(format)
-				}
-				if err != nil {
-					return err
-				}
-				if err := svc.CheckRecovery(); err != nil {
-					return err
-				}
-				_, err = fmt.Fprint(cmd.OutOrStdout(), graph)
-				return err
+				return runStatsGraph(cmd, format, activeSpec)
 			}
 			return runCommand(cmd, func(svc *taskrail.Service) (commandResult, error) {
 				var stats taskrail.StatsReport
@@ -68,6 +48,30 @@ func newStatsCmd() *cobra.Command {
 	cmd.Flags().StringVar(&format, "format", "", "export the dependency DAG instead of stats: dot or mermaid")
 	cmd.Flags().BoolVar(&activeSpec, "active-spec", false, "report only tasks assigned to the active spec, retaining dependency context")
 	return cmd
+}
+
+func runStatsGraph(cmd *cobra.Command, format string, activeSpec bool) error {
+	if machineJSONRequested(cmd) {
+		return publishMachineError(cmd, invalidArgumentsf("--format and --json are mutually exclusive"), nil)
+	}
+	svc, err := serviceFromCmd(cmd)
+	if err != nil {
+		return err
+	}
+	var graph string
+	if activeSpec {
+		graph, err = svc.ActiveSpecDependencyGraph(format)
+	} else {
+		graph, err = svc.DependencyGraph(format)
+	}
+	if err != nil {
+		return err
+	}
+	if err := svc.CheckRecovery(); err != nil {
+		return err
+	}
+	_, err = fmt.Fprint(cmd.OutOrStdout(), graph)
+	return err
 }
 
 // renderStatsText builds the human-readable statistics table.

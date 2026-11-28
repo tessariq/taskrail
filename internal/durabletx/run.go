@@ -100,35 +100,9 @@ func Run(ctx context.Context, own Ownership, repo repolock.Repository, req Reque
 	if err := recheckAfterFence(store, entries); err != nil {
 		return Result{}, recoverRunFailure(store, id, doc, entries, err)
 	}
-	preSemantic := hasPreSemantic(entries)
-	if preSemantic {
-		// Pre-semantic members are candidate bytes, so recovery must see the
-		// publishing phase before the first one can reach disk.
-		doc, err = advancePhase(store, id, doc, PhasePublishing)
-		if err != nil {
-			return Result{}, failure(KindRecovery, id, doc.Phase, evidence(entries), err)
-		}
-		if err := publishPreSemantic(ctx, store, entries); err != nil {
-			return Result{}, recoverRunFailure(store, id, doc, entries, err)
-		}
-	}
-	if preSemantic && req.ValidateBeforeCandidates != nil {
-		current, observeErr := observeEntries(store, entries)
-		if observeErr != nil {
-			return Result{}, recoverRunFailure(store, id, doc, entries, observeErr)
-		}
-		if err := req.ValidateBeforeCandidates(evidenceFrom(entries, current)); err != nil {
-			return Result{}, recoverRunFailure(store, id, doc, entries, err)
-		}
-	}
-	if !preSemantic {
-		doc, err = advancePhase(store, id, doc, PhasePublishing)
-		if err != nil {
-			return Result{}, failure(KindRecovery, id, doc.Phase, evidence(entries), err)
-		}
-	}
-	if err := publishCandidates(ctx, store, entries); err != nil {
-		return Result{}, recoverRunFailure(store, id, doc, entries, err)
+	doc, err = publishRunCandidates(ctx, store, id, doc, entries, req)
+	if err != nil {
+		return Result{}, err
 	}
 	doc, err = advancePhase(store, id, doc, PhaseCandidatePublished)
 	if err != nil {
@@ -138,31 +112,88 @@ func Run(ctx context.Context, own Ownership, repo repolock.Repository, req Reque
 	if err != nil {
 		return Result{}, failure(KindRecovery, id, doc.Phase, evidence(entries), err)
 	}
+	current, err := validateAndPublishFinals(ctx, store, id, doc, entries, req)
+	if err != nil {
+		return Result{}, err
+	}
+	return completeRun(ctx, store, id, req.Command, entries, current)
+}
+
+// publishRunCandidates advances to the publishing phase and publishes every
+// candidate. Pre-semantic members, when present, publish first and may be
+// validated before the remaining candidates. The returned error is already
+// the transaction failure Run reports.
+func publishRunCandidates(ctx context.Context, store *store, id string, doc journal, entries []*transactionEntry, req Request) (journal, error) {
+	var err error
+	preSemantic := hasPreSemantic(entries)
+	if preSemantic {
+		// Pre-semantic members are candidate bytes, so recovery must see the
+		// publishing phase before the first one can reach disk.
+		doc, err = advancePhase(store, id, doc, PhasePublishing)
+		if err != nil {
+			return doc, failure(KindRecovery, id, doc.Phase, evidence(entries), err)
+		}
+		if err := publishPreSemantic(ctx, store, entries); err != nil {
+			return doc, recoverRunFailure(store, id, doc, entries, err)
+		}
+	}
+	if preSemantic && req.ValidateBeforeCandidates != nil {
+		current, observeErr := observeEntries(store, entries)
+		if observeErr != nil {
+			return doc, recoverRunFailure(store, id, doc, entries, observeErr)
+		}
+		if err := req.ValidateBeforeCandidates(evidenceFrom(entries, current)); err != nil {
+			return doc, recoverRunFailure(store, id, doc, entries, err)
+		}
+	}
+	if !preSemantic {
+		doc, err = advancePhase(store, id, doc, PhasePublishing)
+		if err != nil {
+			return doc, failure(KindRecovery, id, doc.Phase, evidence(entries), err)
+		}
+	}
+	if err := publishCandidates(ctx, store, entries); err != nil {
+		return doc, recoverRunFailure(store, id, doc, entries, err)
+	}
+	return doc, nil
+}
+
+// validateAndPublishFinals proves the published candidates, runs the caller's
+// validator over them, and only then publishes fence finals. It returns the
+// set observed after that final publication; the returned error is already
+// the transaction failure Run reports.
+func validateAndPublishFinals(ctx context.Context, store *store, id string, doc journal, entries []*transactionEntry, req Request) ([]observation, error) {
 	current, err := observeEntries(store, entries)
 	if err != nil || !candidateComplete(entries, current) {
-		return Result{}, recoverRunFailure(store, id, doc, entries,
+		return nil, recoverRunFailure(store, id, doc, entries,
 			fmt.Errorf("candidate changed before validation: %w", err))
 	}
 	if req.Validate != nil {
 		if err := ctx.Err(); err != nil {
-			return Result{}, recoverRunFailure(store, id, doc, entries, err)
+			return nil, recoverRunFailure(store, id, doc, entries, err)
 		}
 		if err := req.Validate(evidenceFrom(entries, current)); err != nil {
-			return Result{}, recoverRunFailure(store, id, doc, entries, err)
+			return nil, recoverRunFailure(store, id, doc, entries, err)
 		}
 	}
 	if err := ctx.Err(); err != nil {
-		return Result{}, recoverRunFailure(store, id, doc, entries, err)
+		return nil, recoverRunFailure(store, id, doc, entries, err)
 	}
 	if err := publishFenceFinals(ctx, store, entries); err != nil {
-		return Result{}, recoverRunFailure(store, id, doc, entries, err)
+		return nil, recoverRunFailure(store, id, doc, entries, err)
 	}
 	current, err = observeEntries(store, entries)
 	if err != nil || !allCandidate(entries, current) {
-		return Result{}, recoverRunFailure(store, id, doc, entries,
+		return nil, recoverRunFailure(store, id, doc, entries,
 			fmt.Errorf("candidate changed after final publication: %w", err))
 	}
-	if err := markComplete(store, id, req.Command, AcceptCandidate, entries); err != nil {
+	return current, nil
+}
+
+// completeRun records the accepted candidate set, re-proves it, and clears the
+// fence. current is the set observed after the final publication.
+func completeRun(ctx context.Context, store *store, id, command string, entries []*transactionEntry, current []observation) (Result, error) {
+	if err := markComplete(store, id, command, AcceptCandidate, entries); err != nil {
 		return Result{}, failure(KindRecovery, id, PhaseValidating, evidenceFrom(entries, current), err)
 	}
 	latest, err := observeEntries(store, entries)

@@ -511,11 +511,3 @@ func sortedUniqueFindingIDs(ids []string) bool {
 	}
 	return true
 }
-
-func findingIDsOf(findings []WorkflowReportFinding) []string {
-	ids := make([]string, 0, len(findings))
-	for _, finding := range findings {
-		ids = append(ids, finding.FindingID)
-	}
-	return ids
-}

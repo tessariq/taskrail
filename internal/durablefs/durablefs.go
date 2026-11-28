@@ -308,78 +308,83 @@ func (r *Root) bindParent(path string) (*os.Root, string, []Identity, error) {
 	}
 	ancestors := []Identity{r.identity}
 	for _, part := range parts[:len(parts)-1] {
-		if err := exactName(current, part, true); err != nil {
-			current.Close()
-			return nil, "", nil, err
-		}
-		info, err := current.Lstat(part)
+		next, identity, err := bindAncestor(current, part)
 		if err != nil {
 			current.Close()
 			return nil, "", nil, err
-		}
-		if !info.IsDir() || info.Mode()&fs.ModeSymlink != 0 {
-			current.Close()
-			return nil, "", nil, fmt.Errorf("%w: ancestor %q is not a plain directory", ErrNotRegular, part)
-		}
-		next, err := current.OpenRoot(part)
-		if err != nil {
-			current.Close()
-			return nil, "", nil, err
-		}
-		if testHookAfterDirOpen != nil {
-			testHookAfterDirOpen(part)
-		}
-		observed, err := openObserved(current, part, true)
-		if err != nil {
-			next.Close()
-			current.Close()
-			return nil, "", nil, err
-		}
-		identity, _, err := nativeIdentity(observed)
-		observed.Close()
-		if err != nil {
-			next.Close()
-			current.Close()
-			return nil, "", nil, err
-		}
-		retainedIdentity, _, err := directoryIdentity(next)
-		if err != nil || retainedIdentity != identity {
-			next.Close()
-			current.Close()
-			return nil, "", nil, fmt.Errorf("%w: retained ancestor %q has a different identity", ErrConflict, part)
-		}
-		// Re-observe the name after opening it. This is not an atomic exclusion
-		// against a hostile external actor, but any substitution present at this
-		// operation boundary is refused before the handle becomes authoritative.
-		if err := exactName(current, part, true); err != nil {
-			next.Close()
-			current.Close()
-			return nil, "", nil, err
-		}
-		after, err := current.Lstat(part)
-		if err != nil || !after.IsDir() || after.Mode()&fs.ModeSymlink != 0 {
-			next.Close()
-			current.Close()
-			return nil, "", nil, fmt.Errorf("%w: ancestor %q changed while binding", ErrConflict, part)
-		}
-		confirm, err := current.OpenRoot(part)
-		if err != nil {
-			next.Close()
-			current.Close()
-			return nil, "", nil, err
-		}
-		confirmedIdentity, _, confirmErr := directoryIdentity(confirm)
-		confirm.Close()
-		if confirmErr != nil || confirmedIdentity != identity {
-			next.Close()
-			current.Close()
-			return nil, "", nil, fmt.Errorf("%w: ancestor %q identity changed while binding", ErrConflict, part)
 		}
 		current.Close()
 		current = next
 		ancestors = append(ancestors, identity)
 	}
 	return current, parts[len(parts)-1], ancestors, nil
+}
+
+// bindAncestor opens one plain-directory ancestor of current and confirms its
+// identity before and after the open. It leaves current open for the caller,
+// and on failure closes any handle it opened.
+func bindAncestor(current *os.Root, part string) (*os.Root, Identity, error) {
+	if err := exactName(current, part, true); err != nil {
+		return nil, Identity{}, err
+	}
+	info, err := current.Lstat(part)
+	if err != nil {
+		return nil, Identity{}, err
+	}
+	if !info.IsDir() || info.Mode()&fs.ModeSymlink != 0 {
+		return nil, Identity{}, fmt.Errorf("%w: ancestor %q is not a plain directory", ErrNotRegular, part)
+	}
+	next, err := current.OpenRoot(part)
+	if err != nil {
+		return nil, Identity{}, err
+	}
+	if testHookAfterDirOpen != nil {
+		testHookAfterDirOpen(part)
+	}
+	identity, err := confirmAncestor(current, next, part)
+	if err != nil {
+		next.Close()
+		return nil, Identity{}, err
+	}
+	return next, identity, nil
+}
+
+// confirmAncestor checks that the opened handle next is the directory named
+// part in current, both as observed now and after re-reading the name.
+func confirmAncestor(current, next *os.Root, part string) (Identity, error) {
+	observed, err := openObserved(current, part, true)
+	if err != nil {
+		return Identity{}, err
+	}
+	identity, _, err := nativeIdentity(observed)
+	observed.Close()
+	if err != nil {
+		return Identity{}, err
+	}
+	retainedIdentity, _, err := directoryIdentity(next)
+	if err != nil || retainedIdentity != identity {
+		return Identity{}, fmt.Errorf("%w: retained ancestor %q has a different identity", ErrConflict, part)
+	}
+	// Re-observe the name after opening it. This is not an atomic exclusion
+	// against a hostile external actor, but any substitution present at this
+	// operation boundary is refused before the handle becomes authoritative.
+	if err := exactName(current, part, true); err != nil {
+		return Identity{}, err
+	}
+	after, err := current.Lstat(part)
+	if err != nil || !after.IsDir() || after.Mode()&fs.ModeSymlink != 0 {
+		return Identity{}, fmt.Errorf("%w: ancestor %q changed while binding", ErrConflict, part)
+	}
+	confirm, err := current.OpenRoot(part)
+	if err != nil {
+		return Identity{}, err
+	}
+	confirmedIdentity, _, confirmErr := directoryIdentity(confirm)
+	confirm.Close()
+	if confirmErr != nil || confirmedIdentity != identity {
+		return Identity{}, fmt.Errorf("%w: ancestor %q identity changed while binding", ErrConflict, part)
+	}
+	return identity, nil
 }
 
 func splitPath(path string) ([]string, error) {

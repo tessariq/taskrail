@@ -3,9 +3,6 @@ package taskrail
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"errors"
-	"fmt"
-	"os"
 	"path"
 	"path/filepath"
 	"slices"
@@ -268,7 +265,7 @@ func markerDigest(data []byte) (string, error) {
 
 // layoutFile is one file the current layout contains: its managed logical path,
 // the physical location the active storage context puts it at, the kind of
-// content it holds, and — for the two files ensureLayout writes directly — its
+// content it holds, and — for the two spec files init seeds from a template — its
 // starter body. One table keeps the writer and the two reporters from drifting
 // apart as the layout grows.
 type layoutFile struct {
@@ -278,8 +275,8 @@ type layoutFile struct {
 	starter  func() string
 }
 
-// layoutFiles lists the layout's content in the order ensureLayout creates it,
-// which is also the order the retrofit dry run reports.
+// layoutFiles lists the layout's content in the order init creates it, which
+// is also the order the retrofit dry run reports.
 func (s *Service) layoutFiles() []layoutFile {
 	return []layoutFile{
 		{
@@ -294,9 +291,9 @@ func (s *Service) layoutFiles() []layoutFile {
 			kind:     writeKindSpec,
 			starter:  starterSpecV010,
 		},
-		// The state file and the notes sidecar have writers of their own
-		// (saveState and the no-clobber ensureNotesTemplate), so they carry no
-		// starter here.
+		// The state file and the notes sidecar have content the init writers
+		// build themselves (starterState at the plan's schema, starterNotes),
+		// so they carry no starter here.
 		{
 			logical:  path.Join(s.paths.LogicalPlanningDir, "STATE.md"),
 			physical: s.paths.StateFile,
@@ -459,40 +456,6 @@ func (s *Service) detectRetrofit() []RetrofitMapping {
 // used to tell legacy adoption apart from a fresh empty-repo init.
 func (s *Service) layoutExists() bool {
 	return fileExists(s.paths.StateFile) || dirExists(s.paths.TasksDir)
-}
-
-// ensureLayout creates the current layout idempotently: directories via ensureDir
-// and content via writeFileIfMissing, with the state file written only when
-// absent. Re-running it never overwrites existing files.
-func (s *Service) ensureLayout() error {
-	// Only tracked, committed directories are provisioned. Gitignored artifact
-	// output (verify/, runs/, manual-test/) is created on demand by verify and
-	// manual testing; a clean checkout drops it, so pre-creating it here would
-	// leave init and validate inconsistent (T-024/T-025).
-	for _, dir := range []string{s.paths.SpecsDir, s.paths.TasksDir} {
-		if err := ensureDir(s.paths.RepoRoot, dir); err != nil {
-			return err
-		}
-	}
-	for _, file := range s.layoutFiles() {
-		if file.starter == nil {
-			continue
-		}
-		if err := writeFileIfMissing(s.paths.RepoRoot, file.physical, []byte(file.starter())); err != nil {
-			return err
-		}
-	}
-	if err := ensureNotesTemplate(s.paths.RepoRoot, s.paths.PlanningDir); err != nil {
-		return err
-	}
-	if _, err := os.Stat(s.paths.StateFile); errors.Is(err, os.ErrNotExist) {
-		if err := s.saveState(starterState(s.now(), stateSchemaForLayout(s.paths.LayoutVersion))); err != nil {
-			return err
-		}
-	} else if err != nil {
-		return fmt.Errorf("stat state file: %w", err)
-	}
-	return nil
 }
 
 func markerRelPath() string {

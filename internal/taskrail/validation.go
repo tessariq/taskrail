@@ -98,26 +98,32 @@ func (s *Service) validateState(state *State) []string {
 	if strings.TrimSpace(state.Frontmatter.StatusSummary) == "" {
 		violations = append(violations, "state status_summary must not be empty")
 	}
-	if state.Frontmatter.LastVerificationID == "" {
-		if state.Frontmatter.LastVerificationPreviousID != "" || state.Frontmatter.LastVerifiedCompletionID != "" {
+	violations = append(violations, validateStateVerificationFields(state.Frontmatter)...)
+	violations = append(violations, stateArtifactRefsForPrefix(state.Frontmatter, s.logicalArtifactPrefix())...)
+	return violations
+}
+
+func validateStateVerificationFields(fm StateFrontmatter) []string {
+	violations := make([]string, 0)
+	if fm.LastVerificationID == "" {
+		if fm.LastVerificationPreviousID != "" || fm.LastVerifiedCompletionID != "" {
 			violations = append(violations, "state verification predecessor and completion binding require last_verification_id")
 		}
-	} else {
-		if !lowerHex32.MatchString(state.Frontmatter.LastVerificationID) {
-			violations = append(violations, "state last_verification_id must be lower-case 32-hex")
-		}
-		match := canonicalStateVerification.FindStringSubmatch(state.Frontmatter.LastVerificationResult)
-		if match == nil || match[4] != state.Frontmatter.LastVerificationID {
-			violations = append(violations, "state last_verification_result must be canonical and match last_verification_id")
-		}
-		if previous := state.Frontmatter.LastVerificationPreviousID; previous != "" && (!lowerHex32.MatchString(previous) || previous == state.Frontmatter.LastVerificationID) {
-			violations = append(violations, "state last_verification_previous_id must be a distinct lower-case 32-hex")
-		}
-		if completion := state.Frontmatter.LastVerifiedCompletionID; completion != "" && (!lowerHex32.MatchString(completion) || match == nil || match[1] != "pass") {
-			violations = append(violations, "state last_verified_completion_id requires a passing verification and lower-case 32-hex")
-		}
+		return violations
 	}
-	violations = append(violations, stateArtifactRefsForPrefix(state.Frontmatter, s.logicalArtifactPrefix())...)
+	if !lowerHex32.MatchString(fm.LastVerificationID) {
+		violations = append(violations, "state last_verification_id must be lower-case 32-hex")
+	}
+	match := canonicalStateVerification.FindStringSubmatch(fm.LastVerificationResult)
+	if match == nil || match[4] != fm.LastVerificationID {
+		violations = append(violations, "state last_verification_result must be canonical and match last_verification_id")
+	}
+	if previous := fm.LastVerificationPreviousID; previous != "" && (!lowerHex32.MatchString(previous) || previous == fm.LastVerificationID) {
+		violations = append(violations, "state last_verification_previous_id must be a distinct lower-case 32-hex")
+	}
+	if completion := fm.LastVerifiedCompletionID; completion != "" && (!lowerHex32.MatchString(completion) || match == nil || match[1] != "pass") {
+		violations = append(violations, "state last_verified_completion_id requires a passing verification and lower-case 32-hex")
+	}
 	return violations
 }
 
@@ -222,19 +228,15 @@ func isConcreteArtifactFile(token string) bool {
 	}
 	for i := 0; i < len(ext); i++ {
 		b := ext[i]
-		if !(b >= 'a' && b <= 'z' || b >= 'A' && b <= 'Z' || b >= '0' && b <= '9') {
+		if (b < 'a' || b > 'z') && (b < 'A' || b > 'Z') && (b < '0' || b > '9') {
 			return false
 		}
 	}
 	return true
 }
 
-// stateArtifactRefs flags committed STATE.md frontmatter fields that point at a
-// concrete gitignored artifact file, naming the offending field.
-func stateArtifactRefs(fm StateFrontmatter) []string {
-	return stateArtifactRefsForPrefix(fm, gitignoredArtifactPrefix)
-}
-
+// stateArtifactRefsForPrefix flags committed STATE.md frontmatter fields that
+// point at a concrete gitignored artifact file, naming the offending field.
 func stateArtifactRefsForPrefix(fm StateFrontmatter, prefix string) []string {
 	violations := make([]string, 0)
 	scan := func(field, value string) {
@@ -259,12 +261,8 @@ func stateArtifactRefsForPrefix(fm StateFrontmatter, prefix string) []string {
 	return violations
 }
 
-// taskArtifactRefs flags a committed task file (frontmatter title and body
-// lines) that points at a concrete gitignored artifact file.
-func taskArtifactRefs(task *Task) []string {
-	return taskArtifactRefsForPrefix(task, gitignoredArtifactPrefix)
-}
-
+// taskArtifactRefsForPrefix flags a committed task file (frontmatter title and
+// body lines) that points at a concrete gitignored artifact file.
 func taskArtifactRefsForPrefix(task *Task, prefix string) []string {
 	violations := make([]string, 0)
 	id := task.Frontmatter.ID
@@ -385,42 +383,7 @@ func (s *Service) validateTasks(state *State, tasks []*Task) []string {
 			}
 		}
 
-		if task.Frontmatter.ID == "" {
-			logicalPath := task.Path
-			if logicalPath == "" {
-				logicalPath = s.paths.logicalManagedPath(task.Filename)
-			}
-			violations = append(violations, fmt.Sprintf("task file %s missing id", logicalPath))
-		}
-		if base := filepath.Base(task.Filename); base != task.Frontmatter.ID+".md" {
-			violations = append(violations, fmt.Sprintf("task %s filename must be %s.md", task.Frontmatter.ID, task.Frontmatter.ID))
-		}
-		if _, ok := validStatuses[task.Frontmatter.Status]; !ok {
-			violations = append(violations, fmt.Sprintf("task %s has invalid status %q", task.Frontmatter.ID, task.Frontmatter.Status))
-		}
-		if _, ok := validPriorites[task.Frontmatter.Priority]; !ok {
-			violations = append(violations, fmt.Sprintf("task %s has invalid priority %q", task.Frontmatter.ID, task.Frontmatter.Priority))
-		}
-		for _, violation := range ValidateCompletionVerificationMetadata(task.Frontmatter.Status, task.Frontmatter.CompletionVerificationMetadata) {
-			violations = append(violations, fmt.Sprintf("task %s lifecycle metadata: %s", task.Frontmatter.ID, violation))
-		}
-		for _, violation := range ValidateLoopPolicyMetadata(task.Frontmatter.LoopPolicyMetadata) {
-			violations = append(violations, fmt.Sprintf("task %s loop policy: %s", task.Frontmatter.ID, violation))
-		}
-		for _, field := range loopPolicyFieldsInBody(task.Body) {
-			violations = append(violations, fmt.Sprintf("task %s has %s outside frontmatter", task.Frontmatter.ID, field))
-		}
-		for _, dep := range task.Frontmatter.Dependencies {
-			if dep == task.Frontmatter.ID {
-				violations = append(violations, fmt.Sprintf("task %s cannot depend on itself", task.Frontmatter.ID))
-			}
-		}
-		if strings.TrimSpace(task.Frontmatter.SpecRef) == "" {
-			violations = append(violations, fmt.Sprintf("task %s missing spec_ref", task.Frontmatter.ID))
-		} else if _, err := s.validateSpecRef(task.Frontmatter.SpecRef); err != nil {
-			violations = append(violations, fmt.Sprintf("task %s invalid spec_ref: %v", task.Frontmatter.ID, err))
-		}
-		violations = append(violations, taskArtifactRefsForPrefix(task, s.logicalArtifactPrefix())...)
+		violations = append(violations, s.validateTaskFields(task)...)
 	}
 
 	for _, task := range tasks {
@@ -441,15 +404,67 @@ func (s *Service) validateTasks(state *State, tasks []*Task) []string {
 		}
 		violations = append(violations, fmt.Sprintf("multiple in_progress tasks: %s", strings.Join(ids, ", ")))
 	}
-	if len(inProgress) == 1 {
-		if state.Frontmatter.CurrentTask != inProgress[0].Frontmatter.ID {
-			violations = append(violations, fmt.Sprintf("state current_task %q does not match in_progress task %q", state.Frontmatter.CurrentTask, inProgress[0].Frontmatter.ID))
-		}
-	} else if state.Frontmatter.CurrentTask != "" {
-		violations = append(violations, fmt.Sprintf("state current_task %q set but no task is in_progress", state.Frontmatter.CurrentTask))
+	if violation := validateCurrentTaskBinding(state.Frontmatter.CurrentTask, inProgress); violation != "" {
+		violations = append(violations, violation)
 	}
 
 	return violations
+}
+
+// validateTaskFields reports the rules that judge one task file on its own,
+// independent of the other tasks.
+func (s *Service) validateTaskFields(task *Task) []string {
+	violations := make([]string, 0)
+	if task.Frontmatter.ID == "" {
+		logicalPath := task.Path
+		if logicalPath == "" {
+			logicalPath = s.paths.logicalManagedPath(task.Filename)
+		}
+		violations = append(violations, fmt.Sprintf("task file %s missing id", logicalPath))
+	}
+	if base := filepath.Base(task.Filename); base != task.Frontmatter.ID+".md" {
+		violations = append(violations, fmt.Sprintf("task %s filename must be %s.md", task.Frontmatter.ID, task.Frontmatter.ID))
+	}
+	if _, ok := validStatuses[task.Frontmatter.Status]; !ok {
+		violations = append(violations, fmt.Sprintf("task %s has invalid status %q", task.Frontmatter.ID, task.Frontmatter.Status))
+	}
+	if _, ok := validPriorites[task.Frontmatter.Priority]; !ok {
+		violations = append(violations, fmt.Sprintf("task %s has invalid priority %q", task.Frontmatter.ID, task.Frontmatter.Priority))
+	}
+	for _, violation := range ValidateCompletionVerificationMetadata(task.Frontmatter.Status, task.Frontmatter.CompletionVerificationMetadata) {
+		violations = append(violations, fmt.Sprintf("task %s lifecycle metadata: %s", task.Frontmatter.ID, violation))
+	}
+	for _, violation := range ValidateLoopPolicyMetadata(task.Frontmatter.LoopPolicyMetadata) {
+		violations = append(violations, fmt.Sprintf("task %s loop policy: %s", task.Frontmatter.ID, violation))
+	}
+	for _, field := range loopPolicyFieldsInBody(task.Body) {
+		violations = append(violations, fmt.Sprintf("task %s has %s outside frontmatter", task.Frontmatter.ID, field))
+	}
+	for _, dep := range task.Frontmatter.Dependencies {
+		if dep == task.Frontmatter.ID {
+			violations = append(violations, fmt.Sprintf("task %s cannot depend on itself", task.Frontmatter.ID))
+		}
+	}
+	if strings.TrimSpace(task.Frontmatter.SpecRef) == "" {
+		violations = append(violations, fmt.Sprintf("task %s missing spec_ref", task.Frontmatter.ID))
+	} else if _, err := s.validateSpecRef(task.Frontmatter.SpecRef); err != nil {
+		violations = append(violations, fmt.Sprintf("task %s invalid spec_ref: %v", task.Frontmatter.ID, err))
+	}
+	violations = append(violations, taskArtifactRefsForPrefix(task, s.logicalArtifactPrefix())...)
+	return violations
+}
+
+func validateCurrentTaskBinding(currentTask string, inProgress []*Task) string {
+	if len(inProgress) == 1 {
+		if currentTask != inProgress[0].Frontmatter.ID {
+			return fmt.Sprintf("state current_task %q does not match in_progress task %q", currentTask, inProgress[0].Frontmatter.ID)
+		}
+		return ""
+	}
+	if currentTask != "" {
+		return fmt.Sprintf("state current_task %q set but no task is in_progress", currentTask)
+	}
+	return ""
 }
 
 // parseSpecRef splits a `path#anchor` spec reference into its structural parts

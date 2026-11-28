@@ -70,36 +70,11 @@ func (s *Service) RepointTask(input RepointTaskInput) (result RepointTaskResult,
 	if err != nil {
 		return RepointTaskResult{}, err
 	}
-	target, err := exactTaskByID(tasks, taskID)
+	target, specRef, err := s.repointResolve(state, tasks, taskID, area, specRef)
 	if err != nil {
 		return RepointTaskResult{}, err
 	}
-	// Completed and cancelled tasks are delivered history, excluded from drift by
-	// the coverage orphan rule; re-pointing them would rewrite the record of what
-	// was actually delivered.
-	if !isOpenStatus(target.Frontmatter.Status) {
-		return RepointTaskResult{}, WithMachineErrorCode(MachineCodeInvalidStatus,
-			fmt.Errorf("task %s is %s: re-pointing targets open work, and terminal tasks are delivered history", taskID, target.Frontmatter.Status))
-	}
-
-	if area != "" {
-		specRef, err = s.resolveAreaSpecRef(state, area)
-		if err != nil {
-			return RepointTaskResult{}, err
-		}
-	} else if specRef, err = s.validateSpecRef(specRef); err != nil {
-		return RepointTaskResult{}, invalidArgumentsf("invalid spec_ref: %w", err)
-	}
-
 	oldSpecRef := target.Frontmatter.SpecRef
-	// A no-op re-point would still rewrite STATE.md's updated_at and dirty the
-	// working tree for no change, so reject it as `rename` rejects a no-op re-slug.
-	// specRef is canonical by here, so another spelling of an already-canonical
-	// stored ref is caught as the no-op it is; a legacy stored ref still differs and
-	// is rewritten, which is the sanctioned way to canonicalize one.
-	if specRef == oldSpecRef {
-		return RepointTaskResult{}, invalidArgumentsf("task %s already points at %s", taskID, specRef)
-	}
 
 	// Both branches report the post-apply state: an apply validates the exact
 	// candidate it publishes, while a dry run previews the same rules against
@@ -160,6 +135,41 @@ func (s *Service) RepointTask(input RepointTaskInput) (result RepointTaskResult,
 		Applied:    true,
 		Validation: &validation,
 	}, nil
+}
+
+// repointResolve returns the open task to re-point and its canonical target
+// spec_ref, resolving an area selector against the active spec.
+func (s *Service) repointResolve(state *State, tasks []*Task, taskID, area, specRef string) (*Task, string, error) {
+	target, err := exactTaskByID(tasks, taskID)
+	if err != nil {
+		return nil, "", err
+	}
+	// Completed and cancelled tasks are delivered history, excluded from drift by
+	// the coverage orphan rule; re-pointing them would rewrite the record of what
+	// was actually delivered.
+	if !isOpenStatus(target.Frontmatter.Status) {
+		return nil, "", WithMachineErrorCode(MachineCodeInvalidStatus,
+			fmt.Errorf("task %s is %s: re-pointing targets open work, and terminal tasks are delivered history", taskID, target.Frontmatter.Status))
+	}
+
+	if area != "" {
+		specRef, err = s.resolveAreaSpecRef(state, area)
+		if err != nil {
+			return nil, "", err
+		}
+	} else if specRef, err = s.validateSpecRef(specRef); err != nil {
+		return nil, "", invalidArgumentsf("invalid spec_ref: %w", err)
+	}
+
+	// A no-op re-point would still rewrite STATE.md's updated_at and dirty the
+	// working tree for no change, so reject it as `rename` rejects a no-op re-slug.
+	// specRef is canonical by here, so another spelling of an already-canonical
+	// stored ref is caught as the no-op it is; a legacy stored ref still differs and
+	// is rewritten, which is the sanctioned way to canonicalize one.
+	if specRef == target.Frontmatter.SpecRef {
+		return nil, "", invalidArgumentsf("task %s already points at %s", taskID, specRef)
+	}
+	return target, specRef, nil
 }
 
 // repointSelector resolves the new reference from exactly one selector. A task

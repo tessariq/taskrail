@@ -257,51 +257,23 @@ func (r *Root) PublishDirectoryValidated(ctx context.Context, destination string
 			}
 		}
 	}()
-	for i, file := range stagedFiles {
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-		if testHookBeforeDirectoryFile != nil {
-			if err := testHookBeforeDirectoryFile(file.Name); err != nil {
-				return nil, err
-			}
-		}
-		entry, err := r.Publish(stagedPath+"/"+file.Name, file.Content, file.Mode)
-		if err != nil {
-			return nil, err
-		}
-		if err := entry.Close(); err != nil {
-			return nil, err
-		}
-		snapshots[i] = entry.Snapshot()
-		stagedCount++
+	stagedCount, err = r.stageDirectoryFiles(ctx, stagedPath, stagedFiles, snapshots)
+	if err != nil {
+		return nil, err
 	}
 	if testHookBeforeDirectoryCommit != nil {
 		testHookBeforeDirectoryCommit(stagedPath, destination)
 	}
-	freshDestination, freshLeaf, freshAncestors, err := r.bindParent(destination)
+	fresh, err := r.rebindPublication(publicationCheck{
+		destination: destination, leaf: leaf, ancestors: destinationAncestors,
+		stagedPath: stagedPath, staged: staged.Identity, files: stagedFiles, snapshots: snapshots,
+		ancestorsWhen: "before publishing", stagedWhen: "before publication",
+	})
 	if err != nil {
 		return nil, err
 	}
-	defer freshDestination.Close()
-	if freshLeaf != leaf || !sameIdentities(destinationAncestors, freshAncestors) {
-		return nil, fmt.Errorf("%w: destination ancestors changed before publishing %s", ErrConflict, destination)
-	}
-	if err := exactName(freshDestination, leaf, false); err != nil {
-		return nil, err
-	}
-	freshStaged, stagedName, _, err := r.bindParent(stagedPath)
-	if err != nil {
-		return nil, err
-	}
-	defer freshStaged.Close()
-	identity, err := plainDirectoryIdentity(freshStaged, stagedName, stagedPath)
-	if err != nil || identity != staged.Identity {
-		return nil, fmt.Errorf("%w: staged directory changed before publication: %v", ErrConflict, err)
-	}
-	if err := r.validateStagedDirectory(stagedPath, freshStaged, stagedName, stagedFiles, snapshots); err != nil {
-		return nil, err
-	}
+	defer fresh.destination.Close()
+	defer fresh.stagedParent.Close()
 	if testHookBeforeDirectoryMove != nil {
 		testHookBeforeDirectoryMove(stagedPath, destination)
 	}
@@ -310,60 +282,141 @@ func (r *Root) PublishDirectoryValidated(ctx context.Context, destination string
 			return nil, err
 		}
 	}
-	commitDestination, commitLeaf, commitAncestors, err := r.bindParent(destination)
+	commit, err := r.rebindPublication(publicationCheck{
+		destination: destination, leaf: leaf, ancestors: destinationAncestors,
+		stagedPath: stagedPath, staged: staged.Identity, files: stagedFiles, snapshots: snapshots,
+		ancestorsWhen: "at publication of", stagedWhen: "at publication",
+	})
 	if err != nil {
 		return nil, err
 	}
-	defer commitDestination.Close()
-	if commitLeaf != leaf || !sameIdentities(destinationAncestors, commitAncestors) {
-		return nil, fmt.Errorf("%w: destination ancestors changed at publication of %s", ErrConflict, destination)
-	}
-	if err := exactName(commitDestination, leaf, false); err != nil {
-		return nil, err
-	}
-	commitStaged, commitStagedName, _, err := r.bindParent(stagedPath)
-	if err != nil {
-		return nil, err
-	}
-	defer commitStaged.Close()
-	commitIdentity, err := plainDirectoryIdentity(commitStaged, commitStagedName, stagedPath)
-	if err != nil || commitIdentity != staged.Identity {
-		return nil, fmt.Errorf("%w: staged directory changed at publication: %v", ErrConflict, err)
-	}
-	if err := r.validateStagedDirectory(stagedPath, commitStaged, commitStagedName, stagedFiles, snapshots); err != nil {
-		return nil, err
-	}
+	defer commit.destination.Close()
+	defer commit.stagedParent.Close()
 	if testHookAfterDirectoryCheck != nil {
 		testHookAfterDirectoryCheck(stagedPath, destination)
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if err := moveDirectoryNoReplace(commitStaged, commitStagedName, commitDestination, leaf); err != nil {
+	committed, err = r.commitStagedDirectory(destination, leaf, commit, staged.Identity, stagedFiles, snapshots)
+	if err != nil {
 		return nil, err
 	}
-	if err := barrier(BarrierDirectory, func() error { return syncDirectory(commitDestination) }); err != nil {
-		if validationErr := r.validatePublishedDirectory(destination, staged.Identity, stagedFiles, snapshots); validationErr != nil {
-			committed = true
-			return nil, &MutationError{Operation: "publish-directory", Path: destination, Committed: true, Err: errors.Join(err, validationErr)}
-		}
-		if rollbackErr := moveDirectoryNoReplace(commitDestination, leaf, commitStaged, commitStagedName); rollbackErr != nil {
-			committed = true
-			return nil, &MutationError{Operation: "publish-directory", Path: destination, Committed: true, Err: errors.Join(err, rollbackErr)}
-		}
-		rollbackBarrierErr := barrier(BarrierDirectory, func() error { return syncDirectory(commitDestination) })
-		return nil, errors.Join(err, rollbackBarrierErr)
-	}
-	if err := r.validatePublishedDirectory(destination, staged.Identity, stagedFiles, snapshots); err != nil {
-		if rollbackErr := moveDirectoryNoReplace(commitDestination, leaf, commitStaged, commitStagedName); rollbackErr != nil {
-			committed = true
-			return nil, &MutationError{Operation: "publish-directory", Path: destination, Committed: true, Err: errors.Join(err, rollbackErr)}
-		}
-		barrierErr := barrier(BarrierDirectory, func() error { return syncDirectory(commitDestination) })
-		return nil, errors.Join(err, barrierErr)
-	}
-	committed = true
 	return &Directory{Path: destination, Identity: staged.Identity}, nil
+}
+
+// commitStagedDirectory moves the staged directory onto the absent destination
+// leaf and proves the published result, rolling it back to its staged name
+// when the barrier or validation fails. committed reports whether the
+// publication stands, in which case the staging name must not be cleaned up.
+func (r *Root) commitStagedDirectory(destinationPath, leaf string, handles publicationHandles, expected Identity, files []DirectoryFile, snapshots []Snapshot) (committed bool, err error) {
+	destination, stagedParent, stagedName := handles.destination, handles.stagedParent, handles.stagedName
+	if err := moveDirectoryNoReplace(stagedParent, stagedName, destination, leaf); err != nil {
+		return false, err
+	}
+	if err := barrier(BarrierDirectory, func() error { return syncDirectory(destination) }); err != nil {
+		if validationErr := r.validatePublishedDirectory(destinationPath, expected, files, snapshots); validationErr != nil {
+			return true, &MutationError{Operation: "publish-directory", Path: destinationPath, Committed: true, Err: errors.Join(err, validationErr)}
+		}
+		return rollbackPublishedDirectory(err, destinationPath, destination, leaf, stagedParent, stagedName)
+	}
+	if err := r.validatePublishedDirectory(destinationPath, expected, files, snapshots); err != nil {
+		return rollbackPublishedDirectory(err, destinationPath, destination, leaf, stagedParent, stagedName)
+	}
+	return true, nil
+}
+
+// stageDirectoryFiles publishes each file into the staged directory and
+// records its snapshot. It returns how many files were staged, even on error,
+// so the caller's cleanup removes exactly those.
+func (r *Root) stageDirectoryFiles(ctx context.Context, stagedPath string, files []DirectoryFile, snapshots []Snapshot) (int, error) {
+	for i, file := range files {
+		if err := ctx.Err(); err != nil {
+			return i, err
+		}
+		if testHookBeforeDirectoryFile != nil {
+			if err := testHookBeforeDirectoryFile(file.Name); err != nil {
+				return i, err
+			}
+		}
+		entry, err := r.Publish(stagedPath+"/"+file.Name, file.Content, file.Mode)
+		if err != nil {
+			return i, err
+		}
+		if err := entry.Close(); err != nil {
+			return i, err
+		}
+		snapshots[i] = entry.Snapshot()
+	}
+	return len(files), nil
+}
+
+// publicationCheck is what rebindPublication re-proves; the *When phrases keep
+// the pre-commit and commit-point conflict messages distinguishable.
+type publicationCheck struct {
+	destination, leaf string
+	ancestors         []Identity
+	stagedPath        string
+	staged            Identity
+	files             []DirectoryFile
+	snapshots         []Snapshot
+	ancestorsWhen     string
+	stagedWhen        string
+}
+
+// publicationHandles are freshly bound parents the caller must keep open, and
+// close, until publication finishes.
+type publicationHandles struct {
+	destination  *os.Root
+	stagedParent *os.Root
+	stagedName   string
+}
+
+// rebindPublication rebinds the destination and staged parents and re-proves
+// the destination is still absent under the same ancestors and the staged
+// directory is still intact. On error it closes any handle it bound, staged
+// parent first, matching the caller's deferred close order.
+func (r *Root) rebindPublication(check publicationCheck) (publicationHandles, error) {
+	destination, leaf, ancestors, err := r.bindParent(check.destination)
+	if err != nil {
+		return publicationHandles{}, err
+	}
+	if leaf != check.leaf || !sameIdentities(check.ancestors, ancestors) {
+		destination.Close()
+		return publicationHandles{}, fmt.Errorf("%w: destination ancestors changed %s %s", ErrConflict, check.ancestorsWhen, check.destination)
+	}
+	if err := exactName(destination, check.leaf, false); err != nil {
+		destination.Close()
+		return publicationHandles{}, err
+	}
+	stagedParent, stagedName, _, err := r.bindParent(check.stagedPath)
+	if err != nil {
+		destination.Close()
+		return publicationHandles{}, err
+	}
+	identity, err := plainDirectoryIdentity(stagedParent, stagedName, check.stagedPath)
+	if err == nil && identity == check.staged {
+		err = r.validateStagedDirectory(check.stagedPath, stagedParent, stagedName, check.files, check.snapshots)
+	} else {
+		err = fmt.Errorf("%w: staged directory changed %s: %v", ErrConflict, check.stagedWhen, err)
+	}
+	if err != nil {
+		stagedParent.Close()
+		destination.Close()
+		return publicationHandles{}, err
+	}
+	return publicationHandles{destination: destination, stagedParent: stagedParent, stagedName: stagedName}, nil
+}
+
+// rollbackPublishedDirectory moves a published directory back to its staged
+// name after cause. A failed move leaves the publication committed, so the
+// caller must not clean the staging name up.
+func rollbackPublishedDirectory(cause error, destinationPath string, destination *os.Root, leaf string, stagedParent *os.Root, stagedName string) (committed bool, err error) {
+	if rollbackErr := moveDirectoryNoReplace(destination, leaf, stagedParent, stagedName); rollbackErr != nil {
+		return true, &MutationError{Operation: "publish-directory", Path: destinationPath, Committed: true, Err: errors.Join(cause, rollbackErr)}
+	}
+	barrierErr := barrier(BarrierDirectory, func() error { return syncDirectory(destination) })
+	return false, errors.Join(cause, barrierErr)
 }
 
 func (r *Root) validatePublishedDirectory(path string, expected Identity, files []DirectoryFile, snapshots []Snapshot) error {

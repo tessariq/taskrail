@@ -260,22 +260,8 @@ func (s *Service) validateLocalPromotionRecovery(transactionID string, snapshots
 		}
 		if snapshot.Reported == markerRelPath() {
 			hasMarker = true
-			if snapshot.FenceSHA256 == "" || snapshot.CandidateSHA256 == "" {
-				return fmt.Errorf("local promotion transaction does not fence %s", markerRelPath())
-			}
-			marker, err := os.ReadFile(filepath.Join(s.paths.RepoRoot, filepath.FromSlash(markerRelPath())))
-			if err != nil {
+			if err := s.recoverValidatePromotionMarker(transactionID, snapshot); err != nil {
 				return err
-			}
-			if digestBytes(marker) == snapshot.FenceSHA256 {
-				marker, err = durabletx.RetainedCandidate(s.paths.LockRepository(), transactionID, durabletx.Worktree, markerRelPath())
-				if err != nil {
-					return err
-				}
-			}
-			decoded, err := decodeLayoutMarkerStrict(marker)
-			if err != nil || decoded.StorageMode != StorageCommitted || decoded.MigrationFence != nil || digestBytes(marker) != snapshot.CandidateSHA256 {
-				return fmt.Errorf("retained local promotion marker is invalid")
 			}
 			continue
 		}
@@ -301,6 +287,30 @@ func (s *Service) validateLocalPromotionRecovery(transactionID string, snapshots
 			return err
 		}
 		return s.validatePromotionSkillVisibility(plan)
+	}
+	return nil
+}
+
+// recoverValidatePromotionMarker requires the promotion to fence the marker
+// and its retained candidate to be a fence-free committed marker. While the
+// fenced original is still on disk the candidate is read from the journal.
+func (s *Service) recoverValidatePromotionMarker(transactionID string, snapshot durabletx.Evidence) error {
+	if snapshot.FenceSHA256 == "" || snapshot.CandidateSHA256 == "" {
+		return fmt.Errorf("local promotion transaction does not fence %s", markerRelPath())
+	}
+	marker, err := os.ReadFile(filepath.Join(s.paths.RepoRoot, filepath.FromSlash(markerRelPath())))
+	if err != nil {
+		return err
+	}
+	if digestBytes(marker) == snapshot.FenceSHA256 {
+		marker, err = durabletx.RetainedCandidate(s.paths.LockRepository(), transactionID, durabletx.Worktree, markerRelPath())
+		if err != nil {
+			return err
+		}
+	}
+	decoded, err := decodeLayoutMarkerStrict(marker)
+	if err != nil || decoded.StorageMode != StorageCommitted || decoded.MigrationFence != nil || digestBytes(marker) != snapshot.CandidateSHA256 {
+		return fmt.Errorf("retained local promotion marker is invalid")
 	}
 	return nil
 }

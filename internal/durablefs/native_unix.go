@@ -5,7 +5,6 @@ package durablefs
 import (
 	"errors"
 	"fmt"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -63,8 +62,6 @@ func openRootObserved(path string) (*os.File, error) {
 func replaceStaged(parent *os.Root, _ *os.File, staged, leaf string) error {
 	return parent.Rename(staged, leaf)
 }
-
-func isReparsePoint(fs.FileInfo) bool { return false }
 
 func nativeSyncDirectory(dir *os.File) error { return nativeSync(dir) }
 

@@ -130,7 +130,7 @@ func workflowProductDigest(t *testing.T, entries []workflowProductFixture) strin
 		frame.WriteByte(0)
 		frame.WriteString(entry.mode)
 		frame.WriteByte(0)
-		frame.WriteString(fmt.Sprintf("%d", len(entry.content)))
+		fmt.Fprintf(&frame, "%d", len(entry.content))
 		frame.WriteByte(0)
 		frame.Write(entry.content)
 		frame.WriteByte(0)

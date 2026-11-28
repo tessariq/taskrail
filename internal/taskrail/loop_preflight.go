@@ -164,66 +164,8 @@ func ParseLoopInvocation(args []string) (LoopInvocation, error) {
 				}
 				value = args[i]
 			}
-			switch name {
-			case "--max-iterations":
-				n, err := positiveLoopInt(name, value)
-				if err != nil {
-					return LoopInvocation{}, err
-				}
-				invocation.MaxIterations = n
-			case "--parallel":
-				n, err := positiveLoopInt(name, value)
-				if err != nil {
-					return LoopInvocation{}, err
-				}
-				invocation.Parallel = n
-			case "--workspace-root":
-				invocation.WorkspaceRoot, invocation.WorkspaceRootSet = value, true
-			case "--clone-depth":
-				if value != "full" {
-					if _, err := positiveLoopInt(name, value); err != nil {
-						return LoopInvocation{}, invalidArgumentsf("--clone-depth must be a positive integer or full")
-					}
-				}
-				invocation.CloneDepth, invocation.CloneDepthSet = value, true
-			case "--keep-workspaces":
-				if value != "never" && value != "failure" && value != "always" {
-					return LoopInvocation{}, invalidArgumentsf("--keep-workspaces must be never, failure, or always")
-				}
-				invocation.KeepWorkspaces, invocation.KeepWorkspacesSet = value, true
-			case "--delivery":
-				if value != "local" && value != "review" {
-					return LoopInvocation{}, invalidArgumentsf("--delivery must be local or review")
-				}
-				invocation.Delivery, invocation.DeliverySet = value, true
-			case "--review-adapter":
-				invocation.ReviewAdapter, invocation.ReviewAdapterSet = value, true
-			case "--review-protocol":
-				invocation.ReviewProtocol, invocation.ReviewProtocolSet = value, true
-			case "--check":
-				invocation.Check, invocation.CheckSet = value, true
-			case "--max-review-rounds":
-				n, err := positiveLoopInt(name, value)
-				if err != nil {
-					return LoopInvocation{}, err
-				}
-				if n > 2 {
-					return LoopInvocation{}, invalidArgumentsf("--max-review-rounds must be between 1 and 2")
-				}
-				invocation.MaxReviewRounds = &n
-			case "--timeout":
-				duration, err := time.ParseDuration(value)
-				if err != nil || duration <= 0 {
-					return LoopInvocation{}, invalidArgumentsf("--timeout must be a positive Go duration")
-				}
-				invocation.Timeout = &duration
-			case "--allow-prompt-override-sha256":
-				invocation.AllowPromptOverrideSHA256 = value
-			case "--result-file":
-				if value == "" {
-					return LoopInvocation{}, invalidArgumentsf("--result-file requires a non-empty path")
-				}
-				invocation.ResultFile = value
+			if err := loopApplyValueFlag(&invocation, name, value); err != nil {
+				return LoopInvocation{}, err
 			}
 		default:
 			return LoopInvocation{}, invalidArgumentsf("unsupported loop flag %s", name)
@@ -232,22 +174,98 @@ func ParseLoopInvocation(args []string) (LoopInvocation, error) {
 	if err := validateParallelInvocation(invocation); err != nil {
 		return LoopInvocation{}, err
 	}
-	if invocation.DryRun {
-		if invocation.ResultFile != "" {
-			return LoopInvocation{}, invalidArgumentsf("loop --dry-run does not support --result-file")
-		}
-		if dash >= 0 {
-			return LoopInvocation{}, invalidArgumentsf("loop --dry-run does not accept a child command")
-		}
-		return invocation, nil
-	}
-	if dash < 0 || len(invocation.Child) == 0 {
-		return LoopInvocation{}, invalidArgumentsf("loop execution requires a child command after --")
-	}
-	if seen["--json"] {
-		return LoopInvocation{}, invalidArgumentsf("loop execution does not support --json")
+	if err := loopValidateInvocationMode(invocation, dash >= 0, seen["--json"]); err != nil {
+		return LoopInvocation{}, err
 	}
 	return invocation, nil
+}
+
+// loopApplyValueFlag records one value-taking flag the caller has already
+// accepted as a loop flag name.
+func loopApplyValueFlag(invocation *LoopInvocation, name, value string) error {
+	switch name {
+	case "--max-iterations":
+		n, err := positiveLoopInt(name, value)
+		if err != nil {
+			return err
+		}
+		invocation.MaxIterations = n
+	case "--parallel":
+		n, err := positiveLoopInt(name, value)
+		if err != nil {
+			return err
+		}
+		invocation.Parallel = n
+	case "--workspace-root":
+		invocation.WorkspaceRoot, invocation.WorkspaceRootSet = value, true
+	case "--clone-depth":
+		if value != "full" {
+			if _, err := positiveLoopInt(name, value); err != nil {
+				return invalidArgumentsf("--clone-depth must be a positive integer or full")
+			}
+		}
+		invocation.CloneDepth, invocation.CloneDepthSet = value, true
+	case "--keep-workspaces":
+		if value != "never" && value != "failure" && value != "always" {
+			return invalidArgumentsf("--keep-workspaces must be never, failure, or always")
+		}
+		invocation.KeepWorkspaces, invocation.KeepWorkspacesSet = value, true
+	case "--delivery":
+		if value != "local" && value != "review" {
+			return invalidArgumentsf("--delivery must be local or review")
+		}
+		invocation.Delivery, invocation.DeliverySet = value, true
+	case "--review-adapter":
+		invocation.ReviewAdapter, invocation.ReviewAdapterSet = value, true
+	case "--review-protocol":
+		invocation.ReviewProtocol, invocation.ReviewProtocolSet = value, true
+	case "--check":
+		invocation.Check, invocation.CheckSet = value, true
+	case "--max-review-rounds":
+		n, err := positiveLoopInt(name, value)
+		if err != nil {
+			return err
+		}
+		if n > 2 {
+			return invalidArgumentsf("--max-review-rounds must be between 1 and 2")
+		}
+		invocation.MaxReviewRounds = &n
+	case "--timeout":
+		duration, err := time.ParseDuration(value)
+		if err != nil || duration <= 0 {
+			return invalidArgumentsf("--timeout must be a positive Go duration")
+		}
+		invocation.Timeout = &duration
+	case "--allow-prompt-override-sha256":
+		invocation.AllowPromptOverrideSHA256 = value
+	case "--result-file":
+		if value == "" {
+			return invalidArgumentsf("--result-file requires a non-empty path")
+		}
+		invocation.ResultFile = value
+	}
+	return nil
+}
+
+// loopValidateInvocationMode rejects flags that belong to the other mode:
+// dry-run never launches a child, and execution always needs one.
+func loopValidateInvocationMode(invocation LoopInvocation, hasDelimiter, jsonOutput bool) error {
+	if invocation.DryRun {
+		if invocation.ResultFile != "" {
+			return invalidArgumentsf("loop --dry-run does not support --result-file")
+		}
+		if hasDelimiter {
+			return invalidArgumentsf("loop --dry-run does not accept a child command")
+		}
+		return nil
+	}
+	if !hasDelimiter || len(invocation.Child) == 0 {
+		return invalidArgumentsf("loop execution requires a child command after --")
+	}
+	if jsonOutput {
+		return invalidArgumentsf("loop execution does not support --json")
+	}
+	return nil
 }
 
 func positiveLoopInt(name, value string) (int, error) {

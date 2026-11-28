@@ -121,25 +121,12 @@ func (s *Service) saveState(state *State) error {
 // one file can stop here with earlier files already on disk: the operation never
 // committed (`applied` stays false) but the repository may be partly updated,
 // which is exactly what partial_write names. The failing path is reported
-// because it now holds content the rest of the operation disagrees with; a
-// caller that already landed other files adds them with withWrittenPaths.
+// because it now holds content the rest of the operation disagrees with.
 func (s *Service) managedWriteFailure(path string, cause error) error {
 	return WithMachineFailure(MachineFailure{
 		Code:  MachineCodePartialWrite,
 		Paths: []string{relPath(s.paths.RepoRoot, path)},
 	}, cause)
-}
-
-// withWrittenPaths adds files a failed operation had already written to its
-// report, so `paths` names everything an agent has to review rather than only
-// the write that failed. Only the writer knows what it landed before the
-// failure, so it adds them here rather than the boundary guessing.
-func (s *Service) withWrittenPaths(cause error, written ...string) error {
-	failure := MachineFailureFor(cause)
-	for _, path := range written {
-		failure.Paths = append(failure.Paths, relPath(s.paths.RepoRoot, path))
-	}
-	return WithMachineFailure(failure, cause)
 }
 
 func (s *Service) saveTask(task *Task) error {

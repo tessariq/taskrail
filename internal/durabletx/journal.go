@@ -180,32 +180,41 @@ func (m manifest) validate(transactionID string, repo repolock.Repository) error
 				return fmt.Errorf("manifest members are not in canonical order")
 			}
 		}
-		if (member.Published && !member.Delete && (member.Candidate == nil || member.Candidate.SHA256 == "")) ||
-			(!member.Published && member.Candidate != nil) || (member.Original != nil && member.Original.SHA256 == "") {
-			return fmt.Errorf("manifest member %q records no digest", member.Reported)
-		}
-		if member.Delete && (!member.Published || member.Candidate != nil || member.Fence != nil) {
-			return fmt.Errorf("manifest deletion member %q records an invalid candidate", member.Reported)
-		}
-		if member.Fence != nil && (!member.Published || member.Candidate == nil) {
-			return fmt.Errorf("manifest fence member %q records no final candidate", member.Reported)
-		}
-		if len(member.Ancestors) == 0 || (member.Original != nil && member.Original.Identity == nil) {
-			return fmt.Errorf("manifest member %q records incomplete identity evidence", member.Reported)
-		}
-		for _, state := range []*fileState{member.Original, member.Candidate, member.Fence} {
-			if state != nil && (!digestPattern.MatchString(state.SHA256) || uint32(durablefs.PortableMode(fs.FileMode(state.Mode))) != state.Mode) {
-				return fmt.Errorf("manifest member %q records invalid digest or mode", member.Reported)
-			}
-		}
-		if member.Candidate != nil && member.Candidate.Identity != nil {
-			return fmt.Errorf("manifest member %q records an identity for unpublished candidate bytes", member.Reported)
-		}
-		if member.Fence != nil && member.Fence.Identity != nil {
-			return fmt.Errorf("manifest member %q records an identity for unpublished fence bytes", member.Reported)
+		if err := member.validateEvidence(); err != nil {
+			return err
 		}
 	}
 	return validateFenceOrder(m.Members)
+}
+
+// validateEvidence checks that one member records the digests, modes, and
+// identities its published, deleted, or fenced state requires.
+func (member manifestMember) validateEvidence() error {
+	if (member.Published && !member.Delete && (member.Candidate == nil || member.Candidate.SHA256 == "")) ||
+		(!member.Published && member.Candidate != nil) || (member.Original != nil && member.Original.SHA256 == "") {
+		return fmt.Errorf("manifest member %q records no digest", member.Reported)
+	}
+	if member.Delete && (!member.Published || member.Candidate != nil || member.Fence != nil) {
+		return fmt.Errorf("manifest deletion member %q records an invalid candidate", member.Reported)
+	}
+	if member.Fence != nil && (!member.Published || member.Candidate == nil) {
+		return fmt.Errorf("manifest fence member %q records no final candidate", member.Reported)
+	}
+	if len(member.Ancestors) == 0 || (member.Original != nil && member.Original.Identity == nil) {
+		return fmt.Errorf("manifest member %q records incomplete identity evidence", member.Reported)
+	}
+	for _, state := range []*fileState{member.Original, member.Candidate, member.Fence} {
+		if state != nil && (!digestPattern.MatchString(state.SHA256) || uint32(durablefs.PortableMode(fs.FileMode(state.Mode))) != state.Mode) {
+			return fmt.Errorf("manifest member %q records invalid digest or mode", member.Reported)
+		}
+	}
+	if member.Candidate != nil && member.Candidate.Identity != nil {
+		return fmt.Errorf("manifest member %q records an identity for unpublished candidate bytes", member.Reported)
+	}
+	if member.Fence != nil && member.Fence.Identity != nil {
+		return fmt.Errorf("manifest member %q records an identity for unpublished fence bytes", member.Reported)
+	}
+	return nil
 }
 
 func (j journal) validate(transactionID string) error {

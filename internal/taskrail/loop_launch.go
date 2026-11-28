@@ -122,87 +122,109 @@ func launchLoopChild(input loopChildLaunch) (loopChildExecution, error) {
 		}
 		return execution, nil
 	}
-	stdoutResult := copyLoopChildStream(childStdout, stdout)
-	stderrResult := copyLoopChildStream(childStderr, stderr)
-	stdinResult := writeLoopChildPromptAsync(stdin, input.Prompt)
+	supervisor := &loopChildSupervisor{execution: execution, child: child, containment: containment, stdin: stdin, stdout: childStdout, stderr: childStderr}
+	return supervisor.run(input, stdout, stderr), nil
+}
+
+// loopChildSupervisor owns a started, contained child until its leader exit
+// and every transport stream have been observed, so cleanup runs exactly once.
+type loopChildSupervisor struct {
+	execution    loopChildExecution
+	child        *exec.Cmd
+	containment  loopChildContainment
+	stdin        io.WriteCloser
+	stdout       io.ReadCloser
+	stderr       io.ReadCloser
+	cleanupDone  bool
+	leaderExited bool
+}
+
+func (s *loopChildSupervisor) run(input loopChildLaunch, stdout, stderr io.Writer) loopChildExecution {
+	stdoutResult := copyLoopChildStream(s.stdout, stdout)
+	stderrResult := copyLoopChildStream(s.stderr, stderr)
+	stdinResult := writeLoopChildPromptAsync(s.stdin, input.Prompt)
 	contextDone, stopContext := loopChildContext(input)
 	defer stopContext()
 	checkExit := time.NewTicker(10 * time.Millisecond)
 	defer checkExit.Stop()
-	cleanupDone := false
-	leaderExited := false
-	releaseLeader := func(exitCode int, signal string) {
-		if leaderExited {
-			return
-		}
-		leaderExited = true
-		execution.ExitCode = &exitCode
-		execution.Signal = signal
-		if exitCode != 0 {
-			execution.WaitError = fmt.Errorf("child exited with code %d", exitCode)
-		}
-		if err := child.Process.Release(); err != nil {
-			execution.ContainmentError = errors.Join(execution.ContainmentError, fmt.Errorf("release reaped child: %w", err))
-		}
-	}
-	cleanup := func() {
-		if cleanupDone {
-			return
-		}
-		cleanupDone = true
-		cleanupLoopChildContainment(&execution, containment)
-		if execution.ContainmentError != nil {
-			closeLoopChildTransport(stdin, childStdout, childStderr)
-		}
-		if execution.Containment.leaderReaped {
-			releaseLeader(execution.Containment.leaderExitCode, execution.Containment.leaderSignal)
-		} else if !leaderExited {
-			execution.ContainmentError = errors.Join(execution.ContainmentError,
-				errors.New("leader termination was not observed during containment cleanup"), child.Process.Release())
-			closeLoopChildTransport(stdin, childStdout, childStderr)
-		}
-	}
-	for !leaderExited && !cleanupDone || stdinResult != nil || stdoutResult != nil || stderrResult != nil {
+	for !s.leaderExited && !s.cleanupDone || stdinResult != nil || stdoutResult != nil || stderrResult != nil {
 		select {
 		case err := <-stdinResult:
 			stdinResult = nil
-			execution.StdinError = err
-			if err != nil {
-				cleanup()
-			}
+			s.execution.StdinError = err
+			s.cleanupOnError(err)
 		case err := <-stdoutResult:
 			stdoutResult = nil
-			execution.StdoutError = err
-			if err != nil {
-				cleanup()
-			}
+			s.execution.StdoutError = err
+			s.cleanupOnError(err)
 		case err := <-stderrResult:
 			stderrResult = nil
-			execution.StderrError = err
-			if err != nil {
-				cleanup()
-			}
+			s.execution.StderrError = err
+			s.cleanupOnError(err)
 		case <-contextDone.Done():
-			execution.TimedOut = loopChildTimedOut(input, contextDone)
-			execution.CancellationError = contextDone.Err()
-			cleanup()
+			s.execution.TimedOut = loopChildTimedOut(input, contextDone)
+			s.execution.CancellationError = contextDone.Err()
+			s.cleanup()
 		case <-checkExit.C:
-			if leaderExited {
-				continue
-			}
-			exited, exitCode, signal, err := containment.exited(execution.PID)
-			if err != nil {
-				execution.ContainmentError = errors.Join(execution.ContainmentError, fmt.Errorf("observe child exit: %w", err))
-				cleanup()
-				continue
-			}
-			if exited {
-				releaseLeader(exitCode, signal)
-				cleanup()
-			}
+			s.observeExit()
 		}
 	}
-	return execution, nil
+	return s.execution
+}
+
+func (s *loopChildSupervisor) cleanupOnError(err error) {
+	if err != nil {
+		s.cleanup()
+	}
+}
+
+func (s *loopChildSupervisor) observeExit() {
+	if s.leaderExited {
+		return
+	}
+	exited, exitCode, signal, err := s.containment.exited(s.execution.PID)
+	if err != nil {
+		s.execution.ContainmentError = errors.Join(s.execution.ContainmentError, fmt.Errorf("observe child exit: %w", err))
+		s.cleanup()
+		return
+	}
+	if exited {
+		s.releaseLeader(exitCode, signal)
+		s.cleanup()
+	}
+}
+
+func (s *loopChildSupervisor) releaseLeader(exitCode int, signal string) {
+	if s.leaderExited {
+		return
+	}
+	s.leaderExited = true
+	s.execution.ExitCode = &exitCode
+	s.execution.Signal = signal
+	if exitCode != 0 {
+		s.execution.WaitError = fmt.Errorf("child exited with code %d", exitCode)
+	}
+	if err := s.child.Process.Release(); err != nil {
+		s.execution.ContainmentError = errors.Join(s.execution.ContainmentError, fmt.Errorf("release reaped child: %w", err))
+	}
+}
+
+func (s *loopChildSupervisor) cleanup() {
+	if s.cleanupDone {
+		return
+	}
+	s.cleanupDone = true
+	cleanupLoopChildContainment(&s.execution, s.containment)
+	if s.execution.ContainmentError != nil {
+		closeLoopChildTransport(s.stdin, s.stdout, s.stderr)
+	}
+	if s.execution.Containment.leaderReaped {
+		s.releaseLeader(s.execution.Containment.leaderExitCode, s.execution.Containment.leaderSignal)
+	} else if !s.leaderExited {
+		s.execution.ContainmentError = errors.Join(s.execution.ContainmentError,
+			errors.New("leader termination was not observed during containment cleanup"), s.child.Process.Release())
+		closeLoopChildTransport(s.stdin, s.stdout, s.stderr)
+	}
 }
 
 func loopChildContext(input loopChildLaunch) (context.Context, context.CancelFunc) {

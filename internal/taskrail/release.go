@@ -58,17 +58,9 @@ func (s *Service) ReleaseTask(input ReleaseTaskInput) (result ReleaseTaskResult,
 	if err != nil {
 		return ReleaseTaskResult{}, err
 	}
-	task, err := exactTaskByID(tasks, input.TaskID)
+	task, err := releaseActiveTask(state, tasks, input.TaskID)
 	if err != nil {
 		return ReleaseTaskResult{}, err
-	}
-	if task.Frontmatter.Status != "in_progress" {
-		return ReleaseTaskResult{}, WithMachineErrorCode(MachineCodeInvalidStatus,
-			fmt.Errorf("task %s is not in_progress", input.TaskID))
-	}
-	if state.Frontmatter.CurrentTask != task.Frontmatter.ID || state.Frontmatter.CurrentTaskTitle != task.Frontmatter.Title || len(inProgressTasks(tasks)) != 1 {
-		return ReleaseTaskResult{}, WithMachineErrorCode(MachineCodeRepositoryInvalid,
-			fmt.Errorf("active pointer does not consistently name task %s", input.TaskID))
 	}
 
 	before, err := os.ReadFile(task.Filename)
@@ -90,12 +82,7 @@ func (s *Service) ReleaseTask(input ReleaseTaskInput) (result ReleaseTaskResult,
 		testHookReleaseCandidatePrepared()
 	}
 
-	stateCandidate := *state
-	stateCandidate.Frontmatter.CurrentTask = ""
-	stateCandidate.Frontmatter.CurrentTaskTitle = ""
-	stateCandidate.Frontmatter.UpdatedAt = now
-	stateCandidate.Frontmatter.Blockers = removeBlocker(stateCandidate.Frontmatter.Blockers, input.TaskID)
-	reconcileIdlePointers(&stateCandidate.Frontmatter, tasks)
+	stateCandidate := releaseStateCandidate(state, tasks, input.TaskID, now)
 	preview := replaceReleaseTask(tasks, task, &candidate)
 	stateCandidate.Body = renderStateBody(stateCandidate.Frontmatter, preview)
 	validation := s.validateInMemory(&stateCandidate, preview)
@@ -133,6 +120,37 @@ func (s *Service) ReleaseTask(input ReleaseTaskInput) (result ReleaseTaskResult,
 	}
 	result.Validation = validation
 	return result, nil
+}
+
+// releaseActiveTask returns the task to release, requiring it to be the one
+// in_progress task the state's active pointer names.
+func releaseActiveTask(state *State, tasks []*Task, taskID string) (*Task, error) {
+	task, err := exactTaskByID(tasks, taskID)
+	if err != nil {
+		return nil, err
+	}
+	if task.Frontmatter.Status != "in_progress" {
+		return nil, WithMachineErrorCode(MachineCodeInvalidStatus,
+			fmt.Errorf("task %s is not in_progress", taskID))
+	}
+	if state.Frontmatter.CurrentTask != task.Frontmatter.ID || state.Frontmatter.CurrentTaskTitle != task.Frontmatter.Title || len(inProgressTasks(tasks)) != 1 {
+		return nil, WithMachineErrorCode(MachineCodeRepositoryInvalid,
+			fmt.Errorf("active pointer does not consistently name task %s", taskID))
+	}
+	return task, nil
+}
+
+// releaseStateCandidate clears the active pointer and the task's blocker, then
+// re-projects the idle pointers. The caller renders the body once the task
+// candidate is in the preview.
+func releaseStateCandidate(state *State, tasks []*Task, taskID, now string) State {
+	stateCandidate := *state
+	stateCandidate.Frontmatter.CurrentTask = ""
+	stateCandidate.Frontmatter.CurrentTaskTitle = ""
+	stateCandidate.Frontmatter.UpdatedAt = now
+	stateCandidate.Frontmatter.Blockers = removeBlocker(stateCandidate.Frontmatter.Blockers, taskID)
+	reconcileIdlePointers(&stateCandidate.Frontmatter, tasks)
+	return stateCandidate
 }
 
 func validateReleaseReason(reason string) (string, error) {

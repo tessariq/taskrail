@@ -120,11 +120,7 @@ func reader(owner, command string, surface MachineSurface, storage []string, con
 }
 
 func splitMatrixSet(value string) []string {
-	var values []string
-	for _, item := range strings.Split(value, ", ") {
-		values = append(values, item)
-	}
-	return values
+	return strings.Split(value, ", ")
 }
 
 // WriterTransactionMatrix returns a defensive copy of the complete v0.5 command

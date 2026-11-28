@@ -426,64 +426,90 @@ func (s *Service) taskReviewPublication(input ReviewPublishInput) (taskReviewPub
 	if destinationTree.Present {
 		return out, WithMachineErrorCode(MachineCodeDestinationExists, fmt.Errorf("task review destination already exists"))
 	}
-	tasks, err := s.loadTasks()
+	sources, err := s.reviewPublishTaskSources(input.TaskID)
 	if err != nil {
 		return out, err
 	}
-	var task *Task
-	for _, candidate := range tasks {
-		if candidate.Frontmatter.ID == input.TaskID {
-			task = candidate
-			break
-		}
-	}
-	if task == nil {
-		return out, WithMachineErrorCode(MachineCodeTaskNotFound, fmt.Errorf("task %q not found", input.TaskID))
-	}
-	taskRel, err := s.storageRelative(task.Filename)
+	task, taskBytes, specFile, specBytes := sources.task, sources.taskBytes, sources.specFile, sources.specBytes
+	config, err := s.reviewPublishConfig()
 	if err != nil {
 		return out, err
-	}
-	taskBytes, _, err := durablefs.ReadFile(s.paths.StorageRoot, taskRel, 1<<30)
-	if err != nil {
-		return out, reviewInputError("read reviewed task", err)
-	}
-	taskFrontmatter, _, err := parseFrontmatter[TaskFrontmatter](taskBytes)
-	if err != nil {
-		return out, WithMachineErrorCode(MachineCodeRepositoryInvalid, fmt.Errorf("parse reviewed task: %w", err))
-	}
-	if taskFrontmatter.ID != input.TaskID {
-		return out, WithMachineErrorCode(MachineCodeWriteConflict, fmt.Errorf("reviewed task identity changed while reading"))
-	}
-	specPath, _, err := parseSpecRef(taskFrontmatter.SpecRef)
-	if err != nil {
-		return out, WithMachineErrorCode(MachineCodeRepositoryInvalid, err)
-	}
-	specFile, err := s.paths.physicalSpecPath(specPath)
-	if err != nil {
-		return out, err
-	}
-	specRel, err := s.storageRelative(specFile)
-	if err != nil {
-		return out, err
-	}
-	specBytes, _, err := durablefs.ReadFile(s.paths.StorageRoot, specRel, 1<<30)
-	if err != nil {
-		return out, reviewInputError("read reviewed spec", err)
-	}
-	configRel, err := filepath.Rel(s.paths.RepoRoot, s.paths.ConfigFile)
-	if err != nil {
-		return out, err
-	}
-	config, _, err := durablefs.ReadFile(s.paths.RepoRoot, filepath.ToSlash(configRel), 1<<20)
-	if err != nil {
-		return out, reviewInputError("read Taskrail configuration", err)
 	}
 	out = taskReviewPublication{proposal: proposal, destination: destination, proposalFile: proposalFile, config: config, task: taskBytes, spec: specBytes, taskPath: task.Path, specPath: s.paths.logicalManagedPath(specFile), taskSHA256: digestRaw(taskBytes), specSHA256: digestRaw(specBytes), review: review, prompt: prompt}
 	if out.taskSHA256 != input.ExpectTaskSHA256 || out.specSHA256 != input.ExpectSpecSHA256 || review.TaskID != input.TaskID || review.TaskPath != task.Path || review.TaskSHA256 != out.taskSHA256 || review.SpecPath != out.specPath || review.SpecSHA256 != out.specSHA256 {
 		return taskReviewPublication{}, WithMachineErrorCode(MachineCodeSourceChanged, fmt.Errorf("task review bindings do not match current task and spec snapshots"))
 	}
 	return out, nil
+}
+
+func (s *Service) reviewPublishConfig() ([]byte, error) {
+	configRel, err := filepath.Rel(s.paths.RepoRoot, s.paths.ConfigFile)
+	if err != nil {
+		return nil, err
+	}
+	config, _, err := durablefs.ReadFile(s.paths.RepoRoot, filepath.ToSlash(configRel), 1<<20)
+	if err != nil {
+		return nil, reviewInputError("read Taskrail configuration", err)
+	}
+	return config, nil
+}
+
+type reviewPublishTaskSnapshot struct {
+	task      *Task
+	taskBytes []byte
+	specFile  string
+	specBytes []byte
+}
+
+// reviewPublishTaskSources reads the reviewed task and the spec it references
+// from durable storage, rejecting a task whose identity changed mid-read.
+func (s *Service) reviewPublishTaskSources(taskID string) (reviewPublishTaskSnapshot, error) {
+	tasks, err := s.loadTasks()
+	if err != nil {
+		return reviewPublishTaskSnapshot{}, err
+	}
+	var task *Task
+	for _, candidate := range tasks {
+		if candidate.Frontmatter.ID == taskID {
+			task = candidate
+			break
+		}
+	}
+	if task == nil {
+		return reviewPublishTaskSnapshot{}, WithMachineErrorCode(MachineCodeTaskNotFound, fmt.Errorf("task %q not found", taskID))
+	}
+	taskRel, err := s.storageRelative(task.Filename)
+	if err != nil {
+		return reviewPublishTaskSnapshot{}, err
+	}
+	taskBytes, _, err := durablefs.ReadFile(s.paths.StorageRoot, taskRel, 1<<30)
+	if err != nil {
+		return reviewPublishTaskSnapshot{}, reviewInputError("read reviewed task", err)
+	}
+	taskFrontmatter, _, err := parseFrontmatter[TaskFrontmatter](taskBytes)
+	if err != nil {
+		return reviewPublishTaskSnapshot{}, WithMachineErrorCode(MachineCodeRepositoryInvalid, fmt.Errorf("parse reviewed task: %w", err))
+	}
+	if taskFrontmatter.ID != taskID {
+		return reviewPublishTaskSnapshot{}, WithMachineErrorCode(MachineCodeWriteConflict, fmt.Errorf("reviewed task identity changed while reading"))
+	}
+	specPath, _, err := parseSpecRef(taskFrontmatter.SpecRef)
+	if err != nil {
+		return reviewPublishTaskSnapshot{}, WithMachineErrorCode(MachineCodeRepositoryInvalid, err)
+	}
+	specFile, err := s.paths.physicalSpecPath(specPath)
+	if err != nil {
+		return reviewPublishTaskSnapshot{}, err
+	}
+	specRel, err := s.storageRelative(specFile)
+	if err != nil {
+		return reviewPublishTaskSnapshot{}, err
+	}
+	specBytes, _, err := durablefs.ReadFile(s.paths.StorageRoot, specRel, 1<<30)
+	if err != nil {
+		return reviewPublishTaskSnapshot{}, reviewInputError("read reviewed spec", err)
+	}
+	return reviewPublishTaskSnapshot{task: task, taskBytes: taskBytes, specFile: specFile, specBytes: specBytes}, nil
 }
 
 func (s *Service) specReviewPublication(input ReviewPublishInput) (specReviewPublication, error) {
@@ -546,13 +572,9 @@ func (s *Service) specReviewPublication(input ReviewPublishInput) (specReviewPub
 	if err != nil {
 		return out, reviewInputError("read reviewed spec", err)
 	}
-	configRel, err := filepath.Rel(s.paths.RepoRoot, s.paths.ConfigFile)
+	config, err := s.reviewPublishConfig()
 	if err != nil {
 		return out, err
-	}
-	config, _, err := durablefs.ReadFile(s.paths.RepoRoot, filepath.ToSlash(configRel), 1<<20)
-	if err != nil {
-		return out, reviewInputError("read Taskrail configuration", err)
 	}
 	out = specReviewPublication{proposal: proposal, destination: destination, config: config, spec: spec, specPath: specPath, specSHA256: digestRaw(spec), bundle: bundle, prompts: prompts}
 	if out.specSHA256 != input.ExpectSpecSHA256 || bundle.Manifest.SpecPath != specPath || bundle.Manifest.SpecSHA256 != out.specSHA256 {
@@ -706,20 +728,9 @@ func (s *Service) decompositionReviewPublication(input ReviewPublishInput) (deco
 	if err := s.requireTransientProposal(proposal); err != nil {
 		return out, err
 	}
-	tree, err := durablefs.ObserveTree(s.paths.RepoRoot, proposal)
-	if err != nil || !tree.Present {
-		return out, reviewInputError("inspect decomposition review proposal", err)
-	}
-	files := make(map[string][]byte, len(tree.Entries))
-	for _, entry := range tree.Entries {
-		if entry.Directory {
-			return out, reviewInputError("inspect decomposition review proposal", nil)
-		}
-		data, _, err := durablefs.ReadFile(s.paths.RepoRoot, path.Join(proposal, entry.Path), reviewFileLimit)
-		if err != nil {
-			return out, reviewInputError("read decomposition review proposal", err)
-		}
-		files[entry.Path] = data
+	files, err := s.reviewPublishDecompositionFiles(proposal)
+	if err != nil {
+		return out, err
 	}
 	version, specPath, specFile, err := s.reviewSpecPath(input.Spec)
 	if err != nil {
@@ -773,13 +784,9 @@ func (s *Service) decompositionReviewPublication(input ReviewPublishInput) (deco
 	if destinationTree.Present {
 		return out, WithMachineErrorCode(MachineCodeDestinationExists, fmt.Errorf("decomposition review destination already exists"))
 	}
-	configRel, err := filepath.Rel(s.paths.RepoRoot, s.paths.ConfigFile)
+	config, err := s.reviewPublishConfig()
 	if err != nil {
 		return out, err
-	}
-	config, _, err := durablefs.ReadFile(s.paths.RepoRoot, filepath.ToSlash(configRel), 1<<20)
-	if err != nil {
-		return out, reviewInputError("read Taskrail configuration", err)
 	}
 	out = decompositionReviewPublication{
 		proposal: proposal, destination: destination, specPath: specPath, specReviewPath: input.SpecReview,
@@ -789,6 +796,27 @@ func (s *Service) decompositionReviewPublication(input ReviewPublishInput) (deco
 		return decompositionReviewPublication{}, WithMachineErrorCode(MachineCodeSourceChanged, fmt.Errorf("decomposition review bindings do not match current spec and spec-review snapshots"))
 	}
 	return out, nil
+}
+
+// reviewPublishDecompositionFiles reads a flat decomposition proposal; any
+// subdirectory makes the proposal malformed.
+func (s *Service) reviewPublishDecompositionFiles(proposal string) (map[string][]byte, error) {
+	tree, err := durablefs.ObserveTree(s.paths.RepoRoot, proposal)
+	if err != nil || !tree.Present {
+		return nil, reviewInputError("inspect decomposition review proposal", err)
+	}
+	files := make(map[string][]byte, len(tree.Entries))
+	for _, entry := range tree.Entries {
+		if entry.Directory {
+			return nil, reviewInputError("inspect decomposition review proposal", nil)
+		}
+		data, _, err := durablefs.ReadFile(s.paths.RepoRoot, path.Join(proposal, entry.Path), reviewFileLimit)
+		if err != nil {
+			return nil, reviewInputError("read decomposition review proposal", err)
+		}
+		files[entry.Path] = data
+	}
+	return files, nil
 }
 
 func (s *Service) readDecompositionSpecReview(specReview, version string) (map[string][]byte, error) {
