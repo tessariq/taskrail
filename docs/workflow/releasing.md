@@ -19,6 +19,9 @@ Release is live — follow every step below.
 
 ## Automated: GitHub Release
 
+0. Prune agent guidance: re-read `AGENTS.md` and the nested `internal/**/AGENTS.md`
+   files, and delete rules that the code, a hook, or CI now makes redundant, or
+   that no longer match the repository.
 1. Land the `## v<version>` section in `CHANGELOG.md` (move entries out of `## Unreleased`).
    The workflow refuses to publish if this section is missing or its notes are empty.
    If a v0.5 skill-evaluation report is `waived`, disclose the waiver, residual

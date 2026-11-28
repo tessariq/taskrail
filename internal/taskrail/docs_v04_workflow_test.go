@@ -59,9 +59,11 @@ func TestAutonomousContractCitesCanonicalLifecycleRegistry(t *testing.T) {
 }
 
 func TestV04ShippedPrerequisitesAreDocumented(t *testing.T) {
-	agents := readWorkflowDoc(t, filepath.Join("..", "..", "AGENTS.md"))
-	if !strings.Contains(agents, "`specs/v0.4.0.md`") {
-		t.Error("AGENTS.md source-of-truth specs must include v0.4.0")
+	// AGENTS.md points at specs/README.md for the spec reading order rather than
+	// repeating a list that goes stale every release, so the order lives here.
+	specsIndex := readWorkflowDoc(t, filepath.Join("..", "..", "specs", "README.md"))
+	if !strings.Contains(specsIndex, "`specs/v0.4.0.md`") {
+		t.Error("specs/README.md reading order must include v0.4.0")
 	}
 
 	backlog := readWorkflowDoc(t, filepath.Join("..", "..", "planning", "BACKLOG.md"))

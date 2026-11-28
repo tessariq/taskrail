@@ -77,7 +77,7 @@ Onboarding skills (create tasks with `${TASKRAIL:-taskrail} import --apply`):
 Skills invoke the binary through `${TASKRAIL:-taskrail}` (T-051), never
 `go run ./cmd/taskrail`. In this repository the bare `taskrail` fallback is made
 correct by building the working-tree binary onto the mise PATH — run
-`mise run setup` (T-074). See `AGENTS.md` for the staleness trap this avoids.
+`mise run setup` (T-074). See `docs/binary-resolution-findings.md` for the staleness trap this avoids.
 
 ## Required Behavior
 

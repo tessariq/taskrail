@@ -241,24 +241,29 @@ taskrail task dependency add T-010-api T-009-model  # one reviewed edge
 ## Development
 
 [mise](https://mise.jdx.dev) provisions the pinned toolchain (Go, `task`,
-`lefthook`) from `mise.toml` — optional; direct `go` commands and the
-`Taskfile.yml` targets work without it:
+`lefthook`, `golangci-lint`) from `mise.toml` — optional; direct `go` commands
+and the `Taskfile.yml` targets work without it:
 
 ```sh
-mise run setup   # provision, build taskrail onto PATH, wire the opt-in git hooks
-go build ./cmd/taskrail && go test ./...
+mise run setup        # provision, build taskrail onto PATH, wire the git hooks
+task check            # the CI checks and build-test jobs, step for step
+task check:planning   # the planning/docs CI lane, step for step
 ```
 
-CI (`.github/workflows/ci.yml`) is the authoritative gate and runs the build/test
-matrix over Linux, Windows, and macOS. Optional
-[lefthook](https://github.com/evilmartians/lefthook) hooks mirror it locally
-(`task hooks:install`), with `pre-push` on the shorter `task test:short` lane;
-`pre-commit` also runs the agent-identity guard, and `commit-msg`/`pre-push`
-refuse agent-attribution trailers and session links. Do not bypass them with
-`--no-verify`. See
+CI is the authoritative gate: `ci.yml` runs lint, the guard-script tests, and
+the build/test matrix over Linux, Windows, and macOS; `planning.yml` gates
+planning, spec, and doc changes; `commit-policy.yml` checks every pushed commit
+for agent attribution and agent author identities. Tests keep `task check` and
+`task check:planning` identical to those jobs. The
+[lefthook](https://github.com/evilmartians/lefthook) hooks mirror the fast
+checks locally: `pre-commit` refuses staged merge markers, agent identities,
+and a `STATE.md` that differs from its projection, and runs the doc-pinning
+tests when docs change; `commit-msg` enforces the message policy; `pre-push`
+re-checks attribution, then runs `task lint` and `task test:short`. Do not
+bypass them with `--no-verify`. See
 [CONTRIBUTING.md](CONTRIBUTING.md) for the PR checklist and the AI-assisted
 contribution policy, and
-[AGENTS.md](AGENTS.md#toolchain-and-environment) for the binary-freshness
+[AGENTS.md](AGENTS.md#running-the-cli) for the binary-freshness
 contract that matters when hacking on Taskrail itself.
 
 Maintainer [skill evaluations](docs/workflow/skill-evaluation.md) seal artifact

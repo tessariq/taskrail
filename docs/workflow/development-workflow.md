@@ -22,6 +22,15 @@ Contributor and coding-agent workflow for Taskrail tracked work.
 - Workflow validation: `go run ./cmd/taskrail validate`
 - CLI smoke: `go run ./cmd/taskrail --help`
 - Skill package parity: `task check:skills`
+- Lint: `task lint` (golangci-lint, configured in `.golangci.yml`)
+- Doc-pinning tests: `task check:docs` (tests that read `AGENTS.md`,
+  `README.md`, `docs/`, and `specs/`; full CI skips doc-only changes, so the
+  pre-commit hook and the planning lane run these)
+- `STATE.md` projection: `task check:state` (fails when `planning/STATE.md`
+  differs from what `taskrail repair` would write; remedy `taskrail repair --apply`)
+- Full local gates: `task check` mirrors the CI `checks` and `build-test` jobs,
+  and `task check:planning` mirrors the planning lane. `internal/toolchain`
+  tests fail when either drifts from its workflow.
 
 ## TDD Default
 
@@ -100,6 +109,9 @@ Cleanup rules:
 - Run `git status` after any tracked-work command; the regenerated `STATE.md` and rewritten task files belong in the same commit as the change that produced them.
 - When a commit alters tracked-work or spec state that `STATE.md` reflects (status transitions, added/removed tasks, task counts, active spec, verification result), stage the CLI-regenerated `STATE.md` so committed state never drifts.
 - Create follow-up tasks before the final transition (or via `taskrail verify --create-followup`) so `STATE.md` counts include them.
+- Follow-up task files created while completing a task belong in that task's commit, next to its `STATE.md` update. A task file added after the last state-writing command is missing from the committed `STATE.md` counts until the next writer runs; after hand-adding or removing task files, re-project with `taskrail repair --apply`.
+- When asked to split work into several commits, never separate `STATE.md` or a task's added or rewritten task files from the change that produced them. `STATE.md` is one cumulative snapshot, so splitting it produces a counted-but-absent (or absent-but-counted) inconsistency. Split only along genuinely independent concerns.
+- When a merge or rebase conflicts on `STATE.md`, take either side and re-project it with `taskrail repair --apply`, then run `taskrail validate` and commit the regenerated file (skill `taskrail-repair`). A genuine conflict on the same task file is real content and stays human-resolved.
 
 ## What To Run By Change Type
 

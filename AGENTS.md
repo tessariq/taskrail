@@ -1,257 +1,152 @@
 # AGENTS.md
-Guidance for coding agents working in the Taskrail repository.
 
-## Scope And Intent
+Guidance for coding agents in the Taskrail repository, a Go CLI
+(`github.com/tessariq/taskrail`). This file is the single agent-instruction
+source and must work in every agent tool. Rules belong here; checks that must
+always run belong in `lefthook.yml` and CI. Do not add tool-specific harness
+config such as `.claude/settings.json`, `.claude/rules/`, or content in
+`CLAUDE.md`, which only imports this file.
 
-- This is a Go CLI repository: `github.com/tessariq/taskrail`.
-- Main executable: `./cmd/taskrail`.
-- Internal packages: `./internal/...`.
-- Product specs live under `./specs/`.
-- Planning and tracked work live under `./planning/`.
-- Keep changes small, explicit, and easy to inspect.
-- Taskrail is released software (v0.1.0 through v0.4.0 are tagged). This repository dogfoods its own shipped CLI, `planning/`, `docs/workflow/`, and the packaged skill set exactly like any adopter — not an "adapted" pre-release workflow.
+Before editing Go code, read `internal/AGENTS.md` (it applies to `cmd/` too).
+Before editing `internal/taskrail/` or the packaged skills, read
+`internal/taskrail/AGENTS.md`.
 
-## Source-Of-Truth Files
+## Product Boundaries
 
-- Product specifications, released: `specs/v0.1.0.md`, `specs/v0.2.0.md`, `specs/v0.3.0.md`, `specs/v0.4.0.md`
-- Product specifications, unreleased: `specs/v0.5.0.md`, `specs/v0.6.0.md`, `specs/v0.7.0.md` (the active one is `active_spec_version` in `planning/STATE.md`)
-- Spec reading order and versioning: `specs/README.md`
-- Active planning state: `planning/STATE.md`
-- Tracked tasks: `planning/tasks/`
-- Workflow contract: `docs/workflow/`
-- Release checklist: `docs/workflow/releasing.md`
-- Build and convenience commands: `Taskfile.yml`
-- CI checks: `.github/workflows/ci.yml`
-- Local git hooks: `lefthook.yml` (opt-in pre-commit/commit-msg/pre-push; mirrors CI, but `.github/workflows/ci.yml` is authoritative)
-- Packaged skill source (single source of truth): `internal/taskrail/skills/` (embedded; installed by `taskrail init --with-skills`)
-- Committed skill copies (zero-setup clone): `.agents/skills/` and `.claude/skills/`, kept byte-identical to the package by a parity check (`task check:skills`)
-- Skills productization contract: `docs/workflow/skills-productization.md`
+- Taskrail is released software. This repository dogfoods its own CLI,
+  `planning/`, `docs/workflow/`, and packaged skills exactly like an adopter.
+- Never add built-in LLM-provider integration or direct model calls to Taskrail
+  core (`specs/v0.5.0.md#recommendation-about-llm-support`). `loop` and skill
+  evaluation stay provider-neutral.
+- Never turn Taskrail into a sandbox or runtime manager, and add no
+  container-orchestration semantics.
+- Product scope comes from the specs. Reading order: `specs/README.md`. The
+  active spec is `active_spec_version` in `planning/STATE.md`.
 
-## Toolchain And Environment
+## Setup
 
-- Go version: `1.26` (`go.mod`).
-- `task` is optional convenience. Direct Go commands remain canonical.
-- `mise` (`mise.toml`) provisions the pinned toolchain (Go, `task`, `lefthook`):
-  `mise install` sets it up on a fresh clone and `mise run setup` additionally
-  builds the working-tree `taskrail` onto the mise PATH (`./bin`, via
-  `task taskrail:install`) and wires the opt-in git hooks (`lefthook install`).
-  A bare `taskrail` then resolves to the current build with no `TASKRAIL`
-  override; `task taskrail:check` fails loud if that on-PATH binary is stale.
-  Locally it is optional
-  convenience — direct `go` commands and `Taskfile.yml` targets work without it —
-  but CI provisions the same toolchain via `jdx/mise-action`, so `mise.toml` is
-  the single source of toolchain versions locally and on CI. The pins are guarded
-  by `internal/toolchain`: `go` matches `go.mod`, `lefthook` matches the
-  `task hooks:install` guidance, and CI is asserted to provision via mise-action.
-- The committed skills resolve the binary via `${TASKRAIL:-taskrail}` (T-051), and
-  this repository makes that bare fallback correct by building the working-tree
-  binary onto the mise PATH — run `mise run setup` so `taskrail` on PATH is the
-  working-tree build (T-074); no `TASKRAIL` env override is required. The trap this
-  prevents: without the mise-built binary, `${TASKRAIL:-taskrail}` falls back to the
-  *installed* `taskrail`, a shipped release that can lag the working tree and
-  lack its newest commands and flags. The T-074 freshness
-  guard (`task taskrail:check`) turns that staleness into a loud failure rather than
-  a silent one.
-- **The wrong-binary trap: a state-writing command (`verify`, `complete`, `start`,
-  `block`) run against a binary older than the working tree succeeds silently and
-  stamps task files with behavior the working tree had already fixed.** This
-  happened during T-109–T-118, where an older `./bin` build wrote the very
-  duplicate `## Implementation Notes` heading that change set was removing. It is
-  why the opt-in `pre-commit` hook runs `task taskrail:check`: a stale binary must
-  not write committed state here (T-123, `docs/binary-resolution-findings.md`).
-  Both binary guards name the remedy for what they detected (T-123), so read which
-  one fired:
+- Run `mise run setup` before your first commit in a worktree; do not assume the
+  git hooks are installed. It provisions the pinned toolchain (`mise.toml`),
+  builds the working-tree `taskrail` onto PATH, and installs the lefthook hooks.
+- Commit under the maintainer's git identity: set `user.name` and `user.email`
+  to a person before your first commit. `scripts/check-author.sh` refuses agent
+  identities in pre-commit, pre-push, and CI.
 
-| Symptom | Cause | Remedy |
-|---|---|---|
-| New flag rejected: `taskrail task new --slug ...` fails with `unknown flag: --slug` | The binary `${TASKRAIL:-taskrail}` resolves to a shipped release older than the working tree | `mise run setup` (builds the working tree onto PATH), or export an absolute `TASKRAIL` |
-| State writer succeeds but task files carry old behavior | Same as above, silently — assume this is happening until a guard clears it | Same as above; inspect and re-run affected writers with the fresh binary |
-| `task taskrail:install` fails | Build succeeded but its output is not reachable as `taskrail` — a *resolution* problem, not a build problem | `mise run setup`, or export an absolute `TASKRAIL` for that shell; rebuilding changes nothing |
-| `task taskrail:check` fires | The binary `${TASKRAIL:-taskrail}` would run (an exported `TASKRAIL` wins over PATH, as for the skills) differs from the working-tree build; the check names which of four causes | See below |
+## Definition Of Done
 
-  `task taskrail:check` distinguishes four causes of a byte difference and names
-  the one it found: `TASKRAIL` points somewhere other than the working-tree build
-  (repoint or unset it); the on-PATH binary is a different file (PATH fix); the two
-  builds came from different Go toolchains (`mise.toml` floats `go = "1.26"` to a
-  patch release, so a system `/usr/local/go` produces different bytes from
-  identical source — rerun both halves under `mise exec --`); or the source
-  genuinely moved on (`task taskrail:install`).
-- Prefer repository-local, inspectable file operations over hidden automation.
+| Change | Run before handing off |
+|---|---|
+| Go code | `task check` (mirrors the CI `checks` and `build-test` jobs) |
+| `planning/`, `specs/`, docs, `AGENTS.md` | `task check:planning` (mirrors the planning CI lane) |
+| Packaged skills | `task skills:regen`, then `task check` |
 
-## Build, Format, And Test Commands
+- While iterating, run one package or test: `go test ./internal/taskrail -run '^TestValidateState$'`.
+- A new active-spec area needs a linked task, or `task coverage:gate`
+  (`coverage --min 100`) fails even though `validate` passes.
+- Tests pin the wording of `AGENTS.md`, `README.md`, and `docs/`, and full CI
+  skips doc-only changes. `task check:docs` runs those tests; the pre-commit
+  hook and the planning lane run it too.
+- For user-visible CLI or workflow changes, also run sandbox manual tests and
+  keep `plan.md` and `report.md` under
+  `planning/artifacts/manual-test/<task-id>/<timestamp>/`
+  ([procedure](docs/workflow/development-workflow.md#manual-testing)). Never
+  commit `*_manual_test.go` files or `cmd/manual-test-*/` directories.
 
-### Build
+## Running The CLI
 
-- Build CLI: `go build ./cmd/taskrail`
-- Task wrapper: `task build`
+- In this checkout, prefer `go run ./cmd/taskrail <command>`: it always builds
+  the current source.
+- If you run bare `taskrail` (the packaged skills use `${TASKRAIL:-taskrail}`),
+  run `task taskrail:check` immediately before every state writer and apply the
+  remedy it prints. A binary older than the working tree writes old behavior
+  into task files without erroring (T-123; background in
+  `docs/binary-resolution-findings.md`).
+- Inspect `taskrail <command> --help` rather than guessing flags.
 
-### Formatting And Static Checks
+## Tracked Work
 
-- Check formatting: `gofmt -l .`
-- Apply formatting: `gofmt -w .`
-- Vet: `go vet ./...`
+- `planning/STATE.md` is a CLI-generated projection of the task files, not a
+  task or session log. Never hand-edit `planning/STATE.md`, task status fields,
+  or other machine-managed fields; `task check:state` (pre-commit and CI) fails when
+  `STATE.md` differs from its projection.
+- Re-project mechanical drift, including a merge or rebase conflict on
+  `STATE.md`, with `taskrail repair --apply`; never resolve its conflict markers
+  by hand (skill `taskrail-repair`).
+- Route every transition through the CLI: `taskrail start`, `complete`,
+  `block`, `unblock`, and `verify`. If no command expresses the change you need,
+  that is a missing capability: file a task instead of hand-editing, even when
+  the active spec describes a surface that is not implemented yet.
+- The [Command effects](docs/commands.md#command-effects) table is the list of
+  commands that write tracked files. After any writer, run `git status`, run
+  `taskrail validate`, and commit the regenerated `STATE.md` and task files with
+  the change that produced them
+  ([procedure](docs/workflow/development-workflow.md#committing-tracked-work-state)).
+- Create tasks with `taskrail task new` and move one onto another spec area
+  with `taskrail task repoint`. Tasks declare spec references and dependencies.
+- Before `start`, confirm the task is one independently meaningful outcome with
+  a bounded implementation, review, and verification surface. Never split by
+  file, layer, discipline, phase, or estimate. Re-plan oversized or ambiguous
+  work first; running out of context or review budget never turns unfinished
+  scope into a follow-up
+  ([task readiness](docs/workflow/agent-steering.md#task-readiness)).
+- Follow-up work found during verification becomes new task files, created
+  before the task's final transition or with `verify --create-followup`.
+- `planning/NOTES.md` is human-owned: read it, and edit it only when a human
+  explicitly asks.
+- Verification and manual-test artifacts live under `planning/artifacts/`,
+  which is gitignored. Never commit them or add `.gitkeep` placeholders.
 
-### Tests
+## Review
 
-- Run all tests: `go test ./...`
-- Run one package: `go test ./internal/taskrail`
-- Run one test: `go test ./internal/taskrail -run '^TestValidateState$'`
-- Task wrapper: `task test`
-
-### CLI Smoke Checks
-
-- Root help: `go run ./cmd/taskrail --help`
-- Validate current repo: `go run ./cmd/taskrail validate`
-
-### Workflow Checks
-
-- Validate Taskrail structure: `go run ./cmd/taskrail validate`
-- Select next task: `go run ./cmd/taskrail next --json`
-- Check skill package parity: `task check:skills` (asserts committed `.agents/`/`.claude/` skills equal the embedded `--with-skills` package)
-- Check task-body hygiene: `task check:task-bodies` (asserts no task file repeats a scaffold section heading — `## Description`, `## Acceptance`, `## Verification Notes`, `## Implementation Notes`; runs in the planning fast lane, since a planning-only change never reaches the full CI matrix)
-
-### Git Hooks (Optional)
-
-- Install once: `task hooks:install` (runs `lefthook install`).
-- `lefthook.yml` wires local hooks that mirror CI: `pre-commit` runs `gofmt`, `go vet ./...`, `taskrail validate`, the skill package-parity check, the binary freshness guard (`task taskrail:check`, so a stale binary cannot write committed tracked-work state), and the agent-identity author guard (`scripts/check-author.sh`); `commit-msg` enforces Conventional Commits with descriptive bodies, short task-key suffixes, and no agent-attribution trailers; `pre-push` rescans the pushed range for attribution (`scripts/check-push-messages.sh`) before running `task test:short` (`go test -short ./...`), which skips the working-binary skill-eval suite CI still runs in full.
-- Agent attribution is refused in three places from one policy script, `scripts/check-attribution.sh`: forbidden trailers (`Co-authored-by:`, `Assisted-by:`, `Claude-Session:` and the other agent session/thread trailers), the bare session link a wrapped trailer leaves on its own line, and the robot mark. `scripts/check-author.sh` refuses the same claim made through the author/committer header (an agent runner's git identity). Because `commit-msg` is skipped by `--no-verify`, a rebase, or an amend, `pre-push` re-checks every commit in the pushed range. The guards have their own tests: `task test:commit-msg`, `task test:author`, `task test:push-messages`.
-- Hooks are an opt-in convenience. CI remains the authoritative gate. Do not bypass with `--no-verify`.
-
-## Repository Workflow Rules
-
-- `planning/STATE.md` is the authoritative execution state.
-- `planning/STATE.md` is current state, not a task/session log. Never append
-  continuation prose; use task `## Implementation Notes`, blocker reasons,
-  portable verification summaries/reports, or follow-up tasks.
-- Tasks under `planning/tasks/` must declare spec references and dependencies.
-- Before starting a task, require one independently meaningful outcome with a
-  bounded implementation/review/verification surface. Split independently useful
-  outcomes, preserve atomic safety and integration boundaries, and never split by
-  file, layer, discipline, phase, or numeric estimate. Re-plan oversized or
-  ambiguous work before `start`; do not defer unfinished current scope because an
-  agent exhausted context or review budget.
-- In this source checkout, run `task taskrail:check` immediately before every
-  `${TASKRAIL:-taskrail}` state writer (`next`, `start`, `verify`, `complete`,
-  `block`, and other commands that write tracked files). Stop on failure and
-  apply its named remedy before writing; `go run ./cmd/taskrail ...` builds the
-  current source directly and does not need this guard.
-- Use `taskrail start`, `complete`, `block`, and `verify` for tracked status transitions.
-- Never hand-edit task statuses or machine-managed state fields. The CLI owns every tracked-work transition. If no command expresses the change you need, that is a missing capability: file a task and say so. Do not hand-edit, including when the active spec describes a surface that is not implemented yet.
-- Mechanical `STATE.md` drift is re-projected by `taskrail repair --apply`, never by hand — including when a merge or rebase conflicts on it.
-- Verification artifacts belong under `planning/artifacts/verify/`.
-- Follow-up work discovered during verification should become new task files.
-
-### Review Scope And Stop Conditions
-
-- Unshipped active-spec review workflows describe future product behavior. They
-  are not current contributor checks unless a task or maintainer explicitly
-  invokes them.
-- For ordinary spec and task-file edits, run the applicable deterministic checks
-  once after the change set settles. Do not launch semantic review agents unless
-  explicitly requested or required by a named release or publication workflow.
-- A request for review authorizes one bounded review wave over one frozen
-  snapshot. Batch findings, dispositions, and accepted fixes. Do not recursively
-  launch another wave solely because the first wave changed files or to obtain
-  additional confidence.
-- Another review wave requires one concrete trigger: explicit maintainer
-  instruction, a contract-mandated rerun for a formal artifact, or unresolved
-  release-blocking findings in an explicitly authorized release gate.
-- "Fresh context" specifies reviewer isolation, not repetition. One fresh context
-  per required lens or pass satisfies that requirement.
-- Bootstrap-review staleness does not trigger automatic replacement. Keep one
-  candidate mutable, batch related changes, and publish a new immutable revision
-  only at an explicit review boundary.
-
-## Coding Style Guidelines
-
-- Always run `gofmt` on changed Go files.
-- Prefer focused functions and explicit data structs.
-- Keep functions focused with early returns; aim well under ~50 lines.
-- Keep files 200–400 lines as a norm, 800 as a hard ceiling; extract when a file does too much.
-- Avoid nesting deeper than ~3–4 levels; prefer early returns over deep branches.
-- Comments (and godoc) explain *why*, not *what*: do not restate the code or a signature; reserve them for non-obvious rationale, invariants, and contracts.
-- Prefer the standard library first.
-- Keep the markdown contract easy for humans and agents to inspect.
-- Avoid hidden state and avoid over-abstracting simple file operations.
-
-## Commit Conventions
-
-- Use Conventional Commits: `<type>: <description>` (types: `feat`, `fix`, `refactor`, `docs`, `test`, `chore`, `perf`, `ci`).
-- Reference only the short task key as a parenthetical suffix on the subject, never the full slugged task identifier and never a prefix: `feat: add version reporting to taskrail CLI (T-012)`, not `feat: add version reporting to taskrail CLI (T-012-add-version-reporting)` or `feat: T-012 add version reporting`.
-- Keep the subject imperative and scoped to one logical outcome.
-- Every ordinary commit requires a body after the subject and blank line. Explain the change's intent, context, and non-obvious decisions; do not merely restate the diff, and wrap body lines at 72 characters. Generated merge, revert, fixup, and squash commits are exempt.
-
-### Committing Tracked-Work State
-
-- One commit per tracked task: include the implementation, its tests, and the workflow metadata the CLI regenerated (`planning/STATE.md`, rewritten task files, `CHANGELOG.md`) in the **same** commit. The regenerated state is part of the task's logical outcome — do not split it into a separate follow-up/chore commit.
-- Whenever a change alters tracked-work or spec state that `STATE.md` reflects — task status transitions, added/removed tasks, task counts, active spec/version, or a verification result — stage the CLI-regenerated `planning/STATE.md` (and any task files the CLI rewrote) in that commit so committed state stays consistent.
-- `STATE.md` is generated by the CLI (`start`, `next`, `verify`, `complete`, `block`, `spec activate` all rewrite it). Never hand-edit it, but always commit the version the CLI produced. **Run `git status` after any tracked-work command** to catch regenerated files before committing.
-- Create follow-up tasks before the task's final transition (or via `taskrail verify --create-followup`) so `STATE.md` counts include them; a task file added after the last state-writing command will not appear in committed `STATE.md` until the next one runs.
-- Follow-up task files created while completing a task belong in **that task's commit**, next to its `STATE.md` update — they are part of the same tracked-work outcome, not a separate change. Because `STATE.md` is one cumulative snapshot, a follow-up's `STATE.md` count and its task file must land together.
-- If asked to split the work into multiple commits, never separate `planning/STATE.md` or a task's added/rewritten task files from the functionality that produced them. `STATE.md` is a single cumulative snapshot, so splitting it from its task files produces a counted-but-absent (or absent-but-counted) inconsistency. Surface this, keep each task's implementation + tests + `STATE.md` + task files in one commit, and split only along genuinely independent concerns.
-- When a merge or rebase across parallel PRs **conflicts** on the generated `planning/STATE.md`, never hand-resolve the conflict markers (that is the hand-edit the rule above forbids). `STATE.md` is a projection of the task files, so take either side and re-project it with `taskrail repair --apply`, then `taskrail validate` and commit the regenerated file — the `taskrail-repair` skill documents this flow. A genuine conflict on the *same task file* is real content that stays human-resolved; repair only re-projects the aggregate.
-
-## Testing Expectations
-
-- Follow TDD for code changes whenever practical.
-- Keep unit tests dominant.
-- Use temporary directories for filesystem-level tests.
-- Do not introduce Testcontainers here; Taskrail is a repo-local CLI and should keep test infrastructure light.
-- Add smoke coverage for CLI wiring and focused behavior coverage for task parsing, validation, selection, transitions, and verification artifacts.
-- Run manual testing against task acceptance criteria for user-visible CLI changes, tracked-work transitions, verification/reporting behavior, and non-trivial workflow changes.
-- Store manual test artifacts under `planning/artifacts/manual-test/<task-id>/<timestamp>/`.
-- Prefer sandbox-mode manual testing first: temp directories, local CLI execution, and small helper programs when needed.
-- Use ephemeral `manual_test` Go-tag tests only when a real CLI flow is hard to validate otherwise, and delete them after writing the report.
-
-## Change Checklist For Agents
-
-The generic gates (`gofmt -w` on edited Go files, `go vet ./...`, targeted then
-full `go test ./...`) are stated once under [Boundaries](#boundaries). Beyond
-those:
-
-- Run `go run ./cmd/taskrail validate` when changing planning files, task schema, state schema, or spec references.
-- Run manual testing and persist `plan.md` and `report.md` artifacts for changes that alter Taskrail's visible workflow behavior (see [Testing Expectations](#testing-expectations)); delete all ephemeral manual test code after the report is written — never commit `*_manual_test.go` files or `cmd/manual-test-*/` directories.
-- When changing the packaged skills under `internal/taskrail/skills/`, run `task skills:regen` to regenerate the committed `.agents/`/`.claude/` copies from the package (it re-runs the parity check) so they stay byte-identical.
-- After any `taskrail start`/`next`/`verify`/`complete`/`block`/`spec activate`, run `git status` and stage the regenerated `planning/STATE.md` and rewritten task files with the related change; never leave committed `STATE.md` out of sync with task/spec state.
-- Update `README.md` when CLI commands or workflow expectations change.
-- Update `CHANGELOG.md` for user-visible behavior changes under an Unreleased section — policy and examples in [docs/workflow/changelog.md](docs/workflow/changelog.md).
+- For ordinary spec and task-file edits, run the deterministic checks once after
+  the change settles; do not launch semantic review agents unless asked.
+- A review request authorizes one bounded review wave over one frozen snapshot.
+  Batch findings and fixes, and do not start another wave because files changed
+  or to gain confidence
+  ([review cadence](docs/workflow/agent-steering.md#review-cadence)).
+- Unshipped active-spec review workflows describe future product behavior, not
+  contributor checks, unless a task or maintainer invokes them.
 
 ## Notes On Repository Behavior
 
-Intentional, non-obvious decisions — do not "fix" these:
+Intentional decisions; do not "fix" them. Details in `docs/commands.md`.
 
-- Read-only commands (`validate`, `status`, `stats`, `coverage`, `spec list/show/diff`) never write `planning/STATE.md` or task files, so they need no post-run `git status`/staging follow-up, and their signals never make `validate` fail. `coverage` reports advisory spec-coverage/orphan/drift signals; `status` computes the next eligible task without persisting `next_action`/`updated_at` (unlike `next`, it leaves the working tree clean); `spec diff` is a reporting aid, not a migrator — it never creates tasks, re-points `spec_ref`, or advances status, and its rename candidates are labeled best-effort, never asserted. See the [command effects table](docs/commands.md#command-effects).
-- `coverage --gaps` is read-only and advisory by default (side-effect-free like `coverage`): it emits mechanical structural-gap candidates (`missing-verification`, `dependency-anomaly`, `under-decomposed-area`) over covered active-spec areas and never writes `planning/STATE.md` or task files. `--fail-on <category>` opts into a repository-selected exit code policy without changing the report, and gap findings never make `validate` fail. Every signal is a candidate to promote into a real task, never auto-created state; it composes with `--area`, while coverage-only `--min` is rejected with `--gaps`. It stays mechanical — counts and graph edges only, no semantic inference.
-- `start`, `next`, `verify`, `complete`, and `block` rewrite `planning/STATE.md` (and sometimes task files). Even a `next` selection probe updates `next_action`/`updated_at`, so it dirties the working tree — check `git status` after running it.
-- `spec activate <version>` rewrites `planning/STATE.md` only (it repoints `active_spec_version`/`active_spec_path`, re-projects the idle `status_summary`/blocker `next_action` against the new active spec when no task is active, re-renders, and re-validates); it never touches task files or task status fields. It is the sanctioned CLI-only writer of the active spec, so check `git status` after running it.
-- `task repoint <id>` rewrites one open task's `spec_ref` field and re-projects `planning/STATE.md`; it never changes the id, slug, filename, title, status, or dependencies, and never touches another task file. It is the sanctioned CLI way to move an open task onto another spec area instead of hand-editing frontmatter — not a status mutator and not a bulk migrator. Completed and cancelled tasks are delivered history and are rejected. Because it writes `STATE.md`, check `git status` after running it.
-- Rendered `STATE.md` counts are a projection of the task files. `taskrail task new` refreshes them as it creates a task (prefer it over hand-authoring). If you hand-add/remove/edit task files, refresh the projection with `taskrail repair --apply` — there is no separate "refresh" command; `repair` owns re-projecting `STATE.md` and never touches task files or status.
-- `verify` creates `planning/artifacts/verify/<id>/<timestamp>/` on demand; the artifacts tree is gitignored and is never committed (no `.gitkeep` placeholders — the v0.2.0 gitignored-artifacts contract).
-- Committed `STATE.md` stays portable: `last_verification_result` is a path-free summary and `relevant_artifacts` is empty, so cloned repos never point at producer-only files.
-- Manual-test artifacts under `planning/artifacts/manual-test/` are ephemeral local evidence and are gitignored.
-- Git hooks (`lefthook.yml`) are an opt-in local mirror of CI. If lefthook is not installed they simply do not run, and CI still gates — never rely on hooks as the only check, and never bypass them with `--no-verify`.
+- Read-only commands (`validate`, `status`, `stats`, `coverage`, `task show`,
+  `spec list/show/diff`) never write tracked files. `status` computes the next
+  task without persisting it; `next` writes `next_action` and `updated_at`.
+- `coverage --gaps` is advisory by default and never writes; `--fail-on
+  <category>` opts into an exit code, and gap findings never make `validate` fail.
+- `spec diff` reports and never migrates. `spec activate` rewrites only
+  `STATE.md`.
+- Committed `STATE.md` stays portable: `last_verification_result` is path-free
+  and `relevant_artifacts` is empty.
 
-## Boundaries
+## Commits
 
-**Always:**
+- Use Conventional Commits, `<type>: <description>`, with the types `feat`,
+  `fix`, `refactor`, `docs`, `test`, `chore`, `perf`, `ci`. Keep the subject
+  imperative and scoped to one logical outcome.
+- Suffix the short task key when there is one: `feat: add version reporting
+  (T-012)`, never the slugged identifier and never a prefix.
+- Every ordinary commit needs a body that explains intent, context, and
+  non-obvious decisions, wrapped at 72 characters.
+- Never add agent attribution: no `Co-authored-by:`, `Assisted-by:`, or agent
+  session or thread trailers, no bare session link, and no robot mark.
+  `scripts/check-attribution.sh` is the one policy that `commit-msg`,
+  `pre-push`, and CI apply.
+- Make one commit per tracked task: implementation, tests, and the
+  CLI-regenerated `STATE.md`, task files, and follow-up tasks together. Never
+  split `STATE.md` from the task files it counts.
+- Update `CHANGELOG.md` under Unreleased for user-visible changes
+  ([policy](docs/workflow/changelog.md)). When a command changes, update
+  `docs/commands.md` (including Command effects) and `README.md`.
+- Never bypass hooks with `--no-verify`; CI re-checks the commit policy for
+  every pushed range.
 
-- Run `gofmt`, `go vet ./...`, and targeted tests before handing off.
-- Start behavior changes with a failing test.
-- Route tracked-work transitions through the CLI (`start`, `complete`, `block`, `verify`).
-- Commit the CLI-regenerated `planning/STATE.md` (and rewritten task files) with the change that produced it.
-- Keep each change focused on one logical outcome.
-- Reference concrete evidence paths in verification notes.
+## Ask First
 
-**Ask first:**
-
-- Changing the task or state schema, spec contracts, CI checks, or the skill package-parity structure.
-- Adding a runtime dependency (prefer the standard library).
+- Changing the task or state schema, spec contracts, CI checks, or the skill
+  package-parity structure.
+- Adding a runtime or developer-tool dependency.
 - Broad refactors beyond the task's scope.
-
-**Never:**
-
-- Hand-edit `planning/STATE.md` or task status fields.
-- Commit anything under `planning/artifacts/`, or add `.gitkeep` placeholders.
-- Add built-in LLM-provider integration or direct model calls to Taskrail core (`specs/v0.5.0.md#recommendation-about-llm-support`).
-- Turn Taskrail into a sandbox/runtime manager or add container-orchestration semantics.
-- Bypass hooks or CI-equivalent checks with `--no-verify`.
+- Pushing, tagging, or releasing ([checklist](docs/workflow/releasing.md)).

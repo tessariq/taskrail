@@ -114,3 +114,19 @@ failure mode — the guard misreporting rather than the wrong binary being selec
 but it was folded into T-123 (2026-07-28) rather than split out, because both are the
 same contributor-facing defect: the freshness guard reporting a condition its own
 prescribed remedy cannot resolve. T-123's Description and Acceptance now carry it.
+
+## Quick reference: which guard fired
+
+Both binary guards name the remedy for what they detected (T-123). This table
+moved here from `AGENTS.md`, which now keeps only the rule.
+
+| Symptom | Cause | Remedy |
+|---|---|---|
+| New flag rejected: `taskrail task new --slug ...` fails with `unknown flag: --slug` | The binary `${TASKRAIL:-taskrail}` resolves to a shipped release older than the working tree | `mise run setup` (builds the working tree onto PATH), or export an absolute `TASKRAIL` |
+| State writer succeeds but task files carry old behavior | Same as above, silently; assume this is happening until a guard clears it | Same as above; inspect and re-run affected writers with the fresh binary |
+| `task taskrail:install` fails | The build succeeded but its output is not reachable as `taskrail`: a resolution problem, not a build problem | `mise run setup`, or export an absolute `TASKRAIL` for that shell; rebuilding changes nothing |
+| `task taskrail:check` fires | The binary `${TASKRAIL:-taskrail}` would run differs from the working-tree build (an exported `TASKRAIL` wins over PATH) | Read which cause it names: repoint or unset `TASKRAIL`; fix PATH; rerun both builds under `mise exec --` when the Go toolchains differ (`mise.toml` floats `go = "1.26"`); or `task taskrail:install` when the source moved on |
+
+The T-109–T-118 incident is the reason the opt-in `pre-commit` hook runs
+`task taskrail:check`: an older `./bin` build silently wrote the duplicate
+`## Implementation Notes` heading that change set was removing.

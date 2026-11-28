@@ -19,6 +19,21 @@ AI-generated and AI-assisted PRs are welcome — Taskrail is built that way. Two
 
 The same quality gate applies regardless of how the code was produced.
 
+## Agent instructions and harness
+
+- Agent instructions are tool-neutral. Change agent guidance only in
+  `AGENTS.md` (and the nested `internal/**/AGENTS.md` files). `CLAUDE.md` only
+  imports `AGENTS.md`; add no tool-specific harness config such as
+  `.claude/settings.json` or `.claude/rules/`.
+- A check that must run every time belongs in `lefthook.yml` and CI, not in
+  prose. Agents must run `mise run setup` before their first commit so the
+  hooks are installed; CI re-checks the commit policy for every pushed range.
+- Add an `AGENTS.md` rule only after an agent repeats a mistake, and cite the
+  task or incident that motivated it. Prefer pointing to the check that
+  enforces a rule over restating it. Keep the file within the budget that
+  `TestAgentsGuidanceStaysWithinBudget` enforces, and prune stale rules at each
+  release ([releasing checklist](docs/workflow/releasing.md)).
+
 ## Setup
 
 See [README → Development](README.md#development). Fastest path:
@@ -33,8 +48,10 @@ Direct `go` commands work without mise.
 
 ## Before you open a PR
 
-- `gofmt -w` on changed Go files; `go vet ./...`; `go test ./...` — all green.
-- `taskrail validate` if you touched `planning/`, `specs/`, or the task/state schema.
+- `task check` green for code changes (it mirrors CI: format, lint, vet,
+  guards, tests).
+- `task check:planning` green if you touched `planning/`, `specs/`, docs, or
+  the task/state schema.
 - Conventional Commit subject with only the short task key as a suffix:
   `feat: add repair surface (T-050)` — never the full slugged task identifier or
   a task prefix.
